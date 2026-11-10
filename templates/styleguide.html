@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% block title %}Guide de style · dashu{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Guide de style</h1>
+    <p class="muted">Les briques de l'interface, dans les deux thèmes. Tout vient de <code>static/css/app.css</code>.</p>
+  </div>
+</header>
+
+{#- Chaque panneau force un thème avec data-theme : les couleurs sont écrites
+    avec light-dark() et suivent donc le color-scheme de leur conteneur. -#}
+<div class="sg">
+  {% for theme in themes %}
+  <section class="sg-panel" data-theme="{{ theme }}" data-accent="{{ shell.active.color }}" aria-label="Thème {% if *theme == "dark" %}sombre{% else %}clair{% endif %}">
+    <h2 class="sg-theme">{% if *theme == "dark" %}Sombre{% else %}Clair{% endif %}</h2>
+
+    <h3 class="sg-title">Couleurs</h3>
+    <ul class="sg-swatches" role="list">
+      {% for (token, role) in surfaces %}
+      <li><span class="swatch sw-{{ token }}"></span><code>--{{ token }}</code><span class="muted">{{ role }}</span></li>
+      {% endfor %}
+    </ul>
+
+    <h3 class="sg-title">Accent par espace</h3>
+    <ul class="sg-accents" role="list">
+      {% for (accent, space) in accents %}
+      <li data-accent="{{ accent }}">
+        <span class="swatch sw-accent"></span>
+        <span class="pal-space"><span class="dot" aria-hidden="true"></span>{{ space }}</span>
+        <button class="btn btn-primary" type="button">Action</button>
+        <a href="#main">Lien</a>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <h3 class="sg-title">Typographie</h3>
+    <div class="sg-type">
+      <p class="wordmark">dashu</p>
+      <h1>Titre de page · Rethink Sans 24</h1>
+      <h2>Titre de carte · 13 semi-gras</h2>
+      <p>Texte courant en 14 px. L'interface est dense : on travaille longtemps dessus, tout ce qui sert doit tenir à l'écran.</p>
+      <p class="muted">Texte secondaire, pour les dates et les précisions.</p>
+      <p><code>JetBrains Mono</code> pour le code et l'éditeur : <kbd>Ctrl K</kbd></p>
+    </div>
+
+    <h3 class="sg-title">Boutons</h3>
+    <div class="sg-row">
+      <button class="btn btn-primary" type="button">{{ crate::assets::icon("plus")|safe }}Principal</button>
+      <button class="btn" type="button">Secondaire</button>
+      <button class="btn" type="button" disabled>Désactivé</button>
+      <button class="icon-btn" type="button" aria-label="Exemple de bouton icône">{{ crate::assets::icon("pin")|safe }}</button>
+      <button class="icon-btn is-on" type="button" aria-pressed="true" aria-label="Exemple de bouton icône actif">{{ crate::assets::icon("pin")|safe }}</button>
+      <button class="icon-btn icon-btn-danger" type="button" aria-label="Exemple de bouton de suppression">{{ crate::assets::icon("trash")|safe }}</button>
+    </div>
+    <div class="sg-row">
+      <div class="segmented" role="group" aria-label="Exemple de sélecteur">
+        <button type="button" aria-pressed="false">Jour</button>
+        <button type="button" aria-pressed="true">Semaine</button>
+      </div>
+      <span class="pill">en cours</span>
+      <span class="tag">#réseau</span>
+      <a class="chip" href="#main" aria-current="true">#bts<span class="chip-count">4</span></a>
+      <a class="chip" href="#main">#alternance<span class="chip-count">2</span></a>
+    </div>
+
+    <h3 class="sg-title">Champs</h3>
+    <div class="sg-fields">
+      <label class="field">
+        <span class="field-label">Champ texte</span>
+        <input type="text" value="Révisions réseau" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Liste</span>
+        <select><option>Perso</option><option>École</option><option>Taff</option></select>
+      </label>
+      <div class="searchbar">
+        {{ crate::assets::icon("search")|safe }}
+        <input type="search" placeholder="Rechercher…" aria-label="Exemple de recherche">
+      </div>
+    </div>
+
+    <h3 class="sg-title">Messages</h3>
+    <div class="stack">
+      <p class="alert alert-error">Email ou mot de passe incorrect.</p>
+      <p class="alert alert-warn">{{ crate::assets::icon("alert")|safe }}<span>La synchro a échoué. La dernière version connue reste affichée.</span></p>
+      <p class="toast toast-ok sg-toast">Note déplacée vers École.</p>
+    </div>
+
+    <h3 class="sg-title">Carte et widgets</h3>
+    <div class="sg-cards">
+      <section class="card widget">
+        <header class="card-head"><h2>Prochains cours</h2><a class="card-link" href="#main">Agenda</a></header>
+        <div class="widget-body">
+          <ul class="courses" role="list">
+            <li class="course ev-c8">
+              <div class="course-main"><strong>RÉSEAUX</strong><span class="muted">M. Lefèvre</span></div>
+              <div class="course-meta"><span>Aujourd'hui · 08:00 – 09:55</span><span class="with-icon">{{ crate::assets::icon("map-pin")|safe }}B204</span></div>
+              <span class="pill">en cours</span>
+            </li>
+            <li class="course ev-c2">
+              <div class="course-main"><strong>ANGLAIS</strong><span class="muted">Mme Carter</span></div>
+              <div class="course-meta"><span>Aujourd'hui · 10:10 – 12:05</span><span class="with-icon">{{ crate::assets::icon("map-pin")|safe }}A012</span></div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card widget">
+        <header class="card-head"><h2>Tâches du jour</h2></header>
+        <div class="widget-body">
+          <ul class="tasks" role="list">
+            <li class="task is-done">
+              <button class="check" type="button" role="checkbox" aria-checked="true" aria-label="Rendre le TP VLAN">{{ crate::assets::icon("check")|safe }}</button>
+              <span class="task-title">Rendre le TP VLAN</span>
+            </li>
+            <li class="task">
+              <button class="check" type="button" role="checkbox" aria-checked="false" aria-label="Relire la fiche E5">{{ crate::assets::icon("check")|safe }}</button>
+              <span class="task-title">Relire la fiche E5</span>
+              <span class="tag tag-late">depuis lun. 9 nov.</span>
+            </li>
+          </ul>
+          <div class="skeleton skeleton-3" aria-hidden="true"></div>
+        </div>
+      </section>
+    </div>
+
+    <h3 class="sg-title">Matières de l'agenda</h3>
+    <p class="muted">La couleur d'un cours est dérivée de son nom : 12 teintes, lisibles dans les deux thèmes.</p>
+    <div class="sg-events">
+      {% for color in subject_colors %}
+      <span class="ev sg-ev ev-c{{ color }}"><strong>Matière {{ color }}</strong><span class="ev-time">08:00 – 09:55</span></span>
+      {% endfor %}
+    </div>
+
+    <h3 class="sg-title">Note rendue</h3>
+    <article class="prose sg-prose">
+      <h2>Plan d'adressage</h2>
+      <p>Un paragraphe avec du <strong>gras</strong>, un <a href="#main">lien</a> et du <code>code</code>.</p>
+      <ul>
+        <li><input type="checkbox" checked disabled> VLAN 10 : administration</li>
+        <li><input type="checkbox" disabled> VLAN 20 : élèves</li>
+      </ul>
+      <pre><code><span class="hl-keyword">ip</span> route <span class="hl-constant hl-numeric">0.0.0.0</span> <span class="hl-string">"via 192.168.1.1"</span> <span class="hl-comment"># passerelle</span></code></pre>
+      <table>
+        <thead><tr><th>VLAN</th><th>Réseau</th></tr></thead>
+        <tbody><tr><td>10</td><td>192.168.10.0/24</td></tr><tr><td>20</td><td>192.168.20.0/24</td></tr></tbody>
+      </table>
+    </article>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

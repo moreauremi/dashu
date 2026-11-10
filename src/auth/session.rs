@@ -1,0 +1,221 @@
+//! Contexte d'une requête authentifiée.
+//!
+//! [`Ctx`] est l'extracteur que prennent tous les handlers protégés : il
+//! garantit qu'un utilisateur est connecté et charge ce dont chaque page a
+//! besoin (utilisateur, espaces, espace actif, jeton CSRF). Un handler qui ne
+//! le demande pas n'a accès à aucune donnée utilisateur ; toutes les requêtes
+//! SQL filtrent ensuite sur `ctx.user.id`.
+
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+use axum::http::{HeaderName, StatusCode};
+use axum::response::{IntoResponse, Response};
+use serde::{Deserialize, Serialize};
+use tower_sessions::cookie::time::Duration;
+use tower_sessions::{Expiry, Session};
+
+use crate::AppState;
+use crate::spaces::{self, Space};
+use crate::web::{self, AppError, AppResult, csrf};
+
+/// Clés du contenu de la session (stocké côté serveur, dans SQLite).
+pub const USER_ID: &str = "uid";
+pub const ACTIVE_SPACE: &str = "space";
+const FLASH: &str = "flash";
+
+/// Durée d'une session connectée : 30 jours glissants (repoussés à chaque visite).
+pub const LOGGED_IN_DAYS: i64 = 30;
+/// Une session anonyme ne sert qu'à porter le jeton CSRF du formulaire de
+/// connexion : elle expire vite pour ne pas remplir la table.
+pub const ANONYMOUS_HOURS: i64 = 1;
+
+#[derive(Debug, Clone)]
+pub struct User {
+    pub id: i64,
+    pub email: String,
+    /// `dark`, `light`, ou `None` pour suivre le réglage du système.
+    pub theme: Option<String>,
+    pub has_password: bool,
+    pub google_linked: bool,
+}
+
+/// Message affiché une seule fois sur la page suivante (après une redirection).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Flash {
+    /// `ok` ou `error`.
+    pub kind: String,
+    pub text: String,
+}
+
+pub struct Ctx {
+    pub user: User,
+    pub spaces: Vec<Space>,
+    pub active: Space,
+    pub csrf: String,
+    pub session: Session,
+    /// Chemin + query de la requête, pour y revenir après un changement d'espace.
+    pub path: String,
+}
+
+/// Ce que le gabarit `layout.html` affiche autour de chaque page.
+pub struct Shell {
+    /// Entrée de menu active : `dashboard`, `notes`, `calendar`, `settings`.
+    pub nav: &'static str,
+    pub email: String,
+    /// `dark`, `light` ou chaîne vide (suivre le système).
+    pub theme: String,
+    pub spaces: Vec<Space>,
+    pub active: Space,
+    pub csrf: String,
+    pub path: String,
+    pub flash: Option<Flash>,
+}
+
+impl Ctx {
+    /// Prépare l'habillage d'une page entière. Consomme le message flash en
+    /// attente : à n'appeler que pour une page, pas pour un fragment.
+    pub async fn shell(&self, nav: &'static str) -> AppResult<Shell> {
+        let flash = self.session.remove::<Flash>(FLASH).await?;
+        Ok(Shell {
+            nav,
+            email: self.user.email.clone(),
+            theme: self.user.theme.clone().unwrap_or_default(),
+            spaces: self.spaces.clone(),
+            active: self.active.clone(),
+            csrf: self.csrf.clone(),
+            path: self.path.clone(),
+            flash,
+        })
+    }
+
+    pub async fn flash_ok(&self, text: impl Into<String>) -> AppResult<()> {
+        set_flash(&self.session, "ok", text).await
+    }
+
+    pub async fn flash_error(&self, text: impl Into<String>) -> AppResult<()> {
+        set_flash(&self.session, "error", text).await
+    }
+
+    /// Espace de l'utilisateur portant cet identifiant, s'il existe.
+    pub fn space_by_id(&self, id: i64) -> Option<&Space> {
+        self.spaces.iter().find(|s| s.id == id)
+    }
+}
+
+pub async fn set_flash(session: &Session, kind: &str, text: impl Into<String>) -> AppResult<()> {
+    session
+        .insert(
+            FLASH,
+            Flash {
+                kind: kind.into(),
+                text: text.into(),
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+/// Ouvre la session d'un utilisateur qui vient de s'authentifier.
+pub async fn sign_in(state: &AppState, session: &Session, user_id: i64) -> AppResult<()> {
+    // Nouvel identifiant de session et nouveau jeton CSRF : un identifiant
+    // connu avant la connexion (fixation de session) ne vaut plus rien.
+    session.cycle_id().await?;
+    session.insert(USER_ID, user_id).await?;
+    session.remove::<String>(ACTIVE_SPACE).await?;
+    csrf::rotate(session).await?;
+    session.set_expiry(Some(Expiry::OnInactivity(Duration::days(LOGGED_IN_DAYS))));
+    // Les trois espaces existent dès la première connexion.
+    spaces::ensure_defaults(&state.db, user_id).await?;
+    Ok(())
+}
+
+impl FromRequestParts<AppState> for Ctx {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Response> {
+        let session = Session::from_request_parts(parts, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+
+        let internal = |e: AppError| e.into_response();
+
+        let user_id = session
+            .get::<i64>(USER_ID)
+            .await
+            .map_err(|e| internal(e.into()))?;
+        let Some(user_id) = user_id else {
+            return Err(login_redirect(parts));
+        };
+
+        let user = sqlx::query_as!(
+            User,
+            r#"SELECT id AS "id!", email, theme,
+                      password_hash IS NOT NULL AS "has_password!: bool",
+                      google_sub IS NOT NULL AS "google_linked!: bool"
+               FROM users WHERE id = ?"#,
+            user_id
+        )
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| internal(e.into()))?;
+
+        // Compte supprimé, ou email retiré de ALLOWED_EMAILS : la session ne
+        // vaut plus rien, même si son cookie est encore valide.
+        let user = match user {
+            Some(user) if state.config.is_allowed(&user.email) => user,
+            _ => {
+                let _ = session.flush().await;
+                return Err(login_redirect(parts));
+            }
+        };
+
+        let spaces = spaces::list(&state.db, user.id).await.map_err(internal)?;
+        let wanted = session
+            .get::<String>(ACTIVE_SPACE)
+            .await
+            .map_err(|e| internal(e.into()))?;
+        let active = spaces
+            .iter()
+            .find(|s| Some(&s.slug) == wanted.as_ref())
+            .or_else(|| spaces.first())
+            .cloned()
+            .ok_or_else(|| {
+                internal(AppError::Internal(anyhow::anyhow!(
+                    "utilisateur sans espace"
+                )))
+            })?;
+
+        let csrf = csrf::token(&session).await.map_err(internal)?;
+        let path = parts
+            .uri
+            .path_and_query()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| "/".into());
+
+        Ok(Self {
+            user,
+            spaces,
+            active,
+            csrf,
+            session,
+            path,
+        })
+    }
+}
+
+/// Renvoie vers la page de connexion.
+///
+/// Pour un fragment htmx, une redirection classique insérerait la page de
+/// connexion au milieu d'un widget : on répond donc 401 avec l'en-tête
+/// `HX-Redirect`, que htmx traduit en vraie navigation.
+fn login_redirect(parts: &Parts) -> Response {
+    if web::is_fragment_request(&parts.headers) {
+        (
+            StatusCode::UNAUTHORIZED,
+            [(HeaderName::from_static("hx-redirect"), "/login")],
+        )
+            .into_response()
+    } else {
+        web::see_other("/login")
+    }
+}

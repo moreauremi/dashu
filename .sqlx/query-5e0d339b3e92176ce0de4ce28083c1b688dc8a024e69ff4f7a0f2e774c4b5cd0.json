@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, title, body_md, pinned AS \"pinned!: bool\", updated_at\n           FROM notes WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "body_md",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "pinned!: bool",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5e0d339b3e92176ce0de4ce28083c1b688dc8a024e69ff4f7a0f2e774c4b5cd0"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM tags WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "85f3ef5339f4f625cb16ea6ebb9a6b4e4325c3376799e9f248d3b48499f8f0b0"
+}

@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\", substr(n.body_md, 1, 600) AS \"head!: String\",\n                  n.pinned AS \"pinned!: bool\", n.updated_at AS \"updated_at!: i64\"\n           FROM notes n\n           WHERE n.user_id = ?1 AND n.space_id = ?2\n             AND (?3 IS NULL OR EXISTS (\n                   SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id\n                   WHERE nt.note_id = n.id AND t.name = ?3))\n           ORDER BY n.pinned DESC, n.updated_at DESC\n           LIMIT 300",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "head!: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "pinned!: bool",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "updated_at!: i64",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "99ae2daf130ea8f6e90030cbb2caf562d759aa06f94d8ee9d3376fd81db9e29f"
+}

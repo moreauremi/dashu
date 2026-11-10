@@ -1,0 +1,7 @@
+{% if pinned -%}
+<button id="pin-btn" class="icon-btn is-on" type="button" aria-pressed="true" aria-label="Désépingler la note" title="Désépingler la note"
+        hx-post="/notes/{{ id }}/pin" hx-swap="outerHTML">{{ crate::assets::icon("pin-off")|safe }}</button>
+{%- else -%}
+<button id="pin-btn" class="icon-btn" type="button" aria-pressed="false" aria-label="Épingler la note" title="Épingler la note"
+        hx-post="/notes/{{ id }}/pin" hx-swap="outerHTML">{{ crate::assets::icon("pin")|safe }}</button>
+{%- endif %}

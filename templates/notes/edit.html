@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block title %}{% if title.is_empty() %}Sans titre{% else %}{{ title }}{% endif %} · dashu{% endblock %}
+{% block content %}
+<div class="editor-page">
+  <header class="editor-head">
+    <a class="icon-btn" href="/notes" aria-label="Retour à la liste des notes">{{ crate::assets::icon("arrow-left")|safe }}</a>
+    <span id="save-status" class="save-status" role="status" data-state="saved">{{ saved_label }}</span>
+
+    <div class="editor-actions">
+      {% include "notes/_pin.html" %}
+
+      {% if !other_spaces.is_empty() %}
+      <details class="menu">
+        <summary class="icon-btn" aria-label="Déplacer vers un autre espace" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}</summary>
+        <div class="menu-list">
+          {% for space in other_spaces %}
+          <form method="post" action="/notes/{{ id }}/move">
+            <input type="hidden" name="space_id" value="{{ space.id }}">
+            <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>Déplacer vers {{ space.name }}</button>
+          </form>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+
+      <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Supprimer définitivement cette note ?">
+        <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer la note" title="Supprimer la note">{{ crate::assets::icon("trash")|safe }}</button>
+      </form>
+    </div>
+  </header>
+
+  {#- Sauvegarde automatique : le formulaire s'envoie 2 s après la dernière
+      modification (ou tout de suite sur « flush », déclenché par Ctrl+S).
+      Le serveur répond par le texte de l'indicateur d'état. -#}
+  <form id="note-form" class="note-form" data-save-url="/notes/{{ id }}" data-csrf="{{ shell.csrf }}"
+        hx-post="/notes/{{ id }}" hx-trigger="input delay:2s, flush, submit"
+        hx-target="#save-status" hx-swap="innerHTML" hx-sync="this:replace">
+    <input class="note-title" type="text" name="title" value="{{ title }}" maxlength="200" autocomplete="off"
+           placeholder="Titre" aria-label="Titre de la note">
+    {#- Miroir du contenu de CodeMirror. Il demande l'aperçu 300 ms après la dernière frappe. -#}
+    <textarea name="body_md" hidden
+              hx-post="/notes/preview" hx-trigger="input delay:300ms"
+              hx-target="#preview" hx-swap="innerHTML" hx-sync="this:replace">{{ body_md }}</textarea>
+  </form>
+
+  {% include "notes/_tags.html" %}
+
+  <div class="pane-tabs segmented" role="group" aria-label="Affichage">
+    <button type="button" data-pane-tab="write" aria-pressed="true">{{ crate::assets::icon("pencil")|safe }}Écrire</button>
+    <button type="button" data-pane-tab="preview" aria-pressed="false">{{ crate::assets::icon("eye")|safe }}Aperçu</button>
+  </div>
+
+  <div id="note-panes" class="note-panes" data-show="write">
+    <div id="editor" class="editor"></div>
+    <article id="preview" class="preview prose" aria-label="Aperçu de la note">{{ preview_html|safe }}</article>
+  </div>
+</div>
+
+{#- CodeMirror n'est chargé que sur cette page. -#}
+<script src="{{ crate::assets::url("js/editor.js") }}"></script>
+{% endblock %}

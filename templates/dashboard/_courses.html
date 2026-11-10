@@ -1,0 +1,25 @@
+<div id="w-courses" class="widget-body">
+  {% if items.is_empty() %}
+    {% if has_sources %}
+    <p class="empty">Aucun cours à venir.</p>
+    {% else %}
+    <p class="empty">Pas d'agenda dans cet espace. <a href="/settings#agendas">Ajouter un flux iCal</a></p>
+    {% endif %}
+  {% else %}
+  <ul class="courses" role="list">
+    {% for course in items %}
+    <li class="course ev-c{{ course.color }}">
+      <div class="course-main">
+        <strong>{{ course.subject }}</strong>
+        {% if !course.details.is_empty() %}<span class="muted">{{ course.details }}</span>{% endif %}
+      </div>
+      <div class="course-meta">
+        <span>{{ course.day }} · {{ course.time }}</span>
+        {% if !course.location.is_empty() %}<span class="with-icon">{{ crate::assets::icon("map-pin")|safe }}{{ course.location }}</span>{% endif %}
+      </div>
+      {% if course.ongoing %}<span class="pill">en cours</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET pinned = NOT pinned WHERE id = ? AND user_id = ? RETURNING pinned AS \"pinned!: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "pinned!: bool",
+        "ordinal": 0,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b01aa4eabf4922654bf451c1a5cbefc4dac2b7b0fc2dbbf62099e2f07f6783ff"
+}

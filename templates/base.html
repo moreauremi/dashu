@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr"{% block html_attrs %}{% endblock %}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}dashu{% endblock %}</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark light">
+{#- Configuration de htmx :
+    - pas de <style> injecté ni d'eval : la Content-Security-Policy les interdit ;
+    - pas de copie des pages dans localStorage (elles contiennent des notes) ;
+    - les réponses d'erreur (4xx, 5xx) sont affichées au lieu d'être ignorées. -#}
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"historyCacheSize":0,"refreshOnHistoryMiss":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'>
+<link rel="preload" href="{{ crate::assets::url("fonts/rethink-sans.woff2") }}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ crate::assets::url("css/app.css") }}">
+<link rel="icon" href="{{ crate::assets::url("favicon.svg") }}" type="image/svg+xml">
+<script src="{{ crate::assets::url("js/htmx.js") }}" defer></script>
+<script src="{{ crate::assets::url("js/app.js") }}" defer></script>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

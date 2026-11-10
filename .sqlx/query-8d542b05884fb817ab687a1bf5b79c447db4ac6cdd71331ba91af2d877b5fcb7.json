@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\", n.space_id AS \"space_id!\",\n                          highlight(notes_fts, 0, char(1), char(2)) AS \"title_marked!: String\",\n                          snippet(notes_fts, 1, char(1), char(2), '…', 12) AS \"snippet!: String\"\n                   FROM notes_fts\n                   JOIN notes n ON n.id = notes_fts.rowid\n                   WHERE notes_fts MATCH ?1 AND n.user_id = ?2\n                   ORDER BY bm25(notes_fts, 5.0, 1.0)\n                   LIMIT 8",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "space_id!",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title_marked!: String",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "snippet!: String",
+        "ordinal": 4,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "8d542b05884fb817ab687a1bf5b79c447db4ac6cdd71331ba91af2d877b5fcb7"
+}

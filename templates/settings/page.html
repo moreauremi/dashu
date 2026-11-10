@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+{% block title %}Réglages · dashu{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Réglages</h1>
+</header>
+
+<div class="settings">
+  <section class="card" aria-labelledby="s-theme">
+    <header class="card-head"><h2 id="s-theme">Apparence</h2></header>
+    <div class="card-body">
+      <form class="segmented" method="post" action="/settings/theme" role="group" aria-label="Thème">
+        <input type="hidden" name="next" value="/settings">
+        <button name="theme" value="system" aria-pressed="{{ shell.theme.is_empty() }}">{{ crate::assets::icon("monitor")|safe }}Système</button>
+        <button name="theme" value="dark" aria-pressed="{{ shell.theme == "dark" }}">{{ crate::assets::icon("moon")|safe }}Sombre</button>
+        <button name="theme" value="light" aria-pressed="{{ shell.theme == "light" }}">{{ crate::assets::icon("sun")|safe }}Clair</button>
+      </form>
+      <p class="hint">Le choix est enregistré sur ton compte : il te suit d'un appareil à l'autre.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="s-password">
+    <header class="card-head"><h2 id="s-password">Mot de passe</h2></header>
+    <div class="card-body">
+      {% if !has_password %}
+      <p class="hint">Ton compte n'a pas encore de mot de passe : tu te connectes avec Google. En définir un ajoute la connexion par identifiants.</p>
+      {% endif %}
+      <form class="stack form-narrow" method="post" action="/settings/password">
+        {#- Champ caché : les gestionnaires de mots de passe y rattachent l'identifiant. -#}
+        <input type="text" name="username" value="{{ shell.email }}" autocomplete="username" hidden>
+        {% if has_password %}
+        <label class="field">
+          <span class="field-label">Mot de passe actuel</span>
+          <input type="password" name="current" autocomplete="current-password" required>
+        </label>
+        {% endif %}
+        <label class="field">
+          <span class="field-label">Nouveau mot de passe</span>
+          <input type="password" name="new" autocomplete="new-password" minlength="{{ min_password }}" required aria-describedby="pw-hint">
+          <span id="pw-hint" class="hint">{{ min_password }} caractères minimum.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Confirmer le nouveau mot de passe</span>
+          <input type="password" name="confirm" autocomplete="new-password" minlength="{{ min_password }}" required>
+        </label>
+        <div><button class="btn btn-primary" type="submit">{% if has_password %}Changer le mot de passe{% else %}Définir le mot de passe{% endif %}</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="s-google">
+    <header class="card-head"><h2 id="s-google">Compte Google</h2></header>
+    <div class="card-body">
+      {% if google_linked %}
+      <p class="with-icon status-ok">{{ crate::assets::icon("check")|safe }}Un compte Google est lié à {{ shell.email }}.</p>
+      <form method="post" action="/settings/google/unlink">
+        <button class="btn" type="submit">Délier le compte Google</button>
+      </form>
+      {% else if google_enabled %}
+      <p class="hint">Lie ton compte Google pour te connecter en un clic. Il doit porter l'adresse {{ shell.email }}.</p>
+      {#- Départ vers Google : une vraie navigation, pas une requête htmx. -#}
+      <div><a class="btn" href="/auth/google" hx-boost="false">{{ crate::assets::icon("link")|safe }}Lier mon compte Google</a></div>
+      {% else %}
+      <p class="hint">La connexion Google n'est pas configurée sur ce serveur (variables <code>GOOGLE_CLIENT_ID</code> et <code>GOOGLE_CLIENT_SECRET</code>).</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" id="agendas" aria-labelledby="s-calendars">
+    <header class="card-head"><h2 id="s-calendars">Agendas iCal</h2></header>
+    <div class="card-body">
+      {% if sources.is_empty() %}
+      <p class="hint">Aucun agenda pour l'instant. Dans Pronote : Emploi du temps, puis l'icône d'export iCal, et copie le lien.</p>
+      {% else %}
+      <ul class="sources" role="list">
+        {% for source in sources %}
+        <li class="source">
+          <div class="source-main">
+            <strong>{{ source.name }}</strong>
+            <span class="pal-space" data-accent="{{ source.space_color }}"><span class="dot" aria-hidden="true"></span>{{ source.space_name }}</span>
+          </div>
+          {#- L'URL complète contient un jeton d'accès : seul le domaine est affiché. -#}
+          <code class="source-url">{{ source.masked_url }}</code>
+          {% if let Some(error) = source.error %}
+          <span class="with-icon status-warn">{{ crate::assets::icon("alert")|safe }}Dernière synchro en échec : {{ error }}. {{ source.status }}.</span>
+          {% else %}
+          <span class="muted">{{ source.status }}</span>
+          {% endif %}
+          <form method="post" action="/settings/calendars/{{ source.id }}/delete" hx-confirm="Supprimer l'agenda « {{ source.name }} » et ses événements ?">
+            <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer l'agenda {{ source.name }}">{{ crate::assets::icon("trash")|safe }}</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <form class="source-add" method="post" action="/settings/calendars">
+        <label class="field">
+          <span class="field-label">Nom</span>
+          <input type="text" name="name" maxlength="60" required placeholder="Pronote" autocomplete="off">
+        </label>
+        <label class="field field-grow">
+          <span class="field-label">URL du flux iCal</span>
+          <input type="url" name="url" required placeholder="https://…/ical/Edt.ics?…" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field">
+          <span class="field-label">Espace</span>
+          <select name="space_id">
+            {% for space in shell.spaces %}
+            <option value="{{ space.id }}"{% if space.id == shell.active.id %} selected{% endif %}>{{ space.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <p class="hint">Les agendas sont resynchronisés toutes les heures. L'URL est un secret : elle n'est jamais réaffichée.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

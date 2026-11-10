@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Connexion · dashu{% endblock %}
+{% block body %}
+<main class="auth">
+  <div class="auth-card">
+    <h1 class="wordmark wordmark-lg">dashu</h1>
+    <p class="muted auth-lead">Connecte-toi pour retrouver ton espace.</p>
+
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    {#- Formulaire classique, sans htmx : le jeton CSRF part dans le champ caché. -#}
+    <form class="stack" method="post" action="/login">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus>
+      </label>
+      <label class="field">
+        <span class="field-label">Mot de passe</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Se connecter</button>
+    </form>
+
+    {% if google_enabled %}
+    <p class="divider"><span>ou</span></p>
+    <a class="btn btn-block" href="/auth/google">Continuer avec Google</a>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

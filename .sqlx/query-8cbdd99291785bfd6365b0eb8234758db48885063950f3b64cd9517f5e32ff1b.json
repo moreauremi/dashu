@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT name, last_fetched_at, last_error FROM calendar_sources\n           WHERE user_id = ? AND space_id = ? ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_fetched_at",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_error",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "8cbdd99291785bfd6365b0eb8234758db48885063950f3b64cd9517f5e32ff1b"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT title, body_md FROM notes WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "title",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "body_md",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "914ebb9a7e01abfdd33c8637b08df87a62392870bf0454668191f64ef6bc00af"
+}

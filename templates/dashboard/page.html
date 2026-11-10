@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard · dashu{% endblock %}
+{% block content %}
+<header class="page-head dash-head">
+  <div>
+    <h1>{{ greeting }}</h1>
+    <p class="muted cap-first">{{ date }}</p>
+  </div>
+  {#- L'heure est rendue par le serveur puis tenue à jour par app.js. -#}
+  <time class="clock" data-clock aria-label="Heure à Paris">{{ time }}</time>
+</header>
+
+{#- Chaque widget se charge tout seul : l'emplacement ci-dessous est remplacé
+    par le fragment renvoyé par /widgets/…, sans attendre les autres. -#}
+<div class="widgets">
+  <section class="card widget widget-courses" aria-labelledby="w-courses-title">
+    <header class="card-head">
+      <h2 id="w-courses-title">Prochains cours</h2>
+      <a class="card-link" href="/calendar">Agenda</a>
+    </header>
+    <div id="w-courses" class="widget-body" hx-get="/widgets/courses" hx-trigger="load" hx-swap="outerHTML">
+      <div class="skeleton skeleton-3" role="status" aria-label="Chargement des prochains cours"></div>
+    </div>
+  </section>
+
+  <section class="card widget widget-tasks" aria-labelledby="w-tasks-title">
+    <header class="card-head">
+      <h2 id="w-tasks-title">Tâches du jour</h2>
+    </header>
+    <div id="w-tasks" class="widget-body" hx-get="/widgets/tasks" hx-trigger="load" hx-swap="outerHTML">
+      <div class="skeleton skeleton-3" role="status" aria-label="Chargement des tâches"></div>
+    </div>
+  </section>
+
+  <section class="card widget widget-notes" aria-labelledby="w-notes-title">
+    <header class="card-head">
+      <h2 id="w-notes-title">Notes récentes</h2>
+      <a class="card-link" href="/notes">Toutes les notes</a>
+    </header>
+    <div id="w-notes" class="widget-body" hx-get="/widgets/notes" hx-trigger="load" hx-swap="outerHTML">
+      <div class="skeleton skeleton-5" role="status" aria-label="Chargement des notes"></div>
+    </div>
+  </section>
+</div>
+{% endblock %}

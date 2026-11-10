@@ -1,0 +1,60 @@
+[package]
+name = "dashu"
+version = "1.0.0"
+edition = "2024"
+description = "Espace de travail personnel tout-en-un : dashboard, notes Markdown, emploi du temps."
+license = "MIT"
+publish = false
+
+[dependencies]
+# Serveur
+tokio = { version = "1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync", "io-util"] }
+axum = { version = "0.8.9", features = ["macros"] }
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
+tower-http = { version = "0.7.1", default-features = false, features = ["compression-br", "compression-gzip", "trace", "set-header"] }
+askama = "0.16.1"
+
+# Données
+# sqlx reste en 0.8 : tower-sessions-sqlx-store 0.15 en dépend, et deux
+# versions de sqlx ne peuvent pas lier SQLite dans le même binaire.
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+
+# Authentification
+tower-sessions = { version = "0.15.0", default-features = false, features = ["axum-core", "signed"] }
+tower-sessions-sqlx-store = { version = "0.15.1", default-features = false, features = ["sqlite"] }
+argon2 = "0.6.0"
+openidconnect = { version = "4.1.0", default-features = false, features = ["reqwest", "rustls-tls"] }
+tower_governor = { version = "0.8.0", default-features = false, features = ["axum"] }
+rand = "0.10.3"
+
+# Notes
+pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
+ammonia = "4.2.4"
+syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "html", "parsing", "regex-fancy"] }
+
+# Agenda
+# reqwest reste en 0.12 : c'est la version qu'utilise openidconnect 4, on
+# partage ainsi un seul client HTTP (rustls + ring, sans dépendance système).
+icalendar = { version = "0.17.17", default-features = false, features = ["parser"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std", "serde"] }
+chrono-tz = "0.10.4"
+
+# Divers
+serde = { version = "1.0.229", features = ["derive"] }
+form_urlencoded = "1.2.2"
+anyhow = "1.0.104"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "env-filter", "json"] }
+url = "2"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = 3
+
+# Les dépendances sont optimisées même en debug : Argon2 et SQLite sont
+# inutilisables sinon (une connexion prendrait plusieurs secondes).
+[profile.dev.package."*"]
+opt-level = 2

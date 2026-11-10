@@ -1,0 +1,28 @@
+{#- Fragment complet du widget : chaque action (ajouter, cocher, supprimer)
+    renvoie ce même fragment, qui remplace l'ancien. -#}
+<div id="w-tasks" class="widget-body">
+  {% if tasks.is_empty() %}
+  <p class="empty">Rien de prévu aujourd'hui.</p>
+  {% else %}
+  <ul class="tasks" role="list">
+    {% for task in tasks %}
+    <li class="task{% if task.done %} is-done{% endif %}">
+      <button class="check" type="button" role="checkbox" aria-checked="{{ task.done }}" aria-label="{{ task.title }}"
+              hx-post="/tasks/{{ task.id }}/toggle" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("check")|safe }}</button>
+      <span class="task-title">{{ task.title }}</span>
+      {% if let Some(since) = task.late_since %}<span class="tag tag-late">depuis {{ since }}</span>{% endif %}
+      <button class="icon-btn icon-btn-sm task-delete" type="button" aria-label="Supprimer la tâche « {{ task.title }} »"
+              hx-delete="/tasks/{{ task.id }}" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="widget-count">{{ done_count }} sur {{ tasks.len() }} terminée{% if done_count > 1 %}s{% endif %}</p>
+  {% endif %}
+
+  <form class="task-add" hx-post="/tasks" hx-target="#w-tasks" hx-swap="outerHTML">
+    {#- L'id permet à htmx de rendre le focus au champ après l'ajout. -#}
+    <input id="task-new" type="text" name="title" maxlength="200" required autocomplete="off"
+           placeholder="Ajouter une tâche…" aria-label="Nouvelle tâche">
+    <button class="btn" type="submit" aria-label="Ajouter la tâche">{{ crate::assets::icon("plus")|safe }}</button>
+  </form>
+</div>

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE calendar_sources SET last_attempt_at = ?, last_error = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "695b1c70f2a8c55ef30d09595d586c12c89c0c394b30a8d840f9d460c7b1bf55"
+}

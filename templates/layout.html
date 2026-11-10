@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{#- Habillage commun aux pages connectées : barre latérale, palette, zone de contenu.
+    Variable attendue : `shell` (voir src/auth/session.rs). -#}
+
+{% block html_attrs %}{% if !shell.theme.is_empty() %} data-theme="{{ shell.theme }}"{% endif %}{% endblock %}
+
+{% block body %}
+{#- #app porte tout ce qui dépend de la session. htmx (hx-boost) remplace le
+    contenu de <body> à chaque navigation, donc ces attributs suivent :
+      data-accent  couleur de l'espace actif
+      data-theme   thème choisi (recopié sur <html> par app.js)
+      hx-headers   jeton CSRF joint à toutes les requêtes htmx -#}
+<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}" hx-boost="true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
+  <a class="skip-link" href="#main">Aller au contenu</a>
+
+  <header class="topbar">
+    <button class="icon-btn" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">{{ crate::assets::icon("menu")|safe }}</button>
+    <a class="wordmark" href="/">dashu</a>
+    <span class="topbar-space">{{ shell.active.name }}</span>
+    <button class="icon-btn" type="button" data-palette-open aria-label="Rechercher">{{ crate::assets::icon("search")|safe }}</button>
+  </header>
+
+  <nav id="sidebar" class="sidebar" aria-label="Navigation principale">
+    <a class="wordmark" href="/">dashu</a>
+
+    <div class="spaces" role="group" aria-label="Espace actif">
+      {% for space in shell.spaces %}
+      <form method="post" action="/space">
+        <input type="hidden" name="slug" value="{{ space.slug }}">
+        <input type="hidden" name="next" value="{{ shell.path }}">
+        <button class="space" type="submit" data-accent="{{ space.color }}"{% if space.id == shell.active.id %} aria-current="true"{% endif %}>
+          {{ crate::assets::icon(space.icon())|safe }}
+          <span>{{ space.name }}</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+
+    <button class="search-btn" type="button" data-palette-open>
+      {{ crate::assets::icon("search")|safe }}
+      <span>Rechercher</span>
+      <kbd data-mod-key>Ctrl K</kbd>
+    </button>
+
+    <ul class="nav" role="list">
+      <li><a href="/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
+      <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
+      <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
+      <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
+    </ul>
+
+    <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
+
+    <div class="sidebar-foot">
+      <form class="theme-switch" method="post" action="/settings/theme" role="group" aria-label="Thème">
+        <input type="hidden" name="next" value="{{ shell.path }}">
+        <button name="theme" value="system" aria-pressed="{{ shell.theme.is_empty() }}" aria-label="Thème du système" title="Thème du système">{{ crate::assets::icon("monitor")|safe }}</button>
+        <button name="theme" value="dark" aria-pressed="{{ shell.theme == "dark" }}" aria-label="Thème sombre" title="Thème sombre">{{ crate::assets::icon("moon")|safe }}</button>
+        <button name="theme" value="light" aria-pressed="{{ shell.theme == "light" }}" aria-label="Thème clair" title="Thème clair">{{ crate::assets::icon("sun")|safe }}</button>
+      </form>
+      <div class="account">
+        <span class="account-email" title="{{ shell.email }}">{{ shell.email }}</span>
+        {#- Déconnexion sans htmx : une vraie navigation, pour repartir d'une page vierge. -#}
+        <form method="post" action="/logout" hx-boost="false">
+          <input type="hidden" name="_csrf" value="{{ shell.csrf }}">
+          <button class="icon-btn" type="submit" aria-label="Se déconnecter" title="Se déconnecter">{{ crate::assets::icon("logout")|safe }}</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+  <div class="scrim" data-nav-close></div>
+
+  <main id="main" class="main" tabindex="-1">
+    {% if let Some(flash) = shell.flash %}
+    <p class="toast toast-{{ flash.kind }}" role="status" data-toast>{{ flash.text }}</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <dialog id="palette" class="palette" aria-label="Palette de commandes">
+    <div class="palette-field">
+      {{ crate::assets::icon("search")|safe }}
+      <input id="palette-q" type="search" name="q" autocomplete="off" spellcheck="false"
+             placeholder="Chercher une note, une page, une action…"
+             aria-label="Chercher une note, une page ou une action" aria-controls="palette-results"
+             hx-get="/search/palette" hx-trigger="input changed delay:120ms, palette-open"
+             hx-target="#palette-results" hx-swap="innerHTML">
+      <kbd>Échap</kbd>
+    </div>
+    <div id="palette-results" class="palette-results"></div>
+    <p class="palette-help" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> naviguer <kbd>↵</kbd> ouvrir</p>
+  </dialog>
+</div>
+{% endblock %}

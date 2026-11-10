@@ -1,0 +1,20 @@
+<div id="w-notes" class="widget-body">
+  {% if pinned.is_empty() && recent.is_empty() %}
+  <p class="empty">Aucune note dans cet espace. <a href="/notes/new">Écrire la première</a></p>
+  {% else %}
+  <ul class="note-links" role="list">
+    {% for note in pinned %}
+    <li><a href="/notes/{{ note.id }}">
+      <span class="with-icon note-link-title">{{ crate::assets::icon("pin")|safe }}<span class="sr-only">Épinglée : </span>{{ note.title }}</span>
+      <span class="muted">{{ note.updated }}</span>
+    </a></li>
+    {% endfor %}
+    {% for note in recent %}
+    <li><a href="/notes/{{ note.id }}">
+      <span class="note-link-title">{{ note.title }}</span>
+      <span class="muted">{{ note.updated }}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

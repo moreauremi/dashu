@@ -1,0 +1,18 @@
+<div id="note-tags" class="note-tags">
+  {{ crate::assets::icon("tag")|safe }}
+  {% if !tags.is_empty() %}
+  <ul class="tag-list" role="list">
+    {% for tag in tags %}
+    <li class="tag tag-removable">#{{ tag.name }}<button type="button" aria-label="Retirer le tag {{ tag.name }}"
+        hx-delete="/notes/{{ id }}/tags/{{ tag.id }}" hx-target="#note-tags" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form class="tag-add" hx-post="/notes/{{ id }}/tags" hx-target="#note-tags" hx-swap="outerHTML">
+    <input id="tag-new" type="text" name="name" list="tag-suggestions" maxlength="40" autocomplete="off"
+           placeholder="Ajouter un tag…" aria-label="Ajouter un tag">
+    <datalist id="tag-suggestions">
+      {% for name in suggestions %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+  </form>
+</div>

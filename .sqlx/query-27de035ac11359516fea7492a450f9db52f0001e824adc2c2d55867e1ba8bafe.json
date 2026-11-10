@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", space_id, name, ical_url, last_fetched_at, last_error\n           FROM calendar_sources WHERE user_id = ? ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "ical_url",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_fetched_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_error",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "27de035ac11359516fea7492a450f9db52f0001e824adc2c2d55867e1ba8bafe"
+}

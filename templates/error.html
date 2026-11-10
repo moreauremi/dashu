@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · dashu{% endblock %}
+{% block body %}
+<main class="auth">
+  <div class="auth-card error-card">
+    <p class="error-code">{{ code }}</p>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    <a class="btn btn-primary" href="/">Revenir au dashboard</a>
+  </div>
+</main>
+{% endblock %}

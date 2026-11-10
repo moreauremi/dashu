@@ -1,0 +1,11 @@
+# Fins de ligne LF partout, quel que soit le système.
+* text=auto eol=lf
+
+# Scripts Windows.
+*.cmd text eol=crlf
+
+# Le format iCal impose des fins de ligne CRLF : ne pas y toucher.
+*.ics -text
+
+# Binaires.
+*.woff2 binary

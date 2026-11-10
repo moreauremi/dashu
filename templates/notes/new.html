@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block title %}Nouvelle note · dashu{% endblock %}
+{% block content %}
+{#- Créer une note modifie la base : ça doit être un POST protégé par le jeton
+    CSRF, pas un simple GET. La page envoie donc ce POST dès son affichage,
+    puis htmx suit la redirection vers l'éditeur. -#}
+<form class="empty-state" method="post" action="/notes"
+      hx-post="/notes" hx-trigger="load" hx-target="body" hx-swap="innerHTML" hx-push-url="true">
+  <p class="muted" role="status">Création de la note…</p>
+  <noscript><button class="btn btn-primary" type="submit">Créer la note</button></noscript>
+</form>
+{% endblock %}

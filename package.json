@@ -1,0 +1,22 @@
+{
+  "name": "dashu-assets",
+  "private": true,
+  "description": "Outillage de build des fichiers statiques de dashu (htmx, CodeMirror, icônes, polices). Rien ici n'est servi tel quel : seul le contenu de static/ part dans le binaire.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-assets.mjs"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/rethink-sans": "5.3.0",
+    "@lezer/highlight": "1.2.5",
+    "esbuild": "0.28.2",
+    "htmx.org": "2.0.11",
+    "lucide-static": "1.71.0"
+  }
+}

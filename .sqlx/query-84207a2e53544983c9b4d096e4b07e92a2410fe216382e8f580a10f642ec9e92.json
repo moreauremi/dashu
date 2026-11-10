@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", email, theme,\n                      password_hash IS NOT NULL AS \"has_password!: bool\",\n                      google_sub IS NOT NULL AS \"google_linked!: bool\"\n               FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "email",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "theme",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "has_password!: bool",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "google_linked!: bool",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "84207a2e53544983c9b4d096e4b07e92a2410fe216382e8f580a10f642ec9e92"
+}

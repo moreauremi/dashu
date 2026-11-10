@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block title %}Notes · dashu{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Notes</h1>
+  <form method="post" action="/notes">
+    <button class="btn btn-primary" type="submit">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span></button>
+  </form>
+</header>
+
+{#- Recherche au fil de la frappe : htmx redemande la page et n'en garde que
+    #note-results (hx-select). Sans JavaScript, Entrée envoie le formulaire. -#}
+<form class="searchbar" action="/notes" method="get" role="search">
+  {{ crate::assets::icon("search")|safe }}
+  <input type="search" name="q" value="{{ q }}" autocomplete="off"
+         placeholder="Rechercher dans les notes de l'espace {{ shell.active.name }}…" aria-label="Rechercher dans les notes"
+         hx-get="/notes" hx-trigger="input changed delay:200ms" hx-include="closest form"
+         hx-target="#note-results" hx-select="#note-results" hx-swap="outerHTML" hx-push-url="true">
+  {% if let Some(tag) = tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+</form>
+
+<div id="note-results">
+  {% if !chips.is_empty() %}
+  <nav class="chips" aria-label="Filtrer par tag">
+    {% for chip in chips %}
+    <a class="chip" href="{{ chip.href }}"{% if chip.active %} aria-current="true"{% endif %}>#{{ chip.name }}<span class="chip-count">{{ chip.count }}</span></a>
+    {% endfor %}
+    {% if tag.is_some() %}<a class="chip chip-clear" href="{{ clear_tag_href }}">{{ crate::assets::icon("x")|safe }}Retirer le filtre</a>{% endif %}
+  </nav>
+  {% endif %}
+
+  {% if items.is_empty() %}
+    {% if q.is_empty() && tag.is_none() %}
+    <div class="empty-state">
+      <p>Aucune note dans l'espace {{ shell.active.name }}.</p>
+      <a class="btn" href="/notes/new">Écrire la première</a>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>Aucune note ne correspond.</p></div>
+    {% endif %}
+  {% else %}
+  <ul class="note-list" role="list">
+    {% for item in items %}
+    <li>
+      <a class="note-row" href="/notes/{{ item.id }}">
+        <span class="note-row-title">
+          {% if item.pinned %}{{ crate::assets::icon("pin")|safe }}<span class="sr-only">Épinglée : </span>{% endif %}
+          <span>{{ item.title_html|safe }}</span>
+        </span>
+        <span class="note-row-excerpt">{{ item.excerpt_html|safe }}</span>
+        <span class="note-row-meta">
+          {% for name in item.tags %}<span class="tag">#{{ name }}</span>{% endfor %}
+          <span class="muted">{{ item.updated }}</span>
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

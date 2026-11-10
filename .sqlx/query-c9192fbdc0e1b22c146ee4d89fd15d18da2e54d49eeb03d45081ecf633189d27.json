@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO note_tags (note_id, tag_id)\n             SELECT ?, id FROM tags WHERE user_id = ? AND name = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "c9192fbdc0e1b22c146ee4d89fd15d18da2e54d49eeb03d45081ecf633189d27"
+}

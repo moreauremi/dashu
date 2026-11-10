@@ -1,0 +1,46 @@
+{#- Résultats de la palette. Chaque entrée porte la classe .pal-item : app.js
+    s'en sert pour la navigation au clavier (flèches, Entrée). -#}
+{% if commands.is_empty() && spaces.is_empty() && notes.is_empty() %}
+<p class="palette-empty">Aucun résultat.</p>
+{% endif %}
+
+{% if !commands.is_empty() %}
+<p class="palette-heading">Aller à</p>
+{% for command in commands %}
+<a class="pal-item" href="{{ command.href }}">
+  {{ crate::assets::icon(command.icon)|safe }}
+  <span class="pal-main"><span class="pal-title">{{ command.label }}</span></span>
+  {% if !command.keys.is_empty() %}<kbd>{{ command.keys }}</kbd>{% endif %}
+</a>
+{% endfor %}
+{% endif %}
+
+{% if !spaces.is_empty() %}
+<p class="palette-heading">Changer d'espace</p>
+{% for space in spaces %}
+<form method="post" action="/space">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <input type="hidden" name="slug" value="{{ space.slug }}">
+  <input type="hidden" name="next" value="/">
+  <button class="pal-item" type="submit" data-accent="{{ space.color }}">
+    {{ crate::assets::icon(space.icon())|safe }}
+    <span class="pal-main"><span class="pal-title">Passer à l'espace {{ space.name }}</span></span>
+    <span class="dot" aria-hidden="true"></span>
+  </button>
+</form>
+{% endfor %}
+{% endif %}
+
+{% if !notes.is_empty() %}
+<p class="palette-heading">{{ notes_heading }}</p>
+{% for note in notes %}
+<a class="pal-item" href="/notes/{{ note.id }}">
+  {{ crate::assets::icon("file")|safe }}
+  <span class="pal-main">
+    <span class="pal-title">{{ note.title_html|safe }}</span>
+    {% if !note.excerpt_html.is_empty() %}<span class="pal-sub">{{ note.excerpt_html|safe }}</span>{% endif %}
+  </span>
+  <span class="pal-space" data-accent="{{ note.space_color }}"><span class="dot" aria-hidden="true"></span>{{ note.space_name }}</span>
+</a>
+{% endfor %}
+{% endif %}

@@ -1,0 +1,21 @@
+# Rust
+/target
+
+# Secrets et données locales : seul .env.example est versionné
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+/data
+
+# Outillage front (seul le résultat dans static/ est versionné)
+/node_modules
+
+# Divers
+.DS_Store
+Thumbs.db
+
+# Configuration locale de Claude Code (lancement du serveur de dev)
+/.claude/
