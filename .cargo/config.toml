@@ -1,0 +1,7 @@
+# Les macros sqlx::query! vérifient chaque requête SQL à la compilation.
+# Ce réglage leur fait lire le schéma dans le dossier .sqlx (versionné) plutôt
+# que dans une base : `cargo build` fonctionne donc sur un dépôt tout juste
+# cloné, en CI et dans Docker. Après avoir modifié une requête ou une
+# migration : `cargo sqlx prepare` (voir le README).
+[env]
+SQLX_OFFLINE = "true"

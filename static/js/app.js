@@ -75,6 +75,12 @@
       setTimeout(() => toast.remove(), 4300);
     });
 
+    // Agenda sur petit écran : la semaine défile horizontalement, on amène
+    // la colonne d'aujourd'hui à l'écran.
+    const today = $(".cal-dayhead.is-today");
+    const scroller = $(".cal-scroll");
+    if (today && scroller) scroller.scrollLeft = today.offsetLeft - $(".cal-corner").offsetWidth;
+
     updateClock();
     updateNowLine();
   }
@@ -87,6 +93,10 @@
     // contenu (sauf si la page l'a déjà placé, comme l'éditeur).
     if (document.activeElement === document.body) $("#main")?.focus({ preventScroll: true });
   });
+
+  // Bouton « Précédent » du navigateur : htmx redemande la page au serveur
+  // et la remet en place, il faut la préparer comme une autre.
+  document.addEventListener("htmx:historyRestore", onPage);
 
   // ------------------------------------------------ Menu sur petit écran
 
@@ -142,7 +152,8 @@
 
   // Nouveaux résultats : le premier est présélectionné.
   document.addEventListener("htmx:afterSwap", (event) => {
-    if (event.detail.target.id === "palette-results") selectPaletteItem(0);
+    // (Pas de cible quand htmx restaure une page depuis l'historique.)
+    if (event.detail.target?.id === "palette-results") selectPaletteItem(0);
   });
 
   // ------------------------------------------------------------- Clics

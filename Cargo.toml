@@ -3,7 +3,6 @@ name = "dashu"
 version = "1.0.0"
 edition = "2024"
 description = "Espace de travail personnel tout-en-un : dashboard, notes Markdown, emploi du temps."
-license = "MIT"
 publish = false
 
 [dependencies]

@@ -2,6 +2,7 @@
 //!
 //!   dashu                        lance le serveur
 //!   dashu set-password <email>   crée un compte ou remplace son mot de passe
+//!   dashu backup <fichier>       copie à chaud de la base (VACUUM INTO)
 //!   dashu healthcheck            interroge /health (pour le HEALTHCHECK Docker)
 
 use std::net::SocketAddr;
@@ -21,10 +22,11 @@ async fn main() -> anyhow::Result<()> {
     match args.as_slice() {
         [] | ["serve"] => serve().await,
         ["set-password", email] => set_password(email).await,
+        ["backup", destination] => backup(destination).await,
         ["healthcheck"] => healthcheck().await,
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu healthcheck            vérifie que le serveur répond"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond"
             );
             std::process::exit(2);
         }
@@ -123,6 +125,52 @@ async fn set_password(email: &str) -> anyhow::Result<()> {
     auth::set_password(&pool, email, password).await?;
     pool.close().await;
     eprintln!("Mot de passe enregistré pour {email}.");
+    Ok(())
+}
+
+/// `dashu backup <fichier>` : copie cohérente de la base pendant que le
+/// serveur tourne. `VACUUM INTO` écrit un fichier SQLite complet et compacté,
+/// sans bloquer les lectures ni les écritures en cours (mode WAL).
+async fn backup(destination: &str) -> anyhow::Result<()> {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::{ConnectOptions, Connection};
+    use std::str::FromStr;
+
+    if std::path::Path::new(destination).exists() {
+        bail!("{destination} existe déjà : une sauvegarde n'écrase jamais un fichier");
+    }
+    // DATABASE_URL suffit ici : pas besoin du reste de la configuration.
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://dashu.db".into());
+    let mut source = SqliteConnectOptions::from_str(&database_url)?
+        .busy_timeout(Duration::from_secs(30))
+        .connect()
+        .await
+        .context("ouverture de la base à sauvegarder")?;
+    sqlx::query("VACUUM INTO ?")
+        .bind(destination)
+        .execute(&mut source)
+        .await
+        .context("VACUUM INTO")?;
+    source.close().await?;
+
+    // Une sauvegarde qu'on ne sait pas relire ne vaut rien : on la rouvre et
+    // on demande à SQLite d'en vérifier la structure.
+    let mut copy = SqliteConnectOptions::new()
+        .filename(destination)
+        .read_only(true)
+        .connect()
+        .await?;
+    let check: String = sqlx::query_scalar("PRAGMA integrity_check")
+        .fetch_one(&mut copy)
+        .await?;
+    let notes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM notes")
+        .fetch_one(&mut copy)
+        .await?;
+    copy.close().await?;
+    if check != "ok" {
+        bail!("la sauvegarde {destination} est corrompue : {check}");
+    }
+    eprintln!("Sauvegarde écrite et vérifiée : {destination} ({notes} notes).");
     Ok(())
 }
 

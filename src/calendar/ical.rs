@@ -149,7 +149,9 @@ pub fn subject_color(title: &str) -> u8 {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    (hash % SUBJECT_COLORS) as u8
+    // Les bits de poids faible de FNV sont peu mélangés : sans ce repli des
+    // bits hauts, beaucoup de matières tombaient sur la même couleur.
+    ((hash ^ (hash >> 32)) % SUBJECT_COLORS) as u8
 }
 
 #[cfg(test)]

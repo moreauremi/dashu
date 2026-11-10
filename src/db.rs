@@ -18,6 +18,8 @@ pub async fn connect(database_url: &str) -> anyhow::Result<SqlitePool> {
         // NORMAL est sûr en WAL (pas de corruption) et évite un fsync par transaction.
         .synchronous(SqliteSynchronous::Normal)
         .foreign_keys(true)
+        // L'image Docker n'a pas de /tmp : les tris volumineux restent en mémoire.
+        .pragma("temp_store", "memory")
         .busy_timeout(Duration::from_secs(5));
 
     let pool = SqlitePoolOptions::new()
