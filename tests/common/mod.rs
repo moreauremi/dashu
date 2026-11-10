@@ -1,0 +1,341 @@
+//! Outillage commun aux tests d'intégration.
+//!
+//! Chaque test démarre une application complète (mêmes routes et mêmes
+//! middlewares qu'en production) sur une base SQLite temporaire, et lui parle
+//! à travers [`Client`], un mini-navigateur : il garde les cookies et renvoie
+//! le jeton CSRF comme le fait htmx.
+
+#![allow(dead_code)]
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use axum::Router;
+use axum::body::Body;
+use axum::http::{HeaderMap, Method, Request, StatusCode, header};
+use dashu::config::Config;
+use dashu::{AppState, auth, build_router, db};
+use tower::ServiceExt;
+
+pub const ALICE: &str = "alice@example.test";
+pub const BOB: &str = "bob@example.test";
+/// Mot de passe commun aux comptes de test.
+pub const PASSWORD: &str = "correct horse battery staple";
+
+static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+pub struct TestApp {
+    pub state: AppState,
+    router: Router,
+    db_path: PathBuf,
+}
+
+impl TestApp {
+    /// Application neuve, avec Alice et Bob autorisés et déjà inscrits.
+    pub async fn new() -> Self {
+        let app = Self::empty().await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
+    /// Application neuve sans aucun compte.
+    pub async fn empty() -> Self {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let db_path =
+            std::env::temp_dir().join(format!("dashu-test-{}-{n}.db", std::process::id()));
+        remove_db(&db_path);
+
+        let config = Config {
+            database_url: format!("sqlite://{}", db_path.display()),
+            base_url: "http://localhost:3000".into(),
+            bind_addr: "127.0.0.1:0".parse().unwrap(),
+            allowed_emails: vec![ALICE.into(), BOB.into()],
+            session_secret: "0123456789abcdef".repeat(4),
+            google: None,
+            log_json: false,
+        };
+        let pool = db::connect(&config.database_url)
+            .await
+            .expect("base de test");
+        let state = AppState::new(config, pool).expect("état de test");
+        Self {
+            router: build_router(state.clone()),
+            state,
+            db_path,
+        }
+    }
+
+    pub async fn add_user(&self, email: &str) {
+        auth::set_password(&self.state.db, email, PASSWORD.into())
+            .await
+            .expect("création du compte");
+    }
+
+    /// Nouveau navigateur, sans cookie, avec sa propre adresse IP.
+    pub fn client(&self) -> Client {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        Client {
+            router: self.router.clone(),
+            cookies: BTreeMap::new(),
+            csrf: None,
+            ip: format!("203.0.113.{}", n % 250 + 1),
+        }
+    }
+
+    /// Navigateur déjà connecté.
+    pub async fn logged_in(&self, email: &str) -> Client {
+        let mut client = self.client();
+        let response = client.login(email, PASSWORD).await;
+        assert_eq!(
+            response.status,
+            StatusCode::SEE_OTHER,
+            "connexion de {email}"
+        );
+        client
+    }
+
+    /// Identifiant de l'espace `slug` d'un utilisateur.
+    pub async fn space_id(&self, email: &str, slug: &str) -> i64 {
+        sqlx::query_scalar(
+            "SELECT s.id FROM spaces s JOIN users u ON u.id = s.user_id WHERE u.email = ? AND s.slug = ?",
+        )
+        .bind(email)
+        .bind(slug)
+        .fetch_one(&self.state.db)
+        .await
+        .expect("espace")
+    }
+
+    pub async fn user_id(&self, email: &str) -> i64 {
+        sqlx::query_scalar("SELECT id FROM users WHERE email = ?")
+            .bind(email)
+            .fetch_one(&self.state.db)
+            .await
+            .expect("utilisateur")
+    }
+}
+
+impl Drop for TestApp {
+    fn drop(&mut self) {
+        remove_db(&self.db_path);
+    }
+}
+
+fn remove_db(path: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
+pub struct Client {
+    router: Router,
+    cookies: BTreeMap<String, String>,
+    /// Jeton CSRF de la session, lu dans la dernière page reçue.
+    pub csrf: Option<String>,
+    ip: String,
+}
+
+pub struct TestResponse {
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub body: String,
+}
+
+impl TestResponse {
+    /// Cible d'une redirection.
+    pub fn location(&self) -> &str {
+        self.headers
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+    }
+
+    pub fn header(&self, name: &str) -> &str {
+        self.headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+    }
+}
+
+impl Client {
+    pub async fn get(&mut self, path: &str) -> TestResponse {
+        self.send(Method::GET, path, None, CsrfMode::Header, false)
+            .await
+    }
+
+    /// GET tel que l'envoie htmx pour un fragment (widget, résultats…).
+    pub async fn get_fragment(&mut self, path: &str) -> TestResponse {
+        self.send(Method::GET, path, None, CsrfMode::Header, true)
+            .await
+    }
+
+    /// POST d'un formulaire, avec le jeton CSRF dans l'en-tête (comme htmx).
+    pub async fn post(&mut self, path: &str, form: &[(&str, &str)]) -> TestResponse {
+        self.send(
+            Method::POST,
+            path,
+            Some(encode(form)),
+            CsrfMode::Header,
+            false,
+        )
+        .await
+    }
+
+    /// POST sans aucun jeton CSRF : ce que pourrait envoyer un site tiers.
+    pub async fn post_without_csrf(&mut self, path: &str, form: &[(&str, &str)]) -> TestResponse {
+        self.send(
+            Method::POST,
+            path,
+            Some(encode(form)),
+            CsrfMode::None,
+            false,
+        )
+        .await
+    }
+
+    pub async fn delete(&mut self, path: &str) -> TestResponse {
+        self.send(Method::DELETE, path, None, CsrfMode::Header, false)
+            .await
+    }
+
+    /// Suit une redirection 303 et renvoie la page d'arrivée.
+    pub async fn follow(&mut self, response: TestResponse) -> TestResponse {
+        assert_eq!(
+            response.status,
+            StatusCode::SEE_OTHER,
+            "redirection attendue : {}",
+            response.body
+        );
+        let target = response.location().to_string();
+        self.get(&target).await
+    }
+
+    /// Connexion par le formulaire, comme un navigateur : on charge la page
+    /// pour obtenir le jeton CSRF, puis on l'envoie dans le champ caché.
+    pub async fn login(&mut self, email: &str, password: &str) -> TestResponse {
+        let page = self.get("/login").await;
+        let token = between(&page.body, "name=\"_csrf\" value=\"", "\"")
+            .expect("jeton CSRF du formulaire")
+            .to_string();
+        let form = encode(&[("_csrf", &token), ("email", email), ("password", password)]);
+        let response = self
+            .send(Method::POST, "/login", Some(form), CsrfMode::None, false)
+            .await;
+        if response.status == StatusCode::SEE_OTHER {
+            // La connexion change le jeton : on relit celui de la session ouverte.
+            self.csrf = None;
+            self.get("/styleguide").await;
+        }
+        response
+    }
+
+    /// Valeur brute du cookie de session.
+    pub fn session_cookie(&self) -> Option<&String> {
+        self.cookies.get("dashu")
+    }
+
+    pub fn set_session_cookie(&mut self, value: &str) {
+        self.cookies.insert("dashu".into(), value.into());
+    }
+
+    async fn send(
+        &mut self,
+        method: Method,
+        path: &str,
+        form: Option<String>,
+        csrf: CsrfMode,
+        fragment: bool,
+    ) -> TestResponse {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(path)
+            // Adresse du visiteur, telle que Cloudflare la transmet.
+            .header("cf-connecting-ip", &self.ip);
+        if !self.cookies.is_empty() {
+            let cookies: Vec<String> = self
+                .cookies
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            request = request.header(header::COOKIE, cookies.join("; "));
+        }
+        if let (CsrfMode::Header, Some(token)) = (csrf, &self.csrf) {
+            request = request.header("x-csrf-token", token);
+        }
+        if fragment {
+            request = request.header("hx-request", "true");
+        }
+        let body = match form {
+            Some(form) => {
+                request = request.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+                Body::from(form)
+            }
+            None => Body::empty(),
+        };
+
+        let response = self
+            .router
+            .clone()
+            .oneshot(request.body(body).unwrap())
+            .await
+            .unwrap();
+        let (parts, body) = response.into_parts();
+
+        for value in parts.headers.get_all(header::SET_COOKIE) {
+            let cookie = value.to_str().unwrap();
+            let pair = cookie.split(';').next().unwrap();
+            if let Some((name, value)) = pair.split_once('=') {
+                if value.is_empty() || cookie.contains("Max-Age=0") {
+                    self.cookies.remove(name);
+                } else {
+                    self.cookies.insert(name.to_string(), value.to_string());
+                }
+            }
+        }
+
+        let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+        let body = String::from_utf8_lossy(&bytes).into_owned();
+        // Les pages connectées portent le jeton dans l'attribut hx-headers.
+        if let Some(token) = between(&body, "X-CSRF-Token&quot;:&quot;", "&quot;")
+            .or_else(|| between(&body, "X-CSRF-Token\":\"", "\""))
+        {
+            self.csrf = Some(token.to_string());
+        }
+        TestResponse {
+            status: parts.status,
+            headers: parts.headers,
+            body,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CsrfMode {
+    Header,
+    None,
+}
+
+fn encode(form: &[(&str, &str)]) -> String {
+    form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(form)
+        .finish()
+}
+
+/// Texte compris entre deux marqueurs.
+pub fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let from = text.find(start)? + start.len();
+    let len = text[from..].find(end)?;
+    Some(&text[from..from + len])
+}
+
+/// Identifiant de note à la fin d'une redirection `/notes/{id}`.
+pub fn note_id(response: &TestResponse) -> i64 {
+    response
+        .location()
+        .trim_start_matches("/notes/")
+        .parse()
+        .expect("redirection vers /notes/{id}")
+}
