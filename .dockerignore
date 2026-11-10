@@ -1,0 +1,16 @@
+# Tout ce dont la compilation n'a pas besoin reste hors de l'image.
+.git
+.github
+.claude
+target
+node_modules
+website
+tests
+backups
+data
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+*.md

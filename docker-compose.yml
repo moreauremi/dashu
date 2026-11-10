@@ -1,0 +1,53 @@
+# dashu en production : l'application et son tunnel Cloudflare.
+#
+#   docker compose up -d --build
+#
+# Aucun port n'est publié sur la machine. C'est le conteneur cloudflared qui
+# ouvre une connexion sortante vers Cloudflare et relaie dashu.dev vers
+# http://dashu:3000 à travers le réseau interne de Docker. Rien à ouvrir sur
+# la box.
+#
+# Les valeurs ${…} viennent du fichier .env posé à côté (voir .env.example).
+
+services:
+  dashu:
+    build: .
+    image: dashu:latest
+    restart: unless-stopped
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET manque dans .env}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?ALLOWED_EMAILS manque dans .env}
+      BASE_URL: ${BASE_URL:?BASE_URL manque dans .env}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///data/dashu.db}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      LOG_FORMAT: ${LOG_FORMAT:-}
+    volumes:
+      # Base SQLite.
+      - data:/data
+      # Destination des sauvegardes (second disque du serveur). Le dossier doit
+      # appartenir à l'utilisateur 10001 : voir scripts/backup.sh.
+      - ${BACKUP_DIR:-./backups}:/backups
+    expose:
+      - "3000"
+    # Durcissement : système de fichiers en lecture seule (dashu n'écrit que
+    # dans /data et /backups), aucune capacité Linux, pas d'élévation possible.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN manque dans .env}
+    depends_on:
+      dashu:
+        condition: service_healthy
+
+volumes:
+  data:

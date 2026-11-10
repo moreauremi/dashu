@@ -19,3 +19,6 @@ Thumbs.db
 
 # Configuration locale de Claude Code (lancement du serveur de dev)
 /.claude/
+
+# Sauvegardes locales (voir scripts/backup.sh)
+/backups/
