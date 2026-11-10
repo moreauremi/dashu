@@ -13,7 +13,7 @@
 <form class="searchbar" action="/notes" method="get" role="search">
   {{ crate::assets::icon("search")|safe }}
   <input type="search" name="q" value="{{ q }}" autocomplete="off"
-         placeholder="Rechercher dans les notes de l'espace {{ shell.active.name }}…" aria-label="Rechercher dans les notes"
+         placeholder="Rechercher dans {{ shell.active.name }}" aria-label="Rechercher dans les notes"
          hx-get="/notes" hx-trigger="input changed delay:200ms" hx-include="closest form"
          hx-target="#note-results" hx-select="#note-results" hx-swap="outerHTML" hx-push-url="true">
   {% if let Some(tag) = tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
@@ -32,11 +32,11 @@
   {% if items.is_empty() %}
     {% if q.is_empty() && tag.is_none() %}
     <div class="empty-state">
-      <p>Aucune note dans l'espace {{ shell.active.name }}.</p>
+      <p>Aucune note dans l'espace {{ shell.active.name }}</p>
       <a class="btn" href="/notes/new">Écrire la première</a>
     </div>
     {% else %}
-    <div class="empty-state"><p>Aucune note ne correspond.</p></div>
+    <div class="empty-state"><p>Aucune note ne correspond</p></div>
     {% endif %}
   {% else %}
   <ul class="note-list" role="list">

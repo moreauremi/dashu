@@ -155,7 +155,7 @@ pub async fn set_password(
     )
     .execute(&state.db)
     .await?;
-    ctx.flash_ok("Mot de passe enregistré.").await?;
+    ctx.flash_ok("Mot de passe enregistré").await?;
     Ok(back())
 }
 
@@ -173,7 +173,7 @@ pub async fn unlink_google(ctx: Ctx, State(state): State<AppState>) -> AppResult
     )
     .execute(&state.db)
     .await?;
-    ctx.flash_ok("Compte Google délié.").await?;
+    ctx.flash_ok("Compte Google délié").await?;
     Ok(see_other("/settings"))
 }
 
@@ -229,7 +229,7 @@ pub async fn add_calendar(
     match sync::sync_source(&state, id, &url).await {
         Ok(count) => {
             ctx.flash_ok(format!(
-                "Agenda « {name} » ajouté : {count} événements importés."
+                "Agenda « {name} » ajouté : {count} événements importés"
             ))
             .await?
         }
@@ -260,6 +260,6 @@ pub async fn delete_calendar(
     if deleted == 0 {
         return Err(AppError::NotFound);
     }
-    ctx.flash_ok("Agenda supprimé.").await?;
+    ctx.flash_ok("Agenda supprimé").await?;
     Ok(see_other("/settings#agendas"))
 }

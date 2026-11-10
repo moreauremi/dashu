@@ -206,7 +206,7 @@ pub async fn refresh(
     }
     match (sources.len(), failures) {
         (0, _) => {}
-        (_, 0) => ctx.flash_ok("Agenda à jour.").await?,
+        (_, 0) => ctx.flash_ok("Agenda à jour").await?,
         _ => {
             ctx.flash_error("La synchro a échoué : la dernière version connue reste affichée.")
                 .await?

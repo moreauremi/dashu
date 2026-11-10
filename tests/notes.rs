@@ -110,7 +110,7 @@ async fn cycle_de_vie_d_une_note() {
         .post(&format!("{url}/move"), &[("space_id", &ecole)])
         .await;
     let list = alice.follow(moved).await;
-    assert!(list.body.contains("Note déplacée vers École."));
+    assert!(list.body.contains("Note déplacée vers École<"));
     assert!(
         !list.body.contains("Révisions réseau</span>"),
         "la note a quitté l'espace Perso"
@@ -132,7 +132,7 @@ async fn cycle_de_vie_d_une_note() {
 
     // --- Suppression ---
     let deleted = alice.post(&format!("{url}/delete"), &[]).await;
-    assert!(alice.follow(deleted).await.body.contains("Note supprimée."));
+    assert!(alice.follow(deleted).await.body.contains("Note supprimée<"));
     assert_eq!(alice.get(&url).await.status, StatusCode::NOT_FOUND);
     assert!(!alice.get("/notes?q=trunk").await.body.contains("<mark>"));
     // L'index de recherche et les tags orphelins sont nettoyés.

@@ -36,7 +36,7 @@
 
 {% if !has_sources %}
 <div class="empty-state">
-  <p>Aucun agenda dans l'espace {{ shell.active.name }}.</p>
+  <p>Aucun agenda dans l'espace {{ shell.active.name }}</p>
   <a class="btn btn-primary" href="/settings#agendas">Ajouter un flux iCal</a>
 </div>
 {% else %}
@@ -76,7 +76,7 @@
       {% endfor %}
     </div>
   </div>
-  {% if grid.is_empty %}<p class="cal-empty muted">Rien de prévu sur cette période.</p>{% endif %}
+  {% if grid.is_empty %}<p class="cal-empty muted">Rien de prévu sur cette période</p>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

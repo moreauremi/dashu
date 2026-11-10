@@ -70,12 +70,20 @@
   --font-ui: "Rethink Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
 
+  /* Rayons : contrôle 8, carte 12, panneau 16. Un élément posé dans un autre
+     prend le rayon du parent moins la marge qui les sépare. */
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
-  --control: 34px;
-  --sidebar-w: 232px;
+  --radius-xl: 16px;
+  /* Hauteurs sur la grille de 4 px : champs et boutons, rangées de la barre latérale. */
+  --control: 36px;
+  --row: 32px;
+  --sidebar-w: 240px;
+  /* Une seule courbe pour tout ce qui bouge. */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --fast: 120ms;
+  --enter: 240ms;
 }
 
 [data-theme="dark"] { color-scheme: dark; }
@@ -112,7 +120,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 400 14px/1.45 var(--font-ui);
+  /* Lignes de 20 px : une rangée d'une ou deux lignes tombe sur la grille de 4. */
+  font: 400 14px/20px var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -125,17 +134,17 @@ ol {
   margin: 0;
 }
 
+/* Hiérarchie par la taille et la couleur : 500 pour les titres, 600 réservé au texte des notes. */
 h1 {
   font-size: 24px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  line-height: 32px;
 }
 
 h2 {
   font-size: 13px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 a {
@@ -181,20 +190,20 @@ kbd {
 
 kbd {
   display: inline-block;
-  padding: 0 5px;
+  padding: 0 6px;
   border: 1px solid var(--border-strong);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--surface-2);
   color: var(--text-2);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
   white-space: nowrap;
 }
 
 mark {
   padding: 0 1px;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--selection);
   color: inherit;
 }
@@ -238,14 +247,14 @@ mark {
 .with-icon {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .dot {
@@ -284,80 +293,116 @@ mark {
   color: var(--text);
   font-size: 18px;
   font-weight: 500;
+  line-height: 24px;
   letter-spacing: 0.24em;
   text-decoration: none;
 }
 
+/* Barre latérale : surface neutre. La couleur de l'espace ne vit que dans les
+   intercalaires du sélecteur (voir .space::before).
+   Colonne commune : toutes les icônes à 24 px du bord, tous les libellés à 48 px. */
 .sidebar {
   position: sticky;
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
   height: 100dvh;
-  padding: 18px 12px 12px;
+  padding: 16px 12px 12px;
   overflow-y: auto;
-  /* La barre prend une légère teinte de l'espace actif. */
-  background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+  background: var(--surface);
   border-right: 1px solid var(--border);
 }
 
 .sidebar > .wordmark {
-  padding: 0 8px 4px;
+  padding: 4px 12px;
 }
 
+/* 3 px de marge + 1 px de bordure : les boutons commencent à 4 px du cadre,
+   ce qui donne leur rayon (12 − 4 = 8). */
 .spaces {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  border-radius: var(--radius-lg);
 }
 
 .space {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  height: 32px;
-  padding: 0 9px;
+  height: var(--row);
+  padding: 0 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text-2);
   text-align: left;
-  transition: background-color var(--fast);
+  transition: background-color var(--fast) var(--ease);
 }
 
-/* Chaque bouton porte son propre data-accent : l'icône garde la couleur de son espace. */
+/* L'intercalaire : un onglet de la couleur de l'espace, comme dans un classeur.
+   Chaque bouton porte son propre data-accent. Discret au repos, plein quand
+   l'espace est actif. */
+.space::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.35;
+  transition: opacity var(--fast) var(--ease);
+}
+
 .space .i {
-  color: var(--accent);
+  color: var(--text-3);
 }
 
 .space:hover {
-  background: var(--surface-2);
+  background: color-mix(in oklab, var(--text) 6%, transparent);
   color: var(--text);
 }
 
 .space[aria-current="true"] {
-  background: var(--accent-soft);
+  background: var(--surface-2);
   color: var(--text);
-  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
+.space[aria-current="true"]::before {
+  opacity: 1;
+}
+
+.space[aria-current="true"] .i {
+  color: var(--text-2);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 11 px + 1 px de bordure : l'icône tombe dans la colonne des autres. */
 .search-btn {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: var(--control);
-  padding: 0 8px 0 10px;
+  gap: 8px;
+  height: var(--row);
+  padding: 0 8px 0 11px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text-2);
   text-align: left;
+  transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
 .search-btn:hover {
@@ -378,28 +423,32 @@ mark {
 .nav a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: var(--control);
-  padding: 0 10px;
+  gap: 8px;
+  height: var(--row);
+  padding: 0 12px;
   border-radius: var(--radius);
   color: var(--text-2);
   text-decoration: none;
-  transition: background-color var(--fast);
+  transition: background-color var(--fast) var(--ease);
 }
 
 .nav a:hover {
-  background: color-mix(in oklab, var(--text) 7%, transparent);
+  background: color-mix(in oklab, var(--text) 6%, transparent);
   color: var(--text);
 }
 
 .nav a[aria-current="page"] {
-  background: var(--accent-soft);
+  background: var(--surface-2);
   color: var(--text);
-  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.nav a[aria-current="page"] .i {
-  color: var(--accent);
+/* .btn.new-note : plus spécifique que .btn, défini plus bas dans la feuille. */
+.btn.new-note {
+  height: var(--row);
+  margin-top: 8px;
+  padding: 0 8px 0 11px;
+  gap: 8px;
 }
 
 .new-note span {
@@ -410,7 +459,7 @@ mark {
 .sidebar-foot {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -448,8 +497,8 @@ mark {
 .account {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-left: 8px;
+  gap: 8px;
+  padding-left: 12px;
 }
 
 .account-email {
@@ -457,7 +506,7 @@ mark {
   min-width: 0;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -471,7 +520,7 @@ mark {
   width: 100%;
   max-width: 1160px;
   margin-inline: auto;
-  padding: 28px 32px 56px;
+  padding: 32px 32px 64px;
 }
 
 .main:focus {
@@ -484,27 +533,27 @@ mark {
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .page-head h1 + p {
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 /* Message flash : confirme une action après une redirection, puis s'efface (app.js). */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: 24px;
   z-index: 40;
   max-width: calc(100vw - 32px);
-  padding: 9px 14px;
+  padding: 8px 16px;
   translate: -50% 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface-2);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
-  transition: opacity var(--fast);
+  transition: opacity var(--fast) var(--ease);
 }
 
 .toast-ok {
@@ -523,7 +572,7 @@ mark {
 .widget-body,
 #note-results,
 .palette-results > * {
-  transition: opacity var(--fast);
+  transition: opacity var(--fast) var(--ease);
 }
 
 .htmx-added {
@@ -531,7 +580,7 @@ mark {
 }
 
 .frag-error {
-  padding: 10px 12px;
+  padding: 8px 16px;
   color: var(--danger);
 }
 
@@ -541,7 +590,7 @@ mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   height: var(--control);
   padding: 0 12px;
   border: 1px solid var(--border-strong);
@@ -551,7 +600,7 @@ mark {
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color var(--fast);
+  transition: background-color var(--fast) var(--ease);
 }
 
 .btn:hover {
@@ -562,7 +611,6 @@ mark {
   border-color: transparent;
   background: var(--accent);
   color: var(--on-accent);
-  font-weight: 600;
 }
 
 .btn-primary:hover {
@@ -592,7 +640,7 @@ mark {
   background: transparent;
   color: var(--text-2);
   text-decoration: none;
-  transition: background-color var(--fast);
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
 .icon-btn:hover {
@@ -611,8 +659,8 @@ mark {
 }
 
 .icon-btn-sm {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
 }
 
 .btn-group {
@@ -633,8 +681,8 @@ mark {
 .segmented > button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
+  gap: 8px;
+  height: 32px;
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -658,7 +706,7 @@ mark {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
 }
 
 .field-label {
@@ -675,7 +723,7 @@ input[type="search"],
 select {
   width: 100%;
   height: var(--control);
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid var(--field-border);
   border-radius: var(--radius);
   background: var(--field);
@@ -697,27 +745,28 @@ select:focus-visible {
   position: relative;
   display: flex;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .searchbar > .i {
   position: absolute;
-  left: 11px;
+  left: 12px;
   color: var(--text-3);
   pointer-events: none;
 }
 
 .searchbar input {
-  height: 38px;
-  padding-left: 34px;
+  height: 40px;
+  padding-left: 36px;
 }
 
+/* Un tag a une seule forme : rectangle de 6 px, dans les lignes comme dans les filtres. */
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 22px;
-  padding: 0 7px;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
@@ -730,37 +779,35 @@ select:focus-visible {
   color: var(--warn);
 }
 
-.pill {
+/* État en direct (cours en cours) : un point et un mot, sans pastille. */
+.live {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 11.5px;
-  font-weight: 600;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--text-2);
   font-size: 13px;
   text-decoration: none;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
 .chip:hover {
@@ -769,8 +816,8 @@ select:focus-visible {
 }
 
 .chip[aria-current="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
   color: var(--text);
 }
 
@@ -788,10 +835,10 @@ select:focus-visible {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid;
   border-radius: var(--radius);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .alert .i {
@@ -809,7 +856,7 @@ select:focus-visible {
 }
 
 .alert-warn {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   border-color: color-mix(in oklab, var(--warn) 45%, transparent);
   background: color-mix(in oklab, var(--warn) 10%, var(--surface));
 }
@@ -833,7 +880,7 @@ select:focus-visible {
 }
 
 .empty {
-  padding: 14px;
+  padding: 16px;
 }
 
 .empty-state {
@@ -868,7 +915,7 @@ select:focus-visible {
   min-width: 220px;
   padding: 4px;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
 }
@@ -876,12 +923,12 @@ select:focus-visible {
 .menu-list button {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
   height: var(--control);
-  padding: 0 10px;
+  padding: 0 8px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: transparent;
   text-align: left;
   white-space: nowrap;
@@ -904,8 +951,8 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 40px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -928,7 +975,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
 }
 
 .dash-head {
@@ -940,13 +987,12 @@ select:focus-visible {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  letter-spacing: -0.02em;
 }
 
 .widgets {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -955,49 +1001,52 @@ select:focus-visible {
 }
 
 /* Emplacement d'un widget en cours de chargement : mêmes dimensions que le
-   contenu attendu, pour que la page ne saute pas à son arrivée. */
+   contenu attendu (rangées de 36 px), pour que la page ne saute pas à son arrivée. */
 .skeleton {
-  margin: 12px 14px;
+  margin: 8px;
   border-radius: var(--radius);
-  background: repeating-linear-gradient(to bottom, var(--surface-2) 0 28px, transparent 28px 40px);
+  background: repeating-linear-gradient(to bottom, var(--surface-2) 0 28px, transparent 28px 36px);
 }
 
 .skeleton-3 {
-  height: 108px;
+  height: 100px;
 }
 
 .skeleton-5 {
-  height: 188px;
+  height: 172px;
 }
 
 .widget-count {
-  padding: 2px 14px 8px;
+  padding: 4px 16px 8px;
   color: var(--text-3);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
-.courses,
-.tasks,
-.note-links {
-  padding: 6px;
+/* Listes des widgets : 4 px de marge dans une carte de 12 px, donc des rangées
+   de 8 px de rayon. Texte à 16 px du bord, comme le titre de la carte.
+   Le sélecteur ul.… passe devant ul[role="list"] { padding: 0 }. */
+ul.courses,
+ul.tasks,
+ul.note-links {
+  padding: 4px;
 }
 
 .course {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1px 10px;
+  gap: 0 12px;
   align-items: center;
-  padding: 8px 8px 8px 16px;
+  padding: 8px 12px;
 }
 
 /* Barre de couleur de la matière (même palette que l'agenda). */
 .course::before {
   content: "";
   position: absolute;
-  left: 5px;
-  top: 9px;
-  bottom: 9px;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
   width: 3px;
   border-radius: 2px;
   background: var(--ev-bar);
@@ -1007,15 +1056,17 @@ select:focus-visible {
   border-top: 1px solid var(--border);
 }
 
+/* Centré plutôt que sur la ligne de base : un texte coupé (overflow: hidden)
+   prend sa base en bas de sa boîte et ajouterait un pixel à la rangée. */
 .course-main {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
 .course-main strong {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .course-main .muted {
@@ -1028,14 +1079,14 @@ select:focus-visible {
 .course-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
+  gap: 0 12px;
   grid-column: 1;
   color: var(--text-2);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.course .pill {
+.course .live {
   grid-column: 2;
   grid-row: 1 / span 2;
 }
@@ -1043,9 +1094,9 @@ select:focus-visible {
 .task {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-height: 36px;
-  padding: 0 4px 0 8px;
+  padding: 0 4px 0 12px;
   border-radius: var(--radius);
 }
 
@@ -1057,11 +1108,11 @@ select:focus-visible {
   display: grid;
   flex: none;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 1.5px solid var(--field-border);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--field);
   color: transparent;
 }
@@ -1093,10 +1144,11 @@ select:focus-visible {
   color: var(--text-3);
 }
 
+/* Le champ s'aligne sur les rangées au-dessus (4 px du bord) et prend leur rayon. */
 .task-add {
   display: flex;
-  gap: 6px;
-  padding: 8px 10px 10px;
+  gap: 4px;
+  padding: 8px 4px 4px;
   border-top: 1px solid var(--border);
 }
 
@@ -1108,14 +1160,15 @@ select:focus-visible {
 
 .note-links a {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 34px;
-  padding: 6px 8px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: var(--radius);
   color: var(--text);
   text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
 }
 
 .note-links a:hover {
@@ -1130,15 +1183,14 @@ select:focus-visible {
 }
 
 .note-link-title .i {
-  align-self: center;
-  width: 14px;
-  height: 14px;
-  color: var(--accent);
+  color: var(--text-3);
 }
 
 .note-links .muted {
   flex: none;
-  font-size: 12.5px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- 7. Notes et éditeur ---------- */
@@ -1157,11 +1209,11 @@ select:focus-visible {
 .note-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 16px;
-  padding: 10px 14px;
+  gap: 0 16px;
+  padding: 12px 16px;
   color: var(--text);
   text-decoration: none;
-  transition: background-color var(--fast);
+  transition: background-color var(--fast) var(--ease);
 }
 
 .note-row:hover {
@@ -1175,9 +1227,9 @@ select:focus-visible {
 .note-row-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .note-row-title > span:last-child {
@@ -1187,9 +1239,7 @@ select:focus-visible {
 }
 
 .note-row-title .i {
-  width: 14px;
-  height: 14px;
-  color: var(--accent);
+  color: var(--text-3);
 }
 
 .note-row-excerpt {
@@ -1205,10 +1255,11 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   grid-column: 2;
   grid-row: 1 / span 2;
-  font-size: 12.5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Page éditeur : occupe toute la hauteur, chaque panneau défile séparément. */
@@ -1230,7 +1281,7 @@ select:focus-visible {
 .editor-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -1240,7 +1291,7 @@ select:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: var(--text-3);
-  font-size: 12.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1273,13 +1324,13 @@ select:focus-visible {
 input.note-title {
   width: 100%;
   height: auto;
-  padding: 16px 24px 6px;
+  padding: 16px 24px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
   font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  line-height: 32px;
 }
 
 input.note-title:focus-visible {
@@ -1291,7 +1342,7 @@ input.note-title:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 4px 24px 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text-3);
@@ -1302,14 +1353,14 @@ input.note-title:focus-visible {
 }
 
 .tag-removable {
-  padding-right: 2px;
+  padding-right: 4px;
 }
 
 .tag-removable button {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -1328,9 +1379,9 @@ input.note-title:focus-visible {
 }
 
 .tag-add input {
-  width: 150px;
+  width: 160px;
   height: 24px;
-  padding: 0 6px;
+  padding: 0 8px;
   border-color: transparent;
   background: transparent;
   font-size: 13px;
@@ -1366,7 +1417,7 @@ input.note-title:focus-visible {
 .preview {
   min-width: 0;
   overflow: auto;
-  padding: 20px 24px 40vh;
+  padding: 24px 24px 40vh;
 }
 
 /* Rendu d'une note (aperçu). Le HTML vient du Markdown, nettoyé par ammonia. */
@@ -1374,7 +1425,7 @@ input.note-title:focus-visible {
   max-width: 78ch;
   margin-inline: auto;
   font-size: 15px;
-  line-height: 1.65;
+  line-height: 24px;
   overflow-wrap: break-word;
 }
 
@@ -1382,6 +1433,7 @@ input.note-title:focus-visible {
   margin-top: 0.85em;
 }
 
+/* Les titres d'une note gardent le 600 : c'est le contenu, pas l'interface. */
 .prose h1,
 .prose h2,
 .prose h3,
@@ -1390,7 +1442,6 @@ input.note-title:focus-visible {
   color: var(--text);
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.01em;
 }
 
 .prose > :first-child {
@@ -1434,16 +1485,16 @@ input.note-title:focus-visible {
 }
 
 .prose input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  margin: 0 6px 0 0;
-  vertical-align: -2px;
+  width: 16px;
+  height: 16px;
+  margin: 0 8px 0 0;
+  vertical-align: -3px;
   accent-color: var(--accent);
 }
 
 .prose blockquote {
   margin-inline: 0;
-  padding-left: 14px;
+  padding-left: 16px;
   border-left: 3px solid var(--border-strong);
   color: var(--text-2);
 }
@@ -1456,12 +1507,12 @@ input.note-title:focus-visible {
 
 .prose pre {
   overflow-x: auto;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--field);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 20px;
 }
 
 .prose pre code {
@@ -1480,7 +1531,7 @@ input.note-title:focus-visible {
 
 .prose th,
 .prose td {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border-strong);
   text-align: left;
 }
@@ -1542,11 +1593,11 @@ input.note-title:focus-visible {
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 24px 64px rgb(0 0 0 / 0.4);
-  transition: opacity var(--fast), translate var(--fast);
+  transition: opacity var(--fast) var(--ease), translate var(--fast) var(--ease);
 }
 
 .palette[open] {
@@ -1565,11 +1616,12 @@ input.note-title:focus-visible {
   background: rgb(0 0 0 / 0.45);
 }
 
+/* Icône du champ et icônes des résultats dans la même colonne, à 16 px du bord. */
 .palette-field {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 8px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text-3);
 }
@@ -1595,18 +1647,18 @@ input.note-title:focus-visible {
   flex: 1;
   min-height: 120px;
   overflow-y: auto;
-  padding: 6px;
+  padding: 8px;
 }
 
 .palette-heading {
-  padding: 8px 10px 4px;
+  padding: 8px 8px 4px;
   color: var(--text-3);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .palette-empty {
-  padding: 28px 10px;
+  padding: 32px 8px;
   color: var(--text-2);
   text-align: center;
 }
@@ -1614,10 +1666,10 @@ input.note-title:focus-visible {
 .pal-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   min-height: 40px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
@@ -1626,12 +1678,9 @@ input.note-title:focus-visible {
   text-decoration: none;
 }
 
+/* La couleur d'un espace est portée par son point, pas par l'icône. */
 .pal-item > .i {
   color: var(--text-3);
-}
-
-.pal-item[data-accent] > .i {
-  color: var(--accent);
 }
 
 .pal-item:hover,
@@ -1659,30 +1708,30 @@ input.note-title:focus-visible {
 
 .pal-sub {
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .pal-space {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .palette-help {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
+  gap: 4px;
+  padding: 8px 16px;
   border-top: 1px solid var(--border);
   color: var(--text-3);
   font-size: 12px;
 }
 
 .palette-help kbd:nth-of-type(3) {
-  margin-left: 10px;
+  margin-left: 12px;
 }
 
 /* ---------- 9. Agenda ---------- */
@@ -1699,7 +1748,7 @@ input.note-title:focus-visible {
 }
 
 .cal {
-  --gutter: 54px;
+  --gutter: 56px;
   --slot: 4px; /* hauteur de 5 minutes : une heure fait 48 px */
   --col-min: 124px;
   overflow: hidden;
@@ -1757,7 +1806,7 @@ input.note-title:focus-visible {
 .cal-dayhead a {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   align-self: flex-start;
   color: var(--text-2);
   text-decoration: none;
@@ -1771,8 +1820,8 @@ input.note-title:focus-visible {
   padding: 0 6px;
   border-radius: 999px;
   color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1787,7 +1836,7 @@ input.note-title:focus-visible {
 
 .cal-allday {
   overflow: hidden;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
@@ -1803,9 +1852,9 @@ input.note-title:focus-visible {
 
 .cal-hours span {
   grid-column: 1;
-  padding: 3px 8px 0 0;
+  padding: 4px 8px 0 0;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-align: right;
@@ -1853,18 +1902,18 @@ input.note-title:focus-visible {
   min-height: 0;
   margin: 1px 0;
   overflow: hidden;
-  padding: 3px 6px;
+  padding: 4px 6px;
   border-left: 3px solid var(--ev-bar);
   border-radius: var(--radius-sm);
   background: var(--ev-bg);
   color: var(--ev-fg);
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 16px;
 }
 
 .ev strong {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1934,7 +1983,7 @@ input.note-title:focus-visible {
 }
 
 .cal-empty {
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
 }
 
@@ -1943,7 +1992,7 @@ input.note-title:focus-visible {
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   max-width: 760px;
 }
 
@@ -1959,9 +2008,9 @@ input.note-title:focus-visible {
 .source {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px 12px;
+  gap: 4px 12px;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1991,7 +2040,7 @@ input.note-title:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .source-add .field {
@@ -2015,9 +2064,9 @@ input.note-title:focus-visible {
   gap: 16px;
   width: 100%;
   max-width: 360px;
-  padding: 28px 24px;
+  padding: 32px 24px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   background: var(--surface);
 }
 
@@ -2032,7 +2081,7 @@ input.note-title:focus-visible {
 .divider {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--text-3);
   font-size: 13px;
 }
@@ -2081,26 +2130,26 @@ input.note-title:focus-visible {
 }
 
 .sg-title {
-  margin-top: 14px;
-  padding-bottom: 6px;
+  margin-top: 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
   color: var(--text-2);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .sg-swatches {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .sg-swatches li {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
-  gap: 0 10px;
+  gap: 0 12px;
   align-items: center;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .swatch {
@@ -2134,7 +2183,7 @@ input.note-title:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 12px;
+  gap: 12px;
 }
 
 .sg-accents .pal-space {
@@ -2179,7 +2228,7 @@ input.note-title:focus-visible {
 .sg-events {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .sg-ev {
@@ -2209,15 +2258,19 @@ input.note-title:focus-visible {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 52px;
+    height: 56px;
     padding: 0 8px;
     padding-top: env(safe-area-inset-top, 0);
     border-bottom: 1px solid var(--border);
-    background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+    background: var(--surface);
   }
 
+  /* Nom de l'espace actif, précédé de son point de couleur. */
   .topbar-space {
+    display: inline-flex;
     flex: 1;
+    align-items: center;
+    gap: 8px;
     color: var(--text-2);
     font-size: 13px;
   }
@@ -2230,7 +2283,7 @@ input.note-title:focus-visible {
     width: min(280px, 86vw);
     translate: -100% 0;
     visibility: hidden;
-    transition: translate var(--fast), visibility var(--fast);
+    transition: translate var(--enter) var(--ease), visibility var(--enter);
   }
 
   .app[data-nav-open] .sidebar {
@@ -2247,19 +2300,15 @@ input.note-title:focus-visible {
   }
 
   .main {
-    padding: 18px 14px 48px;
+    padding: 16px 16px 48px;
   }
 
   .main:has(.editor-page) {
-    height: calc(100dvh - 52px);
-  }
-
-  h1 {
-    font-size: 21px;
+    height: calc(100dvh - 56px);
   }
 
   .clock {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .widgets {
@@ -2286,16 +2335,17 @@ input.note-title:focus-visible {
   }
 
   input.note-title {
-    padding: 12px 14px 4px;
-    font-size: 20px;
+    padding: 12px 16px 4px;
+    font-size: 18px;
+    line-height: 24px;
   }
 
   .note-tags {
-    padding: 4px 14px 10px;
+    padding: 4px 16px 12px;
   }
 
   .preview {
-    padding: 16px 14px 30vh;
+    padding: 16px 16px 30vh;
     border-top: 1px solid var(--border);
   }
 
@@ -2308,11 +2358,11 @@ input.note-title:focus-visible {
     grid-row: auto;
     justify-content: flex-start;
     flex-wrap: wrap;
-    margin-top: 2px;
+    margin-top: 4px;
   }
 
   .cal {
-    --gutter: 44px;
+    --gutter: 48px;
   }
 
   .sg {
@@ -2320,7 +2370,7 @@ input.note-title:focus-visible {
   }
 
   .sg-panel {
-    padding: 14px;
+    padding: 16px;
   }
 }
 
@@ -2328,10 +2378,7 @@ input.note-title:focus-visible {
 @media (pointer: coarse) {
   :root {
     --control: 40px;
-  }
-
-  .space {
-    height: 40px;
+    --row: 40px;
   }
 
   .task {
@@ -2339,8 +2386,8 @@ input.note-title:focus-visible {
   }
 
   .check {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
   }
 
   .icon-btn-sm {
@@ -2354,7 +2401,7 @@ input.note-title:focus-visible {
   }
 
   .chip {
-    height: 34px;
+    height: 36px;
   }
 
   input[type="text"],

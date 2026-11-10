@@ -65,10 +65,14 @@ static SANITIZER: LazyLock<Builder<'static>> = LazyLock::new(|| {
     builder
 });
 
+/// Extensions Markdown reconnues, au rendu comme dans les extraits.
+fn options() -> Options {
+    Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH
+}
+
 /// Rend une note en HTML prêt à être inséré dans la page.
 pub fn render(markdown: &str) -> String {
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
+    let options = options();
 
     let mut events = Vec::new();
     // Bloc de code en cours : (langage, contenu accumulé).
@@ -131,10 +135,17 @@ fn highlight(lang: &str, source: &str) -> String {
     format!("<pre><code>{}</code></pre>", generator.finalize())
 }
 
-/// Début du texte d'une note, sans la syntaxe Markdown, pour les listes.
-pub fn excerpt(markdown: &str, max_chars: usize) -> String {
+/// Texte brut d'un morceau de Markdown, sur une ligne : ni `#`, ni `**`, ni
+/// cases `[x]`. Sert aussi aux extraits de la recherche plein texte, qui sont
+/// des morceaux du Markdown d'origine : les marqueurs de FTS5 (caractères de
+/// contrôle) sont du texte pour le parseur et traversent intacts.
+pub fn plain(markdown: &str) -> String {
+    plain_until(markdown, usize::MAX)
+}
+
+fn plain_until(markdown: &str, max_chars: usize) -> String {
     let mut out = String::new();
-    for event in Parser::new(markdown) {
+    for event in Parser::new_ext(markdown, options()) {
         let text = match event {
             Event::Text(text) | Event::Code(text) => text,
             Event::SoftBreak | Event::HardBreak | Event::End(_) => " ".into(),
@@ -145,7 +156,12 @@ pub fn excerpt(markdown: &str, max_chars: usize) -> String {
             break;
         }
     }
-    let collapsed = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Début du texte d'une note, sans la syntaxe Markdown, pour les listes.
+pub fn excerpt(markdown: &str, max_chars: usize) -> String {
+    let collapsed = plain_until(markdown, max_chars);
     if collapsed.chars().count() > max_chars {
         let cut: String = collapsed.chars().take(max_chars).collect();
         format!("{}…", cut.trim_end())
@@ -267,5 +283,20 @@ mod tests {
             "Titre Un gras et du code."
         );
         assert_eq!(excerpt("abcdefghij klm", 5), "abcde…");
+        // Les cases d'une liste de tâches ne passent pas dans l'extrait.
+        assert_eq!(
+            excerpt("## Objectif\n\n- [x] Créer les VLAN\n- [ ] Tester", 100),
+            "Objectif Créer les VLAN Tester"
+        );
+    }
+
+    #[test]
+    fn extrait_fts_sans_syntaxe_et_marqueurs_gardes() {
+        // Morceau tel que le renvoie snippet() de FTS5 : du Markdown brut,
+        // avec \u{1} et \u{2} autour du mot trouvé.
+        assert_eq!(
+            plain("## Objectif\n\nFiltrer le \u{1}VLAN\u{2} 10 :\n\n- [x] Règle **deny**"),
+            "Objectif Filtrer le \u{1}VLAN\u{2} 10 : Règle deny"
+        );
     }
 }

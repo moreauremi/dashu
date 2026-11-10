@@ -2,7 +2,7 @@
     renvoie ce même fragment, qui remplace l'ancien. -#}
 <div id="w-tasks" class="widget-body">
   {% if tasks.is_empty() %}
-  <p class="empty">Rien de prévu aujourd'hui.</p>
+  <p class="empty">Rien de prévu aujourd'hui</p>
   {% else %}
   <ul class="tasks" role="list">
     {% for task in tasks %}
@@ -22,7 +22,7 @@
   <form class="task-add" hx-post="/tasks" hx-target="#w-tasks" hx-swap="outerHTML">
     {#- L'id permet à htmx de rendre le focus au champ après l'ajout. -#}
     <input id="task-new" type="text" name="title" maxlength="200" required autocomplete="off"
-           placeholder="Ajouter une tâche…" aria-label="Nouvelle tâche">
+           placeholder="Ajouter une tâche" aria-label="Nouvelle tâche">
     <button class="btn" type="submit" aria-label="Ajouter la tâche">{{ crate::assets::icon("plus")|safe }}</button>
   </form>
 </div>

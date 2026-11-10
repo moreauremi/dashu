@@ -66,12 +66,12 @@ async fn les_notes_d_alice_sont_invisibles_et_intouchables_pour_bob() {
     // Recherche du mot exact, dans la liste et dans la palette : aucun résultat.
     // (Le mot lui-même réapparaît dans le champ de recherche de Bob, c'est normal.)
     let list = bob.get(&format!("/notes?q={SECRET}")).await;
-    assert!(list.body.contains("Aucune note ne correspond."));
+    assert!(list.body.contains("Aucune note ne correspond<"));
     assert!(!list.body.contains("note-row") && !list.body.contains("Journal"));
     let palette = bob
         .get_fragment(&format!("/search/palette?q={SECRET}"))
         .await;
-    assert!(palette.body.contains("Aucun résultat."));
+    assert!(palette.body.contains("Aucun résultat<"));
     assert!(!palette.body.contains("/notes/"));
     // Alice, elle, retrouve bien sa note avec la même recherche.
     assert!(

@@ -274,7 +274,7 @@ async fn search_in_space(
             } else {
                 mark_matches(&row.title_marked)
             },
-            excerpt_html: mark_matches(&row.snippet),
+            excerpt_html: mark_matches(&markdown::plain(&row.snippet)),
             pinned: row.pinned,
             updated: time::ago(row.updated_at, now),
             tags: Vec::new(),
@@ -517,7 +517,7 @@ pub async fn move_to_space(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
-    ctx.flash_ok(format!("Note déplacée vers {}.", target.name))
+    ctx.flash_ok(format!("Note déplacée vers {}", target.name))
         .await?;
     Ok(see_other("/notes"))
 }
@@ -540,7 +540,7 @@ pub async fn delete(
         return Err(AppError::NotFound);
     }
     prune_orphan_tags(&state.db, ctx.user.id).await?;
-    ctx.flash_ok("Note supprimée.").await?;
+    ctx.flash_ok("Note supprimée").await?;
     Ok(see_other("/notes"))
 }
 

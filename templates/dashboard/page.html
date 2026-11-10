@@ -2,9 +2,10 @@
 {% block title %}Dashboard · dashu{% endblock %}
 {% block content %}
 <header class="page-head dash-head">
+  {#- La date fait le titre ; la salutation (demandée par la spec) passe dessous. -#}
   <div>
-    <h1>{{ greeting }}</h1>
-    <p class="muted cap-first">{{ date }}</p>
+    <h1 class="cap-first">{{ date }}</h1>
+    <p class="muted">{{ greeting }} · {{ shell.active.name }}</p>
   </div>
   {#- L'heure est rendue par le serveur puis tenue à jour par app.js. -#}
   <time class="clock" data-clock aria-label="Heure à Paris">{{ time }}</time>

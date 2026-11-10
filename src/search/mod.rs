@@ -148,7 +148,7 @@ pub async fn palette(
                         } else {
                             notes::mark_matches(&row.title_marked)
                         },
-                        excerpt_html: notes::mark_matches(&row.snippet),
+                        excerpt_html: notes::mark_matches(&markdown::plain(&row.snippet)),
                         space_name,
                         space_color,
                     }

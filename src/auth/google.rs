@@ -227,7 +227,7 @@ pub async fn callback(
             )
             .execute(&state.db)
             .await?;
-            set_flash(&session, "ok", "Compte Google lié.").await?;
+            set_flash(&session, "ok", "Compte Google lié").await?;
         } else {
             set_flash(
                 &session,

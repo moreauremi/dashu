@@ -10,7 +10,7 @@
   {% endif %}
   <form class="tag-add" hx-post="/notes/{{ id }}/tags" hx-target="#note-tags" hx-swap="outerHTML">
     <input id="tag-new" type="text" name="name" list="tag-suggestions" maxlength="40" autocomplete="off"
-           placeholder="Ajouter un tag…" aria-label="Ajouter un tag">
+           placeholder="Ajouter un tag" aria-label="Ajouter un tag">
     <datalist id="tag-suggestions">
       {% for name in suggestions %}<option value="{{ name }}"></option>{% endfor %}
     </datalist>

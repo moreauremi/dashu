@@ -38,7 +38,7 @@ pub async fn page(ctx: Ctx) -> AppResult<Response> {
     };
     let page = DashboardPage {
         greeting,
-        date: time::date_long(time::paris_date(now)),
+        date: time::weekday_day_month(time::paris_date(now)),
         time: time::hm(now),
         shell: ctx.shell("dashboard").await?,
     };

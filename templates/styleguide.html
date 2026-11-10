@@ -58,7 +58,7 @@
         <button type="button" aria-pressed="false">Jour</button>
         <button type="button" aria-pressed="true">Semaine</button>
       </div>
-      <span class="pill">en cours</span>
+      <span class="live"><span class="dot" aria-hidden="true"></span>en cours</span>
       <span class="tag">#réseau</span>
       <a class="chip" href="#main" aria-current="true">#bts<span class="chip-count">4</span></a>
       <a class="chip" href="#main">#alternance<span class="chip-count">2</span></a>
@@ -76,7 +76,7 @@
       </label>
       <div class="searchbar">
         {{ crate::assets::icon("search")|safe }}
-        <input type="search" placeholder="Rechercher…" aria-label="Exemple de recherche">
+        <input type="search" placeholder="Rechercher" aria-label="Exemple de recherche">
       </div>
     </div>
 
@@ -96,7 +96,7 @@
             <li class="course ev-c8">
               <div class="course-main"><strong>RÉSEAUX</strong><span class="muted">M. Lefèvre</span></div>
               <div class="course-meta"><span>Aujourd'hui · 08:00 – 09:55</span><span class="with-icon">{{ crate::assets::icon("map-pin")|safe }}B204</span></div>
-              <span class="pill">en cours</span>
+              <span class="live"><span class="dot" aria-hidden="true"></span>en cours</span>
             </li>
             <li class="course ev-c2">
               <div class="course-main"><strong>ANGLAIS</strong><span class="muted">Mme Carter</span></div>

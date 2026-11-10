@@ -16,7 +16,7 @@
   <header class="topbar">
     <button class="icon-btn" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">{{ crate::assets::icon("menu")|safe }}</button>
     <a class="wordmark" href="/">dashu</a>
-    <span class="topbar-space">{{ shell.active.name }}</span>
+    <span class="topbar-space"><span class="dot" aria-hidden="true"></span>{{ shell.active.name }}</span>
     <button class="icon-btn" type="button" data-palette-open aria-label="Rechercher">{{ crate::assets::icon("search")|safe }}</button>
   </header>
 
@@ -36,20 +36,22 @@
       {% endfor %}
     </div>
 
-    <button class="search-btn" type="button" data-palette-open>
-      {{ crate::assets::icon("search")|safe }}
-      <span>Rechercher</span>
-      <kbd data-mod-key>Ctrl K</kbd>
-    </button>
+    <div class="sidebar-nav">
+      <button class="search-btn" type="button" data-palette-open>
+        {{ crate::assets::icon("search")|safe }}
+        <span>Rechercher</span>
+        <kbd data-mod-key>Ctrl K</kbd>
+      </button>
 
-    <ul class="nav" role="list">
-      <li><a href="/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
-      <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
-      <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
-      <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
-    </ul>
+      <ul class="nav" role="list">
+        <li><a href="/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
+        <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
+        <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
+        <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
+      </ul>
 
-    <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
+      <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
+    </div>
 
     <div class="sidebar-foot">
       <form class="theme-switch" method="post" action="/settings/theme" role="group" aria-label="Thème">
@@ -81,7 +83,7 @@
     <div class="palette-field">
       {{ crate::assets::icon("search")|safe }}
       <input id="palette-q" type="search" name="q" autocomplete="off" spellcheck="false"
-             placeholder="Chercher une note, une page, une action…"
+             placeholder="Note, page ou action"
              aria-label="Chercher une note, une page ou une action" aria-controls="palette-results"
              hx-get="/search/palette" hx-trigger="input changed delay:120ms, palette-open"
              hx-target="#palette-results" hx-swap="innerHTML">

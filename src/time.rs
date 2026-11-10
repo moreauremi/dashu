@@ -91,6 +91,11 @@ pub fn date_long(date: NaiveDate) -> String {
     )
 }
 
+/// « mardi 10 novembre » : titre du dashboard, l'année n'y apprend rien.
+pub fn weekday_day_month(date: NaiveDate) -> String {
+    format!("{} {}", weekday(date.weekday()), day_month(date))
+}
+
 /// « mar. 10 nov. »
 pub fn date_short(date: NaiveDate) -> String {
     format!(

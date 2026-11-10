@@ -405,7 +405,7 @@ async fn changement_de_mot_de_passe() {
             .follow(response)
             .await
             .body
-            .contains("Mot de passe enregistré.")
+            .contains("Mot de passe enregistré<")
     );
 
     assert_eq!(
