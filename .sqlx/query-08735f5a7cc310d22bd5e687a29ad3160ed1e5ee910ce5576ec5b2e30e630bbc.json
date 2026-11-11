@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT f.id AS \"id!\" FROM files f\n           WHERE f.thumb = 0\n             AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.file_id = f.id AND j.kind = 'thumbnail')\n           LIMIT 200",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "08735f5a7cc310d22bd5e687a29ad3160ed1e5ee910ce5576ec5b2e30e630bbc"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", name, mime, size, updated_at\n           FROM files\n           WHERE user_id = ? AND space_id = ?\n           ORDER BY updated_at DESC, id DESC",
+  "query": "SELECT id AS \"id!\", name, mime, size, updated_at, thumb\n           FROM files\n           WHERE user_id = ? AND space_id = ?\n           ORDER BY updated_at DESC, id DESC",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "name": "updated_at",
         "ordinal": 4,
         "type_info": "Integer"
+      },
+      {
+        "name": "thumb",
+        "ordinal": 5,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -37,8 +42,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "10cadc08485051d1cce9f5ee4d167f972e7c40fd5329712b9726cc8baa4c8d8a"
+  "hash": "34a8cecb2270378dfe6ffbf766a40a52c316ecbbcb8f2e63d6e4652a37f798a9"
 }

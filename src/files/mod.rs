@@ -19,7 +19,7 @@ use anyhow::Context as _;
 use askama::Template;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use http_body_util::BodyExt;
 use serde::Deserialize;
@@ -54,6 +54,9 @@ pub struct FileItem {
     pub updated: String,
     /// Vidéo, photo ou PDF, et outils activés : bouton « Compresser ».
     pub compressible: bool,
+    /// Vignette prête : affichée à gauche du nom, sinon `icon`.
+    pub thumb: bool,
+    pub icon: &'static str,
 }
 
 #[derive(Template)]
@@ -76,7 +79,7 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     let now = time::now();
     let tools = state.config.work_dir.is_some();
     let items = sqlx::query!(
-        r#"SELECT id AS "id!", name, mime, size, updated_at
+        r#"SELECT id AS "id!", name, mime, size, updated_at, thumb
            FROM files
            WHERE user_id = ? AND space_id = ?
            ORDER BY updated_at DESC, id DESC"#,
@@ -91,6 +94,8 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         size: human_size(row.size),
         kind: kind_label(&row.mime),
         compressible: tools && crate::tools::Media::for_mime(&row.mime).is_some(),
+        thumb: row.thumb == 1,
+        icon: icon_for(&row.mime),
         name: row.name,
         updated: time::ago(row.updated_at, now),
     })
@@ -345,7 +350,7 @@ async fn finish(
     let now = time::now();
     let saved = async {
         let mut tx = state.db.begin().await?;
-        sqlx::query!(
+        let file_id = sqlx::query!(
             "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             user_id,
@@ -359,18 +364,27 @@ async fn finish(
             now
         )
         .execute(&mut *tx)
-        .await?;
+        .await?
+        .last_insert_rowid();
         sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
             .execute(&mut *tx)
             .await?;
-        tx.commit().await
+        tx.commit().await.map(|()| file_id)
     }
     .await;
-    if let Err(error) = saved {
-        let _ = tokio::fs::remove_file(&dest).await;
-        return Err(error.into());
+    match saved {
+        Ok(file_id) => {
+            // La vignette se fait ensuite, sans faire attendre l'envoi.
+            if let Err(error) = crate::tools::enqueue_thumbnail(state, file_id).await {
+                tracing::warn!(error = format!("{error:#}"), "demande de vignette");
+            }
+            Ok(())
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&dest).await;
+            Err(error.into())
+        }
     }
-    Ok(())
 }
 
 /// Réponse 409 : le morceau n'est pas celui attendu. Le corps est du HTML
@@ -565,14 +579,324 @@ pub async fn delete(
 
     if let Some(files) = &state.config.files {
         let path = stored_path(&files.dir, &key);
-        if let Err(error) = tokio::fs::remove_file(&path).await
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            tracing::warn!(%error, path = %path.display(), "suppression d'un fichier du disque");
+        for path in [thumb_path(&path), preview_path(&path), path] {
+            if let Err(error) = tokio::fs::remove_file(&path).await
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(%error, path = %path.display(), "suppression d'un fichier du disque");
+            }
         }
     }
     ctx.flash_ok("Fichier supprimé").await?;
     Ok(see_other("/files"))
+}
+
+// ---------------------------------------------------------------------
+// Aperçu
+// ---------------------------------------------------------------------
+
+/// Texte montré dans l'aperçu : les 200 premiers Ko.
+const TEXT_PREVIEW_BYTES: u64 = 200 * 1024;
+
+#[derive(Template)]
+#[template(path = "files/view.html")]
+struct ViewPage {
+    shell: Shell,
+    id: i64,
+    name: String,
+    /// « Vidéo · 98 Mo · il y a 2 min »
+    meta: String,
+    compressible: bool,
+    /// Ce que la page montre : `image` (le fichier), `picture` (le grand
+    /// aperçu), `video`, `audio`, `text`, `markdown`, `pending` (aperçu en
+    /// préparation) ou `none`.
+    show: &'static str,
+    /// Vidéo : image affichée avant la lecture.
+    poster: bool,
+    /// Vidéo .mov d'iPhone (HEVC) : tous les navigateurs ne la lisent pas.
+    quicktime: bool,
+    /// Texte échappé, ou HTML du Markdown nettoyé par ammonia.
+    text_html: String,
+    truncated: bool,
+    icon: &'static str,
+}
+
+/// Types que le navigateur affiche tels quels : images bitmap, vidéos, sons.
+/// Jamais le HTML, le SVG ni le PDF, qui peuvent contenir du code.
+fn inline_safe(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+    ) || mime.starts_with("video/")
+        || mime.starts_with("audio/")
+}
+
+/// Types montrés comme du texte (échappé : un HTML ou un SVG s'y lit, sans
+/// jamais s'exécuter).
+fn is_text(mime: &str) -> bool {
+    mime.starts_with("text/") || mime == "application/json" || mime == "image/svg+xml"
+}
+
+/// `GET /files/{id}` : la page d'aperçu d'un fichier.
+pub async fn view(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    let row = sqlx::query!(
+        "SELECT name, mime, size, storage_key, updated_at, thumb, preview FROM files WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let tools = state.config.work_dir.is_some();
+
+    let mut text_html = String::new();
+    let mut truncated = false;
+    let show = match row.mime.as_str() {
+        m if inline_safe(m) && m.starts_with("image/") => "image",
+        m if m.starts_with("video/") => "video",
+        m if m.starts_with("audio/") => "audio",
+        "image/heic" | "image/heif" | "application/pdf" => match (row.preview, row.thumb) {
+            (1, _) => "picture",
+            (_, 0) if tools => "pending",
+            _ => "none",
+        },
+        m if is_text(m) => {
+            let path = stored_path(&files.dir, &row.storage_key);
+            let text = read_start(&path, TEXT_PREVIEW_BYTES).await?;
+            truncated = row.size as u64 > TEXT_PREVIEW_BYTES;
+            if m == "text/markdown" {
+                text_html = crate::notes::markdown::render(&text);
+                "markdown"
+            } else {
+                text_html = web::escape(&text);
+                "text"
+            }
+        }
+        _ => "none",
+    };
+
+    let page = ViewPage {
+        shell: ctx.shell("files").await?,
+        id,
+        meta: format!(
+            "{} · {} · {}",
+            kind_label(&row.mime),
+            human_size(row.size),
+            time::ago(row.updated_at, time::now())
+        ),
+        compressible: tools && crate::tools::Media::for_mime(&row.mime).is_some(),
+        show,
+        poster: row.preview == 1,
+        quicktime: row.mime == "video/quicktime",
+        text_html,
+        truncated,
+        icon: icon_for(&row.mime),
+        name: row.name,
+    };
+    Ok(web::html(page))
+}
+
+/// Début d'un fichier, en texte (les octets invalides deviennent « � »).
+async fn read_start(path: &FsPath, max: u64) -> AppResult<String> {
+    use tokio::io::AsyncReadExt;
+    let file = tokio::fs::File::open(path)
+        .await
+        .with_context(|| format!("fichier absent du disque ({})", path.display()))?;
+    let mut bytes = Vec::new();
+    file.take(max).read_to_end(&mut bytes).await?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// `GET /files/{id}/raw` : le fichier tel quel, pour `<img>`, `<video>` et
+/// `<audio>` (types sans code seulement). Accepte les demandes partielles
+/// (`Range`) : sans elles, Safari ne lit pas une vidéo, et on ne peut pas
+/// avancer dedans.
+pub async fn raw(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> AppResult<Response> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    let row = sqlx::query!(
+        "SELECT name, mime, size, storage_key FROM files WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    if !inline_safe(&row.mime) {
+        return Err(AppError::NotFound);
+    }
+    let total = row.size as u64;
+    let wanted = parse_range(
+        headers.get(header::RANGE).and_then(|v| v.to_str().ok()),
+        total,
+    );
+    let (status, start, len) = match wanted {
+        Wanted::Full => (StatusCode::OK, 0, total),
+        Wanted::Part(start, end) => (StatusCode::PARTIAL_CONTENT, start, end - start + 1),
+        Wanted::Unsatisfiable => {
+            return Ok((
+                StatusCode::RANGE_NOT_SATISFIABLE,
+                [(header::CONTENT_RANGE, format!("bytes */{total}"))],
+            )
+                .into_response());
+        }
+    };
+
+    let path = stored_path(&files.dir, &row.storage_key);
+    let mut response = (status, file_body(&path, start, len).await?).into_response();
+    let h = response.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&row.mime)?);
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
+    h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    if status == StatusCode::PARTIAL_CONTENT {
+        let range = format!("bytes {start}-{}/{total}", start + len - 1);
+        h.insert(header::CONTENT_RANGE, HeaderValue::from_str(&range)?);
+    }
+    h.insert(
+        header::CONTENT_DISPOSITION,
+        disposition("inline", &row.name),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(FILE_CSP),
+    );
+    h.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, max-age=3600"),
+    );
+    Ok(response)
+}
+
+/// `len` octets d'un fichier à partir de `start`, servis en continu.
+async fn file_body(path: &FsPath, start: u64, len: u64) -> AppResult<Body> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .with_context(|| format!("fichier absent du disque ({})", path.display()))?;
+    if start > 0 {
+        file.seek(std::io::SeekFrom::Start(start)).await?;
+    }
+    Ok(Body::from_stream(tokio_util::io::ReaderStream::new(
+        file.take(len),
+    )))
+}
+
+/// Partie demandée par l'en-tête `Range`.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Wanted {
+    /// Tout le fichier (pas d'en-tête, ou un en-tête qu'on ne gère pas).
+    Full,
+    /// Les octets `start` à `end`, inclus.
+    Part(u64, u64),
+    /// Hors du fichier : réponse 416.
+    Unsatisfiable,
+}
+
+/// Lit `Range: bytes=…` (une seule plage ; plusieurs : tout le fichier).
+pub fn parse_range(header: Option<&str>, total: u64) -> Wanted {
+    let Some(spec) = header.and_then(|h| h.trim().strip_prefix("bytes=")) else {
+        return Wanted::Full;
+    };
+    let Some((first, last)) = spec.trim().split_once('-') else {
+        return Wanted::Full;
+    };
+    if spec.contains(',') {
+        return Wanted::Full;
+    }
+    let (first, last) = (first.trim(), last.trim());
+    let range = if first.is_empty() {
+        // « bytes=-500 » : les 500 derniers octets.
+        match last.parse::<u64>() {
+            Ok(0) => return Wanted::Unsatisfiable,
+            Ok(n) => (total.saturating_sub(n), total.saturating_sub(1)),
+            Err(_) => return Wanted::Full,
+        }
+    } else {
+        let Ok(start) = first.parse::<u64>() else {
+            return Wanted::Full;
+        };
+        let end = if last.is_empty() {
+            total.saturating_sub(1)
+        } else {
+            match last.parse::<u64>() {
+                Ok(end) => end.min(total.saturating_sub(1)),
+                Err(_) => return Wanted::Full,
+            }
+        };
+        (start, end)
+    };
+    match range {
+        (start, end) if total > 0 && start <= end && start < total => Wanted::Part(start, end),
+        _ => Wanted::Unsatisfiable,
+    }
+}
+
+/// `GET /files/{id}/thumb` : la vignette de la liste.
+pub async fn thumb(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    derived_image(&ctx, &state, id, false).await
+}
+
+/// `GET /files/{id}/preview` : le grand aperçu (HEIC, PDF, image de vidéo).
+pub async fn preview(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    derived_image(&ctx, &state, id, true).await
+}
+
+/// Vignette ou grand aperçu : des JPEG fabriqués par le service de
+/// conversion, donc sans risque à afficher.
+async fn derived_image(ctx: &Ctx, state: &AppState, id: i64, big: bool) -> AppResult<Response> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    let row = sqlx::query!(
+        "SELECT storage_key, thumb, preview FROM files WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let ready = if big { row.preview } else { row.thumb };
+    if ready != 1 {
+        return Err(AppError::NotFound);
+    }
+    let stored = stored_path(&files.dir, &row.storage_key);
+    let path = if big {
+        preview_path(&stored)
+    } else {
+        thumb_path(&stored)
+    };
+    let len = tokio::fs::metadata(&path)
+        .await
+        .with_context(|| format!("aperçu absent du disque ({})", path.display()))?
+        .len();
+    let mut response = file_body(&path, 0, len).await?.into_response();
+    let h = response.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(FILE_CSP),
+    );
+    h.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, max-age=86400"),
+    );
+    Ok(response)
 }
 
 // ---------------------------------------------------------------------
@@ -593,6 +917,16 @@ pub fn prepare_storage(config: &FilesConfig) {
 /// Emplacement du contenu d'un fichier : `<dossier>/<ab>/<abcdef…>`.
 pub fn stored_path(dir: &FsPath, key: &str) -> PathBuf {
     dir.join(&key[..2]).join(key)
+}
+
+/// Vignette d'un fichier, à côté de lui : `<clé>.thumb.jpg`.
+pub fn thumb_path(stored: &FsPath) -> PathBuf {
+    stored.with_extension("thumb.jpg")
+}
+
+/// Grand aperçu d'un fichier, à côté de lui : `<clé>.preview.jpg`.
+pub fn preview_path(stored: &FsPath) -> PathBuf {
+    stored.with_extension("preview.jpg")
 }
 
 // ---------------------------------------------------------------------
@@ -654,6 +988,26 @@ pub fn mime_for(name: &str) -> &'static str {
     }
 }
 
+/// Icône du sprite selon le type, quand il n'y a pas de vignette.
+pub fn icon_for(mime: &str) -> &'static str {
+    match mime {
+        m if m.starts_with("image/") => "file-image",
+        m if m.starts_with("video/") => "file-video",
+        m if m.starts_with("audio/") => "file-audio",
+        "application/zip" => "file-archive",
+        "application/json" | "text/html" | "text/csv" => "file-code",
+        m if m.contains("spreadsheetml") => "file-sheet",
+        "application/pdf" => "file",
+        m if m.starts_with("text/")
+            || m.contains("wordprocessingml")
+            || m.contains("opendocument") =>
+        {
+            "file"
+        }
+        _ => "file-blank",
+    }
+}
+
 /// Libellé court affiché dans la liste.
 pub fn kind_label(mime: &str) -> &'static str {
     match mime {
@@ -696,9 +1050,14 @@ pub fn human_size(bytes: i64) -> String {
     format!("{text} {}", UNITS[unit])
 }
 
-/// En-tête `Content-Disposition` d'un téléchargement : un nom ASCII de
-/// secours, puis le vrai nom encodé (RFC 6266), accents compris.
+/// En-tête `Content-Disposition` d'un téléchargement.
 fn attachment(name: &str) -> HeaderValue {
+    disposition("attachment", name)
+}
+
+/// En-tête `Content-Disposition` : un nom ASCII de secours, puis le vrai nom
+/// encodé (RFC 6266), accents compris.
+fn disposition(kind: &str, name: &str) -> HeaderValue {
     let fallback: String = name
         .chars()
         .map(|c| {
@@ -718,7 +1077,7 @@ fn attachment(name: &str) -> HeaderValue {
         }
     }
     HeaderValue::from_str(&format!(
-        "attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+        "{kind}; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
     ))
     .unwrap_or_else(|_| HeaderValue::from_static("attachment"))
 }
@@ -774,6 +1133,22 @@ mod tests {
             value.to_str().unwrap(),
             "attachment; filename=\"R_sum_ _final_.pdf\"; filename*=UTF-8''R%C3%A9sum%C3%A9%20%22final%22.pdf"
         );
+    }
+
+    #[test]
+    fn plages_demandees() {
+        assert_eq!(parse_range(None, 100), Wanted::Full);
+        assert_eq!(parse_range(Some("bytes=0-"), 100), Wanted::Part(0, 99));
+        assert_eq!(parse_range(Some("bytes=10-19"), 100), Wanted::Part(10, 19));
+        assert_eq!(parse_range(Some("bytes=90-500"), 100), Wanted::Part(90, 99));
+        assert_eq!(parse_range(Some("bytes=-30"), 100), Wanted::Part(70, 99));
+        assert_eq!(parse_range(Some("bytes=-300"), 100), Wanted::Part(0, 99));
+        assert_eq!(parse_range(Some("bytes=100-"), 100), Wanted::Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=20-10"), 100), Wanted::Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=-0"), 100), Wanted::Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=0-1,5-6"), 100), Wanted::Full);
+        assert_eq!(parse_range(Some("octets=0-1"), 100), Wanted::Full);
+        assert_eq!(parse_range(Some("bytes=0-"), 0), Wanted::Unsatisfiable);
     }
 
     #[test]

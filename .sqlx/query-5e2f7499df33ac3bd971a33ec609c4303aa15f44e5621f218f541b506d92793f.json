@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT storage_key FROM files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5e2f7499df33ac3bd971a33ec609c4303aa15f44e5621f218f541b506d92793f"
+}

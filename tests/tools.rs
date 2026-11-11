@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use axum::http::StatusCode;
 use common::{ALICE, BOB, TestApp, between};
-use dashu::tools::{self, JobSpec, Media, worker};
+use dashu::tools::{self, JobSpec, Media, Task, worker};
 
 /// Identifiant du fichier nommé `name` dans la liste.
 fn id_of(page: &str, name: &str) -> i64 {
@@ -18,9 +18,14 @@ fn id_of(page: &str, name: &str) -> i64 {
         .find(&format!("<span>{name}</span>"))
         .unwrap_or_else(|| panic!("{name} absent de la liste"));
     let before = &page[..at];
-    let start = before.rfind("href=\"/files/").unwrap() + "href=\"/files/".len();
-    let len = before[start..].find('/').unwrap();
-    before[start..start + len].parse().unwrap()
+    let start = before.rfind("class=\"file-name\" href=\"/files/").unwrap()
+        + "class=\"file-name\" href=\"/files/".len();
+    before[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>()
+        .parse()
+        .unwrap()
 }
 
 /// Envoie un fichier, lance sa compression, et renvoie le dossier de la tâche.
@@ -36,7 +41,7 @@ async fn start_compression(
     let id = id_of(&client.get("/files").await.body, name);
     let launched = client.post(&format!("/files/{id}/compress"), &[]).await;
     assert_eq!(launched.status, StatusCode::SEE_OTHER, "{}", launched.body);
-    let job: i64 = sqlx::query_scalar("SELECT MAX(id) FROM jobs")
+    let job: i64 = sqlx::query_scalar("SELECT MAX(id) FROM jobs WHERE kind = 'compress'")
         .fetch_one(&app.state.db)
         .await
         .unwrap();
@@ -52,10 +57,12 @@ fn fake(size: usize) -> impl Fn(&JobSpec, &Path, &dyn Fn(u8)) -> Result<(), Stri
 }
 
 async fn job_status(app: &TestApp) -> (String, Option<String>) {
-    sqlx::query_as("SELECT status, error FROM jobs ORDER BY id DESC LIMIT 1")
-        .fetch_one(&app.state.db)
-        .await
-        .unwrap()
+    sqlx::query_as(
+        "SELECT status, error FROM jobs WHERE kind = 'compress' ORDER BY id DESC LIMIT 1",
+    )
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap()
 }
 
 #[tokio::test]
@@ -72,9 +79,11 @@ async fn compresser_prepare_une_tache_pour_le_service() {
     assert_eq!(
         spec,
         JobSpec {
+            task: Task::Compress,
             media: Media::Video,
             input: "input.mov".into(),
             output: "output.mp4".into(),
+            preview: None,
         }
     );
     assert_eq!(job_status(&app).await.0, "queued");
@@ -197,7 +206,7 @@ async fn on_ne_compresse_pas_le_fichier_d_un_autre() {
     bob.get("/files").await;
     let refused = bob.post(&format!("/files/{id}/compress"), &[]).await;
     assert_eq!(refused.status, StatusCode::NOT_FOUND);
-    let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs")
+    let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE kind = 'compress'")
         .fetch_one(&app.state.db)
         .await
         .unwrap();
@@ -259,9 +268,11 @@ async fn une_vraie_video_est_compressee_par_ffmpeg() {
         .expect("ffmpeg installé");
     assert!(made.success());
     let spec = JobSpec {
+        task: Task::Compress,
         media: Media::Video,
         input: "input.mov".into(),
         output: "output.mp4".into(),
+        preview: None,
     };
     std::fs::write(dir.join("job.json"), serde_json::to_vec(&spec).unwrap()).unwrap();
 

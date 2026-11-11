@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT j.source_name, j.source_size, j.status, j.progress, j.error,\n                  f.size AS \"result_size?: i64\"\n           FROM jobs j\n           LEFT JOIN files f ON f.id = j.result_file_id\n           WHERE j.user_id = ? AND j.space_id = ?\n             AND (j.status IN ('queued', 'running') OR j.updated_at > ?)\n           ORDER BY j.id DESC\n           LIMIT 20",
+  "query": "SELECT j.source_name, j.source_size, j.status, j.progress, j.error,\n                  f.size AS \"result_size?: i64\"\n           FROM jobs j\n           LEFT JOIN files f ON f.id = j.result_file_id\n           WHERE j.user_id = ? AND j.space_id = ? AND j.kind = 'compress'\n             AND (j.status IN ('queued', 'running') OR j.updated_at > ?)\n           ORDER BY j.id DESC\n           LIMIT 20",
   "describe": {
     "columns": [
       {
@@ -46,5 +46,5 @@
       false
     ]
   },
-  "hash": "698276fdfca2815614d004643269eb304994ee8f4838f01a0117add333f4366e"
+  "hash": "414163d00c5d3bff08c42af198c3b46478e4bb541b19a958723a95e48aa2a156"
 }

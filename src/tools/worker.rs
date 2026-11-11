@@ -21,7 +21,7 @@ use std::io::{BufRead, BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,7 +30,7 @@ use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageDecoder, ImageReader, Limits, Rgb, RgbImage};
 
-use super::{JobSpec, Media};
+use super::{JobSpec, Media, Task};
 
 /// Conversions simultanées au plus : le serveur est un vieux portable.
 const PARALLEL: usize = 2;
@@ -39,6 +39,11 @@ const VIDEO_MAX_SIDE: u32 = 1920;
 /// Côté le plus long d'une photo compressée.
 const IMAGE_MAX_SIDE: u32 = 2560;
 const JPEG_QUALITY: u8 = 82;
+/// Vignette de la liste : 256 px au plus (affichée en 40 px, nette sur un
+/// écran de téléphone).
+const THUMB_SIDE: u32 = 256;
+/// Grand aperçu (photo HEIC, page de PDF, image d'une vidéo).
+const PREVIEW_SIDE: u32 = 1600;
 
 /// Signature d'une conversion : produit `spec.output` dans `dir`, en
 /// signalant sa progression. L'erreur est un message pour l'utilisateur.
@@ -57,20 +62,33 @@ pub fn run(work_dir: &Path) -> anyhow::Result<()> {
     );
 
     let running = Arc::new(AtomicUsize::new(0));
+    // Une vidéo 4K compressée occupe plus d'un gigaoctet : jamais deux à la
+    // fois, sinon la limite de mémoire du service serait dépassée.
+    let video = Arc::new(AtomicBool::new(false));
     loop {
         for dir in ready_jobs(&jobs) {
             if running.load(Ordering::SeqCst) >= PARALLEL {
                 break;
             }
+            let heavy = is_video_compression(&dir);
+            if heavy && video.load(Ordering::SeqCst) {
+                continue;
+            }
             if !claim(&dir) {
                 continue;
             }
             running.fetch_add(1, Ordering::SeqCst);
-            let (running, tools) = (running.clone(), tools.clone());
+            if heavy {
+                video.store(true, Ordering::SeqCst);
+            }
+            let (running, video, tools) = (running.clone(), video.clone(), tools.clone());
             thread::spawn(move || {
                 process_job(&dir, &|spec, dir, progress| {
                     tools.convert(spec, dir, progress)
                 });
+                if heavy {
+                    video.store(false, Ordering::SeqCst);
+                }
                 running.fetch_sub(1, Ordering::SeqCst);
             });
         }
@@ -78,17 +96,37 @@ pub fn run(work_dir: &Path) -> anyhow::Result<()> {
     }
 }
 
-/// Après un arrêt brutal (coupure, mise à jour), les tâches commencées et
-/// jamais finies sont remises en attente : elles repartiront de zéro.
+fn is_video_compression(dir: &Path) -> bool {
+    fs::read(dir.join("job.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_slice::<JobSpec>(&raw).ok())
+        .is_some_and(|spec| spec.task == Task::Compress && spec.media == Media::Video)
+}
+
+/// Après un arrêt brutal (coupure, mise à jour, mémoire dépassée), les
+/// tâches commencées et jamais finies sont remises en attente : elles
+/// repartiront de zéro. Interrompue deux fois, une tâche est abandonnée :
+/// sinon un fichier qui fait tomber le service le ferait tomber en boucle.
 pub fn recover(jobs: &Path) {
     for dir in job_dirs(jobs) {
         let finished = dir.join("done").exists() || dir.join("error").exists();
-        if dir.join("started").exists() && !finished {
-            for name in ["started", "progress"] {
-                let _ = fs::remove_file(dir.join(name));
-            }
-            tracing::info!(job = %dir.display(), "tâche interrompue, remise en attente");
+        if !dir.join("started").exists() || finished {
+            continue;
         }
+        if dir.join("attempts").exists() {
+            write_atomic(
+                &dir,
+                "error",
+                "Conversion interrompue deux fois : fichier trop lourd pour le serveur ?",
+            );
+            tracing::warn!(job = %dir.display(), "tâche interrompue deux fois, abandonnée");
+            continue;
+        }
+        write_atomic(&dir, "attempts", "1");
+        for name in ["started", "progress"] {
+            let _ = fs::remove_file(dir.join(name));
+        }
+        tracing::info!(job = %dir.display(), "tâche interrompue, remise en attente");
     }
 }
 
@@ -176,6 +214,13 @@ impl Tools {
     }
 
     pub fn convert(&self, spec: &JobSpec, dir: &Path, progress: &dyn Fn(u8)) -> Result<(), String> {
+        match spec.task {
+            Task::Compress => self.compress(spec, dir, progress),
+            Task::Thumbnail => self.thumbnail(spec, dir),
+        }
+    }
+
+    fn compress(&self, spec: &JobSpec, dir: &Path, progress: &dyn Fn(u8)) -> Result<(), String> {
         let input = dir.join(&spec.input);
         let output = dir.join(&spec.output);
         match spec.media {
@@ -198,6 +243,69 @@ impl Tools {
                 run_tool(cmd, Duration::from_secs(600), |_| {})
             }
         }
+    }
+
+    /// Vignette (`spec.output`) et, s'il est demandé, grand aperçu
+    /// (`spec.preview`) : la photo, la première page du PDF, ou une image de
+    /// la vidéo prise au début.
+    fn thumbnail(&self, spec: &JobSpec, dir: &Path) -> Result<(), String> {
+        let input = dir.join(&spec.input);
+        let image = match spec.media {
+            Media::Image => load_image(&input)?,
+            Media::Heic => {
+                let decoded = dir.join("decoded.png");
+                let mut cmd = Command::new("heif-dec");
+                cmd.arg(&input).arg(&decoded);
+                run_tool(cmd, Duration::from_secs(120), |_| {})?;
+                let image = load_image(&decoded);
+                let _ = fs::remove_file(&decoded);
+                image?
+            }
+            Media::Pdf => {
+                let page = dir.join("page.png");
+                let mut cmd = Command::new("gs");
+                cmd.args(first_page_args(&page)).arg(&input);
+                run_tool(cmd, Duration::from_secs(120), |_| {})?;
+                let image = load_image(&page);
+                let _ = fs::remove_file(&page);
+                image?
+            }
+            Media::Video => {
+                let probe = probe(&input)?;
+                let frame = dir.join("frame.jpg");
+                let at = (probe.duration / 3.0).min(1.0);
+                let mut cmd = Command::new("ffmpeg");
+                cmd.args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-ss",
+                ])
+                .arg(format!("{at:.2}"))
+                .arg("-i")
+                .arg(&input)
+                .args(frame_args(probe.hdr && self.zscale))
+                .arg(&frame);
+                run_tool(cmd, Duration::from_secs(120), |_| {})?;
+                let image = load_image(&frame);
+                let _ = fs::remove_file(&frame);
+                image?
+            }
+        };
+        if let Some(preview) = &spec.preview {
+            save_jpeg(
+                &fit(image.clone(), PREVIEW_SIDE),
+                &dir.join(preview),
+                JPEG_QUALITY,
+            )?;
+        }
+        save_jpeg(
+            &image.thumbnail(THUMB_SIDE, THUMB_SIDE),
+            &dir.join(&spec.output),
+            75,
+        )
     }
 
     fn video(&self, input: &Path, output: &Path, progress: &dyn Fn(u8)) -> Result<(), String> {
@@ -260,6 +368,39 @@ pub fn video_filters(tonemap: bool) -> String {
     } else {
         format!("{scale},format=yuv420p")
     }
+}
+
+/// Arguments ffmpeg pour extraire une image d'une vidéo (1280 px au plus).
+pub fn frame_args(tonemap: bool) -> Vec<String> {
+    let scale = "scale=w='min(1280,iw)':h='min(1280,ih)':force_original_aspect_ratio=decrease";
+    let filters = if tonemap {
+        format!(
+            "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,{scale},format=yuvj420p"
+        )
+    } else {
+        scale.to_string()
+    };
+    ["-frames:v", "1", "-vf", &filters, "-q:v", "3"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Arguments Ghostscript : la première page d'un PDF en PNG (110 dpi).
+pub fn first_page_args(output: &Path) -> Vec<String> {
+    vec![
+        "-sDEVICE=png16m".into(),
+        "-r110".into(),
+        "-dFirstPage=1".into(),
+        "-dLastPage=1".into(),
+        "-dTextAlphaBits=4".into(),
+        "-dGraphicsAlphaBits=4".into(),
+        "-dSAFER".into(),
+        "-dNOPAUSE".into(),
+        "-dBATCH".into(),
+        "-dQUIET".into(),
+        format!("-sOutputFile={}", output.display()),
+    ]
 }
 
 /// Arguments Ghostscript : réglage « ebook », images à 150 dpi.
@@ -391,8 +532,17 @@ fn run_tool(
 /// Photo : orientation EXIF appliquée, 2560 px au plus sur le grand côté,
 /// transparence posée sur du blanc, JPEG qualité 82.
 pub fn compress_image(input: &Path, output: &Path) -> Result<(), String> {
+    save_jpeg(
+        &fit(load_image(input)?, IMAGE_MAX_SIDE),
+        output,
+        JPEG_QUALITY,
+    )
+}
+
+/// Lit une image, avec l'orientation enregistrée par l'appareil appliquée.
+fn load_image(path: &Path) -> Result<DynamicImage, String> {
     let unreadable = |_| "Image illisible.".to_string();
-    let mut reader = ImageReader::open(input)
+    let mut reader = ImageReader::open(path)
         .map_err(unreadable)?
         .with_guessed_format()
         .map_err(unreadable)?;
@@ -412,15 +562,24 @@ pub fn compress_image(input: &Path, output: &Path) -> Result<(), String> {
     if let Some(orientation) = orientation {
         image.apply_orientation(orientation);
     }
-    if image.width() > IMAGE_MAX_SIDE || image.height() > IMAGE_MAX_SIDE {
-        image = image.resize(IMAGE_MAX_SIDE, IMAGE_MAX_SIDE, FilterType::Lanczos3);
-    }
-    let rgb = flatten_on_white(&image);
+    Ok(image)
+}
 
+/// Réduit une image pour qu'elle tienne dans un carré de `side` pixels.
+fn fit(image: DynamicImage, side: u32) -> DynamicImage {
+    if image.width() > side || image.height() > side {
+        image.resize(side, side, FilterType::Lanczos3)
+    } else {
+        image
+    }
+}
+
+fn save_jpeg(image: &DynamicImage, output: &Path, quality: u8) -> Result<(), String> {
+    let rgb = flatten_on_white(image);
     let file =
         fs::File::create(output).map_err(|_| "Écriture du résultat impossible.".to_string())?;
     let mut writer = BufWriter::new(file);
-    JpegEncoder::new_with_quality(&mut writer, JPEG_QUALITY)
+    JpegEncoder::new_with_quality(&mut writer, quality)
         .encode_image(&rgb)
         .map_err(|_| "Écriture du résultat impossible.".to_string())
 }
