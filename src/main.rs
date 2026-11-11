@@ -46,9 +46,10 @@ async fn serve() -> anyhow::Result<()> {
     }
     let state = AppState::new(config, pool.clone())?;
 
-    // Tâches de fond : synchro des agendas toutes les heures, purge des
-    // sessions expirées toutes les heures.
+    // Tâches de fond, toutes les heures : synchro des agendas, purge des
+    // sessions expirées et des envois de fichiers abandonnés.
     calendar::sync::spawn_hourly(state.clone());
+    files::spawn_cleanup(state.clone());
     tokio::spawn(db::session_store(&pool).continuously_delete_expired(Duration::from_secs(3600)));
 
     let app = build_router(state.clone());

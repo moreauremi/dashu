@@ -327,42 +327,67 @@ impl Client {
         .await
     }
 
-    /// Envoi d'un fichier comme le fait static/js/files.js : le contenu brut
-    /// dans le corps, le nom dans l'adresse, le jeton CSRF dans l'en-tête.
+    /// Envoi d'un fichier comme static/js/files.js : ouverture de l'envoi,
+    /// puis le contenu en un seul morceau. Renvoie la dernière réponse.
     pub async fn upload(&mut self, name: &str, content: &[u8]) -> TestResponse {
-        let path = format!("/files?name={}", encode_component(name));
-        self.send(
-            Method::POST,
-            &path,
-            Some(SentBody::Raw(content.to_vec(), true)),
-            CsrfMode::Header,
-            true,
-        )
-        .await
+        self.upload_in_chunks(name, content, usize::MAX).await
     }
 
-    /// Envoi sans taille annoncée : seul le comptage des octets reçus peut
-    /// alors arrêter un fichier trop gros.
-    pub async fn upload_unannounced(&mut self, name: &str, content: &[u8]) -> TestResponse {
-        let path = format!("/files?name={}", encode_component(name));
-        self.send(
-            Method::POST,
-            &path,
-            Some(SentBody::Raw(content.to_vec(), false)),
-            CsrfMode::Header,
-            true,
-        )
-        .await
+    /// Même envoi, découpé en morceaux de `chunk` octets.
+    pub async fn upload_in_chunks(
+        &mut self,
+        name: &str,
+        content: &[u8],
+        chunk: usize,
+    ) -> TestResponse {
+        let start = self.start_upload(name, content.len()).await;
+        if start.status != StatusCode::CREATED {
+            return start;
+        }
+        let id = start.body.clone();
+        let mut offset: usize = 0;
+        loop {
+            let end = offset.saturating_add(chunk).min(content.len());
+            let response = self
+                .put_chunk(&id, offset, &content[offset..end], true)
+                .await;
+            if response.status != StatusCode::OK || end == content.len() {
+                return response;
+            }
+            offset = end;
+        }
     }
 
-    /// Même envoi, sans jeton CSRF.
-    pub async fn upload_without_csrf(&mut self, name: &str, content: &[u8]) -> TestResponse {
-        let path = format!("/files?name={}", encode_component(name));
+    /// `POST /files/uploads` : ouvre un envoi ; le corps de la réponse est
+    /// l'identifiant de l'envoi.
+    pub async fn start_upload(&mut self, name: &str, size: usize) -> TestResponse {
+        let path = format!("/files/uploads?name={}&size={size}", encode_component(name));
+        self.send(Method::POST, &path, None, CsrfMode::Header, true)
+            .await
+    }
+
+    /// Même ouverture, sans jeton CSRF.
+    pub async fn start_upload_without_csrf(&mut self, name: &str, size: usize) -> TestResponse {
+        let path = format!("/files/uploads?name={}&size={size}", encode_component(name));
+        self.send(Method::POST, &path, None, CsrfMode::None, true)
+            .await
+    }
+
+    /// `PUT /files/uploads/{id}?offset=…` : un morceau. Avec `announce` faux,
+    /// la taille n'est pas annoncée (pas de Content-Length).
+    pub async fn put_chunk(
+        &mut self,
+        id: &str,
+        offset: usize,
+        bytes: &[u8],
+        announce: bool,
+    ) -> TestResponse {
+        let path = format!("/files/uploads/{id}?offset={offset}");
         self.send(
-            Method::POST,
+            Method::PUT,
             &path,
-            Some(SentBody::Raw(content.to_vec(), true)),
-            CsrfMode::None,
+            Some(SentBody::Raw(bytes.to_vec(), announce)),
+            CsrfMode::Header,
             true,
         )
         .await
