@@ -4,13 +4,14 @@
 //!   dashu set-password <email>   crée un compte ou remplace son mot de passe
 //!   dashu backup <fichier>       copie à chaud de la base (VACUUM INTO)
 //!   dashu healthcheck            interroge /health (pour le HEALTHCHECK Docker)
+//!   dashu worker                 service de conversion (voir src/tools/worker.rs)
 
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
 use dashu::config::Config;
-use dashu::{AppState, auth, build_router, calendar, db, files};
+use dashu::{AppState, auth, build_router, calendar, db, files, tools};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower_sessions::ExpiredDeletion;
 
@@ -24,9 +25,10 @@ async fn main() -> anyhow::Result<()> {
         ["set-password", email] => set_password(email).await,
         ["backup", destination] => backup(destination).await,
         ["healthcheck"] => healthcheck().await,
+        ["worker"] => worker().await,
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)"
             );
             std::process::exit(2);
         }
@@ -50,6 +52,7 @@ async fn serve() -> anyhow::Result<()> {
     // sessions expirées et des envois de fichiers abandonnés.
     calendar::sync::spawn_hourly(state.clone());
     files::spawn_cleanup(state.clone());
+    tools::spawn_collector(state.clone());
     tokio::spawn(db::session_store(&pool).continuously_delete_expired(Duration::from_secs(3600)));
 
     let app = build_router(state.clone());
@@ -182,6 +185,18 @@ async fn backup(destination: &str) -> anyhow::Result<()> {
     let pluriel = if notes > 1 { "s" } else { "" };
     eprintln!("Sauvegarde écrite et vérifiée : {destination} ({notes} note{pluriel}).");
     Ok(())
+}
+
+/// `dashu worker` : le service de conversion. Il ne lit que `WORK_DIR` :
+/// il n'a ni la configuration de dashu, ni ses secrets, ni la base.
+async fn worker() -> anyhow::Result<()> {
+    init_logging(std::env::var("LOG_FORMAT").as_deref() == Ok("json"));
+    let dir = std::env::var("WORK_DIR")
+        .ok()
+        .filter(|d| !d.trim().is_empty())
+        .context("WORK_DIR manquant : dossier de travail partagé avec dashu")?;
+    tokio::task::spawn_blocking(move || tools::worker::run(std::path::Path::new(dir.trim())))
+        .await?
 }
 
 /// `dashu healthcheck` : l'image Docker finale ne contient ni curl ni wget,

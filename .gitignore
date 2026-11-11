@@ -28,3 +28,5 @@ Thumbs.db
 
 # Fichiers envoyés en local (FILES_DIR=fichiers dans .env)
 /fichiers/
+# Dossier de travail local des conversions (WORK_DIR=travail dans .env)
+/travail/

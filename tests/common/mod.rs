@@ -35,6 +35,8 @@ pub struct TestApp {
     db_path: PathBuf,
     /// Dossier des fichiers envoyés (FILES_DIR), propre à ce test.
     pub files_dir: PathBuf,
+    /// Dossier de travail des outils (WORK_DIR), propre à ce test.
+    pub work_dir: PathBuf,
 }
 
 impl TestApp {
@@ -90,6 +92,9 @@ impl TestApp {
         let files_dir =
             std::env::temp_dir().join(format!("dashu-test-{}-{n}-fichiers", std::process::id()));
         let _ = std::fs::remove_dir_all(&files_dir);
+        let work_dir =
+            std::env::temp_dir().join(format!("dashu-test-{}-{n}-travail", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work_dir);
 
         let config = Config {
             database_url: format!("sqlite://{}", db_path.display()),
@@ -104,6 +109,7 @@ impl TestApp {
                 dir: files_dir.clone(),
                 max_upload_bytes: MAX_UPLOAD,
             }),
+            work_dir: files.then(|| work_dir.clone()),
         };
         let pool = db::connect(&config.database_url)
             .await
@@ -114,6 +120,7 @@ impl TestApp {
             state,
             db_path,
             files_dir,
+            work_dir,
         }
     }
 
@@ -249,6 +256,7 @@ impl Drop for TestApp {
     fn drop(&mut self) {
         remove_db(&self.db_path);
         let _ = std::fs::remove_dir_all(&self.files_dir);
+        let _ = std::fs::remove_dir_all(&self.work_dir);
     }
 }
 

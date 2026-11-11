@@ -60,6 +60,9 @@ systemctl restart dashu
 if healthy; then
   echo "$TARGET" > "$DEPLOYED"
   install_scripts
+  # Le service de conversion utilise le même binaire : il repart avec lui.
+  # Une conversion en cours est reprise de zéro (src/tools/worker.rs).
+  systemctl try-restart dashu-worker 2>/dev/null || true
   echo "Mise à jour terminée : $(git log -1 --format='%h %s')"
   exit 0
 fi

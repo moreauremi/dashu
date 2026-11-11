@@ -52,6 +52,8 @@ pub struct FileItem {
     /// Libellé court du type : « PDF », « Image »…
     pub kind: &'static str,
     pub updated: String,
+    /// Vidéo, photo ou PDF, et outils activés : bouton « Compresser ».
+    pub compressible: bool,
 }
 
 #[derive(Template)]
@@ -65,11 +67,14 @@ struct ListPage {
     max_size: String,
     max_bytes: u64,
     items: Vec<FileItem>,
+    /// Compressions en cours ou récentes (vide si les outils sont désactivés).
+    jobs: crate::tools::JobsPanel,
 }
 
 /// `GET /files` : les fichiers de l'espace actif, les plus récents d'abord.
 pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
     let now = time::now();
+    let tools = state.config.work_dir.is_some();
     let items = sqlx::query!(
         r#"SELECT id AS "id!", name, mime, size, updated_at
            FROM files
@@ -85,6 +90,7 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         id: row.id,
         size: human_size(row.size),
         kind: kind_label(&row.mime),
+        compressible: tools && crate::tools::Media::for_mime(&row.mime).is_some(),
         name: row.name,
         updated: time::ago(row.updated_at, now),
     })
@@ -99,6 +105,7 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
             .unwrap_or_default(),
         max_bytes: files.map(|f| f.max_upload_bytes).unwrap_or_default(),
         items,
+        jobs: crate::tools::panel(&state, ctx.user.id, ctx.active.id).await?,
     };
     Ok(web::html(page))
 }
@@ -416,7 +423,7 @@ async fn append(mut body: Body, out: &mut tokio::fs::File, room: u64) -> Result<
 
 /// Empreinte SHA-256 d'un fichier, lu par blocs de 1 Mo hors du fil
 /// asynchrone (un fichier de 2 Go prend quelques secondes).
-async fn hash_file(path: PathBuf) -> std::io::Result<String> {
+pub(crate) async fn hash_file(path: PathBuf) -> std::io::Result<String> {
     tokio::task::spawn_blocking(move || {
         use std::io::Read;
         let mut file = std::fs::File::open(path)?;

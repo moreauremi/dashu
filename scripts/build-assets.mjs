@@ -83,6 +83,7 @@ const icons = {
   files: "files",
   upload: "upload",
   download: "download",
+  shrink: "shrink",
   tasks: "list-todo",
   link: "link",
   info: "info",

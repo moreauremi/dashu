@@ -17,6 +17,7 @@ pub mod settings;
 pub mod spaces;
 pub mod tabbar;
 pub mod time;
+pub mod tools;
 pub mod web;
 
 use std::sync::Arc;
@@ -153,6 +154,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/uploads/{id}", put(files::upload_chunk))
         .route("/files/{id}/download", get(files::download))
         .route("/files/{id}/delete", post(files::delete))
+        // Outils : compression (le travail est fait par dashu-worker)
+        .route("/files/{id}/compress", post(tools::compress))
+        .route("/files/jobs", get(tools::jobs_fragment))
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))

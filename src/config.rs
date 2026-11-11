@@ -31,6 +31,9 @@ pub struct Config {
     /// `None` si `FILES_DIR` n'est pas renseigné : la page Fichiers l'indique
     /// et n'accepte aucun envoi.
     pub files: Option<FilesConfig>,
+    /// Dossier de travail partagé avec le service de conversion
+    /// (`/srv/dashu/tmp`). `None` : pas de compression (bouton absent).
+    pub work_dir: Option<std::path::PathBuf>,
 }
 
 /// Stockage des fichiers envoyés (v2).
@@ -161,6 +164,11 @@ impl Config {
             google,
             log_json: env.get("LOG_FORMAT").as_deref() == Some("json"),
             api,
+            // Sans fichiers, rien à compresser.
+            work_dir: files
+                .as_ref()
+                .and(env.get("WORK_DIR"))
+                .map(|dir| dir.trim().into()),
             files,
         })
     }

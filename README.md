@@ -28,7 +28,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Dashboard | Prochains cours, tâches du jour, notes récentes. Chaque widget se charge indépendamment. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
-| Fichiers (v2, en cours) | Envoi par glisser-déposer ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, suppression. Voir [Fichiers](#7-fichiers-v2). |
+| Fichiers (v2, en cours) | Envoi par glisser-déposer ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, suppression. Compression des vidéos, photos et PDF en une copie plus légère. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
 
 Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes, `N` crée une note, `G` puis `D`, `N`, `F` ou `C` mène au Dashboard, aux Notes, aux Fichiers ou à l'Agenda. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 
@@ -90,6 +90,7 @@ En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu
 | `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit l'API. Doit figurer dans `ALLOWED_EMAILS`. |
 | `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
 | `MAX_UPLOAD_MB` | non | Taille maximale d'un fichier, en Mo. 2048 par défaut. |
+| `WORK_DIR` | non | Active la compression : dossier de travail partagé avec le service de conversion (`/srv/dashu/tmp` en production). Demande `FILES_DIR`. |
 | `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
 | `BACKUP_DIR` | Docker seulement | Dossier de l'hôte où vont les sauvegardes. |
 | `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut ; `127.0.0.1:3000` en production. |
@@ -314,6 +315,48 @@ Le service n'écrit que dans les dossiers listés par `ReadWritePaths` ([`harden
 install -m 644 /opt/dashu/src/deploy/lxc/hardening.conf /etc/systemd/system/dashu.service.d/ && systemctl daemon-reload && systemctl restart dashu
 ```
 
+### 8. Compression (v2)
+
+Le bouton « Compresser » d'une vidéo, d'une photo ou d'un PDF crée une copie plus légère, « nom (compressé) », dans le même espace. L'original est gardé.
+
+| Fichier | Résultat | Outil |
+| --- | --- | --- |
+| Vidéo | MP4 H.264, 1080p au plus (verticale comprise), qualité CRF 23, son AAC 128 kb/s. Une vidéo HDR d'iPhone est ramenée en couleurs standard. | ffmpeg |
+| Photo (JPEG, PNG, WebP) | JPEG, 2560 px au plus sur le grand côté, qualité 82, orientation de l'appareil appliquée | crate `image` (Rust) |
+| Photo HEIC (iPhone) | Pareil, après décodage | libheif (`heif-dec`), puis `image` |
+| PDF | Réglage « ebook » : images à 150 dpi | Ghostscript (`-dSAFER`) |
+
+Si la copie n'est pas plus petite, elle n'est pas gardée et la page le dit.
+
+**Pourquoi un service à part.** Lire un fichier envoyé par quelqu'un d'autre, c'est confier des octets inconnus à un programme complexe. dashu ne le fait donc jamais lui-même. Il dépose une tâche dans `WORK_DIR/jobs/<id>/` (une copie du fichier et `job.json`), et c'est `dashu worker`, lancé par [`dashu-worker.service`](deploy/lxc/dashu-worker.service), qui fait le travail :
+
+- son propre compte (`dashu-worker`), aucun réseau, 1,5 Go de mémoire au plus, priorité basse ;
+- il ne voit que `/srv/dashu/tmp` : ni la base, ni `dashu.env` et ses secrets, ni les fichiers rangés, ni les sauvegardes ;
+- deux conversions à la fois au plus, chacune avec sa limite de temps (1 h pour une vidéo, 10 min pour un PDF, 2 min pour une photo HEIC) ;
+- après un arrêt brutal, les conversions commencées reprennent de zéro.
+
+dashu relève le travail toutes les 2 secondes : progression, résultat (rangé parmi les fichiers), ou message d'échec. La page suit l'avancement et recharge la liste à la fin. Le dossier de travail est partagé par le groupe `dashu-jobs`, dont dashu fait partie.
+
+`install.sh` installe tout quand `/srv/dashu` est monté. Sur un serveur déjà installé, en root dans le conteneur, après le `dashu-update` qui apporte cette version :
+
+```bash
+apt-get install -y ffmpeg ghostscript libheif-examples
+```
+
+```bash
+groupadd --system dashu-jobs && useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid dashu-jobs dashu-worker && usermod -a -G dashu-jobs dashu
+```
+
+```bash
+install -d -o dashu -g dashu-jobs -m 2770 /srv/dashu/tmp /srv/dashu/tmp/jobs && echo 'WORK_DIR=/srv/dashu/tmp' >> /etc/dashu/dashu.env
+```
+
+```bash
+cd /opt/dashu/src/deploy/lxc && install -m 644 dashu-worker.service /etc/systemd/system/ && install -m 644 hardening.conf /etc/systemd/system/dashu.service.d/ && systemctl daemon-reload && systemctl enable --now dashu-worker && systemctl restart dashu
+```
+
+Vérifier : `systemctl status dashu-worker`, puis `journalctl -u dashu-worker -n 20`. La ligne « service de conversion démarré » dit aussi si le filtre `zscale` (couleurs des vidéos HDR) est présent. `dashu-update` redémarre le service de conversion avec dashu.
+
 ### Variante : Docker
 
 Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push. Dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
@@ -400,6 +443,7 @@ dashu/
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets
 │   ├── files/              fichiers : envoi, liste, téléchargement (v2)
+│   ├── tools/              compression : tâches (mod.rs) et service de conversion (worker.rs)
 │   ├── notes/              liste, éditeur, tags, rendu Markdown
 │   ├── calendar/           lecture iCal, synchro, grille jour/semaine
 │   ├── search/             palette Ctrl+K

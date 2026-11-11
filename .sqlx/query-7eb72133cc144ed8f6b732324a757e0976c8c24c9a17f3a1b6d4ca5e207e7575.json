@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE jobs SET status = 'done', progress = 100, result_file_id = ?, updated_at = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "7eb72133cc144ed8f6b732324a757e0976c8c24c9a17f3a1b6d4ca5e207e7575"
+}
