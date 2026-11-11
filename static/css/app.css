@@ -412,10 +412,18 @@ html {
   opacity: 1;
 }
 
+/* Barre de raccourcis : téléphone seulement (voir la section petits écrans). */
+.tabbar {
+  display: none;
+}
+
 /* L'île reste en place pendant un changement de page. */
 ::view-transition-group(island),
 ::view-transition-old(island),
-::view-transition-new(island) {
+::view-transition-new(island),
+::view-transition-group(tabbar),
+::view-transition-old(tabbar),
+::view-transition-new(tabbar) {
   animation: none;
 }
 
@@ -2197,6 +2205,51 @@ input.note-title:focus-visible {
   max-width: 360px;
 }
 
+/* Réglages : choix des raccourcis du téléphone. */
+.tab-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tab-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.tab-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control);
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.tab-choice input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.tab-choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.tab-choice:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .sources {
   display: flex;
   flex-direction: column;
@@ -2481,6 +2534,62 @@ input.note-title:focus-visible {
     height: 32px;
   }
 
+  /* Raccourcis en bas de l'écran, au-dessus de la barre d'accueil de l'iPhone. */
+  .tabbar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 20;
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    view-transition-name: tabbar;
+  }
+
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+    height: 52px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-3);
+    font: 500 11px/14px var(--font-ui);
+    text-decoration: none;
+  }
+
+  .tab .i {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tab span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tab[aria-current="page"] {
+    color: var(--accent);
+  }
+
+  .tab:active {
+    background: color-mix(in oklab, var(--text) 6%, transparent);
+  }
+
+  /* L'éditeur garde tout l'écran (et le clavier sa place). */
+  .app:has(.editor-page) > .tabbar {
+    display: none;
+  }
+
   .swipe-hint[data-side="left"] {
     left: 16px;
   }
@@ -2514,7 +2623,8 @@ input.note-title:focus-visible {
   }
 
   .main {
-    padding: 16px 16px 48px;
+    /* En bas : la barre de raccourcis (60 px + zone de l'iPhone) et de l'air. */
+    padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .main:has(.editor-page) {

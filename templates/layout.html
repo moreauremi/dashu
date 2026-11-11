@@ -83,6 +83,17 @@
     {% block content %}{% endblock %}
   </main>
 
+  {#- Téléphone : barre de raccourcis en bas de l'écran (choisis dans Réglages). -#}
+  <nav class="tabbar" aria-label="Raccourcis">
+    {% for tab in shell.tabs %}
+    {% if tab.href.is_empty() %}
+    <button class="tab" type="button" data-palette-open>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></button>
+    {% else %}
+    <a class="tab" href="{{ tab.href }}"{% if tab.key == shell.nav %} aria-current="page"{% endif %}>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></a>
+    {% endif %}
+    {% endfor %}
+  </nav>
+
   <dialog id="palette" class="palette" aria-label="Palette de commandes">
     <div class="palette-field">
       {{ crate::assets::icon("search")|safe }}

@@ -14,6 +14,7 @@ pub mod notes;
 pub mod search;
 pub mod settings;
 pub mod spaces;
+pub mod tabbar;
 pub mod time;
 pub mod web;
 
@@ -149,6 +150,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings", get(settings::page))
         .route("/settings/theme", post(settings::set_theme))
         .route("/settings/password", post(settings::set_password))
+        .route("/settings/tabs", post(settings::set_tabs))
         .route("/settings/google/unlink", post(settings::unlink_google))
         .route("/settings/calendars", post(settings::add_calendar))
         .route(

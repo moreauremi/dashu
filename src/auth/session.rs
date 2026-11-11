@@ -16,6 +16,7 @@ use tower_sessions::{Expiry, Session};
 
 use crate::AppState;
 use crate::spaces::{self, Space};
+use crate::tabbar::{self, Tab};
 use crate::web::{self, AppError, AppResult, csrf};
 
 /// Clés du contenu de la session (stocké côté serveur, dans SQLite).
@@ -37,6 +38,8 @@ pub struct User {
     pub theme: Option<String>,
     pub has_password: bool,
     pub google_linked: bool,
+    /// Raccourcis du téléphone (voir [`crate::tabbar`]), `None` = par défaut.
+    pub mobile_tabs: Option<String>,
 }
 
 /// Message affiché une seule fois sur la page suivante (après une redirection).
@@ -69,6 +72,8 @@ pub struct Shell {
     pub csrf: String,
     pub path: String,
     pub flash: Option<Flash>,
+    /// Barre de raccourcis du téléphone.
+    pub tabs: Vec<&'static Tab>,
 }
 
 impl Ctx {
@@ -85,6 +90,7 @@ impl Ctx {
             csrf: self.csrf.clone(),
             path: self.path.clone(),
             flash,
+            tabs: tabbar::selected(self.user.mobile_tabs.as_deref()),
         })
     }
 
@@ -151,7 +157,8 @@ impl FromRequestParts<AppState> for Ctx {
             User,
             r#"SELECT id AS "id!", email, theme,
                       password_hash IS NOT NULL AS "has_password!: bool",
-                      google_sub IS NOT NULL AS "google_linked!: bool"
+                      google_sub IS NOT NULL AS "google_linked!: bool",
+                      mobile_tabs
                FROM users WHERE id = ?"#,
             user_id
         )
