@@ -28,9 +28,12 @@ healthy() {
 # Contenu d'une base, pour comparer d'un coup d'œil avant et après.
 summary() {
   sqlite3 -readonly "$1" \
-    "SELECT (SELECT COUNT(*) FROM notes) || ' notes, ' ||
-            (SELECT COUNT(*) FROM tasks) || ' tâches, ' ||
-            (SELECT COUNT(*) FROM calendar_sources) || ' agendas'"
+    "WITH c(n, t, a) AS (SELECT (SELECT COUNT(*) FROM notes),
+                                (SELECT COUNT(*) FROM tasks),
+                                (SELECT COUNT(*) FROM calendar_sources))
+     SELECT n || ' note' || IIF(n > 1, 's', '') || ', ' ||
+            t || ' tâche' || IIF(t > 1, 's', '') || ', ' ||
+            a || ' agenda' || IIF(a > 1, 's', '') FROM c"
 }
 
 # Met en place un fichier comme base de dashu, service arrêté.
