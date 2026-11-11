@@ -5,22 +5,26 @@
 //! * Sur le disque, il ne porte jamais le nom choisi par l'utilisateur, mais
 //!   une clé aléatoire : `<FILES_DIR>/<2 premiers caractères>/<clé>`. Un nom
 //!   piégé (`../../etc/passwd`) ne peut donc désigner aucun autre fichier.
-//! * L'envoi arrive en continu et va directement sur le disque : la mémoire
-//!   de dashu ne dépend pas de la taille du fichier.
+//! * L'envoi arrive par morceaux de 50 Mo au plus (limite de Cloudflare),
+//!   chacun écrit sur le disque au fil de l'eau : la mémoire de dashu ne
+//!   dépend pas de la taille du fichier.
 //! * Toutes les requêtes filtrent sur `user_id`, comme les notes.
 
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::{Path as FsPath, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Context as _;
 use askama::Template;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use http_body_util::BodyExt;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use sqlx::SqlitePool;
 use tokio::io::AsyncWriteExt;
 
 use crate::AppState;
@@ -100,57 +104,170 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
 }
 
 // ---------------------------------------------------------------------
-// Envoi
+// Envoi, par morceaux
 // ---------------------------------------------------------------------
+//
+// Un fichier part en morceaux de 50 Mo au plus (static/js/files.js) :
+// Cloudflare refuse toute requête de plus de 100 Mo, et un morceau raté se
+// renvoie seul. Le déroulé :
+//   1. `POST /files/uploads?name=…&size=…` ouvre un envoi et renvoie son
+//      identifiant ; la taille totale est vérifiée tout de suite ;
+//   2. `PUT /files/uploads/{id}?offset=…` ajoute un morceau, dans l'ordre ;
+//   3. au dernier morceau, le fichier rejoint la liste (réponse 201).
+// Un envoi en cours survit à un redémarrage de dashu ; abandonné, il est
+// effacé au bout de 24 heures (`cleanup_stale`).
 
-#[derive(Deserialize)]
-pub struct UploadQuery {
-    name: String,
+/// Taille maximale d'un morceau, côté serveur. Le navigateur envoie des
+/// morceaux de 50 Mo, sous la limite de Cloudflare (100 Mo par requête).
+pub const CHUNK_MAX_BYTES: u64 = 64 * 1024 * 1024;
+/// Un envoi sans nouvelles depuis plus longtemps est abandonné.
+const STALE_UPLOAD_SECONDS: i64 = 24 * 3600;
+/// En-tête qui donne au navigateur le nombre d'octets déjà reçus.
+pub const RECEIVED_HEADER: &str = "x-upload-received";
+
+/// Envois dont un morceau est en train d'arriver : un seul à la fois par
+/// envoi, sinon deux morceaux pourraient s'écrire au même endroit.
+pub type Busy = Arc<Mutex<HashSet<String>>>;
+
+struct BusyGuard {
+    set: Busy,
+    id: String,
 }
 
-/// `POST /files?name=…` : le corps de la requête est le contenu du fichier,
-/// tel quel (pas de formulaire multipart). C'est `static/js/files.js` qui
-/// l'envoie, un fichier par requête, avec le jeton CSRF dans l'en-tête.
-/// Le fichier va dans l'espace actif.
-pub async fn upload(
+impl BusyGuard {
+    fn take(set: &Busy, id: &str) -> Option<Self> {
+        let mut busy = set.lock().unwrap_or_else(|e| e.into_inner());
+        busy.insert(id.to_string()).then(|| Self {
+            set: set.clone(),
+            id: id.to_string(),
+        })
+    }
+}
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        self.set
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.id);
+    }
+}
+
+fn too_large(max: u64) -> AppError {
+    AppError::TooLarge(format!(
+        "Fichier trop volumineux : {} au plus.",
+        human_size(i64::try_from(max).unwrap_or(i64::MAX))
+    ))
+}
+
+#[derive(Deserialize)]
+pub struct StartQuery {
+    name: String,
+    size: u64,
+}
+
+/// `POST /files/uploads?name=…&size=…` : ouvre un envoi dans l'espace actif
+/// et renvoie son identifiant.
+pub async fn start_upload(
     ctx: Ctx,
     State(state): State<AppState>,
-    Query(query): Query<UploadQuery>,
-    headers: HeaderMap,
+    Query(query): Query<StartQuery>,
+) -> AppResult<Response> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    if query.size > files.max_upload_bytes {
+        return Err(too_large(files.max_upload_bytes));
+    }
+    let size = i64::try_from(query.size).map_err(|_| too_large(files.max_upload_bytes))?;
+    let name = clean_name(&query.name);
+
+    let id = web::csrf::random_token();
+    let part = part_path(&files.dir, &id);
+    if let Some(parent) = part.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("dossier des envois {}", parent.display()))?;
+    }
+    tokio::fs::File::create(&part)
+        .await
+        .with_context(|| format!("création de {}", part.display()))?;
+    let now = time::now();
+    sqlx::query!(
+        "INSERT INTO uploads (id, user_id, space_id, name, size, received, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+        id,
+        ctx.user.id,
+        ctx.active.id,
+        name,
+        size,
+        now,
+        now
+    )
+    .execute(&state.db)
+    .await?;
+    Ok((StatusCode::CREATED, id).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct ChunkQuery {
+    offset: u64,
+}
+
+/// `PUT /files/uploads/{id}?offset=…` : ajoute un morceau. `offset` doit être
+/// le nombre d'octets déjà reçus ; sinon la réponse 409 donne le bon dans
+/// l'en-tête `x-upload-received`, et le navigateur reprend de là.
+pub async fn upload_chunk(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<ChunkQuery>,
     body: Body,
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
-    let max = files.max_upload_bytes;
-    let too_large = || {
-        AppError::TooLarge(format!(
-            "Fichier trop volumineux : {} au plus.",
-            human_size(i64::try_from(max).unwrap_or(i64::MAX))
-        ))
+    if !is_token(&id) {
+        return Err(AppError::NotFound);
+    }
+    let Some(_busy) = BusyGuard::take(&state.uploads_busy, &id) else {
+        return Err(AppError::BadRequest(
+            "Un morceau de ce fichier est déjà en cours d'envoi.".into(),
+        ));
     };
-
-    // Taille annoncée par le navigateur : refus immédiat, sans rien écrire.
-    let announced = headers
-        .get(header::CONTENT_LENGTH)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<u64>().ok());
-    if announced.is_some_and(|len| len > max) {
-        return Err(too_large());
+    let upload = sqlx::query!(
+        "SELECT space_id, name, size, received FROM uploads WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let (size, received) = (upload.size as u64, upload.received as u64);
+    if query.offset != received {
+        return Ok(out_of_order(received));
     }
 
-    let name = clean_name(&query.name);
-    let incoming = files.dir.join(INCOMING);
-    tokio::fs::create_dir_all(&incoming)
-        .await
-        .with_context(|| format!("dossier des envois {}", incoming.display()))?;
-    let part = incoming.join(format!("{}.part", web::csrf::random_token()));
+    let part = part_path(&files.dir, &id);
+    let Ok(mut out) = tokio::fs::OpenOptions::new().append(true).open(&part).await else {
+        // Fichier partiel disparu : l'envoi ne peut pas reprendre.
+        sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
+            .execute(&state.db)
+            .await?;
+        return Err(AppError::BadRequest("Envoi perdu : recommence-le.".into()));
+    };
+    // Coupure entre l'écriture d'un morceau et l'enregistrement en base : on
+    // revient à ce que la base connaît.
+    if out.metadata().await?.len() != received {
+        out.set_len(received).await?;
+    }
 
-    // Un envoi refusé ou interrompu ne laisse rien sur le disque.
-    let (size, sha256) = match receive(body, &part, max).await {
-        Ok(received) => received,
+    let room = (size - received).min(CHUNK_MAX_BYTES);
+    let written = match append(body, &mut out, room).await {
+        Ok(written) => written,
         Err(error) => {
-            let _ = tokio::fs::remove_file(&part).await;
+            let _ = out.set_len(received).await;
             return Err(match error {
-                Receive::TooLarge => too_large(),
+                Receive::TooLarge if room < CHUNK_MAX_BYTES => {
+                    AppError::TooLarge("Le fichier est plus gros qu'annoncé.".into())
+                }
+                Receive::TooLarge => AppError::TooLarge("Morceau trop gros.".into()),
                 Receive::Interrupted => AppError::BadRequest("Envoi interrompu.".into()),
                 Receive::Disk(error) => {
                     AppError::Internal(anyhow::Error::new(error).context("écriture d'un envoi"))
@@ -158,46 +275,112 @@ pub async fn upload(
             });
         }
     };
+    out.sync_data().await?;
+    drop(out);
+
+    let received = received + written;
+    if received < size {
+        let (received_db, now) = (received as i64, time::now());
+        sqlx::query!(
+            "UPDATE uploads SET received = ?, updated_at = ? WHERE id = ?",
+            received_db,
+            now,
+            id
+        )
+        .execute(&state.db)
+        .await?;
+        return Ok((
+            StatusCode::OK,
+            [(RECEIVED_HEADER, received.to_string())],
+            "Morceau reçu",
+        )
+            .into_response());
+    }
+
+    finish(
+        &state,
+        files,
+        &id,
+        upload.space_id,
+        &upload.name,
+        ctx.user.id,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, "Fichier reçu").into_response())
+}
+
+/// Dernier morceau reçu : le fichier partiel prend sa place définitive et
+/// rejoint la liste.
+async fn finish(
+    state: &AppState,
+    files: &FilesConfig,
+    id: &str,
+    space_id: i64,
+    name: &str,
+    user_id: i64,
+) -> AppResult<()> {
+    let part = part_path(&files.dir, id);
+    let sha256 = hash_file(part.clone())
+        .await
+        .context("empreinte d'un fichier reçu")?;
+    let size = tokio::fs::metadata(&part).await?.len() as i64;
 
     let key = web::csrf::random_token();
     let dest = stored_path(&files.dir, &key);
-    let placed = async {
-        if let Some(parent) = dest.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-        tokio::fs::rename(&part, &dest).await
+    if let Some(parent) = dest.parent() {
+        tokio::fs::create_dir_all(parent).await?;
     }
-    .await;
-    if let Err(error) = placed {
-        let _ = tokio::fs::remove_file(&part).await;
-        return Err(anyhow::Error::new(error)
-            .context("mise en place d'un fichier reçu")
-            .into());
-    }
+    tokio::fs::rename(&part, &dest)
+        .await
+        .context("mise en place d'un fichier reçu")?;
 
-    let mime = mime_for(&name);
-    let size = i64::try_from(size).unwrap_or(i64::MAX);
+    let mime = mime_for(name);
     let now = time::now();
-    let inserted = sqlx::query!(
-        "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ctx.user.id,
-        ctx.active.id,
-        name,
-        mime,
-        size,
-        sha256,
-        key,
-        now,
-        now
-    )
-    .execute(&state.db)
+    let saved = async {
+        let mut tx = state.db.begin().await?;
+        sqlx::query!(
+            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            user_id,
+            space_id,
+            name,
+            mime,
+            size,
+            sha256,
+            key,
+            now,
+            now
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await
+    }
     .await;
-    if let Err(error) = inserted {
+    if let Err(error) = saved {
         let _ = tokio::fs::remove_file(&dest).await;
         return Err(error.into());
     }
-    Ok((StatusCode::CREATED, "Fichier reçu").into_response())
+    Ok(())
+}
+
+/// Réponse 409 : le morceau n'est pas celui attendu. Le corps est du HTML
+/// (comme un fragment htmx) pour que l'en-tête arrive tel quel au navigateur.
+fn out_of_order(received: u64) -> Response {
+    (
+        StatusCode::CONFLICT,
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8".to_string()),
+            (
+                header::HeaderName::from_static(RECEIVED_HEADER),
+                received.to_string(),
+            ),
+        ],
+        r#"<p class="frag-error" role="alert">Morceau inattendu : reprise de l'envoi.</p>"#,
+    )
+        .into_response()
 }
 
 enum Receive {
@@ -212,27 +395,106 @@ impl From<std::io::Error> for Receive {
     }
 }
 
-/// Écrit le corps de la requête dans `path`, morceau par morceau, en
-/// comptant les octets. Renvoie la taille et l'empreinte SHA-256.
-async fn receive(mut body: Body, path: &FsPath, max: u64) -> Result<(u64, String), Receive> {
-    let mut out = tokio::fs::File::create(path).await?;
-    let mut hasher = Sha256::new();
-    let mut size: u64 = 0;
+/// Ajoute le corps de la requête à `out`, au fil de l'eau, `room` octets au
+/// plus. Renvoie le nombre d'octets écrits.
+async fn append(mut body: Body, out: &mut tokio::fs::File, room: u64) -> Result<u64, Receive> {
+    let mut written: u64 = 0;
     while let Some(frame) = body.frame().await {
         let frame = frame.map_err(|_| Receive::Interrupted)?;
         let Ok(data) = frame.into_data() else {
             continue;
         };
-        size += data.len() as u64;
-        if size > max {
+        written += data.len() as u64;
+        if written > room {
             return Err(Receive::TooLarge);
         }
-        hasher.update(&data);
         out.write_all(&data).await?;
     }
     out.flush().await?;
-    out.sync_all().await?;
-    Ok((size, to_hex(&hasher.finalize())))
+    Ok(written)
+}
+
+/// Empreinte SHA-256 d'un fichier, lu par blocs de 1 Mo hors du fil
+/// asynchrone (un fichier de 2 Go prend quelques secondes).
+async fn hash_file(path: PathBuf) -> std::io::Result<String> {
+    tokio::task::spawn_blocking(move || {
+        use std::io::Read;
+        let mut file = std::fs::File::open(path)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0u8; 1 << 20];
+        loop {
+            let read = file.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        Ok(to_hex(&hasher.finalize()))
+    })
+    .await
+    .map_err(std::io::Error::other)?
+}
+
+/// Efface les envois abandonnés (24 heures sans nouvelles) et les fichiers
+/// partiels qu'aucun envoi ne référence plus. Ceux de moins d'une heure sont
+/// laissés : un envoi peut être en train de s'ouvrir.
+pub async fn cleanup_stale(db: &SqlitePool, config: &FilesConfig) -> anyhow::Result<()> {
+    let limit = time::now() - STALE_UPLOAD_SECONDS;
+    sqlx::query!("DELETE FROM uploads WHERE updated_at < ?", limit)
+        .execute(db)
+        .await?;
+    let live: HashSet<String> = sqlx::query_scalar!(r#"SELECT id AS "id!" FROM uploads"#)
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .collect();
+
+    let Ok(mut entries) = tokio::fs::read_dir(config.dir.join(INCOMING)).await else {
+        return Ok(());
+    };
+    let recent = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        let id = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
+        let young = entry
+            .metadata()
+            .await
+            .and_then(|m| m.modified())
+            .is_ok_and(|modified| modified > recent);
+        if !live.contains(id) && !young {
+            let _ = tokio::fs::remove_file(&path).await;
+        }
+    }
+    Ok(())
+}
+
+/// Nettoyage des envois abandonnés : au démarrage, puis toutes les heures.
+pub fn spawn_cleanup(state: AppState) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            tick.tick().await;
+            if let Some(files) = &state.config.files
+                && let Err(error) = cleanup_stale(&state.db, files).await
+            {
+                tracing::warn!(error = format!("{error:#}"), "nettoyage des envois");
+            }
+        }
+    });
+}
+
+/// Fichier partiel d'un envoi : `<dossier>/.envois/<id>.part`.
+fn part_path(dir: &FsPath, id: &str) -> PathBuf {
+    dir.join(INCOMING).join(format!("{id}.part"))
+}
+
+/// Vrai pour un identifiant tel que dashu les fabrique : 64 caractères
+/// hexadécimaux. Rien d'autre ne peut donc atteindre un chemin.
+fn is_token(id: &str) -> bool {
+    id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 // ---------------------------------------------------------------------
@@ -310,20 +572,14 @@ pub async fn delete(
 // Stockage
 // ---------------------------------------------------------------------
 
-/// Au démarrage : crée le dossier des envois et efface les envois restés en
-/// plan (coupure pendant un envoi). Un dossier inutilisable n'empêche pas
-/// dashu de démarrer : seuls les fichiers sont touchés, et l'erreur est
-/// signalée dans les logs.
+/// Au démarrage : crée le dossier des envois. Un dossier inutilisable
+/// n'empêche pas dashu de démarrer : seuls les fichiers sont touchés, et
+/// l'erreur est signalée dans les logs. Les envois restés en plan sont
+/// effacés plus tard, par `cleanup_stale` : un envoi en cours peut reprendre
+/// après un redémarrage (une mise à jour, par exemple).
 pub fn prepare_storage(config: &FilesConfig) {
-    let incoming = config.dir.join(INCOMING);
-    if let Err(error) = std::fs::create_dir_all(&incoming) {
+    if let Err(error) = std::fs::create_dir_all(config.dir.join(INCOMING)) {
         tracing::warn!(%error, dir = %config.dir.display(), "dossier des fichiers inutilisable");
-        return;
-    }
-    if let Ok(entries) = std::fs::read_dir(&incoming) {
-        for entry in entries.flatten() {
-            let _ = std::fs::remove_file(entry.path());
-        }
     }
 }
 

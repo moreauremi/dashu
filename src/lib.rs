@@ -26,7 +26,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{Extensions, HeaderMap, StatusCode, Version, header};
 use axum::middleware::{from_fn, from_fn_with_state};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use sqlx::SqlitePool;
 use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
@@ -48,6 +48,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// `None` si la connexion Google n'est pas configurée.
     pub google: Option<Arc<GoogleOidc>>,
+    /// Envois de fichiers dont un morceau est en train d'arriver.
+    pub uploads_busy: files::Busy,
 }
 
 impl AppState {
@@ -66,6 +68,7 @@ impl AppState {
             config: Arc::new(config),
             http,
             google,
+            uploads_busy: Default::default(),
         })
     }
 }
@@ -144,8 +147,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/notes/{id}/delete", post(notes::delete))
         .route("/notes/{id}/tags", post(notes::add_tag))
         .route("/notes/{id}/tags/{tag_id}", delete(notes::remove_tag))
-        // Fichiers (l'envoi lit le corps en continu, sans la limite de 2 Mo)
-        .route("/files", get(files::list).post(files::upload))
+        // Fichiers (un envoi lit le corps en continu, sans la limite de 2 Mo)
+        .route("/files", get(files::list))
+        .route("/files/uploads", post(files::start_upload))
+        .route("/files/uploads/{id}", put(files::upload_chunk))
         .route("/files/{id}/download", get(files::download))
         .route("/files/{id}/delete", post(files::delete))
         // Agenda

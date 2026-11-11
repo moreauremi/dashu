@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM uploads WHERE updated_at < ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4630bc550bcf62fe63eadfefa3cc92bba95e98904cdc976355f304dd27e51a8b"
+}

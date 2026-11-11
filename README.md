@@ -290,9 +290,13 @@ bash <(pct exec <n> -- cat /opt/dashu/src/deploy/hermes/install.sh)
 
 Le contenu des fichiers va dans `FILES_DIR`, sur le second disque (`/srv/dashu/fichiers`) ; la base n'en garde que le nom, la taille, le type et l'empreinte SHA-256. Sur le disque, un fichier porte une clé aléatoire, jamais le nom choisi par l'utilisateur : un nom piégé comme `../../etc/passwd` ne peut désigner aucun autre fichier.
 
-- **Envoi** : `static/js/files.js` envoie chaque fichier tel quel dans le corps d'un `POST /files?name=…` (deux à la fois, une barre de progression par fichier). dashu l'écrit sur le disque au fil de l'eau, en comptant les octets : sa mémoire ne dépend pas de la taille du fichier, et un envoi trop gros ou interrompu ne laisse rien.
+- **Envoi, par morceaux** : l'offre gratuite de Cloudflare refuse toute requête de plus de 100 Mo. `static/js/files.js` découpe donc chaque fichier en morceaux de 50 Mo (deux fichiers à la fois, une barre de progression par fichier) :
+  1. `POST /files/uploads?name=…&size=…` ouvre l'envoi ; une taille au-delà de `MAX_UPLOAD_MB` est refusée tout de suite ;
+  2. chaque morceau part dans un `PUT /files/uploads/{id}?offset=…`, et dashu l'ajoute au fichier partiel `FILES_DIR/.envois/<id>.part`, au fil de l'eau, en comptant les octets ;
+  3. au dernier morceau, le fichier rejoint la liste.
+
+  La mémoire de dashu ne dépend donc pas de la taille du fichier. Un morceau raté est renvoyé (trois essais). Si dashu attend un autre morceau, il répond 409 avec l'en-tête `x-upload-received`, et le navigateur reprend de là. Un envoi en cours survit à un redémarrage de dashu ; abandonné, il est effacé au bout de 24 heures.
 - **Téléchargement** : toujours en pièce jointe (`Content-Disposition: attachment`), avec `Content-Security-Policy: sandbox` et `nosniff` : un fichier HTML ou SVG piégé ne s'exécute jamais dans la page de dashu.
-- **Limite de Cloudflare** : l'offre gratuite refuse les requêtes de plus de 100 Mo. Un fichier plus gros passe par l'adresse Tailscale, où seule `MAX_UPLOAD_MB` s'applique ; la page le dit si l'envoi est refusé.
 
 `install.sh` crée le dossier et renseigne `FILES_DIR` quand `/srv/dashu` est monté. Sur un serveur déjà installé, en root dans le conteneur :
 
@@ -450,7 +454,6 @@ npm install && npm run build
 
 ## Limites connues de la v1
 
-- Par `app.dashu.dev`, un fichier de plus de 100 Mo est refusé par Cloudflare (offre gratuite) : passer par l'adresse Tailscale.
 - Les récurrences iCal (`RRULE`) ne sont pas développées. Pronote n'en produit pas ; un autre calendrier pourrait en contenir.
 - Changer de mot de passe ne ferme pas les sessions déjà ouvertes sur d'autres appareils.
 - La validation d'une URL iCal porte sur le nom saisi : un nom public qui résoudrait vers une adresse privée n'est pas détecté.

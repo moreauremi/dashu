@@ -100,22 +100,142 @@ async fn fichier_trop_gros_refuse_sans_rien_laisser() {
     alice.get("/files").await;
     let too_big = vec![0u8; MAX_UPLOAD as usize + 1];
 
-    // Taille annoncée : refus avant d'écrire quoi que ce soit.
+    // Taille totale au-delà de la limite : refus dès l'ouverture de l'envoi.
     let refused = alice.upload("gros.bin", &too_big).await;
     assert_eq!(refused.status, StatusCode::PAYLOAD_TOO_LARGE);
     assert!(refused.body.contains("64 Ko au plus"), "{}", refused.body);
-
-    // Taille non annoncée : le comptage des octets reçus arrête l'envoi.
-    let refused = alice.upload_unannounced("gros.bin", &too_big).await;
-    assert_eq!(refused.status, StatusCode::PAYLOAD_TOO_LARGE);
-
     assert!(app.stored_files().is_empty(), "{:?}", app.stored_files());
-    assert!(!alice.get("/files").await.body.contains("gros.bin"));
 
-    // Pile à la limite : accepté.
-    let at_limit = vec![0u8; MAX_UPLOAD as usize];
-    let sent = alice.upload_unannounced("juste.bin", &at_limit).await;
+    // Taille annoncée mensongère, morceau sans Content-Length : le comptage
+    // des octets reçus arrête l'envoi, et le fichier partiel revient à vide.
+    let id = alice.start_upload("menteur.bin", 10).await.body;
+    let refused = alice.put_chunk(&id, 0, &[0u8; 11], false).await;
+    assert_eq!(refused.status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(
+        refused.body.contains("plus gros qu&#39;annoncé"),
+        "{}",
+        refused.body
+    );
+    assert!(
+        app.stored_files()
+            .iter()
+            .all(|path| path.metadata().unwrap().len() == 0)
+    );
+    let page = alice.get("/files").await.body;
+    assert!(!page.contains("gros.bin") && !page.contains("menteur.bin"));
+
+    // Pile à la limite, en trois morceaux : accepté.
+    let at_limit = vec![7u8; MAX_UPLOAD as usize];
+    let sent = alice.upload_in_chunks("juste.bin", &at_limit, 25_000).await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
+}
+
+#[tokio::test]
+async fn un_gros_fichier_arrive_en_plusieurs_morceaux() {
+    use sha2::{Digest, Sha256};
+
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.get("/files").await;
+    let content: Vec<u8> = (0..50_000u32).map(|i| (i % 251) as u8).collect();
+
+    let sent = alice.upload_in_chunks("video.mp4", &content, 16_384).await;
+    assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
+
+    let page = alice.get("/files").await;
+    assert!(page.body.contains("Vidéo · 49 Ko"), "{}", page.body);
+    let id = first_file_id(&page.body);
+    let file = alice.get(&format!("/files/{id}/download")).await;
+    assert_eq!(file.bytes, content, "le fichier recollé est identique");
+
+    let stored: String = sqlx::query_scalar("SELECT sha256 FROM files WHERE id = ?")
+        .bind(id)
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    let expected: String = Sha256::digest(&content)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(stored, expected);
+    // Plus d'envoi en cours, plus de fichier partiel.
+    let pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM uploads")
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert_eq!(pending, 0);
+    assert_eq!(app.stored_files().len(), 1);
+}
+
+#[tokio::test]
+async fn un_morceau_hors_ordre_donne_le_point_de_reprise() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.get("/files").await;
+    let id = alice.start_upload("cours.pdf", 10).await.body;
+
+    let early = alice.put_chunk(&id, 5, b"fghij", true).await;
+    assert_eq!(early.status, StatusCode::CONFLICT);
+    assert_eq!(early.header("x-upload-received"), "0");
+
+    let first = alice.put_chunk(&id, 0, b"abcde", true).await;
+    assert_eq!(first.status, StatusCode::OK);
+    assert_eq!(first.header("x-upload-received"), "5");
+
+    // Le même morceau renvoyé (réponse perdue, par exemple) : on reprend à 5.
+    let again = alice.put_chunk(&id, 0, b"abcde", true).await;
+    assert_eq!(again.status, StatusCode::CONFLICT);
+    assert_eq!(again.header("x-upload-received"), "5");
+
+    let last = alice.put_chunk(&id, 5, b"fghij", true).await;
+    assert_eq!(last.status, StatusCode::CREATED);
+    let id = first_file_id(&alice.get("/files").await.body);
+    assert_eq!(
+        alice.get(&format!("/files/{id}/download")).await.bytes,
+        b"abcdefghij"
+    );
+}
+
+#[tokio::test]
+async fn un_fichier_vide_est_accepte() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.get("/files").await;
+    let sent = alice.upload("vide.txt", b"").await;
+    assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
+    assert!(alice.get("/files").await.body.contains("Texte · 0 o"));
+}
+
+#[tokio::test]
+async fn les_envois_abandonnes_sont_effaces() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.get("/files").await;
+    let id = alice.start_upload("abandon.bin", 100).await.body;
+    alice.put_chunk(&id, 0, &[1u8; 40], true).await;
+    let part = app.files_dir.join(".envois").join(format!("{id}.part"));
+    assert!(part.exists());
+
+    // Un jour plus tard, sans nouvelles.
+    sqlx::query("UPDATE uploads SET updated_at = updated_at - 2 * 86400")
+        .execute(&app.state.db)
+        .await
+        .unwrap();
+    let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+    std::fs::File::options()
+        .write(true)
+        .open(&part)
+        .unwrap()
+        .set_modified(two_hours_ago)
+        .unwrap();
+
+    let files = app.state.config.files.as_ref().unwrap();
+    dashu::files::cleanup_stale(&app.state.db, files)
+        .await
+        .unwrap();
+    assert!(!part.exists());
+    let refused = alice.put_chunk(&id, 40, &[1u8; 60], true).await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -138,6 +258,12 @@ async fn un_compte_n_a_aucun_acces_aux_fichiers_d_un_autre() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(app.stored_files().len(), 1, "le fichier d'Alice est intact");
+
+    // Un envoi en cours d'Alice est tout aussi inaccessible à Bob.
+    let upload = alice.start_upload("brouillon.txt", 5).await.body;
+    bob.get("/files").await;
+    let refused = bob.put_chunk(&upload, 0, b"pirat", true).await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -145,7 +271,7 @@ async fn envoi_sans_jeton_csrf_refuse() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     alice.get("/files").await;
-    let refused = alice.upload_without_csrf("note.txt", b"bonjour").await;
+    let refused = alice.start_upload_without_csrf("note.txt", 7).await;
     assert_eq!(refused.status, StatusCode::FORBIDDEN);
     assert!(app.stored_files().is_empty());
 }

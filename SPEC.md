@@ -334,7 +334,7 @@ Les règles de la v1 restent valables : stack, sécurité, cibles de performance
 
 | Module | Inclus en v2 | Hors v2 |
 | --- | --- | --- |
-| Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Dossiers, client de synchronisation, versions d'un fichier, envoi par morceaux |
+| Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Dossiers, client de synchronisation, versions d'un fichier |
 | Notes | Image collée dans l'éditeur, lien vers un fichier de l'espace | Galerie, redimensionnement dans la note |
 | Partage | Lien temporaire (1 h, 1 jour ou 7 jours), révocable | Lien protégé par mot de passe, dépôt par un tiers |
 | Outils : conversions | Images, Markdown et texte, PDF, audio et vidéo | DOCX et PPTX vers PDF (pas de LibreOffice), OCR (v3), retouche photo (v4) |
@@ -370,7 +370,7 @@ Sur le disque, un fichier vit dans `/srv/dashu/fichiers/<2 premiers caractères 
 
 - Glisser-déposer ou bouton, plusieurs fichiers à la fois, barre de progression par fichier.
 - Envoi en continu (streaming) : le fichier va directement sur le disque, la mémoire de dashu ne dépend pas de sa taille.
-- Taille maximale : `MAX_UPLOAD_MB`, 2 Go par défaut. **Par `app.dashu.dev`, Cloudflare limite une requête à 100 Mo** (offre gratuite) : au-delà, passer par l'adresse Tailscale. Le message d'erreur le dit.
+- Taille maximale : `MAX_UPLOAD_MB`, 2 Go par défaut. **Par `app.dashu.dev`, Cloudflare limite une requête à 100 Mo** (offre gratuite) : le fichier part donc en morceaux de 50 Mo, recollés par dashu. Un morceau raté se renvoie seul, et un envoi en cours survit à un redémarrage. Ajouté le 11 novembre 2026, à la demande de Rémi.
 - Un envoi interrompu ou refusé ne laisse rien sur le disque.
 
 ### Page Fichiers
@@ -460,7 +460,7 @@ La v2 est terminée quand toutes les cases sont cochées sur le serveur réel.
 
 **Fichiers**
 
-- [ ] Envoi de plusieurs fichiers par glisser-déposer : un de 90 Mo par `app.dashu.dev`, un de 1 Go par Tailscale ; la mémoire de dashu reste sous la cible
+- [ ] Envoi de plusieurs fichiers par glisser-déposer, dont un de 1 Go par `app.dashu.dev` (en morceaux, malgré la limite de Cloudflare) ; la mémoire de dashu reste sous la cible
 - [ ] Un fichier trop gros est refusé avec un message clair, et rien ne reste sur le disque
 - [ ] Un fichier tagué est retrouvé par la recherche, par son tag et dans la palette `Ctrl+K`
 - [ ] Aperçu d'une image, d'un PDF et d'un texte ; téléchargement, renommage, déplacement, suppression
