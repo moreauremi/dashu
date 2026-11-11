@@ -2508,7 +2508,8 @@ input.note-title:focus-visible {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 56px;
+    /* La zone sous la barre d'état s'ajoute aux 56 px, sans les rogner. */
+    height: calc(56px + env(safe-area-inset-top, 0px));
     padding: 0 8px;
     padding-top: env(safe-area-inset-top, 0);
     border-bottom: 1px solid var(--border);
@@ -2736,6 +2737,15 @@ input.note-title:focus-visible {
   select {
     /* 16 px : en dessous, iOS zoome sur le champ quand on le touche. */
     font-size: 16px;
+  }
+}
+
+/* Ouverte depuis l'écran d'accueil, dashu se comporte comme une app : pas de
+   zoom au pincement ni au double tap, le défilement reste libre. Dans le
+   navigateur, le zoom reste possible (accessibilité). app.js complète. */
+@media (display-mode: standalone) {
+  html {
+    touch-action: pan-x pan-y;
   }
 }
 

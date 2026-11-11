@@ -64,6 +64,7 @@
       if (app.dataset.theme) document.documentElement.dataset.theme = app.dataset.theme;
       else delete document.documentElement.dataset.theme;
     }
+    syncThemeColor();
 
     $$("[data-mod-key]").forEach((kbd) => {
       kbd.textContent = isMac ? "⌘ K" : "Ctrl K";
@@ -113,6 +114,47 @@
   // Bouton « Précédent » du navigateur : htmx redemande la page au serveur
   // et la remet en place, il faut la préparer comme une autre.
   document.addEventListener("htmx:historyRestore", onPage);
+
+  // ------------------------------------------- App sur l'écran d'accueil
+
+  // Barre d'état de l'app : couleur de la barre du haut (--surface) dans le
+  // thème imposé par les réglages, sinon dans celui du système (les deux
+  // balises theme-color de base.html, une par thème).
+  const BAR_COLOR = { light: "#ffffff", dark: "#181817" };
+
+  function syncThemeColor() {
+    const forced = BAR_COLOR[document.documentElement.dataset.theme];
+    $$('meta[name="theme-color"]').forEach((meta) => {
+      meta.content = forced || BAR_COLOR[meta.media.includes("dark") ? "dark" : "light"];
+    });
+  }
+
+  // Ouverte depuis l'écran d'accueil, dashu ne zoome plus, comme une app
+  // (dans le navigateur, le zoom reste permis). Le CSS coupe le double tap ;
+  // ici on interdit le zoom dans le viewport, et comme iOS ignore cette
+  // consigne depuis iOS 10, on bloque aussi le pincement lui-même.
+  const standalone =
+    matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches ||
+    navigator.standalone === true;
+
+  if (standalone) {
+    const viewport = $('meta[name="viewport"]');
+    if (viewport) viewport.content += ", maximum-scale=1, user-scalable=no";
+
+    // Événements propres à Safari iOS : gesture* = pincement en cours.
+    if ("ongesturestart" in window) {
+      const block = (event) => event.preventDefault();
+      document.addEventListener("gesturestart", block, { passive: false });
+      document.addEventListener("gesturechange", block, { passive: false });
+      document.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches.length > 1) event.preventDefault();
+        },
+        { passive: false },
+      );
+    }
+  }
 
   // ------------------------------------------------ Menu sur petit écran
 

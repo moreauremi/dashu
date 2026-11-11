@@ -33,9 +33,11 @@ fn main() {
     walk(&static_dir, &static_dir, &mut files);
     files.sort();
 
-    // Les CSS passent en dernier : ils référencent polices et images, dont il
-    // faut d'abord connaître le nom avec empreinte.
-    let (css, others): (Vec<_>, Vec<_>) = files.into_iter().partition(|(p, _)| p.ends_with(".css"));
+    // Les CSS et le manifeste de l'app passent en dernier : ils référencent
+    // polices et images, dont il faut d'abord connaître le nom avec empreinte.
+    let (css, others): (Vec<_>, Vec<_>) = files
+        .into_iter()
+        .partition(|(p, _)| p.ends_with(".css") || p.ends_with(".webmanifest"));
 
     let mut entries: Vec<(String, String, PathBuf)> = Vec::new();
     for (logical, path) in others {

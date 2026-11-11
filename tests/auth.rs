@@ -253,6 +253,39 @@ async fn fichiers_statiques_avec_empreinte_et_cache_d_un_an() {
 }
 
 #[tokio::test]
+async fn manifeste_pour_l_ecran_d_accueil() {
+    let app = TestApp::new().await;
+    let mut visitor = app.client();
+    let page = visitor.get("/login").await;
+
+    let manifest = common::between(&page.body, "rel=\"manifest\" href=\"", "\"")
+        .expect("lien vers le manifeste");
+    assert!(
+        manifest.starts_with("/static/manifest.") && manifest != "/static/manifest.webmanifest",
+        "{manifest}"
+    );
+    let icon = common::between(&page.body, "rel=\"apple-touch-icon\" href=\"", "\"")
+        .expect("icône pour iOS");
+    assert_eq!(visitor.get(icon).await.header("content-type"), "image/png");
+
+    let response = visitor.get(manifest).await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.header("content-type"), "application/manifest+json");
+    let json: serde_json::Value = serde_json::from_str(&response.body).expect("JSON valide");
+    assert_eq!(json["display"], "standalone");
+    assert_eq!(json["start_url"], "/");
+    // Les icônes citées portent une empreinte et existent.
+    for icon in json["icons"].as_array().expect("icônes") {
+        let src = icon["src"].as_str().unwrap();
+        assert!(
+            !src.ends_with("icon-192.png") && !src.ends_with("icon-512.png"),
+            "{src}"
+        );
+        assert_eq!(visitor.get(src).await.status, StatusCode::OK, "{src}");
+    }
+}
+
+#[tokio::test]
 async fn trois_espaces_des_la_premiere_connexion() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
