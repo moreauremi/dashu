@@ -9,8 +9,11 @@
     contenu de <body> à chaque navigation, donc ces attributs suivent :
       data-accent  couleur de l'espace actif
       data-theme   thème choisi (recopié sur <html> par app.js)
-      hx-headers   jeton CSRF joint à toutes les requêtes htmx -#}
-<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}" hx-boost="true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
+      hx-headers   jeton CSRF joint à toutes les requêtes htmx
+      hx-swap      les changements de page passent par une View Transition
+                   (fondu court, sans écran vide) là où le navigateur la gère ;
+                   les fragments (widgets, recherche…) gardent leur propre hx-swap -#}
+<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}" hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
   <a class="skip-link" href="#main">Aller au contenu</a>
 
   <header class="topbar">
