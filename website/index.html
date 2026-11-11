@@ -3,933 +3,338 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>dashu · tableau de bord open source et auto-hébergeable</title>
-<meta name="description" content="dashu réunit sur un seul tableau de bord votre équipe, votre journée et votre maison. Open source, installable avec Docker sur votre propre serveur.">
+<title>dashu · dashboard, notes et emploi du temps auto-hébergés</title>
+<meta name="description" content="dashu réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote en trois espaces (Perso, École, Taff). Open source, un seul binaire Rust, hébergé chez soi.">
+<meta name="color-scheme" content="light dark">
 <meta property="og:title" content="dashu">
-<meta property="og:description" content="Votre équipe, votre journée et votre maison sur un seul tableau. Open source et auto-hébergeable.">
-<meta property="og:url" content="https://dashu.dev">
-<meta property="og:type" content="website">
-<meta name="theme-color" content="#FFFFFF">
+<meta property="og:description" content="Dashboard, notes Markdown et emploi du temps, en trois espaces. Open source et auto-hébergé.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rethink+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/rethink-sans.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-/* Mise en page : colonne de 1200 px, sections empilées ; l'aperçu de l'app est une vraie grille bento 12 × 6
-   dessinée à 1200 × 720 puis mise à l'échelle. Jetons repris tels quels du guide de style dashu v0.1. */
+/* Page d'accueil de dashu.dev. Mêmes jetons que l'application (static/css/app.css) :
+   une couleur = light-dark(clair, sombre), un accent par espace. Aucune ressource externe. */
+@font-face{font-family:"Rethink Sans";src:url(fonts/rethink-sans.woff2) format("woff2");font-weight:400 800;font-display:swap}
 :root{
-  --bg-page:#F7F7F5; --bg-card:#FFFFFF; --bg-subtle:#F7F7F5; --bg-hover:#F3F3F1;
-  --border:#E9E9E7; --divider:#F0F0EE; --control-off:#DCDCDA;
-  --text:#111111; --text-hover:#2B2B2B; --text-secondary:#555555; --text-muted:#6B6B6B; --on-dark:#FFFFFF;
-  --grid-line:#EFEFED; --today:#FAFAF8; --code-muted:#A3A3A3;
-  --cours-bg:#E8F0FE; --cours-tx:#1A4FB5; --cours-dot:#2F6FE0;
-  --travail-bg:#E6F4EA; --travail-tx:#17663A; --travail-dot:#1E9E57;
-  --projet-bg:#F0EAFE; --projet-tx:#5B2FB3; --projet-dot:#8155E8;
-  --perso-bg:#FDEEE2; --perso-tx:#9A3D0B; --perso-dot:#E8742C;
-  --ok:#1E9E57; --err:#D64545; --err-tx:#B42E2E;
-  --font:'Rethink Sans','Helvetica Neue',Arial,sans-serif;
-  --mono:ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+  color-scheme:light dark;
+  --bg:light-dark(#f6f6f3,#0f0f0e);
+  --surface:light-dark(#ffffff,#181817);
+  --surface-2:light-dark(#eeeeea,#232321);
+  --border:light-dark(#e2e2dd,#2c2c29);
+  --border-strong:light-dark(#c9c9c3,#42423e);
+  --text:light-dark(#141413,#edede9);
+  --text-2:light-dark(#4b4b46,#b5b5ae);
+  --text-3:light-dark(#6a6a64,#8f8f88);
+  --orange:light-dark(#b04a0c,#f2935c);
+  --blue:light-dark(#1e56c4,#7daaf8);
+  --green:light-dark(#126b40,#5fcb99);
+  --on-text:light-dark(#ffffff,#10100f);
+  --font:"Rethink Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
   --gutter:16px;
-  color-scheme:light;
 }
-@media (min-width:760px){ :root{ --gutter:24px } }
-
+@media (min-width:760px){:root{--gutter:32px}}
 *,*::before,*::after{box-sizing:border-box}
-[hidden]{display:none!important}
-html{scroll-behavior:smooth;scroll-padding-top:84px}
-body{margin:0;background:var(--bg-page);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg-card)}
-img,svg{max-width:100%}
-a{color:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:72px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.6 var(--font);-webkit-font-smoothing:antialiased}
 h1,h2,h3,p,ul,ol{margin:0}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+ul{padding:0;list-style:none}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:max(var(--gutter),env(safe-area-inset-left,0px))}
 
-.wrap{max-width:1248px;margin:0 auto;padding-left:max(var(--gutter),env(safe-area-inset-left,0px));padding-right:max(var(--gutter),env(safe-area-inset-right,0px))}
+/* Boutons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:500 15px/1 var(--font);text-decoration:none;white-space:nowrap;transition:background-color 120ms var(--ease),border-color 120ms var(--ease)}
+.btn:hover{border-color:var(--border-strong)}
+.btn-primary{background:var(--text);border-color:var(--text);color:var(--on-text)}
+.btn-primary:hover{background:color-mix(in oklab,var(--text) 85%,var(--bg));border-color:transparent}
+.btn-lg{height:44px;padding:0 20px}
 
-/* ---------- Boutons (guide §6) ---------- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font:500 14px/1 var(--font);text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color .15s}
-.btn:hover{background:var(--bg-hover)}
-.btn-primary{background:var(--text);border-color:var(--text);color:var(--on-dark)}
-.btn-primary:hover{background:var(--text-hover)}
-.btn-icon{width:40px;padding:0}
-.btn[disabled]{color:var(--text-muted);background:var(--bg-card);cursor:not-allowed}
-.btn-lg{height:44px;padding:0 20px;font-size:15px}
-
-/* ---------- Barre du haut du site ---------- */
-.site-bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg-card);border-bottom:1px solid var(--border)}
+/* Barre */
+.bar{position:sticky;top:0;z-index:10;background:color-mix(in oklab,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
 .bar-in{height:60px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.wordmark{font-size:20px;font-weight:500;letter-spacing:.24em;text-decoration:none;color:var(--text)}
-.bar-actions{display:flex;align-items:center;gap:8px}
-@media (max-width:519px){ .hide-sm{display:none} }
+.wordmark{display:flex;align-items:center;gap:10px;font-weight:500;font-size:18px;letter-spacing:.02em;text-decoration:none}
+.wordmark i{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:var(--text);color:var(--on-text);font-style:normal;font-size:18px;line-height:1}
+.nav{display:flex;align-items:center;gap:4px}
+.nav a.link{padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--text-2);font-size:15px}
+.nav a.link:hover{color:var(--text);background:var(--surface-2)}
+@media (max-width:719px){.nav .link{display:none}}
+@media (max-width:519px){.link-label{display:none}.nav .btn{padding:0 12px}}
 
-/* ---------- Hero ---------- */
-.hero{padding-block:64px 0}
-.hero-text{max-width:820px}
-.eyebrow{display:inline-flex;align-items:center;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg-card);font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:24px}
-h1{font-size:clamp(36px,5.4vw,62px);line-height:1.05;letter-spacing:-.032em;font-weight:500;text-wrap:balance}
-.lead{font-size:clamp(17px,1.7vw,19px);line-height:1.55;color:var(--text-secondary);max-width:640px;margin-top:20px}
+/* Hero */
+.hero{padding-block:72px 40px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:13px;color:var(--text-2)}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+h1{margin-top:24px;max-width:15ch;font-size:clamp(40px,7vw,72px);line-height:1.02;letter-spacing:-.035em;font-weight:500;text-wrap:balance}
+h1 .spaces{display:block;color:var(--text-3)}
+.lead{margin-top:24px;max-width:600px;font-size:clamp(17px,2vw,19px);color:var(--text-2)}
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
-.preview{margin-top:48px}
-.preview-cap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin-top:12px;font-size:13px;color:var(--text-secondary)}
-.only-sm{display:none}
-@media (max-width:759px){ .only-sm{display:inline} .hero{padding-block:40px 0} .preview{margin-top:32px} }
 
-/* ---------- Cadre de capture : l'app est dessinée à 1200 × 720 puis réduite ---------- */
-.shot{position:relative;width:100%;max-width:100%;aspect-ratio:1200/720;overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--bg-page)}
-.shot>.app{position:absolute;left:0;top:0;transform-origin:0 0}
-.shot[data-clone] .app{pointer-events:none}
+/* Aperçu de l'application (données d'exemple, dessiné en HTML) */
+.shot{margin-top:56px;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:0 1px 0 var(--border),0 24px 60px -32px color-mix(in oklab,var(--text) 35%,transparent);overflow:hidden}
+.shot-bar{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.shot-bar span{width:10px;height:10px;border-radius:50%;background:var(--border-strong)}
+.shot-bar em{margin-left:12px;font:400 12px/1 var(--mono);font-style:normal;color:var(--text-3)}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:420px}
+.side{border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.side b{padding:0 8px 12px;font-weight:500;letter-spacing:.02em}
+.side .sp{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+.side .sp i{width:8px;height:8px;border-radius:50%}
+.side .sp.on{background:color-mix(in oklab,var(--blue) 13%,var(--surface));color:var(--blue);font-weight:500}
+.side hr{border:0;border-top:1px solid var(--border);margin:10px 4px}
+.side .nv{height:32px;display:flex;align-items:center;padding:0 8px;color:var(--text-2)}
+.main{padding:24px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.main-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.main-head h3{font-size:22px;font-weight:500;letter-spacing:-.01em}
+.main-head p{font-size:14px;color:var(--text-3)}
+.main-head time{font:500 28px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface);font-size:14px;min-width:0}
+.card h4{margin:0 0 10px;font-size:13px;font-weight:500;color:var(--text-2)}
+.row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border)}
+.row:first-of-type{border-top:0}
+.chip{flex:none;width:4px;align-self:stretch;border-radius:2px}
+.row small{display:block;color:var(--text-3);font-size:12px}
+.box{flex:none;width:16px;height:16px;margin-top:2px;border:1.5px solid var(--border-strong);border-radius:4px}
+.box.done{background:var(--blue);border-color:var(--blue)}
+.row.done span{color:var(--text-3);text-decoration:line-through}
+.pin{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--surface-2);color:var(--text-2);margin-left:6px}
+.shot-cap{margin-top:12px;font-size:13px;color:var(--text-3)}
+@media (max-width:899px){.cards{grid-template-columns:1fr 1fr}.card.c3{display:none}}
+@media (max-width:719px){.app{grid-template-columns:1fr}.side{display:none}.main{padding:16px}.cards{grid-template-columns:1fr}.card.c3{display:block}.main-head time{font-size:22px}}
 
-/* ---------- L'app dashu (maquette) ---------- */
-.app{width:1200px;height:720px;display:flex;flex-direction:column;background:var(--bg-page);color:var(--text);font-size:14px;line-height:1.35;text-align:left}
-.app-bar{flex:none;height:60px;padding:10px 20px;display:flex;align-items:center;gap:28px;background:var(--bg-card);border-bottom:1px solid var(--border)}
-.app-logo{font-size:20px;font-weight:500;letter-spacing:.24em}
-.tabs{flex:1;display:flex;gap:4px}
-.tab{height:40px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--text-secondary);font:500 14px/1 var(--font);cursor:pointer}
-.tab:hover{background:var(--bg-hover)}
-.tab[aria-current="page"]{background:var(--text);color:var(--on-dark)}
-.app-actions{display:flex;align-items:center;gap:8px}
-.avatar{width:40px;height:40px;border-radius:999px;background:var(--text);color:var(--on-dark);display:grid;place-items:center;font-size:13px;font-weight:500;letter-spacing:.04em;margin-left:4px}
+/* Sections */
+section.block{padding-block:72px;border-top:1px solid var(--border)}
+.kicker{font-size:14px;color:var(--text-3);margin-bottom:12px}
+h2{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.025em;font-weight:500;max-width:22ch;text-wrap:balance}
+.intro{margin-top:16px;max-width:620px;color:var(--text-2)}
+.grid{margin-top:40px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:899px){.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:599px){.grid{grid-template-columns:1fr}}
+.feat{padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.feat .ic{display:grid;place-items:center;width:36px;height:36px;border-radius:8px;background:var(--surface-2);margin-bottom:16px;color:var(--text)}
+.feat h3{font-size:17px;font-weight:500;margin-bottom:6px}
+.feat p{font-size:15px;color:var(--text-2)}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:13px;background:var(--surface-2);color:var(--text-2)}
+.tag i{width:7px;height:7px;border-radius:50%}
 
-.view{flex:1;min-height:0;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-template-rows:repeat(6,minmax(0,1fr));gap:12px;padding:12px 20px 20px}
-.app.editing .view{background-image:radial-gradient(var(--control-off) 1px,transparent 1.5px);background-size:14px 14px}
-.w{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
-.app.editing .w{border-style:dashed;border-color:var(--text-muted)}
-.wh{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
-.wt{font-size:13px;font-weight:500;color:var(--text-muted);white-space:nowrap}
-.wi{font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.wi svg.i{width:13px;height:13px}
-.sub{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
-.fill{flex:1;min-height:0}
+.facts{margin-top:40px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.fact{padding:20px;border-left:1px solid var(--border)}
+.fact:first-child{border-left:0}
+.fact strong{display:block;font-size:28px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.fact span{font-size:14px;color:var(--text-2)}
+@media (max-width:899px){.facts{grid-template-columns:1fr 1fr}.fact:nth-child(3){border-left:0}.fact:nth-child(n+3){border-top:1px solid var(--border)}}
+.stack{margin-top:16px;font-size:14px;color:var(--text-3)}
 
-/* listes */
-.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.row{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 8px;border-top:1px solid var(--divider)}
-.row:first-child{border-top:0}
-.row.tall{min-height:44px}
-.row.two{min-height:48px;padding-block:4px}
-.row.now{background:var(--bg-hover);border-radius:10px;border-top-color:transparent}
-.row.now+.row{border-top-color:transparent}
-.r-main{flex:1;min-width:0;display:flex;flex-direction:column}
-.r-t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r-s{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{flex:none;font-size:11px;font-weight:500;line-height:1;padding:4px 8px;border-radius:999px;background:var(--text);color:var(--on-dark)}
-.dot{width:8px;height:8px;border-radius:999px;flex:none;background:var(--c,var(--text-muted))}
-.c-cours{--c:var(--cours-dot)} .c-travail{--c:var(--travail-dot)} .c-projet{--c:var(--projet-dot)} .c-perso{--c:var(--perso-dot)}
-.c-ok{--c:var(--ok)} .c-err{--c:var(--err)}
-.st{font-size:12px;color:var(--text-secondary);white-space:nowrap}
-.st.err{color:var(--err-tx);font-weight:500}
-.ini{flex:none;width:26px;height:26px;border-radius:999px;background:var(--bg-subtle);border:1px solid var(--border);display:grid;place-items:center;font-size:11px;font-weight:500;color:var(--text-secondary)}
+.road{margin-top:40px;display:grid;gap:0;border-left:1px solid var(--border-strong);margin-left:6px}
+.step{position:relative;padding:0 0 28px 28px}
+.step:last-child{padding-bottom:0}
+.step::before{content:"";position:absolute;left:-7px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--bg);border:2px solid var(--border-strong)}
+.step.now::before{background:var(--green);border-color:var(--green)}
+.step h3{font-size:17px;font-weight:500}
+.step h3 small{font-size:13px;font-weight:400;color:var(--text-3);margin-left:8px}
+.step p{font-size:15px;color:var(--text-2);margin-top:2px}
 
-/* tâches */
-.task{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 8px;border:0;border-top:1px solid var(--divider);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.list>li:first-child .task{border-top:0}
-.task:hover{background:var(--bg-hover)}
-.box{flex:none;width:18px;height:18px;border:1.5px solid var(--text-muted);border-radius:6px;display:grid;place-items:center}
-.box svg.i{width:12px;height:12px;stroke:var(--on-dark);stroke-width:3;opacity:0}
-.task[aria-checked="true"] .box{background:var(--text);border-color:var(--text)}
-.task[aria-checked="true"] .box svg.i{opacity:1}
-.t-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.task[aria-checked="true"] .t-label{text-decoration:line-through;color:var(--text-muted)}
+pre{margin:32px 0 0;padding:20px;border-radius:12px;background:var(--surface);border:1px solid var(--border);overflow-x:auto;font:400 14px/1.7 var(--mono)}
+pre .c{color:var(--text-3)}
+.after{margin-top:16px;color:var(--text-2);max-width:620px}
+.after a{text-underline-offset:3px}
 
-/* interrupteur (guide §6) */
-.toggle{position:relative;flex:none;width:48px;height:28px;padding:0;border:0;border-radius:999px;background:var(--control-off);cursor:pointer;transition:background-color .15s}
-.toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:999px;background:var(--bg-card);transition:transform .15s}
-.toggle[aria-pressed="true"]{background:var(--text)}
-.toggle[aria-pressed="true"]::after{transform:translateX(20px)}
-.dev{flex:1;min-width:0}
-
-/* grands chiffres */
-.kpi{font-size:48px;font-weight:500;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.temp{font-size:32px;font-weight:500;line-height:1;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
-.temp.xl{font-size:36px}
-.trend{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);margin-top:10px}
-.trend svg.i{width:14px;height:14px}
-.kpi-wrap{margin-block:auto}
-
-/* thermostat */
-.thermo{flex:none;background:var(--bg-subtle);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
-.steps{display:flex;align-items:center;gap:8px}
-.step{flex:none;width:44px;height:44px;border-radius:12px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);display:grid;place-items:center;cursor:pointer}
-.step:hover{background:var(--bg-hover)}
-.setpoint{min-width:64px;text-align:center;font-weight:500;font-variant-numeric:tabular-nums}
-
-/* météo */
-.meteo{justify-content:center}
-.meteo-in{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.meteo-t{display:flex;align-items:center;gap:10px}
-.meteo-t svg.i{width:28px;height:28px;stroke-width:1.5;color:var(--text-secondary)}
-
-/* notes */
-.n-title{font-size:16px;font-weight:600;margin-bottom:6px}
-.n-body{font-size:14px;color:var(--text-secondary);line-height:1.5}
-ul.n-body{padding-left:18px}
-
-/* liens */
-.tiles{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:8px}
-.tile{min-width:0;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:10px;background:var(--bg-subtle);font-weight:500;white-space:nowrap;overflow:hidden}
-.mono{flex:none;width:28px;height:28px;border-radius:6px;background:var(--text);color:var(--on-dark);display:grid;place-items:center;font-size:12px;font-weight:600}
-
-/* agenda semaine (guide §6) */
-.legend{display:flex;gap:12px}
-.legend span{display:inline-flex;align-items:center;gap:5px}
-.week{flex:1;min-height:0;display:grid;grid-template-columns:36px repeat(5,minmax(0,1fr));grid-template-rows:auto minmax(0,1fr);column-gap:4px}
-.wk-d{display:flex;align-items:center;gap:6px;padding:0 0 8px 4px;font-size:12px;color:var(--text-secondary)}
-.wk-d b{width:26px;height:26px;border-radius:999px;display:grid;place-items:center;font-size:12px;font-weight:500;color:var(--text)}
-.wk-d.today b{background:var(--text);color:var(--on-dark)}
-.hours{position:relative}
-.hours span{position:absolute;left:0;font-size:11px;color:var(--text-muted);line-height:1;transform:translateY(-50%);font-variant-numeric:tabular-nums}
-.col{position:relative;border-radius:8px;background:repeating-linear-gradient(to bottom,var(--grid-line) 0,var(--grid-line) 1px,transparent 1px,transparent 20%),var(--col-bg,transparent)}
-.col.today{--col-bg:var(--today)}
-.ev{position:absolute;left:2px;right:2px;border-radius:8px;padding:6px 8px;background:var(--ev-bg);color:var(--ev-tx);overflow:hidden;font-size:12px;line-height:1.3}
-.ev strong{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ev span{display:block;white-space:nowrap;font-variant-numeric:tabular-nums}
-.ev.cours{--ev-bg:var(--cours-bg);--ev-tx:var(--cours-tx)}
-.ev.travail{--ev-bg:var(--travail-bg);--ev-tx:var(--travail-tx)}
-.ev.projet{--ev-bg:var(--projet-bg);--ev-tx:var(--projet-tx)}
-.ev.perso{--ev-bg:var(--perso-bg);--ev-tx:var(--perso-tx)}
-.nowline{position:absolute;left:0;right:0;height:2px;background:var(--text);z-index:2}
-.nowline::before{content:"";position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:999px;background:var(--text)}
-
-/* graphiques en barres */
-.chart{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px}
-.bars{flex:1;min-height:0;display:flex;align-items:flex-end;gap:10px;border-bottom:1px solid var(--border);padding-top:20px}
-.bar{position:relative;flex:1;height:calc(var(--v) * 100%);background:var(--control-off);border-radius:4px 4px 0 0}
-.bar.hi{background:var(--text)}
-.bar b{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;font-size:12px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
-.bar-x{display:flex;gap:10px}
-.bar-x span{flex:1;text-align:center;font-size:11px;color:var(--text-muted)}
-
-/* tableau de données */
-.tbl{width:100%;border-collapse:collapse}
-.tbl th{font-size:12px;font-weight:500;color:var(--text-muted);text-align:left;padding:0 8px 8px;border-bottom:1px solid var(--border)}
-.tbl td{height:40px;padding:0 8px;border-top:1px solid var(--divider);white-space:nowrap}
-.tbl tr:first-child td{border-top:0}
-.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
-.tbl .muted{color:var(--text-secondary)}
-.tbl .st{font-size:14px}
-.cell-st{display:inline-flex;align-items:center;gap:6px}
-
-/* ---------- Sections du site ---------- */
-.section{padding-block:104px 0}
-@media (max-width:759px){ .section{padding-block:72px 0} }
-.label{font-size:13px;font-weight:500;color:var(--text-muted);margin-bottom:12px}
-h2{font-size:clamp(28px,3.4vw,40px);line-height:1.12;letter-spacing:-.025em;font-weight:500;text-wrap:balance;max-width:760px}
-.intro{font-size:17px;color:var(--text-secondary);max-width:640px;margin-top:16px}
-
-/* vues */
-.usecases{display:flex;flex-direction:column;gap:20px;margin-top:48px}
-.usecase{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:40px;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:32px}
-.usecase .shot{border-radius:12px}
-.uc-text{min-width:0}
-.uc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-h3{font-size:24px;line-height:1.2;letter-spacing:-.015em;font-weight:500}
-.ver{font-size:12px;font-weight:500;line-height:1;padding:5px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-secondary);background:var(--bg-card);white-space:nowrap;font-variant-numeric:tabular-nums}
-.ver.now{background:var(--text);border-color:var(--text);color:var(--on-dark)}
-.uc-for{font-size:14px;color:var(--text-muted);margin-top:4px}
-.uc-desc{margin-top:16px;color:var(--text-secondary)}
-.facts{list-style:none;padding:0;margin-top:20px;display:flex;flex-direction:column;gap:10px;font-size:15px}
-.facts li{display:flex;gap:10px;align-items:baseline}
-.facts li::before{content:"";flex:none;width:6px;height:6px;border-radius:999px;background:var(--text);transform:translateY(-2px)}
-@media (max-width:899px){ .usecase{grid-template-columns:1fr;gap:24px;padding:20px} }
-
-/* widgets et connecteurs */
-.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;margin-top:48px;align-items:start}
-@media (max-width:899px){ .split{grid-template-columns:1fr} }
-.panel{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;min-width:0}
-.panel-t{font-size:13px;font-weight:500;color:var(--text-muted);margin-bottom:8px}
-.cat{display:grid;grid-template-columns:120px minmax(0,1fr);gap:4px 16px;padding:14px 0;border-top:1px solid var(--divider);font-size:15px}
-.cat:first-of-type{border-top:0}
-.cat dt{font-weight:500}
-.cat dd{margin:0;color:var(--text-secondary)}
-@media (max-width:479px){ .cat{grid-template-columns:1fr} }
-.scroll-x{overflow-x:auto}
-.conn{width:100%;border-collapse:collapse;font-size:15px}
-.conn th{font-size:12px;font-weight:500;color:var(--text-muted);text-align:left;padding:0 12px 10px 0;border-bottom:1px solid var(--border)}
-.conn td{padding:14px 12px 14px 0;border-top:1px solid var(--divider);vertical-align:top}
-.conn tr:first-child td{border-top:0}
-.conn td:first-child{font-weight:500;white-space:nowrap}
-.conn td:nth-child(2){color:var(--text-secondary)}
-.conn td:last-child{text-align:right;padding-right:0;white-space:nowrap}
-.conn .ver{display:inline-block}
-.note{font-size:14px;color:var(--text-secondary);margin-top:16px}
-@media (max-width:599px){
-  .conn thead{display:none}
-  .conn,.conn tbody{display:block}
-  .conn tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:14px 0;border-top:1px solid var(--divider)}
-  .conn tr:first-child{border-top:0}
-  .conn td{padding:0;border:0}
-  .conn td:nth-child(2){grid-column:1/-1;grid-row:2}
-}
-
-/* installation */
-.install{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:40px;align-items:start;margin-top:48px}
-@media (max-width:899px){ .install{grid-template-columns:1fr;gap:28px} }
-.code{background:var(--text);color:var(--on-dark);border-radius:14px;overflow:hidden;min-width:0}
-.code+.code{margin-top:12px}
-.code-h{display:flex;align-items:center;justify-content:space-between;gap:12px;height:48px;padding:0 8px 0 18px;border-bottom:1px solid #2A2A2A;font-size:13px;color:var(--code-muted)}
-.copy{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:10px;border:1px solid #333333;background:transparent;color:var(--on-dark);font:500 13px/1 var(--font);cursor:pointer}
-.copy:hover{background:#222222}
-.copy svg.i{width:15px;height:15px}
-.code pre{margin:0;padding:18px;overflow-x:auto;font:400 13.5px/1.65 var(--mono)}
-.code .cm{color:var(--code-muted)}
-.prompt{color:var(--code-muted);user-select:none}
-
-/* feuille de route */
-.road{list-style:none;padding:0;margin-top:48px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
-@media (max-width:899px){ .road{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (max-width:519px){ .road{grid-template-columns:1fr} }
-.road li{display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:2px solid var(--control-off)}
-.road li.current{border-top-color:var(--text)}
-.road .rv{display:flex;align-items:center;gap:10px}
-.road .rv strong{font-size:20px;font-weight:500;letter-spacing:-.01em}
-.road p{color:var(--text-secondary);font-size:15px}
-
-/* pied de page */
-.foot{margin-top:120px;background:var(--bg-card);border-top:1px solid var(--border)}
-.foot-in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding-block:28px}
-.foot p{font-size:14px;color:var(--text-secondary)}
-.foot nav{display:flex;flex-wrap:wrap;gap:20px;font-size:14px}
-.foot nav a{text-decoration:none;color:var(--text-secondary)}
-.foot nav a:hover{color:var(--text)}
-
-:focus-visible{outline:2px solid var(--text);outline-offset:2px}
-.code :focus-visible{outline-color:var(--on-dark)}
-@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *,*::before,*::after{transition:none!important} }
+.final{padding-block:80px;border-top:1px solid var(--border);text-align:center}
+.final h2{margin-inline:auto}
+.final .cta{justify-content:center}
+footer{border-top:1px solid var(--border);padding-block:28px;font-size:14px;color:var(--text-3)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+footer a{color:var(--text-2);text-underline-offset:3px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
-
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
-  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
-  <symbol id="i-up" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
-  <symbol id="i-down" viewBox="0 0 24 24"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
-  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="note" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M2 13v3M22 13v3"/></symbol>
 </svg>
 
-<header class="site-bar">
+<header class="bar">
   <div class="wrap bar-in">
-    <a class="wordmark" href="#top">dashu</a>
-    <nav class="bar-actions" aria-label="Liens principaux">
-      <a class="btn btn-icon" href="https://github.com/moreauremi/dashu" aria-label="Code source sur GitHub"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg></a>
-      <button class="btn hide-sm" type="button" disabled title="Disponible avec la v1.0">Se connecter</button>
-      <a class="btn btn-primary" href="#apercu">Voir la démo</a>
+    <a class="wordmark" href="#" aria-label="dashu, accueil"><i aria-hidden="true">d</i>dashu</a>
+    <nav class="nav" aria-label="Navigation principale">
+      <a class="link" href="#fonctions">Fonctionnalités</a>
+      <a class="link" href="#feuille-de-route">Feuille de route</a>
+      <a class="link" href="#installer">Installer</a>
+      <a class="btn" href="https://github.com/moreauremi/dashu" aria-label="Code source sur GitHub"><svg class="i" aria-hidden="true"><use href="#gh"/></svg><span class="link-label">GitHub</span></a>
+      <a class="btn btn-primary" href="https://app.dashu.dev">Ouvrir l'app</a>
     </nav>
   </div>
 </header>
 
-<main id="top">
-
-  <!-- 1. Ce qu'est dashu + capture de la vue générale -->
-  <section class="hero wrap" aria-labelledby="titre">
-    <div class="hero-text">
-      <p class="eyebrow">Open source · en développement</p>
-      <h1 id="titre">Votre équipe, votre journée et votre maison sur un seul tableau.</h1>
-      <p class="lead">dashu est un tableau de bord que vous installez sur votre propre serveur. Chaque vue se compose de widgets branchés sur vos agendas, vos tableurs, vos API et Home Assistant.</p>
-      <div class="cta">
-        <a class="btn btn-primary btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>Voir le code sur GitHub</a>
-        <a class="btn btn-lg" href="#installer">Installer avec Docker</a>
-      </div>
+<main>
+  <section class="wrap hero">
+    <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source · auto-hébergé · v1</span>
+    <h1>Dashboard, notes et emploi du temps. <span class="spaces">Au même endroit.</span></h1>
+    <p class="lead">dashu réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote, rangés en trois espaces (Perso, École et Taff) derrière une seule connexion. Un seul binaire Rust, hébergé chez soi.</p>
+    <div class="cta">
+      <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
+      <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
     </div>
 
-    <div class="preview" id="apercu">
-      <div class="shot" id="demo-shot">
-        <div class="app" id="demo">
-          <div class="app-bar">
-            <span class="app-logo">dashu</span>
-            <div class="tabs" role="group" aria-label="Vues">
-              <button class="tab" type="button" data-view="generale" aria-current="page">Générale</button>
-              <button class="tab" type="button" data-view="perso">Perso</button>
-              <button class="tab" type="button" data-view="equipe">Équipe</button>
-              <button class="tab" type="button" data-view="maison">Maison</button>
+    <figure class="shot" aria-label="Aperçu du dashboard de dashu, avec des données d'exemple" style="margin-inline:0">
+      <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span><em>app.dashu.dev</em></div>
+      <div class="app" aria-hidden="true">
+        <div class="side">
+          <b>dashu</b>
+          <div class="sp"><i style="background:var(--orange)"></i>Perso</div>
+          <div class="sp on"><i style="background:var(--blue)"></i>École</div>
+          <div class="sp"><i style="background:var(--green)"></i>Taff</div>
+          <hr>
+          <div class="nv">Dashboard</div>
+          <div class="nv">Notes</div>
+          <div class="nv">Agenda</div>
+          <div class="nv">Réglages</div>
+        </div>
+        <div class="main">
+          <div class="main-head">
+            <div><h3>Lundi 16 novembre</h3><p>Bonjour · École</p></div>
+            <time>08:12</time>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <h4>Prochains cours</h4>
+              <div class="row"><i class="chip" style="background:var(--blue)"></i><span>Réseaux<small>Aujourd'hui · 08:30 – 10:30 · B204</small></span></div>
+              <div class="row"><i class="chip" style="background:var(--green)"></i><span>Cybersécurité<small>Aujourd'hui · 10:45 – 12:15 · B110</small></span></div>
+              <div class="row"><i class="chip" style="background:var(--orange)"></i><span>Anglais<small>Demain · 09:00 – 11:00 · A12</small></span></div>
             </div>
-            <div class="app-actions">
-              <button class="btn btn-icon" type="button" data-soon="La recherche arrive avec la v1.0." aria-label="Rechercher"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></button>
-              <button class="btn" type="button" data-edit aria-pressed="false">Modifier</button>
-              <button class="btn btn-primary" type="button" data-soon="La bibliothèque de widgets arrive avec la v1.0."><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Widget</button>
-              <span class="avatar" aria-hidden="true">RM</span>
+            <div class="card">
+              <h4>Tâches du jour</h4>
+              <div class="row done"><i class="box done"></i><span>Relire le cours sur les VLAN</span></div>
+              <div class="row"><i class="box"></i><span>Finir le TP de routage</span></div>
+              <div class="row"><i class="box"></i><span>Préparer l'oral de veille</span></div>
+            </div>
+            <div class="card c3">
+              <h4>Notes récentes</h4>
+              <div class="row"><span>Cours réseau : VLAN et trunk<span class="pin">épinglée</span><small>modifiée il y a 2 h</small></span></div>
+              <div class="row"><span>Fiche révision : STP<small>hier</small></span></div>
+              <div class="row"><span>Idées pour le portfolio<small>ven. 13 nov.</small></span></div>
             </div>
           </div>
-
-          <!-- Vue générale -->
-          <section class="view" data-view="generale" aria-label="Vue générale">
-            <div class="w" style="grid-area:1/1/span 4/span 6">
-              <div class="wh"><span class="wt">Agenda · semaine du 2 nov.</span>
-                <span class="wi legend"><span><i class="dot c-cours"></i>Cours</span><span><i class="dot c-travail"></i>Travail</span><span><i class="dot c-projet"></i>Projet</span><span><i class="dot c-perso"></i>Perso</span></span></div>
-              <div class="week">
-                <span></span>
-                <span class="wk-d">Lun <b>2</b></span>
-                <span class="wk-d today">Mar <b>3</b></span>
-                <span class="wk-d">Mer <b>4</b></span>
-                <span class="wk-d">Jeu <b>5</b></span>
-                <span class="wk-d">Ven <b>6</b></span>
-                <div class="hours"><span style="top:0%">8:00</span><span style="top:20%">10:00</span><span style="top:40%">12:00</span><span style="top:60%">14:00</span><span style="top:80%">16:00</span></div>
-                <div class="col">
-                  <div class="ev cours" style="top:10%;height:30%"><strong>Réseaux</strong><span>9:00 – 12:00</span></div>
-                  <div class="ev cours" style="top:55%;height:30%"><strong>Sécurité</strong><span>13:30 – 16:30</span></div>
-                </div>
-                <div class="col today">
-                  <div class="ev travail" style="top:10%;height:35%"><strong>Alternance</strong><span>9:00 – 12:30</span></div>
-                  <div class="ev projet" style="top:60%;height:15%"><strong>Point projet</strong><span>14:00 – 15:30</span></div>
-                  <div class="ev perso" style="top:90%;height:10%;padding-block:4px"><strong>Sport</strong></div>
-                  <div class="nowline" style="top:71.6%" aria-hidden="true"></div>
-                </div>
-                <div class="col">
-                  <div class="ev travail" style="top:10%;height:80%"><strong>Alternance</strong><span>9:00 – 17:00</span></div>
-                </div>
-                <div class="col">
-                  <div class="ev cours" style="top:10%;height:30%"><strong>Dév web</strong><span>9:00 – 12:00</span></div>
-                  <div class="ev projet" style="top:60%;height:20%"><strong>Maquettes</strong><span>14:00 – 16:00</span></div>
-                </div>
-                <div class="col">
-                  <div class="ev cours" style="top:20%;height:20%"><strong>Anglais</strong><span>10:00 – 12:00</span></div>
-                  <div class="ev perso" style="top:85%;height:15%"><strong>Courses</strong><span>16:30 – 18:00</span></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:5/1/span 2/span 3">
-              <div class="wh"><span class="wt">Chiffre d'affaires · oct.</span><span class="wi">Équipe</span></div>
-              <div class="kpi-wrap"><div class="kpi">18 420 €</div><div class="trend"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>+12 % par rapport à septembre</div></div>
-            </div>
-
-            <div class="w" style="grid-area:5/4/span 2/span 3">
-              <div class="wh"><span class="wt">Notes</span><span class="wi">Perso</span></div>
-              <p class="n-title">Réunion de jeudi</p>
-              <p class="n-body">Montrer la grille 12 × 6 et le mode kiosque. Demander qui veut tester la démo.</p>
-            </div>
-
-            <div class="w" style="grid-area:1/7/span 2/span 3">
-              <div class="wh"><span class="wt">Aujourd'hui</span><span class="wi">mardi 3 nov.</span></div>
-              <ul class="list">
-                <li class="row two"><i class="dot c-travail"></i><span class="r-main"><span class="r-t">Alternance</span><span class="r-s">9:00 – 12:30</span></span></li>
-                <li class="row two now"><i class="dot c-projet"></i><span class="r-main"><span class="r-t">Point projet</span><span class="r-s">14:00 – 15:30</span></span><span class="badge">en cours</span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Sport</span><span class="r-s">17:00 – 18:00</span></span></li>
-              </ul>
-            </div>
-
-            <div class="w" data-tasks style="grid-area:3/7/span 2/span 3">
-              <div class="wh"><span class="wt">Tâches</span><span class="wi" data-count></span></div>
-              <ul class="list">
-                <li><button class="task" type="button" role="checkbox" aria-checked="true"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Envoyer le devis</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Réserver la salle</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Relire le compte rendu</span></button></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:5/7/span 2/span 3">
-              <div class="wh"><span class="wt">Services</span><span class="wi">Homelab</span></div>
-              <ul class="list">
-                <li class="row"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Site vitrine</span><span class="st">En ligne</span></li>
-                <li class="row"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Nextcloud</span><span class="st">En ligne</span></li>
-                <li class="row"><i class="dot c-err"></i><span class="r-t" style="flex:1">Sauvegarde NAS</span><span class="st err">Hors ligne</span></li>
-              </ul>
-            </div>
-
-            <div class="w meteo" style="grid-area:1/10/span 1/span 3">
-              <div class="meteo-in">
-                <div><div class="wt">Météo · Nantes</div><div class="sub">Nuageux · 9° / 14°</div></div>
-                <div class="meteo-t"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><span class="temp">12°</span></div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:2/10/span 3/span 3">
-              <div class="wh"><span class="wt">Maison</span><span class="wi"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>2FA</span></div>
-              <div class="thermo">
-                <div><div class="sub">Thermostat</div><div class="temp"><span data-setpoint>21,0</span>°</div><div class="sub">Actuelle 20,5°</div></div>
-                <div class="steps">
-                  <button class="step" type="button" data-step="-0.5" aria-label="Baisser la consigne"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
-                  <button class="step" type="button" data-step="0.5" aria-label="Monter la consigne"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
-                </div>
-              </div>
-              <ul class="list">
-                <li class="row tall"><span class="dev">Salon</span><button class="toggle" type="button" aria-pressed="true" aria-label="Lumière Salon"></button></li>
-                <li class="row tall"><span class="dev">Cuisine</span><button class="toggle" type="button" aria-pressed="false" aria-label="Lumière Cuisine"></button></li>
-                <li class="row tall"><span class="dev">Chambre</span><button class="toggle" type="button" aria-pressed="false" aria-label="Lumière Chambre"></button></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:5/10/span 2/span 3">
-              <div class="wh"><span class="wt">Liens</span></div>
-              <div class="tiles">
-                <span class="tile"><span class="mono">G</span>GitHub</span>
-                <span class="tile"><span class="mono">M</span>Mail</span>
-                <span class="tile"><span class="mono">N</span>Nextcloud</span>
-                <span class="tile"><span class="mono">P</span>Photos</span>
-              </div>
-            </div>
-          </section>
-
-          <!-- Vue perso -->
-          <section class="view" data-view="perso" aria-label="Vue perso" hidden>
-            <div class="w" style="grid-area:1/1/span 3/span 3">
-              <div class="wh"><span class="wt">Aujourd'hui</span><span class="wi">mardi 3 nov.</span></div>
-              <ul class="list">
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Footing</span><span class="r-s">7:30 – 8:15</span></span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Dentiste</span><span class="r-s">12:15 – 12:45</span></span></li>
-                <li class="row two now"><i class="dot c-projet"></i><span class="r-main"><span class="r-t">Point projet</span><span class="r-s">14:00 – 15:30</span></span><span class="badge">en cours</span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Cinéma</span><span class="r-s">20:30 – 22:45</span></span></li>
-              </ul>
-            </div>
-
-            <div class="w meteo" style="grid-area:1/4/span 1/span 3">
-              <div class="meteo-in">
-                <div><div class="wt">Météo · Nantes</div><div class="sub">Nuageux · 9° / 14°</div></div>
-                <div class="meteo-t"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><span class="temp">12°</span></div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:2/4/span 2/span 3">
-              <div class="wh"><span class="wt">Budget restant · nov.</span><span class="wi">CSV</span></div>
-              <div class="kpi-wrap"><div class="kpi">640 €</div><div class="trend">sur 900 € prévus ce mois-ci</div></div>
-            </div>
-
-            <div class="w" style="grid-area:1/7/span 3/span 6">
-              <div class="wh"><span class="wt">Dépenses par semaine</span><span class="wi">Tableur · budget 2026</span></div>
-              <div class="chart">
-                <div class="bars">
-                  <div class="bar" style="--v:.58"></div><div class="bar" style="--v:.71"></div><div class="bar" style="--v:.44"></div><div class="bar" style="--v:.83"></div>
-                  <div class="bar" style="--v:.52"></div><div class="bar" style="--v:.66"></div><div class="bar" style="--v:.48"></div><div class="bar hi" style="--v:.36"><b>126 €</b></div>
-                </div>
-                <div class="bar-x"><span>S38</span><span>S39</span><span>S40</span><span>S41</span><span>S42</span><span>S43</span><span>S44</span><span>S45</span></div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:4/1/span 3/span 6">
-              <div class="wh"><span class="wt">Actu</span><span class="wi">3 flux RSS</span></div>
-              <ul class="list">
-                <li class="row two"><span class="r-main"><span class="r-t">Sauvegardes 3-2-1 : la méthode, appliquée à un homelab</span><span class="r-s">Carnet homelab · il y a 2 h</span></span></li>
-                <li class="row two"><span class="r-main"><span class="r-t">Passer ses agendas en ICS pour ne plus rien recopier</span><span class="r-s">Journal du Libre · il y a 5 h</span></span></li>
-                <li class="row two"><span class="r-main"><span class="r-t">dashu v0.1 : premiers pas de la grille bento</span><span class="r-s">Notes de version · hier</span></span></li>
-                <li class="row two"><span class="r-main"><span class="r-t">Mini-PC d'occasion : lequel choisir pour débuter</span><span class="r-s">Carnet homelab · hier</span></span></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:4/7/span 3/span 3">
-              <div class="wh"><span class="wt">Notes</span></div>
-              <p class="n-title">Idées cadeau</p>
-              <ul class="n-body"><li>Platine vinyle d'occasion</li><li>Cours de poterie</li><li>Livre sur l'auto-hébergement</li></ul>
-            </div>
-
-            <div class="w" data-tasks style="grid-area:4/10/span 3/span 3">
-              <div class="wh"><span class="wt">Tâches</span><span class="wi" data-count></span></div>
-              <ul class="list">
-                <li><button class="task" type="button" role="checkbox" aria-checked="true"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Payer le loyer</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Rappeler le garage</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Rendre les livres</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Trier les photos</span></button></li>
-              </ul>
-            </div>
-          </section>
-
-          <!-- Vue équipe -->
-          <section class="view" data-view="equipe" aria-label="Vue équipe" hidden>
-            <div class="w" style="grid-area:1/1/span 3/span 6">
-              <div class="wh"><span class="wt">Commandes</span><span class="wi">Google Sheets · CSV</span></div>
-              <table class="tbl">
-                <thead><tr><th>Client</th><th>Article</th><th>Statut</th><th class="num">Montant</th></tr></thead>
-                <tbody>
-                  <tr><td>L. Garnier</td><td class="muted">Vase en grès</td><td><span class="cell-st"><i class="dot c-ok"></i>Livrée</span></td><td class="num">84 €</td></tr>
-                  <tr><td>Café Volta</td><td class="muted">12 tasses</td><td><span class="cell-st"><i class="dot c-err"></i><span class="st err">En retard</span></span></td><td class="num">312 €</td></tr>
-                  <tr><td>M. Perrin</td><td class="muted">Saladier</td><td class="muted">En préparation</td><td class="num">58 €</td></tr>
-                  <tr><td>A. Lemoine</td><td class="muted">Lot d'assiettes</td><td class="muted">En préparation</td><td class="num">146 €</td></tr>
-                  <tr><td>Studio Ploum</td><td class="muted">Carafe</td><td><span class="cell-st"><i class="dot c-ok"></i>Livrée</span></td><td class="num">72 €</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="w" style="grid-area:1/7/span 2/span 3">
-              <div class="wh"><span class="wt">Chiffre d'affaires · oct.</span></div>
-              <div class="kpi-wrap"><div class="kpi">18 420 €</div><div class="trend"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>+12 % par rapport à septembre</div></div>
-            </div>
-
-            <div class="w" style="grid-area:1/10/span 2/span 3">
-              <div class="wh"><span class="wt">Services</span></div>
-              <ul class="list">
-                <li class="row"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Boutique en ligne</span><span class="st">En ligne</span></li>
-                <li class="row"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Paiement</span><span class="st">En ligne</span></li>
-                <li class="row"><i class="dot c-err"></i><span class="r-t" style="flex:1">API stock</span><span class="st err">Hors ligne</span></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:3/7/span 2/span 6">
-              <div class="wh"><span class="wt">Commandes par jour</span><span class="wi">cette semaine</span></div>
-              <div class="chart">
-                <div class="bars">
-                  <div class="bar" style="--v:.55"></div><div class="bar hi" style="--v:.78"><b>14</b></div><div class="bar" style="--v:.4"></div><div class="bar" style="--v:.62"></div>
-                  <div class="bar" style="--v:.5"></div><div class="bar" style="--v:.34"></div><div class="bar" style="--v:.12"></div>
-                </div>
-                <div class="bar-x"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:4/1/span 3/span 3">
-              <div class="wh"><span class="wt">Agenda commun</span><span class="wi">cette semaine</span></div>
-              <ul class="list">
-                <li class="row two"><i class="dot c-travail"></i><span class="r-main"><span class="r-t">Réunion d'équipe</span><span class="r-s">Lun · 9:00 – 10:00</span></span></li>
-                <li class="row two"><i class="dot c-travail"></i><span class="r-main"><span class="r-t">Livraison d'argile</span><span class="r-s">Mer · 14:00 – 15:00</span></span></li>
-                <li class="row two"><i class="dot c-projet"></i><span class="r-main"><span class="r-t">Photos du catalogue</span><span class="r-s">Jeu · 10:00 – 12:00</span></span></li>
-                <li class="row two"><i class="dot c-projet"></i><span class="r-main"><span class="r-t">Marché de créateurs</span><span class="r-s">Sam · 9:00 – 18:00</span></span></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:4/4/span 3/span 3">
-              <div class="wh"><span class="wt">Annonces</span><span class="wi">Claire · hier</span></div>
-              <p class="n-title">Inventaire samedi</p>
-              <p class="n-body">On ferme à 16:00 pour compter le stock. Pensez à imprimer les étiquettes avant vendredi.</p>
-            </div>
-
-            <div class="w" data-tasks style="grid-area:5/7/span 2/span 6">
-              <div class="wh"><span class="wt">Tâches de l'équipe</span><span class="wi" data-count></span></div>
-              <ul class="list">
-                <li style="display:flex;align-items:center;gap:8px"><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Relancer Café Volta pour la livraison</span></button><span class="ini" title="Claire">CL</span></li>
-                <li style="display:flex;align-items:center;gap:8px"><button class="task" type="button" role="checkbox" aria-checked="true"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Mettre à jour les prix en ligne</span></button><span class="ini" title="Mathis">MB</span></li>
-                <li style="display:flex;align-items:center;gap:8px"><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Préparer le stand du marché</span></button><span class="ini" title="Rémi">RM</span></li>
-              </ul>
-            </div>
-          </section>
-
-          <!-- Vue maison -->
-          <section class="view" data-view="maison" aria-label="Vue maison" hidden>
-            <div class="w" style="grid-area:1/1/span 3/span 3">
-              <div class="wh"><span class="wt">Thermostat</span><span class="wi"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>2FA</span></div>
-              <div><div class="temp xl">20,5°</div><div class="sub" style="margin-top:6px">Température actuelle · salon</div></div>
-              <ul class="list" style="margin-top:10px">
-                <li class="row"><span class="dev">Humidité</span><span class="st">48 %</span></li>
-                <li class="row"><span class="dev">Programme</span><span class="st">Confort jusqu'à 22:00</span></li>
-              </ul>
-              <div class="thermo" style="margin-top:auto;margin-bottom:0">
-                <button class="step" type="button" data-step="-0.5" aria-label="Baisser la consigne"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
-                <span class="setpoint">Consigne <span data-setpoint>21,0</span>°</span>
-                <button class="step" type="button" data-step="0.5" aria-label="Monter la consigne"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:1/4/span 3/span 3">
-              <div class="wh"><span class="wt">Lumières</span><span class="wi"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>2FA</span></div>
-              <ul class="list">
-                <li class="row tall"><span class="dev">Salon</span><button class="toggle" type="button" aria-pressed="true" aria-label="Lumière Salon"></button></li>
-                <li class="row tall"><span class="dev">Cuisine</span><button class="toggle" type="button" aria-pressed="true" aria-label="Lumière Cuisine"></button></li>
-                <li class="row tall"><span class="dev">Chambre</span><button class="toggle" type="button" aria-pressed="false" aria-label="Lumière Chambre"></button></li>
-                <li class="row tall"><span class="dev">Entrée</span><button class="toggle" type="button" aria-pressed="false" aria-label="Lumière Entrée"></button></li>
-              </ul>
-            </div>
-
-            <div class="w meteo" style="grid-area:1/7/span 1/span 3">
-              <div class="meteo-in">
-                <div><div class="wt">Météo · Nantes</div><div class="sub">Nuageux · 9° / 14°</div></div>
-                <div class="meteo-t"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><span class="temp">12°</span></div>
-              </div>
-            </div>
-
-            <div class="w" style="grid-area:1/10/span 3/span 3">
-              <div class="wh"><span class="wt">Caméras</span><span class="wi">Home Assistant</span></div>
-              <ul class="list">
-                <li class="row tall"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Entrée</span><span class="st">En ligne</span></li>
-                <li class="row tall"><i class="dot c-ok"></i><span class="r-t" style="flex:1">Jardin</span><span class="st">En ligne</span></li>
-                <li class="row tall"><i class="dot c-err"></i><span class="r-t" style="flex:1">Garage</span><span class="st err">Hors ligne</span></li>
-              </ul>
-              <p class="sub" style="margin-top:auto">Dernier mouvement : entrée, 14:02</p>
-            </div>
-
-            <div class="w" style="grid-area:2/7/span 2/span 3">
-              <div class="wh"><span class="wt">Électricité · aujourd'hui</span></div>
-              <div class="kpi-wrap"><div class="kpi">6,2 kWh</div><div class="trend"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>−8 % par rapport à hier</div></div>
-            </div>
-
-            <div class="w" style="grid-area:4/1/span 3/span 6">
-              <div class="wh"><span class="wt">Consommation · 7 derniers jours</span><span class="wi">kWh par jour</span></div>
-              <div class="chart">
-                <div class="bars">
-                  <div class="bar" style="--v:.58"></div><div class="bar" style="--v:.64"></div><div class="bar" style="--v:.5"></div><div class="bar" style="--v:.82"></div>
-                  <div class="bar" style="--v:.86"></div><div class="bar" style="--v:.6"></div><div class="bar hi" style="--v:.52"><b>6,2</b></div>
-                </div>
-                <div class="bar-x"><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span><span>Lun</span><span>Mar</span></div>
-              </div>
-            </div>
-
-            <div class="w" data-tasks style="grid-area:4/7/span 3/span 3">
-              <div class="wh"><span class="wt">Courses</span><span class="wi" data-count></span></div>
-              <ul class="list">
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Lait</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="true"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Pain</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Lessive</span></button></li>
-                <li><button class="task" type="button" role="checkbox" aria-checked="false"><span class="box"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span><span class="t-label">Croquettes du chat</span></button></li>
-              </ul>
-            </div>
-
-            <div class="w" style="grid-area:4/10/span 3/span 3">
-              <div class="wh"><span class="wt">Agenda du foyer</span></div>
-              <ul class="list">
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Technicien fibre</span><span class="r-s">Mer · 9:00 – 11:00</span></span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Ramassage du verre</span><span class="r-s">Jeu · matin</span></span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Marché</span><span class="r-s">Sam · 10:00 – 12:00</span></span></li>
-                <li class="row two"><i class="dot c-perso"></i><span class="r-main"><span class="r-t">Déjeuner en famille</span><span class="r-s">Dim · 12:30</span></span></li>
-              </ul>
-            </div>
-          </section>
         </div>
       </div>
-      <p class="preview-cap"><span id="demo-note" aria-live="polite">Démo avec de fausses données : changez de vue, allumez une lumière, cochez une tâche.</span><span class="only-sm">Plus lisible sur un grand écran.</span></p>
+    </figure>
+    <p class="shot-cap">Aperçu avec des données d'exemple. Thème clair ou sombre selon le système.</p>
+  </section>
+
+  <section class="block" id="fonctions">
+    <div class="wrap">
+      <p class="kicker">Ce que fait la v1</p>
+      <h2>Tout ce qui sert au quotidien, sans rien de plus.</h2>
+      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, et le dashboard, les notes et l'agenda suivent.</p>
+      <ul class="grid">
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
+          <h3>Trois espaces</h3>
+          <p>Perso, École et Taff, chacun avec sa couleur. Rien ne se mélange.</p>
+          <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Taff</span></div>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#grid"/></svg></div>
+          <h3>Dashboard</h3>
+          <p>Prochains cours, tâches du jour et notes récentes. Chaque widget se charge seul : un widget lent ne retarde pas les autres.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
+          <h3>Notes Markdown</h3>
+          <p>Aperçu en direct, sauvegarde automatique, tags, épinglage et recherche plein texte qui ignore les accents.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
+          <h3>Emploi du temps</h3>
+          <p>Le flux iCal de Pronote importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#lock"/></svg></div>
+          <h3>Une seule connexion</h3>
+          <p>Mot de passe ou Google sur le même compte. Pas d'inscription publique : seuls les emails autorisés entrent.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></div>
+          <h3>API pour un assistant</h3>
+          <p>Une API JSON protégée par une clé, désactivée par défaut, pour qu'un assistant gère les tâches et les notes et lise l'agenda.</p>
+        </li>
+      </ul>
     </div>
   </section>
 
-  <!-- 2. Les trois usages -->
-  <section class="section wrap" id="vues" aria-labelledby="vues-t">
-    <p class="label">Vues</p>
-    <h2 id="vues-t">Un compte, trois contextes, une vue qui résume tout</h2>
-    <p class="intro">On passe d'une vue à l'autre depuis la barre du haut. La vue générale reprend les widgets que vous épinglez depuis les autres, avec leurs droits d'origine.</p>
-
-    <div class="usecases">
-      <article class="usecase">
-        <div class="uc-text">
-          <div class="uc-head"><h3>Équipe</h3><span class="ver now">v1.0</span></div>
-          <p class="uc-for">Classe, association, petite entreprise</p>
-          <p class="uc-desc">Un tableau commun pour l'agenda, les tâches, le tableur partagé et l'état des services.</p>
-          <ul class="facts">
-            <li>Rôles propriétaire, admin, éditeur et lecteur</li>
-            <li>Journal d'activité : qui a changé quoi, et quand</li>
-            <li>Mode kiosque pour l'écran de la salle</li>
-          </ul>
-        </div>
-        <div class="shot" data-clone="equipe" role="img" aria-label="Aperçu de la vue Équipe : commandes, chiffre d'affaires, services et tâches de l'équipe"></div>
-      </article>
-
-      <article class="usecase">
-        <div class="uc-text">
-          <div class="uc-head"><h3>Perso</h3><span class="ver now">v1.0</span></div>
-          <p class="uc-for">Pour vous seul</p>
-          <p class="uc-desc">Votre journée au même endroit : agenda, météo, actualités, budget et notes.</p>
-          <ul class="facts">
-            <li>Personne d'autre n'y a accès, pas même l'admin du serveur</li>
-            <li>Un bouton pour épingler un widget dans la vue générale</li>
-            <li>Une colonne sur téléphone, sans rien perdre</li>
-          </ul>
-        </div>
-        <div class="shot" data-clone="perso" role="img" aria-label="Aperçu de la vue Perso : journée, budget, dépenses, actualités et tâches"></div>
-      </article>
-
-      <article class="usecase">
-        <div class="uc-text">
-          <div class="uc-head"><h3>Maison</h3><span class="ver">v1.1 lecture</span><span class="ver">v1.2 actions</span></div>
-          <p class="uc-for">Le foyer et ses habitants</p>
-          <p class="uc-desc">Lumières, chauffage, caméras et consommation, branchés sur Home Assistant.</p>
-          <ul class="facts">
-            <li>Double authentification obligatoire pour piloter la maison</li>
-            <li>Chaque action inscrite au journal, avec l'appareil utilisé</li>
-            <li>Accès invité qui expire, pour une baby-sitter ou une location</li>
-          </ul>
-        </div>
-        <div class="shot" data-clone="maison" role="img" aria-label="Aperçu de la vue Maison : thermostat, lumières, caméras, consommation et courses"></div>
-      </article>
+  <section class="block">
+    <div class="wrap">
+      <p class="kicker">Sous le capot</p>
+      <h2>Léger, rapide, et rien à exposer.</h2>
+      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardé à chaud chaque nuit.</p>
+      <div class="facts">
+        <div class="fact"><strong>1</strong><span>binaire Rust d'environ 17 Mo, et rien d'autre à installer</span></div>
+        <div class="fact"><strong>&lt; 40 Ko</strong><span>par page hors éditeur, CSS et JavaScript compris</span></div>
+        <div class="fact"><strong>3 à 6 ms</strong><span>de temps de réponse serveur</span></div>
+        <div class="fact"><strong>98 – 100</strong><span>au score Lighthouse mobile</span></div>
+      </div>
+      <p class="stack">Mesures faites en local sur la v1. Rust, axum, SQLite, htmx, askama. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
     </div>
   </section>
 
-  <!-- 3. Widgets et connecteurs -->
-  <section class="section wrap" id="widgets" aria-labelledby="widgets-t">
-    <p class="label">Widgets et connecteurs</p>
-    <h2 id="widgets-t">Quelques connecteurs génériques, des centaines de sources</h2>
-    <p class="intro">dashu lit les formats que presque tous les services exportent déjà. Pour le reste, n8n envoie ses données au webhook entrant.</p>
-
-    <div class="split">
-      <div class="panel">
-        <p class="panel-t">Bibliothèque de départ</p>
-        <dl>
-          <div class="cat"><dt>Agenda</dt><dd>Semaine, Aujourd'hui, Prochain événement</dd></div>
-          <div class="cat"><dt>Données</dt><dd>Chiffre clé, Graphique, Tableau, JSON libre</dd></div>
-          <div class="cat"><dt>Maison</dt><dd>Appareil, Thermostat, Scène</dd></div>
-          <div class="cat"><dt>Infos</dt><dd>Météo, Flux RSS</dd></div>
-          <div class="cat"><dt>Liens et notes</dt><dd>Liens, Notes, Tâches</dd></div>
-          <div class="cat"><dt>Services</dt><dd>Statut de service</dd></div>
-        </dl>
-      </div>
-
-      <div class="panel">
-        <p class="panel-t">Connecteurs prévus</p>
-        <div class="scroll-x">
-          <table class="conn">
-            <thead><tr><th>Connecteur</th><th>Ce qu'il couvre</th><th style="text-align:right">Version</th></tr></thead>
-            <tbody>
-              <tr><td>ICS</td><td>Google Agenda, Outlook, Apple, Pronote, tout agenda exportable</td><td><span class="ver now">v1.0</span></td></tr>
-              <tr><td>CSV</td><td>Google Sheets et Excel publiés, fichiers déposés</td><td><span class="ver now">v1.0</span></td></tr>
-              <tr><td>REST / JSON</td><td>N'importe quelle API qui renvoie du JSON</td><td><span class="ver now">v1.0</span></td></tr>
-              <tr><td>RSS / Atom</td><td>Actualités, blogs, versions GitHub, podcasts</td><td><span class="ver now">v1.0</span></td></tr>
-              <tr><td>Ping HTTP</td><td>État en ligne d'un site ou d'un service</td><td><span class="ver now">v1.0</span></td></tr>
-              <tr><td>Home Assistant</td><td>Tous les appareils gérés par Home Assistant</td><td><span class="ver">v1.1</span></td></tr>
-              <tr><td>Webhook entrant</td><td>n8n et tout service capable d'envoyer une requête</td><td><span class="ver">v1.1</span></td></tr>
-              <tr><td>Google, Microsoft</td><td>Agendas et tableurs privés, sans les publier</td><td><span class="ver">v2</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="note">Les données sont récupérées par votre serveur, jamais par le navigateur : vos clés d'API ne le quittent pas.</p>
+  <section class="block" id="feuille-de-route">
+    <div class="wrap">
+      <p class="kicker">Feuille de route</p>
+      <h2>Une version à la fois, utilisée avant la suivante.</h2>
+      <div class="road">
+        <div class="step now"><h3>v1 · Dashboard, notes, emploi du temps<small>en ligne</small></h3><p>Espaces, widgets, notes Markdown, agenda Pronote, API pour un assistant.</p></div>
+        <div class="step"><h3>v2 · Fichiers</h3><p>Un cloud de fichiers par espace, partage par lien temporaire.</p></div>
+        <div class="step"><h3>v3 · Outils fichiers</h3><p>Conversion d'images, fusion, découpe et compression de PDF, OCR.</p></div>
+        <div class="step"><h3>v4 · Médias</h3><p>Retouche et détourage de photos dans le navigateur.</p></div>
+        <div class="step"><h3>v5 · Audio</h3><p>Lecture des notes à voix haute, transcription des vocaux et des cours.</p></div>
+        <div class="step"><h3>v6 · IA</h3><p>Un assistant qui cherche dans les notes et les fichiers.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- 4. Open source et auto-hébergeable -->
-  <section class="section wrap" id="installer" aria-labelledby="installer-t">
-    <p class="label">Installation</p>
-    <h2 id="installer-t">Un conteneur Docker, sur votre matériel</h2>
-    <div class="install">
-      <div>
-        <p class="intro" style="margin-top:0">dashu tourne sur un homelab, un NAS ou un petit serveur loué. Le code est public sur GitHub.</p>
-        <ul class="facts">
-          <li>Gratuit sur votre propre matériel</li>
-          <li>Clés d'API et jetons chiffrés en base, jamais réaffichés</li>
-          <li>Inscription ouverte, sur invitation ou fermée, au choix de l'admin</li>
-          <li>Accès conseillé par un tunnel plutôt qu'en ouvrant des ports</li>
-        </ul>
-        <div class="cta"><a class="btn btn-primary" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>Suivre le projet</a></div>
-      </div>
-      <div style="min-width:0">
-        <div class="code">
-          <div class="code-h"><span>docker-compose.yml</span><button class="copy" type="button" data-copy="compose"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copier</span></button></div>
-<pre id="compose"><code>services:
-  dashu:
-    image: ghcr.io/moreauremi/dashu:latest
-    ports:
-      - "8080:8080"
-    environment:
-      DASHU_PUBLIC_URL: https://dash.exemple.fr
-      DASHU_SECRET_KEY: ${DASHU_SECRET_KEY}  <span class="cm"># clé de chiffrement</span>
-      DASHU_SIGNUP: invitation               <span class="cm"># ou ouverte, fermee</span>
-    volumes:
-      - ./data:/data</code></pre>
-        </div>
-        <div class="code">
-          <div class="code-h"><span>Terminal</span><button class="copy" type="button" data-copy="cmd"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copier</span></button></div>
-<pre id="cmd"><code><span class="prompt">$ </span>export DASHU_SECRET_KEY=$(openssl rand -hex 32)
-<span class="prompt">$ </span>docker compose up -d</code></pre>
-        </div>
-        <p class="note">Installation prévue pour la v1.0. L'image n'est pas encore publiée.</p>
-      </div>
+  <section class="block" id="installer">
+    <div class="wrap">
+      <p class="kicker">Installer</p>
+      <h2>Chez soi, sur un vieux PC ou un mini-serveur.</h2>
+<pre><span class="c"># Récupérer le code et le configurer</span>
+git clone https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
+cp .env.example .env
+
+<span class="c"># Lancer (Docker) puis créer son compte</span>
+docker compose up -d --build
+docker compose exec dashu /dashu set-password toi@example.com</pre>
+      <p class="after">Le <a href="https://github.com/moreauremi/dashu#readme">README</a> détaille les variables, le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
     </div>
   </section>
 
-  <!-- 5. Feuille de route -->
-  <section class="section wrap" id="feuille-de-route" aria-labelledby="road-t">
-    <p class="label">Feuille de route</p>
-    <h2 id="road-t">Chaque version est utilisable seule</h2>
-    <p class="intro">La maison arrive en deux temps : d'abord la lecture, puis les actions, une fois les droits éprouvés.</p>
-    <ol class="road">
-      <li class="current"><div class="rv"><strong>v1.0</strong><span class="ver now">en cours</span></div><p>Comptes, équipes, vues et tableaux. Connecteurs ICS, CSV, API, RSS et ping. Mode édition et bibliothèque de widgets.</p></li>
-      <li><div class="rv"><strong>v1.1</strong></div><p>Home Assistant en lecture. Webhook entrant pour n8n.</p></li>
-      <li><div class="rv"><strong>v1.2</strong></div><p>Actions sur la maison, avec double authentification, journal et liste blanche d'appareils par widget.</p></li>
-      <li><div class="rv"><strong>v2</strong></div><p>Connexion Google et Microsoft, plugins de la communauté, catalogue de modèles et de thèmes.</p></li>
-    </ol>
+  <section class="final">
+    <div class="wrap">
+      <h2>Le code est ouvert.</h2>
+      <p class="intro" style="margin-inline:auto">Lisez-le, installez-le, proposez des idées.</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>moreauremi/dashu</a>
+        <a class="btn btn-lg" href="https://app.dashu.dev">Ouvrir l'app</a>
+      </div>
+    </div>
   </section>
 </main>
 
-<footer class="foot">
-  <div class="wrap foot-in">
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><span class="wordmark" style="font-size:18px">dashu</span><p>Tableau de bord open source et auto-hébergeable.</p></div>
-    <nav aria-label="Pied de page">
-      <a href="#apercu">Démo</a>
-      <a href="#installer">Installation</a>
-      <a href="#feuille-de-route">Feuille de route</a>
-      <a href="https://github.com/moreauremi/dashu">GitHub</a>
-    </nav>
+<footer>
+  <div class="wrap">
+    <span>dashu · open source, en développement</span>
+    <span><a href="https://github.com/moreauremi/dashu">GitHub</a> · <a href="https://app.dashu.dev">app.dashu.dev</a></span>
   </div>
 </footer>
-
-<script>
-(function () {
-  var W = 1200;
-  var demo = document.getElementById('demo');
-  var note = document.getElementById('demo-note');
-
-  function setView(app, name) {
-    app.querySelectorAll('.tab').forEach(function (t) {
-      if (t.dataset.view === name) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
-    });
-    app.querySelectorAll('.view').forEach(function (v) { v.hidden = v.dataset.view !== name; });
-  }
-  function countTasks(w) {
-    var all = w.querySelectorAll('.task').length;
-    var done = w.querySelectorAll('.task[aria-checked="true"]').length;
-    var out = w.querySelector('[data-count]');
-    if (out) out.textContent = done + ' sur ' + all;
-  }
-  demo.querySelectorAll('[data-tasks]').forEach(countTasks);
-
-  // Captures des vues pour la section « Vues » : copies inertes de la démo
-  document.querySelectorAll('.shot[data-clone]').forEach(function (shot) {
-    var c = demo.cloneNode(true);
-    c.removeAttribute('id');
-    c.setAttribute('inert', '');
-    c.setAttribute('aria-hidden', 'true');
-    setView(c, shot.dataset.clone);
-    shot.appendChild(c);
-  });
-
-  // Mise à l'échelle de chaque capture
-  function fit(shot) {
-    var app = shot.querySelector('.app');
-    if (app) app.style.transform = 'scale(' + (shot.clientWidth / W) + ')';
-  }
-  var shots = document.querySelectorAll('.shot');
-  shots.forEach(fit);
-  if ('ResizeObserver' in window) {
-    var ro = new ResizeObserver(function (entries) { entries.forEach(function (e) { fit(e.target); }); });
-    shots.forEach(function (s) { ro.observe(s); });
-  } else {
-    window.addEventListener('resize', function () { shots.forEach(fit); });
-  }
-
-  // Interactions de la démo
-  demo.addEventListener('click', function (e) {
-    var t;
-    if ((t = e.target.closest('.tab'))) { setView(demo, t.dataset.view); return; }
-    if ((t = e.target.closest('.toggle'))) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
-    if ((t = e.target.closest('.task'))) {
-      t.setAttribute('aria-checked', t.getAttribute('aria-checked') !== 'true');
-      countTasks(t.closest('.w'));
-      return;
-    }
-    if ((t = e.target.closest('[data-step]'))) {
-      var out = t.closest('.w').querySelector('[data-setpoint]');
-      var v = parseFloat(out.textContent.replace(',', '.')) + parseFloat(t.dataset.step);
-      v = Math.min(25, Math.max(15, v));
-      out.textContent = v.toFixed(1).replace('.', ',');
-      return;
-    }
-    if ((t = e.target.closest('[data-edit]'))) {
-      var on = !demo.classList.contains('editing');
-      demo.classList.toggle('editing', on);
-      t.setAttribute('aria-pressed', on);
-      t.textContent = on ? 'Terminer' : 'Modifier';
-      note.textContent = on ? 'Mode édition : en vrai, on déplace et redimensionne les widgets sur la grille 12 × 6.' : 'Démo avec de fausses données : changez de vue, allumez une lumière, cochez une tâche.';
-      return;
-    }
-    if ((t = e.target.closest('[data-soon]'))) { note.textContent = t.dataset.soon; }
-  });
-
-  // Boutons « Copier »
-  document.querySelectorAll('[data-copy]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var pre = document.getElementById(b.dataset.copy);
-      var text = pre.innerText.replace(/^\$ /gm, '');
-      var label = b.querySelector('span');
-      function done() { label.textContent = 'Copié'; setTimeout(function () { label.textContent = 'Copier'; }, 1600); }
-      function fallback() {
-        var r = document.createRange(); r.selectNodeContents(pre);
-        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-        label.textContent = 'Sélectionné';
-      }
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
-        else fallback();
-      } catch (err) { fallback(); }
-    });
-  });
-})();
-</script>
 </body>
 </html>
