@@ -42,10 +42,22 @@ Une case cochée veut dire « vérifié », et la ligne dit où : sur le serveur
 Rien pour la v1. À garder en tête :
 
 - **Le 12 novembre au matin**, `dashu-restore` (sans argument) doit lister un fichier `dashu-2026-11-12_0330….db` : la preuve que la minuterie lance bien la sauvegarde seule.
-- **Sauvegardes sur le second disque** : aujourd'hui elles sont sur le même disque que la base (voir les écarts plus bas, et la fin de « Sauvegardes et restauration » dans le README).
 - **Si `/usr/local/sbin` manque dans le `PATH`** du shell ouvert par `pct enter` : `echo 'export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"' >> ~/.bashrc`.
 
-Fait le 11 novembre : script de mesure injecté par Cloudflare désactivé (Web Analytics), client OAuth Google créé, `BASE_URL` passé à `https://app.dashu.dev`.
+Fait le 11 novembre : script de mesure injecté par Cloudflare désactivé (Web Analytics), client OAuth Google créé, `BASE_URL` passé à `https://app.dashu.dev`. Le soir, les sauvegardes sont passées sur le second disque, comme le demandait la spec (voir « v2 : avancement »).
+
+## v2 : avancement
+
+Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Étape en cours : 1, prérequis.
+
+- [ ] **Le second disque est monté dans le conteneur et le reste après un redémarrage de l'hôte**
+  - Fait le 11 novembre 2026 : l'ancien contenu du disque de 465 Go est effacé, et le disque est déclaré comme stockage LVM-thin `ssd2`. Deux volumes y sont pris : `mp0` de 45 Go sur `/srv/dashu`, `mp1` de 5 Go sur `/var/backups/dashu`.
+  - Vérifié sur le serveur après un redémarrage du conteneur : les deux volumes sont montés, et dashu, cloudflared et Tailscale répondent.
+  - Reste à vérifier au prochain redémarrage de l'hôte.
+- [ ] **La base est sauvegardée sur le second disque, les fichiers sur le premier**
+  - La base : vérifié sur le serveur. Les 12 sauvegardes existantes ont été recopiées sur le volume, avec les mêmes empreintes SHA-256. Une sauvegarde lancée par `dashu-backup` y a été écrite.
+  - Les fichiers : à l'étape 6.
+- [x] **Le conteneur a 4 Go de mémoire** : appliqué à chaud le 11 novembre 2026 (`pct set --memory 4096`).
 
 ## Mesures de performance
 
@@ -86,7 +98,6 @@ Moyens imposés par la spec : compilation `release` avec LTO (fait), empreinte d
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.
 - **L'application est sur `app.dashu.dev`**, pas sur `dashu.dev` : `dashu.dev` garde la page d'accueil publique du projet (GitHub Pages).
 - **Accès supplémentaire par Tailscale** (`tailscale serve`), qui marche même si Cloudflare tombe.
-- **Sauvegardes sur le même disque que la base**, pas encore sur le second disque du serveur comme le demande la spec. Elles protègent d'une erreur ou d'une mise à jour ratée, pas d'une panne de disque.
 - **Google en mode Test** : seuls les utilisateurs tests déclarés dans la Google Cloud Console passent l'écran de Google. Pour un outil perso, c'est suffisant, et ça ajoute une barrière devant `ALLOWED_EMAILS`.
 - **Ajouts hors spec**, faits à la demande après la v1 de base : API JSON pour un assistant (Hermès) avec une administration SSH limitée à six actions, agenda de Perso qui réunit tous les espaces, événements de plus de 24 h dans le bandeau « journée », « île » de changement d'espace avec balayage, barre de raccourcis sur téléphone, app installable sur l'écran d'accueil.
 - **Le dépôt n'était pas vide.** Il contenait la page d'accueil (`website/`) et son workflow GitHub Pages : ils sont laissés tels quels. Le README, qui décrivait un autre projet (équipes, domotique, connecteurs), a été remplacé.
