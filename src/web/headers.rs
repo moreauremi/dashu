@@ -38,10 +38,14 @@ pub async fn security_headers(
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
 
-    headers.insert(
-        header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(CSP),
-    );
+    // Une réponse peut poser une CSP plus stricte encore : c'est le cas d'un
+    // fichier téléchargé (`sandbox`, voir src/files). On ne la remplace pas.
+    if !headers.contains_key(header::CONTENT_SECURITY_POLICY) {
+        headers.insert(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(CSP),
+        );
+    }
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),

@@ -121,6 +121,7 @@ impl From<AppError> for ApiError {
             AppError::NotFound => Self::new(StatusCode::NOT_FOUND, "introuvable"),
             AppError::Forbidden => Self::new(StatusCode::FORBIDDEN, "action refusée"),
             AppError::BadRequest(message) => Self::bad_request(message),
+            AppError::TooLarge(message) => Self::new(StatusCode::PAYLOAD_TOO_LARGE, message),
             AppError::Internal(error) => Self::internal(error),
         }
     }

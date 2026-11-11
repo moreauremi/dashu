@@ -517,7 +517,7 @@
     if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event)) return;
 
     const key = event.key.toLowerCase();
-    if (pendingG && Date.now() - pendingG < 1000 && ["d", "n", "c"].includes(key)) {
+    if (pendingG && Date.now() - pendingG < 1000 && ["d", "n", "f", "c"].includes(key)) {
       pendingG = 0;
       event.preventDefault();
       return go(`g ${key}`);

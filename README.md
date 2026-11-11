@@ -28,8 +28,9 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Dashboard | Prochains cours, tâches du jour, notes récentes. Chaque widget se charge indépendamment. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
+| Fichiers (v2, en cours) | Envoi par glisser-déposer ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, suppression. Voir [Fichiers](#7-fichiers-v2). |
 
-Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes, `N` crée une note, `G` puis `D`, `N` ou `C` mène au Dashboard, aux Notes ou à l'Agenda. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
+Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes, `N` crée une note, `G` puis `D`, `N`, `F` ou `C` mène au Dashboard, aux Notes, aux Fichiers ou à l'Agenda. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 
 ## Installation locale
 
@@ -87,6 +88,8 @@ En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
 | `API_TOKEN` | non | Active l'API JSON (`/api/v1`) : jeton attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API répond 404. |
 | `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit l'API. Doit figurer dans `ALLOWED_EMAILS`. |
+| `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
+| `MAX_UPLOAD_MB` | non | Taille maximale d'un fichier, en Mo. 2048 par défaut. |
 | `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
 | `BACKUP_DIR` | Docker seulement | Dossier de l'hôte où vont les sauvegardes. |
 | `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut ; `127.0.0.1:3000` en production. |
@@ -267,6 +270,30 @@ Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sa
 bash <(pct exec <n> -- cat /opt/dashu/src/deploy/hermes/install.sh)
 ```
 
+### 7. Fichiers (v2)
+
+Le contenu des fichiers va dans `FILES_DIR`, sur le second disque (`/srv/dashu/fichiers`) ; la base n'en garde que le nom, la taille, le type et l'empreinte SHA-256. Sur le disque, un fichier porte une clé aléatoire, jamais le nom choisi par l'utilisateur : un nom piégé comme `../../etc/passwd` ne peut désigner aucun autre fichier.
+
+- **Envoi** : `static/js/files.js` envoie chaque fichier tel quel dans le corps d'un `POST /files?name=…` (deux à la fois, une barre de progression par fichier). dashu l'écrit sur le disque au fil de l'eau, en comptant les octets : sa mémoire ne dépend pas de la taille du fichier, et un envoi trop gros ou interrompu ne laisse rien.
+- **Téléchargement** : toujours en pièce jointe (`Content-Disposition: attachment`), avec `Content-Security-Policy: sandbox` et `nosniff` : un fichier HTML ou SVG piégé ne s'exécute jamais dans la page de dashu.
+- **Limite de Cloudflare** : l'offre gratuite refuse les requêtes de plus de 100 Mo. Un fichier plus gros passe par l'adresse Tailscale, où seule `MAX_UPLOAD_MB` s'applique ; la page le dit si l'envoi est refusé.
+
+`install.sh` crée le dossier et renseigne `FILES_DIR` quand `/srv/dashu` est monté. Sur un serveur déjà installé, en root dans le conteneur :
+
+```bash
+install -d -o dashu -g dashu -m 750 /srv/dashu/fichiers
+```
+
+```bash
+echo 'FILES_DIR=/srv/dashu/fichiers' >> /etc/dashu/dashu.env
+```
+
+Le service n'écrit que dans les dossiers listés par `ReadWritePaths` ([`hardening.conf`](deploy/lxc/hardening.conf)). `dashu-update` ne réinstalle pas ce fichier : après la mise à jour, le recopier depuis le code récupéré, recharger systemd et redémarrer dashu :
+
+```bash
+install -m 644 /opt/dashu/src/deploy/lxc/hardening.conf /etc/systemd/system/dashu.service.d/ && systemctl daemon-reload && systemctl restart dashu
+```
+
 ### Variante : Docker
 
 Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push. Dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
@@ -352,6 +379,7 @@ dashu/
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets
+│   ├── files/              fichiers : envoi, liste, téléchargement (v2)
 │   ├── notes/              liste, éditeur, tags, rendu Markdown
 │   ├── calendar/           lecture iCal, synchro, grille jour/semaine
 │   ├── search/             palette Ctrl+K
@@ -406,6 +434,7 @@ npm install && npm run build
 
 ## Limites connues de la v1
 
+- Par `app.dashu.dev`, un fichier de plus de 100 Mo est refusé par Cloudflare (offre gratuite) : passer par l'adresse Tailscale.
 - Les récurrences iCal (`RRULE`) ne sont pas développées. Pronote n'en produit pas ; un autre calendrier pourrait en contenir.
 - Changer de mot de passe ne ferme pas les sessions déjà ouvertes sur d'autres appareils.
 - La validation d'une URL iCal porte sur le nom saisi : un nom public qui résoudrait vers une adresse privée n'est pas détecté.

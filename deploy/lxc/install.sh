@@ -63,6 +63,12 @@ ENV
 fi
 chown root:dashu /etc/dashu/dashu.env
 chmod 640 /etc/dashu/dashu.env
+# Fichiers (v2) : seulement si un second disque est monté sur /srv/dashu
+# (README, « Second disque »). Sans lui, la page Fichiers reste désactivée.
+if mountpoint -q /srv/dashu; then
+  install -d -o dashu -g dashu -m 750 /srv/dashu/fichiers
+  grep -q '^FILES_DIR=' /etc/dashu/dashu.env || echo 'FILES_DIR=/srv/dashu/fichiers' >> /etc/dashu/dashu.env
+fi
 
 say "Services et scripts"
 install -m 644 deploy/lxc/dashu.service deploy/lxc/dashu-backup.service deploy/lxc/dashu-backup.timer /etc/systemd/system/

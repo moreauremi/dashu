@@ -20,7 +20,7 @@ pub struct Tab {
 pub const MAX: usize = 4;
 
 /// Toutes les entrées possibles, dans l'ordre où elles s'affichent.
-pub const ALL: [Tab; 6] = [
+pub const ALL: [Tab; 7] = [
     Tab {
         key: "dashboard",
         label: "Dashboard",
@@ -32,6 +32,12 @@ pub const ALL: [Tab; 6] = [
         label: "Notes",
         icon: "notes",
         href: "/notes",
+    },
+    Tab {
+        key: "files",
+        label: "Fichiers",
+        icon: "files",
+        href: "/files",
     },
     Tab {
         key: "calendar",

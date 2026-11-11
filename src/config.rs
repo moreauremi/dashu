@@ -28,7 +28,22 @@ pub struct Config {
     /// `None` si `API_TOKEN` n'est pas renseigné : toutes les routes `/api`
     /// répondent alors 404.
     pub api: Option<ApiConfig>,
+    /// `None` si `FILES_DIR` n'est pas renseigné : la page Fichiers l'indique
+    /// et n'accepte aucun envoi.
+    pub files: Option<FilesConfig>,
 }
+
+/// Stockage des fichiers envoyés (v2).
+#[derive(Debug, Clone)]
+pub struct FilesConfig {
+    /// Dossier du contenu des fichiers, par exemple `/srv/dashu/fichiers`.
+    pub dir: std::path::PathBuf,
+    /// Taille maximale d'un fichier, en octets.
+    pub max_upload_bytes: u64,
+}
+
+/// Taille maximale d'un fichier par défaut : 2 Go.
+pub const DEFAULT_MAX_UPLOAD_MB: u64 = 2048;
 
 /// Accès à l'API JSON (`/api/v1`) par un programme, par exemple un assistant.
 #[derive(Clone)]
@@ -112,6 +127,25 @@ impl Config {
             }
         };
 
+        let files = match env.get("FILES_DIR") {
+            None => None,
+            Some(dir) => {
+                let max_mb = match env.get("MAX_UPLOAD_MB") {
+                    None => DEFAULT_MAX_UPLOAD_MB,
+                    Some(value) => value
+                        .trim()
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|mb| *mb > 0)
+                        .context("MAX_UPLOAD_MB doit être un nombre entier de Mo, supérieur à 0")?,
+                };
+                Some(FilesConfig {
+                    dir: dir.trim().into(),
+                    max_upload_bytes: max_mb * 1024 * 1024,
+                })
+            }
+        };
+
         Ok(Self {
             database_url: env
                 .get("DATABASE_URL")
@@ -127,6 +161,7 @@ impl Config {
             google,
             log_json: env.get("LOG_FORMAT").as_deref() == Some("json"),
             api,
+            files,
         })
     }
 

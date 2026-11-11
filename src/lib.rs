@@ -10,6 +10,7 @@ pub mod calendar;
 pub mod config;
 pub mod dashboard;
 pub mod db;
+pub mod files;
 pub mod notes;
 pub mod search;
 pub mod settings;
@@ -23,12 +24,14 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
+use axum::http::{Extensions, HeaderMap, StatusCode, Version, header};
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::routing::{delete, get, post};
 use sqlx::SqlitePool;
 use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{DefaultPredicate, Predicate};
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::{Key, SameSite};
 use tower_sessions::{Expiry, SessionManagerLayer};
@@ -141,6 +144,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/notes/{id}/delete", post(notes::delete))
         .route("/notes/{id}/tags", post(notes::add_tag))
         .route("/notes/{id}/tags/{tag_id}", delete(notes::remove_tag))
+        // Fichiers (l'envoi lit le corps en continu, sans la limite de 2 Mo)
+        .route("/files", get(files::list).post(files::upload))
+        .route("/files/{id}/download", get(files::download))
+        .route("/files/{id}/delete", post(files::delete))
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))
@@ -179,9 +186,16 @@ pub fn build_router(state: AppState) -> Router {
             state.clone(),
             web::headers::security_headers,
         ))
-        .layer(CompressionLayer::new())
+        .layer(CompressionLayer::new().compress_when(DefaultPredicate::new().and(not_a_download)))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Un fichier téléchargé n'est pas recompressé : souvent déjà compressé
+/// (photo, vidéo, PDF), il coûterait du processeur pour rien sur un vieux
+/// serveur, et garderait sa taille annoncée (`Content-Length`).
+fn not_a_download(_: StatusCode, _: Version, headers: &HeaderMap, _: &Extensions) -> bool {
+    !headers.contains_key(header::CONTENT_DISPOSITION)
 }
 
 /// `GET /health` : pour la supervision, sans authentification.

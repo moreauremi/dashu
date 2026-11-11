@@ -50,6 +50,7 @@
       <ul class="nav" role="list">
         <li><a href="/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
         <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
+        <li><a href="/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
         <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
         <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
       </ul>
