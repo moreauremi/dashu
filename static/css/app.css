@@ -1928,6 +1928,12 @@ input.note-title:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Vue d'ensemble (Perso) : l'espace d'origine d'un cours, dans sa couleur. */
+.ev-space {
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* Selon la hauteur du cours : une ligne (moins de 50 min), deux lignes
    (moins de 70 min), sinon tout. */
 .ev.is-compact {

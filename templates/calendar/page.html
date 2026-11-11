@@ -65,9 +65,9 @@
       <div class="cal-col tg tgh{{ grid.hours_count }}{% if day.is_today %} is-today{% endif %}" role="list" aria-label="{{ day.label }}">
         {% for ev in day.events %}
         <article class="ev ev-c{{ ev.color }} gs{{ ev.start_slot }} ge{{ ev.end_slot }} k{{ ev.columns }} p{{ ev.column }} {{ ev.density }}{% if ev.past %} is-past{% endif %}"
-                 role="listitem" title="{{ ev.subject }} · {{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}">
+                 role="listitem" title="{% if !ev.tag.is_empty() %}{{ ev.tag }} · {% endif %}{{ ev.subject }} · {{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}">
           <strong>{{ ev.subject }}</strong>
-          <span class="ev-time">{{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}</span>
+          <span class="ev-time">{% if !ev.tag.is_empty() %}<b class="ev-space" data-accent="{{ ev.tag_color }}">{{ ev.tag }}</b> · {% endif %}{{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}</span>
           {% if !ev.details.is_empty() %}<span class="ev-details">{{ ev.details }}</span>{% endif %}
         </article>
         {% endfor %}
