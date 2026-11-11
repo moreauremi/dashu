@@ -81,6 +81,7 @@
     const scroller = $(".cal-scroll");
     if (today && scroller) scroller.scrollLeft = today.offsetLeft - $(".cal-corner").offsetWidth;
 
+    bindWheel();
     updateClock();
     updateNowLine();
   }
@@ -122,7 +123,7 @@
   /** Sans nouvel événement pendant ce délai, le geste est considéré relâché. */
   const RELEASE_MS = 160;
   /** Après un changement, on attend ce calme pour réarmer (inertie du trackpad). */
-  const REARM_MS = 350;
+  const REARM_MS = 250;
 
   const spaceButtons = () => $$("[data-island] .isl-btn");
   const activeIndex = () =>
@@ -154,7 +155,21 @@
     switchSpace(button, Math.sign(buttons.indexOf(button) - activeIndex()));
   });
 
-  const gesture = { dir: 0, progress: 0, releaseTimer: 0, rearmTimer: 0, blocked: false };
+  const gesture = {
+    dir: 0,
+    progress: 0,
+    releaseTimer: 0,
+    rearmTimer: 0,
+    blocked: false,
+    // Plus petite amplitude vue depuis le blocage : l'inertie décroît.
+    minAmp: Infinity,
+  };
+
+  function rearm() {
+    clearTimeout(gesture.rearmTimer);
+    gesture.blocked = false;
+    gesture.minAmp = Infinity;
+  }
 
   // L'avancement (--p) passe par une feuille de style construite, pas par un
   // attribut style : la Content-Security-Policy refuse tout style en ligne, et
@@ -205,11 +220,12 @@
     const el = hint();
     el.classList.add("is-done");
     gesture.blocked = true;
+    gesture.minAmp = Infinity;
     gesture.progress = 0;
     clearTimeout(gesture.releaseTimer);
     // Filet de sécurité si la page ne change pas (réseau coupé…).
     clearTimeout(gesture.rearmTimer);
-    gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), 1500);
+    gesture.rearmTimer = setTimeout(rearm, 1500);
     setTimeout(() => {
       el.classList.add("is-releasing");
       el.classList.remove("is-on", "is-done");
@@ -237,33 +253,50 @@
   }
 
   // Trackpad (ou Maj + molette) : on cumule le défilement horizontal.
-  document.addEventListener(
-    "wheel",
-    (event) => {
-      // Inertie après un changement : on attend le calme avant de réarmer.
-      if (gesture.blocked) {
-        clearTimeout(gesture.rearmTimer);
-        gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), REARM_MS);
-        return;
-      }
-      const dx = event.deltaX * (event.deltaMode === 1 ? 16 : 1);
-      if (event.ctrlKey || Math.abs(dx) < 1 || Math.abs(dx) < Math.abs(event.deltaY) * 1.5) return;
-      const dir = Math.sign(dx);
-      if (!swipeAllowed(event.target) || scrollsHorizontally(event.target, dir)) return;
+  function onWheel(event) {
+    const dx = event.deltaX * (event.deltaMode === 1 ? 16 : 1);
 
-      // Retour en arrière pendant le geste : le rond se vide d'abord.
-      let progress = gesture.dir === dir ? gesture.progress : -gesture.progress;
-      progress += Math.abs(dx) / WHEEL_DISTANCE;
-      if (progress < 0) {
-        showProgress(-dir, -progress);
-      } else if (neighbour(dir)) {
-        showProgress(dir, progress);
-      }
-      clearTimeout(gesture.releaseTimer);
-      gesture.releaseTimer = setTimeout(release, RELEASE_MS);
-    },
-    { passive: true },
-  );
+    // Juste après un changement, le trackpad continue sur sa lancée avec des
+    // valeurs qui décroissent. On réarme au calme, ou dès qu'un net regain
+    // d'amplitude montre que c'est un nouveau geste.
+    if (gesture.blocked) {
+      const amp = Math.abs(dx);
+      gesture.minAmp = Math.min(gesture.minAmp, amp);
+      clearTimeout(gesture.rearmTimer);
+      gesture.rearmTimer = setTimeout(rearm, REARM_MS);
+      if (!(gesture.minAmp < 6 && amp > Math.max(10, gesture.minAmp * 4))) return;
+      rearm();
+    }
+
+    if (event.ctrlKey || Math.abs(dx) < 1 || Math.abs(dx) < Math.abs(event.deltaY) * 1.5) return;
+    const dir = Math.sign(dx);
+    if (!swipeAllowed(event.target) || scrollsHorizontally(event.target, dir)) return;
+
+    // Retour en arrière pendant le geste : le rond se vide d'abord.
+    let progress = gesture.dir === dir ? gesture.progress : -gesture.progress;
+    progress += Math.abs(dx) / WHEEL_DISTANCE;
+    if (progress < 0) {
+      showProgress(-dir, -progress);
+    } else if (neighbour(dir)) {
+      showProgress(dir, progress);
+    }
+    clearTimeout(gesture.releaseTimer);
+    gesture.releaseTimer = setTimeout(release, RELEASE_MS);
+  }
+
+  // L'écouteur est posé sur chaque #app, pas sur document. Au trackpad, Firefox
+  // et Chrome envoient tout un geste (inertie comprise) à l'élément sous le
+  // pointeur au début du geste. Après un changement de page, cet élément a
+  // été retiré par htmx : ses événements ne remontent plus jusqu'à document,
+  // mais ils passent encore par l'ancien #app, qui garde son écouteur. Sans
+  // cela, il fallait cliquer pour refaire un balayage.
+  const wheelBound = new WeakSet();
+  function bindWheel() {
+    const app = $("#app");
+    if (!app || wheelBound.has(app)) return;
+    wheelBound.add(app);
+    app.addEventListener("wheel", onWheel, { passive: true });
+  }
 
   // Doigt sur écran tactile.
   let touch = null;
@@ -316,8 +349,10 @@
     if (event.detail.target !== document.body) return;
     gesture.dir = 0;
     gesture.progress = 0;
-    clearTimeout(gesture.rearmTimer);
-    gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), REARM_MS);
+    if (gesture.blocked) {
+      clearTimeout(gesture.rearmTimer);
+      gesture.rearmTimer = setTimeout(rearm, REARM_MS);
+    }
   });
 
   // ------------------------------------------------- Palette de commandes
