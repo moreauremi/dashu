@@ -269,8 +269,8 @@ Chaque version ne démarre que lorsque la précédente est déployée et utilis�
 
 | Version | Contenu | Briques envisagées |
 | --- | --- | --- |
-| v2 — Fichiers | Cloud de fichiers par espace, partage par lien temporaire | Stockage disque + métadonnées SQLite, upload en streaming axum |
-| v3 — Outils fichiers | Convertisseur d'images, outils PDF (fusion, découpe, compression), OCR | crate `image`, `lopdf` ; pandoc / LibreOffice / Tesseract appelés en sous-processus pour ce que Rust ne couvre pas |
+| v2 — Fichiers et outils | Fichiers par espace, partage par lien temporaire, onglet Outils (conversions, téléchargeur) : voir le cahier des charges v2 en fin de document | Stockage sur le second disque + métadonnées SQLite, envoi en continu axum ; ffmpeg, pandoc, poppler, qpdf en sous-processus isolés |
+| v3 — OCR | Texte des images et des PDF scannés (les conversions prévues ici sont avancées en v2) | Tesseract en sous-processus |
 | v4 — Médias | Retouche photo dans le navigateur, redimensionnement, détourage | `photon-rs` compilé en WASM (îlot Rust côté client) ; détourage via un modèle ONNX |
 | v5 — Audio | Lecture audio des notes (TTS), transcription de vocaux et de cours | Piper ou Kokoro pour le TTS, `whisper-rs` pour la transcription |
 | v6 — IA | Assistant qui cherche dans les notes et fichiers | API Claude, recherche FTS5 puis recherche sémantique |
@@ -312,3 +312,202 @@ Travaille par étapes : styleguide, auth, espaces, notes, agenda, dashboard, dé
 | Prix | estime en prix x token ce que cette tâche à coûté |  |
 
 Noter aussi la durée totale et les bugs trouvés après livraison : c'est ce qui dit le plus sur la fiabilité réelle.
+
+---
+
+# dashu — Cahier des charges v2
+
+Nov 11, 2026 · @Rémi Moreau
+
+## Contexte et objectifs
+
+La v1 est terminée et sert au quotidien (voir `STATUS.md`). La v2 ajoute **les fichiers** et un **onglet Outils**. Option retenue le 11 novembre 2026 : des fichiers en « version courte », sans dossiers, et les conversions prévues en v3 avancées ici.
+
+- **Un endroit pour ses fichiers**, rangés par espace comme les notes, retrouvés par tags et recherche.
+- **Des conversions « tout en un »** : on dépose un fichier, dashu propose les formats possibles.
+- **Rien d'exécuté** : aucun fichier envoyé ne peut lancer de code dans la page de dashu, et aucune conversion ne peut toucher au reste du serveur.
+- **Livrée par morceaux** : chaque PR est utilisable seule, dans l'ordre donné à la fin.
+
+Les règles de la v1 restent valables : stack, sécurité, cibles de performance, design, critères vérifiés sur le serveur réel.
+
+## Périmètre v2
+
+| Module | Inclus en v2 | Hors v2 |
+| --- | --- | --- |
+| Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Dossiers, client de synchronisation, versions d'un fichier, envoi par morceaux |
+| Notes | Image collée dans l'éditeur, lien vers un fichier de l'espace | Galerie, redimensionnement dans la note |
+| Partage | Lien temporaire (1 h, 1 jour ou 7 jours), révocable | Lien protégé par mot de passe, dépôt par un tiers |
+| Outils : conversions | Images, Markdown et texte, PDF, audio et vidéo ; DOCX et PPTX seulement si besoin | OCR (v3), retouche photo (v4) |
+| Outils : téléchargeur | YouTube, Instagram et TikTok vers MP4 ou MP3, réservé au compte de Rémi | Tout autre site, partage du résultat |
+| API | En option : lister et ajouter un fichier (pour Hermès) | Suppression de fichier par l'API |
+
+## Prérequis serveur
+
+1. **Second disque.** Le disque de 465 Go est vidé, puis déclaré comme stockage Proxmox (LVM-thin). Un volume en est monté dans le conteneur dashu (point de montage Proxmox `mp0`) sur `/srv/dashu`, avec trois dossiers : `fichiers/`, `tmp/` (conversions en cours) et `sauvegardes/`. Proxmox gère lui-même les droits du volume dans un conteneur non privilégié.
+2. **Sauvegardes croisées.** Chaque donnée existe sur deux disques physiques :
+   - la base (premier disque) est sauvegardée chaque nuit sur le second disque, comme le demandait déjà la v1 ;
+   - les fichiers (second disque) sont copiés chaque nuit sur le premier disque, dans un volume dédié (`mp1`, 60 Go au départ, agrandissable). La copie est incrémentale : un fichier inchangé n'est pas recopié, et 14 jours d'historique sont gardés.
+3. **Mémoire** du conteneur : de 2 à 4 Go (`pct set <n> --memory 4096`). L'hôte en a 16 ; gratuit.
+4. **Paquets** : ffmpeg, pandoc, poppler-utils, qpdf, ghostscript, libheif-examples ; Typst et yt-dlp en binaires officiels (trop anciens ou absents dans Debian) ; LibreOffice seulement si on le garde. `deploy/lxc/install.sh` et le README sont mis à jour.
+
+## Fichiers
+
+### Modèle de données
+
+| Table | Colonnes principales | Remarques |
+| --- | --- | --- |
+| `files` | id, user\_id, space\_id, name, mime, size, sha256, storage\_key, created\_at, updated\_at | `storage_key` : 32 octets aléatoires, seul nom sur le disque |
+| `files_fts` | table virtuelle FTS5 sur name | Tenue à jour par des triggers, comme les notes |
+| `file_tags` | file\_id, tag\_id | Mêmes tags que les notes |
+| `share_links` | id, file\_id, token\_hash, expires\_at, revoked\_at, created\_at | Le lien en clair n'est jamais stocké |
+
+Sur le disque, un fichier vit dans `/srv/dashu/fichiers/<2 premiers caractères de la clé>/<clé>`. Le nom choisi par l'utilisateur n'apparaît jamais dans un chemin, ce qui ferme la porte aux noms piégés (`../`).
+
+### Envoi
+
+- Glisser-déposer ou bouton, plusieurs fichiers à la fois, barre de progression par fichier.
+- Envoi en continu (streaming) : le fichier va directement sur le disque, la mémoire de dashu ne dépend pas de sa taille.
+- Taille maximale : `MAX_UPLOAD_MB`, 2 Go par défaut. **Par `app.dashu.dev`, Cloudflare limite une requête à 100 Mo** (offre gratuite) : au-delà, passer par l'adresse Tailscale. Le message d'erreur le dit.
+- Un envoi interrompu ou refusé ne laisse rien sur le disque.
+
+### Page Fichiers
+
+- Liste de l'espace actif : nom, taille, date, tags ; tri par date ou par nom ; filtre par tag ; recherche sur le nom.
+- Les noms de fichiers apparaissent dans la palette `Ctrl+K`.
+- Actions : télécharger, renommer, déplacer vers un autre espace, ajouter un tag, supprimer (avec confirmation).
+- Le dashboard gagne un widget « Fichiers récents » (5 derniers).
+
+### Aperçu et sécurité du contenu
+
+Un fichier envoyé est une donnée, jamais une page. Toute réponse qui sert un fichier porte `X-Content-Type-Options: nosniff` et `Content-Security-Policy: sandbox`.
+
+| Type | Aperçu |
+| --- | --- |
+| PNG, JPEG, WebP, GIF | Image dans la page |
+| PDF | Lecteur du navigateur. Si l'en-tête `sandbox` l'empêche (cas connu de Chrome), le PDF est servi depuis un sous-domaine séparé ou proposé en téléchargement : à trancher dans la PR de l'aperçu |
+| Texte, Markdown, code | Rendu par le serveur dans un bloc échappé (le Markdown passe par ammonia, comme les notes) |
+| HTML, SVG, tout le reste | Pas d'aperçu : téléchargement (`Content-Disposition: attachment`) |
+
+### Notes
+
+- Une image collée dans l'éditeur est envoyée comme fichier de l'espace, puis insérée en Markdown : `![nom](/files/<id>/raw)`.
+- ammonia n'accepte une image que si son adresse est un fichier de dashu ; la CSP (`img-src 'self'`) bloque le reste.
+- Un fichier se lie à une note par un lien Markdown, proposé par la palette.
+
+### Partage par lien
+
+- Durée au choix : 1 heure, 1 jour ou 7 jours. Révocable à tout moment depuis la page Fichiers.
+- Le lien contient 32 octets aléatoires ; seule leur empreinte SHA-256 est en base.
+- La page publique `/s/<jeton>` ne montre que le nom et la taille, et télécharge le fichier. Elle est limitée en nombre de requêtes, comme le login.
+- Lien expiré, révoqué ou inconnu : même page « lien invalide », sans dire lequel des trois.
+
+## Outils : conversions
+
+Une zone de dépôt : on lâche un fichier, dashu affiche les sorties possibles selon son type.
+
+| Entrée | Sorties | Outil |
+| --- | --- | --- |
+| PNG, JPEG, WebP, GIF, HEIC (photos iPhone) | PNG, JPEG, WebP, PDF | crate `image` ; HEIC décodé par libheif (`heif-dec`) |
+| Markdown, TXT | PDF, HTML, DOCX | pandoc (moteur PDF : Typst) |
+| PDF | Images, texte ; fusion, découpe, compression | poppler-utils (images, texte), qpdf (fusion, découpe), Ghostscript (compression : qpdf seul ne recompresse pas les images) |
+| DOCX, PPTX | PDF | LibreOffice, seulement si Rémi en a besoin (plusieurs centaines de Mo) |
+| Vidéo, audio | MP4, MP3, compression | ffmpeg |
+
+### File d'attente et isolement
+
+- Une table `jobs` : type, fichier d'entrée, paramètres, état, progression, erreur, fichier produit.
+- **dashu ne lance aucune conversion lui-même** : il est limité à 256 Mo et n'a aucun droit. Il dépose la demande dans `/srv/dashu/tmp/queue/`. Une unité systemd « path » surveille ce dossier et démarre le service `dashu-worker`.
+- `dashu-worker` (le même binaire, sous-commande `worker`) tourne sous un utilisateur à lui. Il n'a pas de réseau (`PrivateNetwork=yes`) et n'écrit que dans `tmp/`. Ses limites : 1,5 Go de mémoire, 10 minutes et 2 Go de sortie par conversion, priorité processeur basse. Il traite deux conversions à la fois au plus.
+- La progression est affichée (pourcentage pour ffmpeg, étapes pour le reste) ; une erreur s'affiche en clair.
+- Le résultat se télécharge, ou va dans les fichiers de l'espace en un clic.
+- Tout ce qui est dans `tmp/` disparaît après 24 heures (`systemd-tmpfiles`).
+
+## Outils : téléchargeur de liens
+
+En dernier, une fois le reste en service.
+
+- Un lien YouTube, Instagram ou TikTok devient un MP4 ou un MP3, avec yt-dlp et ffmpeg. Seuls ces trois sites sont acceptés, après lecture de l'adresse (pas une simple recherche de texte).
+- Service séparé `dashu-download`. Il a besoin d'Internet, mais il lui est interdit de joindre le réseau local, Tailscale et la machine elle-même (`IPAddressDeny`), ce qui empêche de s'en servir pour atteindre le homelab.
+- yt-dlp est mis à jour chaque semaine par une minuterie : il casse quand les plateformes changent.
+- Instagram et TikTok demandent souvent un cookie de session. C'est un secret : fichier dans `/etc/dashu/`, lisible par ce service seul, jamais affiché.
+- **Cadre** : les conditions d'utilisation des trois plateformes interdisent le téléchargement. L'outil est donc réservé au compte de Rémi (`DOWNLOADER_EMAIL`), un résultat ne se partage jamais par lien, et l'outil ne figure pas dans le portfolio.
+
+## API (en option)
+
+`GET /api/v1/files?space=&q=&tag=` et `POST /api/v1/files` (envoi d'un fichier), avec le même jeton que le reste de l'API. Pas de suppression ni de partage par l'API.
+
+## Exigences de performance
+
+Les cibles de la v1 restent valables pour toutes les pages, y compris la page Fichiers et l'onglet Outils. En plus :
+
+| Mesure | Cible |
+| --- | --- |
+| Mémoire de dashu pendant l'envoi d'un fichier de 1 Go | < 100 Mo |
+| Temps de réponse des pages pendant une conversion vidéo | < 50 ms |
+| Liste de 1 000 fichiers | < 20 ms côté serveur |
+
+## Critères d'acceptation v2
+
+La v2 est terminée quand toutes les cases sont cochées sur le serveur réel.
+
+**Prérequis**
+
+- [ ] Le second disque est monté dans le conteneur et le reste après un redémarrage de l'hôte
+- [ ] La base est sauvegardée sur le second disque, les fichiers sur le premier
+- [ ] Le conteneur a 4 Go de mémoire
+
+**Fichiers**
+
+- [ ] Envoi de plusieurs fichiers par glisser-déposer : un de 90 Mo par `app.dashu.dev`, un de 1 Go par Tailscale ; la mémoire de dashu reste sous la cible
+- [ ] Un fichier trop gros est refusé avec un message clair, et rien ne reste sur le disque
+- [ ] Un fichier tagué est retrouvé par la recherche, par son tag et dans la palette `Ctrl+K`
+- [ ] Aperçu d'une image, d'un PDF et d'un texte ; téléchargement, renommage, déplacement, suppression
+- [ ] Un fichier HTML et un SVG piégés ne s'exécutent jamais : ils sont proposés en téléchargement (test et essai réel)
+- [ ] Une image collée dans l'éditeur s'affiche dans l'aperçu et apparaît dans les fichiers de l'espace
+- [ ] Un lien de partage marche sans être connecté, puis est refusé une fois expiré ou révoqué
+- [ ] Un second compte ne peut ni voir, ni télécharger, ni partager les fichiers du premier (tests)
+- [ ] Restauration réelle : un fichier supprimé revient à partir de la sauvegarde de la nuit
+
+**Outils**
+
+- [ ] Chaque ligne du tableau des conversions produit un fichier valide (tests avec des fichiers d'exemple)
+- [ ] Une photo HEIC d'iPhone devient un JPEG sur le serveur réel
+- [ ] Trois conversions lancées ensemble : deux tournent, la troisième attend ; la progression s'affiche
+- [ ] Une conversion qui dépasse le temps ou la mémoire est arrêtée avec un message clair
+- [ ] Le service de conversion n'a pas accès au réseau (test)
+- [ ] Les fichiers temporaires disparaissent après 24 heures
+
+**Téléchargeur**
+
+- [ ] Un lien YouTube donne un MP4 et un MP3
+- [ ] Un autre site, ou une adresse du réseau local, est refusé (tests)
+- [ ] Un autre compte n'a pas accès à l'outil, et un résultat ne peut pas être partagé
+- [ ] La mise à jour hebdomadaire de yt-dlp est programmée
+
+**Technique**
+
+- [ ] `cargo clippy` sans avertissement, `cargo test` vert en CI
+- [ ] Les cibles de performance v1 et v2 sont atteintes (Lighthouse mobile ≥ 95 sur la page Fichiers)
+- [ ] README à jour : second disque, paquets, sauvegarde et restauration des fichiers, services de conversion
+
+## Ordre de livraison
+
+Une PR par ligne, chacune utilisable seule :
+
+1. Prérequis : second disque, mémoire, sauvegardes croisées (scripts de `deploy/lxc/`)
+2. Fichiers : modèle, envoi, liste, téléchargement, suppression
+3. Aperçu, tags, recherche, palette, widget du dashboard
+4. Partage par lien temporaire
+5. Images collées et liens vers les fichiers dans les notes
+6. Sauvegarde étendue aux fichiers, exercice de restauration
+7. Outils : file d'attente, isolement, conversions d'images et de PDF
+8. Conversions de documents, d'audio et de vidéo
+9. Téléchargeur de liens
+10. En option : API des fichiers pour Hermès
+
+## À trancher avant de commencer
+
+- **Le contenu actuel du second disque** (une ancienne installation de Proxmox) : ce qui doit être gardé avant de le vider.
+- **LibreOffice** : utile seulement pour convertir des DOCX ou des PPTX en PDF. Sans lui, l'installation reste légère.
+- **Taille du volume de sauvegarde des fichiers** sur le premier disque : 60 Go proposés, sur environ 120 Go libres.
+- **Aperçu des PDF** : sous-domaine séparé ou téléchargement, si l'en-tête `sandbox` bloque le lecteur du navigateur.
