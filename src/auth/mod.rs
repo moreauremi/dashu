@@ -54,7 +54,9 @@ pub async fn login_page(
         return Ok(see_other("/"));
     }
     let error = match query.e.as_deref() {
-        Some("refuse") => Some(BAD_CREDENTIALS),
+        // Le visiteur a prouvé à Google que ce compte est le sien : lui dire
+        // qu'il n'a pas accès ne révèle rien sur les autres adresses.
+        Some("refuse") => Some("Ce compte Google n'a pas accès à dashu."),
         Some("google") => Some("La connexion avec Google n'a pas abouti. Réessaie."),
         _ => None,
     };

@@ -102,6 +102,19 @@ async fn email_hors_liste_refuse_meme_avec_le_bon_mot_de_passe() {
 }
 
 #[tokio::test]
+async fn compte_google_refuse_message_clair() {
+    // Retour de Google pour un email hors de ALLOWED_EMAILS (src/auth/google.rs).
+    let app = TestApp::new().await;
+    let page = app.client().get("/login?e=refuse").await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(
+        page.body
+            .contains("Ce compte Google n&#39;a pas accès à dashu.")
+    );
+    assert!(!page.body.contains(BAD_CREDENTIALS));
+}
+
+#[tokio::test]
 async fn sixieme_tentative_en_une_minute_bloquee() {
     let app = TestApp::new().await;
     let mut attacker = app.client();
