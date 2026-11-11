@@ -12,7 +12,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 - [Comptes et connexion](#comptes-et-connexion)
 - [Créer les identifiants Google](#créer-les-identifiants-google)
 - [API pour un assistant](#api-pour-un-assistant)
-- [Déploiement : homelab et tunnel Cloudflare](#déploiement--homelab-et-tunnel-cloudflare)
+- [Déploiement : homelab, Tailscale et tunnel Cloudflare](#déploiement--homelab-tailscale-et-tunnel-cloudflare)
 - [Sauvegardes et restauration](#sauvegardes-et-restauration)
 - [Sécurité](#sécurité)
 - [Développement](#développement)
@@ -76,20 +76,20 @@ cargo test
 
 ## Variables d'environnement
 
-En local elles sont lues dans le fichier `.env` ; en production c'est Docker Compose qui les transmet. Le fichier `.env` n'est jamais versionné, seul `.env.example` l'est.
+En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu/dashu.env`, que systemd transmet au service (ou `.env` avec Docker). Ces fichiers ne sont jamais versionnés, seul `.env.example` l'est.
 
 | Variable | Obligatoire | Rôle |
 | --- | --- | --- |
 | `SESSION_SECRET` | oui | Clé de signature du cookie de session, 64 caractères minimum. La changer déconnecte tout le monde. |
 | `ALLOWED_EMAILS` | oui | Emails autorisés, séparés par des virgules. Retirer un email coupe l'accès de ce compte immédiatement. |
-| `BASE_URL` | oui | URL publique, sans barre finale (`https://dashu.dev`). En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
-| `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; dans Docker `sqlite:///data/dashu.db`. |
+| `BASE_URL` | oui | URL publique, sans barre finale (`https://app.dashu.dev`). Sert aussi d'adresse de retour à Google. En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
+| `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; en production `sqlite:///var/lib/dashu/dashu.db` (Docker : `sqlite:///data/dashu.db`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
 | `API_TOKEN` | non | Active l'API JSON (`/api/v1`) : jeton attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API répond 404. |
 | `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit l'API. Doit figurer dans `ALLOWED_EMAILS`. |
-| `TUNNEL_TOKEN` | en production | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
-| `BACKUP_DIR` | en production | Dossier de l'hôte où vont les sauvegardes. |
-| `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut. |
+| `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
+| `BACKUP_DIR` | Docker seulement | Dossier de l'hôte où vont les sauvegardes. |
+| `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut ; `127.0.0.1:3000` en production. |
 | `LOG_FORMAT` | non | `json` pour des logs en JSON, une ligne par événement. |
 | `RUST_LOG` | non | Niveau de log, `info` par défaut. |
 
@@ -109,14 +109,13 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 Gratuit, à faire une fois dans la [Google Cloud Console](https://console.cloud.google.com/).
 
 1. Créer un projet (par exemple « dashu »).
-2. Menu **API et services > Écran de consentement OAuth** : type d'utilisateur **Externe**, un nom d'application et ton adresse de contact. Tant que l'application reste en mode « Test », ajouter ton adresse dans **Utilisateurs tests**.
-3. Menu **API et services > Identifiants > Créer des identifiants > ID client OAuth**, type **Application Web**.
-4. Dans **URI de redirection autorisés**, ajouter exactement :
-   - `https://dashu.dev/auth/google/callback`
+2. Menu **Google Auth Platform** (ou **API et services > Écran de consentement OAuth**) : nom de l'application, adresse d'assistance, audience **Externe**. L'application peut rester en mode **Test** : dashu ne demande que l'identité, aucune vérification par Google n'est nécessaire. En mode Test, seules les adresses listées dans **Audience > Utilisateurs tests** peuvent passer l'écran de Google : y mettre ton adresse (et celle qui sert à tester le refus, voir STATUS.md).
+3. **Clients > Créer un client**, type **Application Web**. Dans **URI de redirection autorisés**, ajouter exactement :
+   - `https://app.dashu.dev/auth/google/callback`
    - `http://localhost:3000/auth/google/callback` (pour tester en local)
-5. Copier l'ID client et le code secret dans `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), puis redémarrer dashu.
+4. Copier l'ID client et le code secret dans la configuration (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` dans `/etc/dashu/dashu.env`, ou `.env` en local), vérifier que `BASE_URL` vaut `https://app.dashu.dev`, puis redémarrer dashu.
 
-dashu ne demande à Google que l'identité et l'adresse email (`openid email`).
+dashu ne demande à Google que l'identité et l'adresse email (`openid email`). L'adresse de retour est construite à partir de `BASE_URL` : la connexion Google se fait donc depuis `https://app.dashu.dev`, pas depuis l'adresse Tailscale (le mot de passe, lui, marche partout).
 
 ## API pour un assistant
 
@@ -141,97 +140,173 @@ Exemple :
 
 ```bash
 curl -s -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
-  -d '{"title": "Réviser le VLAN", "space": "ecole"}' https://dashu.dev/api/v1/tasks
+  -d '{"title": "Réviser le VLAN", "space": "ecole"}' https://app.dashu.dev/api/v1/tasks
 ```
 
 Volontairement absent : la suppression de notes, les réglages, le mot de passe et les sources iCal. Les dates renvoyées sont en heure de Paris, au format ISO 8601.
 
-## Déploiement : homelab et tunnel Cloudflare
+## Déploiement : homelab, Tailscale et tunnel Cloudflare
 
-Le serveur ouvre une connexion sortante vers Cloudflare, qui relaie `dashu.dev` vers le conteneur. Aucun port n'est à ouvrir sur la box.
+dashu tourne **sans Docker**, dans un conteneur LXC Debian du serveur Proxmox de la maison : le binaire est compilé sur place et lancé par systemd. Il n'écoute que sur `127.0.0.1:3000`. Deux chemins y mènent, sans ouvrir un seul port sur la box :
 
 ```text
-navigateur ──HTTPS──> Cloudflare ══tunnel══> cloudflared ──HTTP──> dashu:3000 ──> /data/dashu.db
-                                             └────────── réseau interne Docker ──────────┘
+                  ┌───────────────────── conteneur LXC « dashu » ──────────────────────┐
+partout ──HTTPS──> Cloudflare ══tunnel══> cloudflared ──┐
+                  │                                     ├──HTTP──> dashu 127.0.0.1:3000 ──> /var/lib/dashu/dashu.db
+tailnet ──HTTPS──> tailscale serve ─────────────────────┘
+                  └─────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Avant de basculer le domaine.** `dashu.dev` sert aujourd'hui la page d'accueil du dossier `website/`, publiée par GitHub Pages (`.github/workflows/pages.yml`). Faire pointer le domaine vers le tunnel la remplace par l'application. Si la page d'accueil doit rester en ligne, lui donner un autre nom (par exemple `www.dashu.dev`) avant l'étape 1.
+| Adresse | Sert à |
+| --- | --- |
+| `https://app.dashu.dev` | L'application, depuis n'importe où (tunnel Cloudflare). C'est le `BASE_URL`. |
+| `https://dashu.<tailnet>.ts.net` | La même application, pour les appareils du réseau Tailscale. Reste joignable si Cloudflare tombe. |
+| `https://dashu.dev` | La page d'accueil publique du projet (dossier `website/`, GitHub Pages). |
 
-### 1. Cloudflare
+Une autre méthode, avec Docker, est décrite plus bas : [Variante : Docker](#variante--docker).
 
-1. Le domaine `dashu.dev` doit utiliser les serveurs DNS de Cloudflare (offre gratuite). Le certificat HTTPS est fourni par Cloudflare.
-2. Dans **Zero Trust > Networks > Tunnels**, créer un tunnel de type **Cloudflared** et copier son jeton : c'est `TUNNEL_TOKEN`.
-3. Dans l'onglet **Public Hostname** du tunnel, ajouter `dashu.dev` avec le service `http://dashu:3000`.
+### 1. Le conteneur
 
-### 2. La machine
-
-Un conteneur LXC Debian sur Proxmox (non privilégié, avec les options `nesting=1` et `keyctl=1` nécessaires à Docker), puis [Docker Engine et le plugin Compose](https://docs.docker.com/engine/install/debian/).
-
-### 3. dashu
+Sur l'hôte Proxmox, un conteneur Debian 13 non privilégié : 2 cœurs, 2 Go de mémoire (la compilation en a besoin, dashu seul tient dans 50 Mo), 16 Go de disque. Trouver puis télécharger le modèle Debian 13 :
 
 ```bash
-git clone https://github.com/moreauremi/dashu.git /opt/dashu
+pveam update && pveam available --section system | grep debian-13
 ```
 
 ```bash
-cd /opt/dashu && cp .env.example .env
+pveam download local debian-13-standard_<version>_amd64.tar.zst
 ```
 
-Remplir `.env` (voir le tableau plus haut), préparer le dossier des sauvegardes, puis démarrer :
+Puis créer le conteneur (ici le numéro 120 ; `pvesh get /cluster/nextid` donne le prochain libre) :
 
 ```bash
-mkdir -p /mnt/backup/dashu && chown 10001:10001 /mnt/backup/dashu
+pct create 120 local:vztmpl/debian-13-standard_<version>_amd64.tar.zst --hostname dashu --cores 2 --memory 2048 --swap 1024 --rootfs local-lvm:16 --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features nesting=1 --onboot 1
 ```
+
+Tailscale a besoin de `/dev/net/tun` : ajouter ces deux lignes à `/etc/pve/lxc/120.conf`, puis démarrer le conteneur (`pct start 120`) :
+
+```ini
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+```
+
+### 2. dashu
+
+Dans le conteneur (`pct enter 120`), en root :
+
+```bash
+apt-get update && apt-get install -y curl
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | bash -s -- toi@example.com https://app.dashu.dev
+```
+
+[`deploy/lxc/install.sh`](deploy/lxc/install.sh) installe Rust, clone la branche dans `/opt/dashu/src`, compile (10 à 20 minutes sur un vieux processeur), crée l'utilisateur système `dashu`, écrit la configuration dans `/etc/dashu/dashu.env` (un `SESSION_SECRET` est généré), installe le service, la sauvegarde nocturne et les scripts d'exploitation. Il se termine en affichant la commande qui crée le compte :
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu set-password "$0"' toi@example.com
+```
+
+Ce qui est installé :
+
+| Élément | Rôle |
+| --- | --- |
+| `/usr/local/bin/dashu` | Le binaire. |
+| `/etc/dashu/dashu.env` | Les variables d'environnement (lisible par root et le groupe `dashu` seulement). |
+| `/var/lib/dashu/dashu.db` | La base SQLite. |
+| `dashu.service` | Le service, sous l'utilisateur `dashu`, 256 Mo de mémoire au plus, durci (`deploy/lxc/hardening.conf` : système en lecture seule sauf `/var/lib/dashu`, aucune capacité). |
+| `dashu-backup.timer` | La sauvegarde, chaque nuit à 3 h 30. |
+| `dashu-update`, `dashu-backup`, `dashu-restore`, `dashu-admin` | Les scripts d'exploitation, dans `/usr/local/sbin`. |
+
+Après une modification de `/etc/dashu/dashu.env` : `systemctl restart dashu`.
+
+### 3. Tailscale
+
+Dans le conteneur :
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+```
+
+```bash
+tailscale up --hostname dashu
+```
+
+```bash
+tailscale serve --bg 3000
+```
+
+`tailscale serve` publie dashu en HTTPS sur le réseau Tailscale, avec un certificat valide. Il faut MagicDNS et HTTPS activés dans la console Tailscale.
+
+### 4. Tunnel Cloudflare
+
+1. Le domaine `dashu.dev` utilise les serveurs DNS de Cloudflare (offre gratuite).
+2. Dans **Zero Trust > Réseaux > Tunnels**, créer un tunnel de type **Cloudflared**, choisir Debian et lancer dans le conteneur les commandes affichées (elles installent `cloudflared` comme service). Le jeton du tunnel est un secret : il ne quitte pas le conteneur.
+3. Dans les **routes publiées** du tunnel, ajouter `app.dashu.dev` vers `http://localhost:3000`.
+4. Dans **Analytics & Logs > Web Analytics**, désactiver l'injection automatique pour `dashu.dev` (**Manage Site**, réglage **Disable** ; il faut parfois d'abord ajouter le site à Web Analytics pour voir ce réglage). Sinon Cloudflare ajoute un script de mesure à chaque page, que la CSP de dashu bloque, avec une erreur dans la console. Vérification : `curl -s https://app.dashu.dev/login | grep -c beacon` doit répondre `0`.
+
+### 5. Mise à jour
+
+```bash
+dashu-update
+```
+
+Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sauvegarde la base (`avant-maj-*.db`), remplace le binaire et redémarre. Si la nouvelle version ne répond pas sur `/health` dans les 20 secondes, il remet l'ancien binaire et la base d'avant. Si la compilation échoue, rien ne change en service et le lancement suivant réessaie. La version en service est notée dans `/etc/dashu/deployed-commit`. Les scripts de `deploy/lxc/` sont remis à jour en même temps que le binaire. Les migrations de la base s'appliquent au démarrage.
+
+### 6. Supervision et accès d'un assistant
+
+- `https://app.dashu.dev/health` répond `ok` sans authentification : à interroger avec Uptime Kuma ou un équivalent.
+- Logs : `journalctl -u dashu -f`. Ajouter `LOG_FORMAT=json` dans `/etc/dashu/dashu.env` pour un format exploitable par un collecteur.
+- Un assistant (Hermès) peut administrer dashu en SSH sans avoir la main sur le conteneur : sa clé est limitée à [`dashu-admin`](deploy/lxc/dashu-admin) dans `/root/.ssh/authorized_keys` (`restrict,command="/usr/local/sbin/dashu-admin" ssh-ed25519 …`). Six actions existent : `status`, `logs [N]`, `restart`, `update`, `update-status`, `backup`. La restauration n'en fait pas partie.
+
+### Variante : Docker
+
+Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push. Dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
+
+```bash
+git clone https://github.com/moreauremi/dashu.git /opt/dashu && cd /opt/dashu && cp .env.example .env
+```
+
+Remplir `.env` (avec `DATABASE_URL=sqlite:///data/dashu.db`, `TUNNEL_TOKEN` et `BACKUP_DIR`), puis :
 
 ```bash
 docker compose up -d --build
 ```
 
-La première construction compile le binaire (plusieurs minutes) ; les suivantes réutilisent le cache. Créer ensuite le compte, soit en se connectant avec Google, soit avec :
-
 ```bash
 docker compose exec dashu /dashu set-password toi@example.com
 ```
 
-### 4. Supervision et logs
-
-- `https://dashu.dev/health` répond `ok` sans authentification : à interroger avec Uptime Kuma ou un équivalent.
-- Docker vérifie lui-même la santé du conteneur ; `cloudflared` ne démarre que lorsque dashu répond.
-- Logs : `docker compose logs -f dashu`. Ajouter `LOG_FORMAT=json` dans `.env` pour un format exploitable par un collecteur.
-
-### 5. Mise à jour
-
-```bash
-cd /opt/dashu && git pull && docker compose up -d --build
-```
-
-Les migrations de la base s'appliquent au démarrage.
+Mise à jour : `git pull && docker compose up -d --build`. Sauvegarde : planifier [`scripts/backup.sh`](scripts/backup.sh) (`30 3 * * *` dans `crontab -e`) ; il explique aussi la restauration dans le volume.
 
 ## Sauvegardes et restauration
 
-`scripts/backup.sh` fait une copie à chaud de la base (commande SQLite `VACUUM INTO`, lancée par `dashu backup` dans le conteneur), **la rouvre pour la vérifier**, puis supprime les copies de plus de 14 jours. Le serveur n'est pas arrêté.
+Chaque nuit à 3 h 30, `dashu-backup.timer` lance [`dashu-backup`](deploy/lxc/dashu-backup) : copie à chaud de la base (commande SQLite `VACUUM INTO`, par `dashu backup`), sans arrêter le service. La copie est **rouverte et vérifiée** (`PRAGMA integrity_check`) avant d'être gardée. Les copies vont dans `/var/backups/dashu` :
 
-À planifier une fois avec `crontab -e` sur la machine qui héberge Docker :
+| Fichier | Fait par | Gardé |
+| --- | --- | --- |
+| `dashu-AAAA-MM-JJ_HHMMSS.db` | la sauvegarde de la nuit, ou `dashu-admin backup` | 14 jours |
+| `avant-maj-*.db` | `dashu-update`, juste avant de remplacer le binaire | 30 jours |
+| `avant-restauration-*.db` | `dashu-restore`, juste avant de remplacer la base | 30 jours |
 
-```cron
-30 3 * * * /opt/dashu/scripts/backup.sh >> /var/log/dashu-backup.log 2>&1
-```
+Sauvegarder tout de suite : `systemctl start dashu-backup`.
 
-Restaurer une sauvegarde (le nom du projet Compose est celui du dossier, ici `dashu`) :
-
-```bash
-cd /opt/dashu && docker compose stop dashu
-```
+**Restaurer.** [`dashu-restore`](deploy/lxc/dashu-restore) sans argument liste les sauvegardes, la plus récente en premier :
 
 ```bash
-docker run --rm -v dashu_data:/data -v /mnt/backup/dashu:/backups:ro alpine sh -c "rm -f /data/dashu.db-wal /data/dashu.db-shm && cp /backups/dashu-AAAA-MM-JJ_HHMMSS.db /data/dashu.db && chown 10001:10001 /data/dashu.db"
+dashu-restore
 ```
 
 ```bash
-docker compose start dashu
+dashu-restore dashu-2026-11-12_033000.db
 ```
 
-Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer : faire l'exercice une fois après la mise en service.
+Le script vérifie que le fichier est une base dashu saine (sinon il ne touche à rien), met la base actuelle de côté dans `avant-restauration-*.db`, arrête dashu, remplace la base, redémarre et vérifie que `/health` répond. Si dashu ne démarre pas avec la sauvegarde, la base d'avant est remise en place automatiquement. Une restauration se défait donc en restaurant le fichier `avant-restauration-*.db` qu'elle indique. Les sessions étant dans la base, revenir à la veille peut déconnecter les appareils connectés depuis.
+
+Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exercice est décrit dans [STATUS.md](STATUS.md).
+
+> Les sauvegardes sont sur le disque du conteneur, donc sur le même disque physique que la base. Elles protègent d'une erreur ou d'une mise à jour ratée, pas d'une panne du disque. Pour ça, monter un dossier d'un second disque sur `/var/backups/dashu` (option `mp0` du conteneur) ou sauvegarder le conteneur entier avec Proxmox (`vzdump`) vers un autre support.
 
 ## Sécurité
 
@@ -245,7 +320,8 @@ Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer : faire l
 - **Isolation** : toutes les requêtes SQL filtrent sur l'utilisateur connecté. Des tests vérifient qu'un second compte ne peut ni lire ni modifier les données du premier.
 - **Flux iCal** : l'URL Pronote contient un jeton d'accès. Elle n'est jamais réaffichée en entier ni écrite dans les logs. Seules les URL `https` publiques sont acceptées.
 - **API** : désactivée tant que `API_TOKEN` est vide. Le jeton (32 caractères minimum) est comparé en temps constant et n'apparaît jamais dans les logs. L'API n'agit que sur le compte `API_USER_EMAIL` et ne peut ni supprimer une note, ni toucher aux réglages, au mot de passe ou aux sources iCal.
-- **Image Docker** : image `scratch` (le binaire seul), utilisateur sans privilège, système de fichiers en lecture seule, aucune capacité Linux, aucun port publié.
+- **Service** : utilisateur système sans shell, écoute sur `127.0.0.1` seulement, système en lecture seule sauf `/var/lib/dashu`, aucune capacité Linux (`deploy/lxc/hardening.conf`). Configuration lisible par root et le groupe `dashu` seulement.
+- **Image Docker** (variante) : image `scratch` (le binaire seul), utilisateur sans privilège, système de fichiers en lecture seule, aucune capacité Linux, aucun port publié.
 
 ## Développement
 
@@ -274,7 +350,8 @@ dashu/
 ├── static/                 CSS, JS, icônes, polices (embarqués dans le binaire)
 ├── frontend/               source de l'éditeur CodeMirror
 ├── tests/                  tests d'intégration + fixtures/pronote.ics
-├── scripts/                backup.sh, build-assets.mjs, dev.cmd
+├── deploy/lxc/             installation sans Docker : install.sh, services systemd, dashu-update, -backup, -restore, -admin
+├── scripts/                backup.sh (variante Docker), build-assets.mjs, dev.cmd
 ├── Dockerfile, docker-compose.yml
 └── website/                page d'accueil publique de dashu.dev (GitHub Pages)
 ```
@@ -309,10 +386,11 @@ npm install && npm run build
 | sqlx 0.8 (et non 0.9) | Version imposée par `tower-sessions-sqlx-store` | Deux versions de sqlx ne peuvent pas lier SQLite dans le même binaire. |
 | reqwest 0.12 (et non 0.13) | Version qu'utilise `openidconnect` 4 | Un seul client HTTP, en rustls + ring, sans dépendance système. |
 | syntect | Coloration du code des notes, côté serveur | « Code avec coloration » sans ajouter de JavaScript. Les classes produites sont filtrées par ammonia. |
-| Fichiers statiques | Embarqués dans le binaire, empreinte dans le nom | L'image Docker ne contient qu'un fichier ; cache navigateur d'un an sans risque de version périmée. |
+| Fichiers statiques | Embarqués dans le binaire, empreinte dans le nom | Un seul fichier à déployer ; cache navigateur d'un an sans risque de version périmée. |
 | Styles en ligne | Aucun | La CSP les interdit. L'agenda se place avec des classes générées par `build.rs` ; CodeMirror vit dans un shadow root. |
 | Thèmes | Fonction CSS `light-dark()` | Chaque couleur est écrite une fois. Demande un navigateur de 2024 ou plus récent (Chrome 123, Firefox 120, Safari 17.5). |
 | Dates | Entiers Unix (UTC) en base | Affichage en Europe/Paris par `src/time.rs`, heure d'été comprise. |
+| Déploiement | Binaire natif + systemd dans un LXC, pas Docker | La spec prévoyait Docker Compose. Sur un vieux serveur, un binaire de 15 Mo sous systemd évite une couche de plus ; l'image Docker reste construite par la CI. |
 
 ## Limites connues de la v1
 

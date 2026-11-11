@@ -1,0 +1,6 @@
+[Unit]
+Description=Sauvegarde de la base dashu
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dashu-backup

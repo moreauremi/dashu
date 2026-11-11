@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Sauvegarde de la base, lancée chaque nuit à 3 h 30 par dashu-backup.timer.
+#
+# `dashu backup` fait une copie à chaud (VACUUM INTO) sans arrêter le service,
+# puis la rouvre pour la vérifier (PRAGMA integrity_check). Les copies de plus
+# de 14 jours sont supprimées ; celles faites avant une mise à jour ou une
+# restauration sont gardées 30 jours.
+set -euo pipefail
+
+DIR=/var/backups/dashu
+DEST="$DIR/dashu-$(date +%F_%H%M%S).db"
+
+runuser -u dashu -- env DATABASE_URL=sqlite:///var/lib/dashu/dashu.db /usr/local/bin/dashu backup "$DEST"
+find "$DIR" -name 'dashu-*.db' -mtime +14 -delete
+find "$DIR" \( -name 'avant-maj-*.db' -o -name 'avant-restauration-*.db' \) -mtime +30 -delete
+echo "$DEST"

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Administration à distance, pour un assistant (Hermès) qui se connecte en SSH
+# avec une clé limitée à ce seul programme, dans /root/.ssh/authorized_keys :
+#
+#   restrict,command="/usr/local/sbin/dashu-admin" ssh-ed25519 AAAA… hermes
+#
+# La commande demandée arrive dans SSH_ORIGINAL_COMMAND ; seules six actions
+# fixes existent. Pas de restauration ici : elle se fait à la main.
+set -euo pipefail
+set -f
+read -r -a ARGS <<< "${SSH_ORIGINAL_COMMAND:-$*}"
+ACTION="${ARGS[0]:-}"
+
+healthy() {
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Version réellement en service (voir dashu-update), et non celle du code source.
+version() {
+  local deployed source
+  deployed="$(cat /etc/dashu/deployed-commit 2>/dev/null || true)"
+  source="$(git -C /opt/dashu/src rev-parse HEAD 2>/dev/null || true)"
+  if [ -z "$deployed" ]; then
+    echo "version : inconnue"
+    return
+  fi
+  echo "version : $(git -C /opt/dashu/src log -1 --format='%h %s (%cd)' --date=short "$deployed" 2>/dev/null || echo "${deployed:0:7}")"
+  if [ -n "$source" ] && [ "$source" != "$deployed" ]; then
+    echo "attention : le code ${source:0:7} est récupéré mais pas en service (compilation ratée ?)"
+  fi
+}
+
+case "$ACTION" in
+  status)
+    echo "service : $(systemctl is-active dashu || true)"
+    if curl -fsS --max-time 3 http://127.0.0.1:3000/health >/dev/null 2>&1; then echo "santé : ok"; else echo "santé : ne répond pas"; fi
+    version
+    echo "disque : $(df -h / | awk 'NR==2 {print $4 " libres sur " $2}')"
+    LAST="$(find /var/backups/dashu -name 'dashu-*.db' -printf '%T@ %f\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2)"
+    echo "dernière sauvegarde : ${LAST:-aucune}"
+    if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "mise à jour : en cours"; fi
+    ;;
+  logs)
+    N="${ARGS[1]:-50}"
+    [[ "$N" =~ ^[0-9]{1,3}$ ]] || { echo "nombre de lignes invalide" >&2; exit 2; }
+    journalctl -u dashu -n "$N" --no-pager -o short-iso
+    ;;
+  restart)
+    systemctl restart dashu
+    if healthy; then echo "dashu redémarré, il répond."; else echo "dashu redémarré mais ne répond pas : regarde les logs."; exit 1; fi
+    ;;
+  update)
+    if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "Une mise à jour est déjà en cours."; exit 0; fi
+    systemd-run --quiet --collect --unit=dashu-update --description="Mise à jour de dashu" /usr/local/sbin/dashu-update
+    echo "Mise à jour lancée en arrière-plan (10 à 20 min s'il faut recompiler). Suivi : update-status."
+    ;;
+  update-status)
+    if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "en cours"; else echo "aucune mise à jour en cours"; fi
+    journalctl -u dashu-update -n 12 --no-pager -o cat 2>/dev/null || true
+    ;;
+  backup)
+    systemctl start dashu-backup.service
+    echo "Sauvegarde faite : $(find /var/backups/dashu -name 'dashu-*.db' -printf '%T@ %f\n' | sort -n | tail -1 | cut -d' ' -f2)"
+    ;;
+  *)
+    echo "actions possibles : status, logs [N], restart, update, update-status, backup" >&2
+    exit 2
+    ;;
+esac

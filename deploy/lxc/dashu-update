@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Met dashu à jour : récupère la branche, recompile, redémarre.
+#
+# - Compilation ratée : rien ne change en service, le lancement suivant réessaie.
+# - Nouvelle version qui ne démarre pas : retour à l'ancien binaire et à la
+#   base d'avant la mise à jour.
+#
+# La version en service est notée dans /etc/dashu/deployed-commit. On compare
+# à elle, pas au code source : après une compilation ratée, le code est déjà
+# à jour alors que le binaire ne l'est pas.
+set -euo pipefail
+export RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo
+export PATH="/opt/rust/cargo/bin:$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+BRANCH="$(cat /etc/dashu/branch)"
+DEPLOYED=/etc/dashu/deployed-commit
+
+healthy() {
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Les scripts d'exploitation vivent dans le dépôt (deploy/lxc) : on les remet
+# à jour avec le binaire. Écriture puis renommage, pour ne jamais modifier sur
+# place un script en cours d'exécution (celui-ci compris).
+install_scripts() {
+  local script
+  for script in dashu-update dashu-backup dashu-restore dashu-admin; do
+    [ -f "deploy/lxc/$script" ] || continue
+    install -m 755 "deploy/lxc/$script" "/usr/local/sbin/.$script.new"
+    mv -f "/usr/local/sbin/.$script.new" "/usr/local/sbin/$script"
+  done
+}
+
+cd /opt/dashu/src
+echo "Récupération de la branche $BRANCH..."
+git fetch -q --depth 1 origin "$BRANCH"
+TARGET="$(git rev-parse FETCH_HEAD)"
+if [ "$TARGET" = "$(cat "$DEPLOYED" 2>/dev/null)" ]; then
+  echo "Déjà à jour : $(git log -1 --format='%h %s' "$TARGET")"
+  exit 0
+fi
+
+git reset -q --hard "$TARGET"
+echo "Compilation de $(git log -1 --format='%h %s')..."
+if ! nice -n 10 cargo build --release --locked; then
+  echo "La compilation a échoué : la version en service ne change pas."
+  exit 1
+fi
+
+SNAP="/var/backups/dashu/avant-maj-$(date +%F_%H%M%S).db"
+runuser -u dashu -- env DATABASE_URL=sqlite:///var/lib/dashu/dashu.db /usr/local/bin/dashu backup "$SNAP"
+cp /usr/local/bin/dashu /usr/local/bin/dashu.prev
+install -m 755 target/release/dashu /usr/local/bin/dashu
+systemctl restart dashu
+
+if healthy; then
+  echo "$TARGET" > "$DEPLOYED"
+  install_scripts
+  echo "Mise à jour terminée : $(git log -1 --format='%h %s')"
+  exit 0
+fi
+
+echo "La nouvelle version ne démarre pas : retour à la précédente."
+systemctl stop dashu
+install -m 755 /usr/local/bin/dashu.prev /usr/local/bin/dashu
+rm -f /var/lib/dashu/dashu.db-wal /var/lib/dashu/dashu.db-shm
+install -o dashu -g dashu -m 640 "$SNAP" /var/lib/dashu/dashu.db
+systemctl start dashu
+exit 1
