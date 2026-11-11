@@ -16,6 +16,14 @@
 <link rel="preload" href="{{ crate::assets::url("fonts/rethink-sans.woff2") }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ crate::assets::url("css/app.css") }}">
 <link rel="icon" href="{{ crate::assets::url("favicon.svg") }}" type="image/svg+xml">
+{#- Ajoutée à l'écran d'accueil, dashu s'ouvre comme une app (manifeste :
+    plein écran, icône). La couleur de la barre d'état suit le thème du
+    système ; app.js la corrige si un thème est imposé dans les réglages. -#}
+<link rel="manifest" href="{{ crate::assets::url("manifest.webmanifest") }}">
+<link rel="apple-touch-icon" href="{{ crate::assets::url("icons/apple-touch-icon.png") }}">
+<meta name="apple-mobile-web-app-title" content="dashu">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#181817" media="(prefers-color-scheme: dark)">
 <script src="{{ crate::assets::url("js/htmx.js") }}" defer></script>
 <script src="{{ crate::assets::url("js/app.js") }}" defer></script>
 </head>
