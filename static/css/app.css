@@ -273,6 +273,25 @@ mark {
   min-height: 100dvh;
 }
 
+/* La barre latérale occupe la colonne de gauche ; l'île et le contenu
+   partagent celle de droite (l'île flotte par-dessus, voir .island). */
+.app > .sidebar {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app > .island,
+.app > .main {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Le balayage horizontal sert à changer d'espace : on coupe le geste
+   « page précédente » du navigateur au trackpad. */
+html {
+  overscroll-behavior-x: none;
+}
+
 .skip-link {
   position: absolute;
   left: 12px;
@@ -298,8 +317,8 @@ mark {
   text-decoration: none;
 }
 
-/* Barre latérale : surface neutre. La couleur de l'espace ne vit que dans les
-   intercalaires du sélecteur (voir .space::before).
+/* Barre latérale : surface neutre, navigation seulement. Le choix de l'espace
+   est dans l'île (voir .island).
    Colonne commune : toutes les icônes à 24 px du bord, tous les libellés à 48 px. */
 .sidebar {
   position: sticky;
@@ -318,70 +337,211 @@ mark {
   padding: 4px 12px;
 }
 
-/* 3 px de marge + 1 px de bordure : les boutons commencent à 4 px du cadre,
-   ce qui donne leur rayon (12 − 4 = 8). */
-.spaces {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-}
+/* ---------- L'île : sélecteur d'espace flottant ---------- */
 
-.space {
-  position: relative;
+/* Une pilule noire en haut de l'écran, quel que soit le thème (color-scheme:
+   dark : les accents y prennent leur variante claire, lisible sur le noir).
+   L'espace actif s'élargit et montre son nom, les autres seulement leur icône. */
+.island {
+  position: sticky;
+  top: 16px;
+  z-index: 15;
+  align-self: start;
+  justify-self: center;
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: var(--row);
-  padding: 0 8px;
+  gap: 2px;
+  height: 44px;
+  margin-top: 16px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #000;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.09),
+    0 12px 32px -12px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+  view-transition-name: island;
+}
+
+.island form {
+  display: contents;
+}
+
+.isl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 36px;
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: transparent;
-  color: var(--text-2);
-  text-align: left;
-  transition: background-color var(--fast) var(--ease);
+  color: color-mix(in oklab, var(--accent) 65%, var(--text-3));
+  font: 500 13px/1 var(--font-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--enter) var(--ease),
+    color var(--enter) var(--ease),
+    gap var(--enter) var(--ease),
+    padding var(--enter) var(--ease);
 }
 
-/* L'intercalaire : un onglet de la couleur de l'espace, comme dans un classeur.
-   Chaque bouton porte son propre data-accent. Discret au repos, plein quand
-   l'espace est actif. */
-.space::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-  opacity: 0.35;
-  transition: opacity var(--fast) var(--ease);
+.isl-btn:hover {
+  background: rgb(255 255 255 / 0.07);
+  color: var(--accent);
 }
 
-.space .i {
-  color: var(--text-3);
-}
-
-.space:hover {
-  background: color-mix(in oklab, var(--text) 6%, transparent);
+.isl-label {
+  max-width: 0;
+  overflow: hidden;
   color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    max-width var(--enter) var(--ease),
+    opacity var(--fast) var(--ease);
 }
 
-.space[aria-current="true"] {
-  background: var(--surface-2);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border);
+.isl-btn[aria-current="true"] {
+  gap: 8px;
+  padding: 0 14px 0 12px;
+  background: color-mix(in oklab, var(--accent) 26%, #000);
+  color: var(--accent);
 }
 
-.space[aria-current="true"]::before {
+.isl-btn[aria-current="true"] .isl-label {
+  max-width: 9em;
   opacity: 1;
 }
 
-.space[aria-current="true"] .i {
-  color: var(--text-2);
+/* L'île reste en place pendant un changement de page. */
+::view-transition-group(island),
+::view-transition-old(island),
+::view-transition-new(island) {
+  animation: none;
+}
+
+/* Page éditeur : plein écran, pas d'île (changer d'espace y ramène aux notes). */
+.app:has(.editor-page) > .island {
+  display: none;
+}
+
+/* ---------- Balayage : indicateur de changement d'espace ---------- */
+
+/* --p : avancement du geste, de 0 à 1. Déclarée pour pouvoir l'animer
+   quand le geste est relâché avant la fin (retour à 0). */
+@property --p {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* Un rond qui se remplit autour de l'icône de l'espace visé, du côté où l'on
+   balaie. Créé par app.js, hors de la page : il ne capte aucun clic. */
+.swipe-hint {
+  position: fixed;
+  top: 50%;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-top: -32px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p) * 360deg), rgb(255 255 255 / 0.16) 0);
+  box-shadow: 0 12px 32px -10px rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+  opacity: 0;
+  scale: 0.6;
+  pointer-events: none;
+  transition:
+    opacity var(--fast) var(--ease),
+    scale var(--fast) var(--ease);
+}
+
+.swipe-hint::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: #000;
+}
+
+.swipe-hint .i {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+}
+
+.swipe-hint[data-side="left"] {
+  left: calc(var(--sidebar-w) + 24px);
+}
+
+.swipe-hint[data-side="right"] {
+  right: 24px;
+}
+
+.swipe-hint.is-on {
+  opacity: 1;
+  scale: calc(0.7 + var(--p) * 0.3);
+}
+
+.swipe-hint.is-releasing {
+  transition:
+    --p var(--enter) var(--ease),
+    opacity var(--enter) var(--ease),
+    scale var(--enter) var(--ease);
+}
+
+.swipe-hint.is-done {
+  scale: 1.12;
+}
+
+/* Changement d'espace : le contenu glisse vers le côté du balayage (ou du
+   bouton cliqué dans l'île), au lieu du simple fondu. */
+@keyframes slide-out-left {
+  to {
+    transform: translateX(-48px);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(48px);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-out-right {
+  to {
+    transform: translateX(48px);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-48px);
+    opacity: 0;
+  }
+}
+
+:root[data-slide="next"]::view-transition-old(root) {
+  animation: slide-out-left var(--enter) var(--ease) both;
+}
+
+:root[data-slide="next"]::view-transition-new(root) {
+  animation: slide-in-right var(--enter) var(--ease) both;
+}
+
+:root[data-slide="prev"]::view-transition-old(root) {
+  animation: slide-out-right var(--enter) var(--ease) both;
+}
+
+:root[data-slide="prev"]::view-transition-new(root) {
+  animation: slide-in-left var(--enter) var(--ease) both;
 }
 
 .sidebar-nav {
@@ -520,7 +680,8 @@ mark {
   width: 100%;
   max-width: 1160px;
   margin-inline: auto;
-  padding: 32px 32px 64px;
+  /* En haut : la place de l'île (16 + 44 px) et 24 px d'air. */
+  padding: 84px 32px 64px;
 }
 
 .main:focus {
@@ -2302,14 +2463,31 @@ input.note-title:focus-visible {
     background: var(--surface);
   }
 
-  /* Nom de l'espace actif, précédé de son point de couleur. */
-  .topbar-space {
-    display: inline-flex;
-    flex: 1;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-2);
-    font-size: 13px;
+  .topbar {
+    justify-content: space-between;
+  }
+
+  /* L'île se pose au milieu de la barre du haut, entre menu et recherche. */
+  .island {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    left: 50%;
+    z-index: 25;
+    height: 40px;
+    margin: 0;
+    translate: -50% 0;
+  }
+
+  .isl-btn {
+    height: 32px;
+  }
+
+  .swipe-hint[data-side="left"] {
+    left: 16px;
+  }
+
+  .swipe-hint[data-side="right"] {
+    right: 16px;
   }
 
   /* La barre latérale devient un tiroir, ouvert par le bouton menu. */

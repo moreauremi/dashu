@@ -18,26 +18,27 @@
 
   <header class="topbar">
     <button class="icon-btn" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">{{ crate::assets::icon("menu")|safe }}</button>
-    <a class="wordmark" href="/">dashu</a>
-    <span class="topbar-space"><span class="dot" aria-hidden="true"></span>{{ shell.active.name }}</span>
     <button class="icon-btn" type="button" data-palette-open aria-label="Rechercher">{{ crate::assets::icon("search")|safe }}</button>
   </header>
 
+  {#- L'« île » : sélecteur d'espace flottant en haut de l'écran. L'espace actif
+      s'élargit et affiche son nom ; les autres ne montrent que leur icône.
+      On change aussi d'espace en balayant de côté (app.js, « Balayage »). -#}
+  <div class="island" role="group" aria-label="Espace actif" data-island>
+    {% for space in shell.spaces %}
+    <form method="post" action="/space">
+      <input type="hidden" name="slug" value="{{ space.slug }}">
+      <input type="hidden" name="next" value="{{ shell.path }}">
+      <button class="isl-btn" type="submit" data-accent="{{ space.color }}" title="{{ space.name }}"{% if space.id == shell.active.id %} aria-current="true"{% endif %}>
+        {{ crate::assets::icon(space.icon())|safe }}
+        <span class="isl-label">{{ space.name }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+
   <nav id="sidebar" class="sidebar" aria-label="Navigation principale">
     <a class="wordmark" href="/">dashu</a>
-
-    <div class="spaces" role="group" aria-label="Espace actif">
-      {% for space in shell.spaces %}
-      <form method="post" action="/space">
-        <input type="hidden" name="slug" value="{{ space.slug }}">
-        <input type="hidden" name="next" value="{{ shell.path }}">
-        <button class="space" type="submit" data-accent="{{ space.color }}"{% if space.id == shell.active.id %} aria-current="true"{% endif %}>
-          {{ crate::assets::icon(space.icon())|safe }}
-          <span>{{ space.name }}</span>
-        </button>
-      </form>
-      {% endfor %}
-    </div>
 
     <div class="sidebar-nav">
       <button class="search-btn" type="button" data-palette-open>

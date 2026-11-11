@@ -107,6 +107,219 @@
     $("[data-nav-toggle]")?.setAttribute("aria-expanded", String(open));
   }
 
+  // ------------------------------------------------- Espaces : île et balayage
+  //
+  // L'île (en haut) liste les espaces dans l'ordre : Perso, École, Taff.
+  // On peut aussi balayer de côté, deux doigts au trackpad ou un doigt sur
+  // téléphone : l'icône de l'espace voisin apparaît du côté du geste, dans un
+  // rond qui se remplit ; quand il est plein, la page glisse vers cet espace.
+  // Relâché avant, le rond se vide et rien ne se passe.
+
+  /** Défilement horizontal (en px) pour remplir le rond au trackpad. */
+  const WHEEL_DISTANCE = 320;
+  /** Part de la largeur de l'écran à parcourir au doigt. */
+  const TOUCH_SHARE = 0.38;
+  /** Sans nouvel événement pendant ce délai, le geste est considéré relâché. */
+  const RELEASE_MS = 160;
+  /** Après un changement, on attend ce calme pour réarmer (inertie du trackpad). */
+  const REARM_MS = 350;
+
+  const spaceButtons = () => $$("[data-island] .isl-btn");
+  const activeIndex = () =>
+    spaceButtons().findIndex((b) => b.getAttribute("aria-current") === "true");
+
+  /** Bouton de l'espace voisin : +1 à droite, −1 à gauche (pas de boucle). */
+  function neighbour(dir) {
+    const i = activeIndex();
+    return i < 0 ? null : spaceButtons()[i + dir] || null;
+  }
+
+  /** Prépare le glissement de page, puis envoie le formulaire de l'espace. */
+  function switchSpace(button, dir) {
+    if (!button || button.getAttribute("aria-current") === "true") return;
+    document.documentElement.dataset.slide = dir > 0 ? "next" : "prev";
+    // L'île bascule tout de suite ; la page suit quand le serveur répond.
+    spaceButtons().forEach((b) => b.toggleAttribute("aria-current", b === button));
+    button.setAttribute("aria-current", "true");
+    button.form.requestSubmit(button);
+    setTimeout(() => delete document.documentElement.dataset.slide, 800);
+  }
+
+  // Clic dans l'île : même glissement, dans le sens du bouton choisi.
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element && event.target.closest("[data-island] .isl-btn");
+    if (!button) return;
+    event.preventDefault();
+    const buttons = spaceButtons();
+    switchSpace(button, Math.sign(buttons.indexOf(button) - activeIndex()));
+  });
+
+  const gesture = { dir: 0, progress: 0, releaseTimer: 0, rearmTimer: 0, blocked: false };
+
+  // L'avancement (--p) passe par une feuille de style construite, pas par un
+  // attribut style : la Content-Security-Policy refuse tout style en ligne, et
+  // htmx recopie le <body> quand il change de page.
+  const progressSheet = new CSSStyleSheet();
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, progressSheet];
+  const setProgress = (value) => progressSheet.replaceSync(`.swipe-hint { --p: ${value}; }`);
+
+  function hint() {
+    let el = $(".swipe-hint");
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "swipe-hint";
+      el.setAttribute("aria-hidden", "true");
+      document.body.append(el);
+    }
+    return el;
+  }
+
+  function showProgress(dir, progress) {
+    const target = neighbour(dir);
+    const el = hint();
+    if (gesture.dir !== dir || !el.firstChild) {
+      el.replaceChildren(...(target ? [target.querySelector("svg").cloneNode(true)] : []));
+      el.dataset.accent = target?.dataset.accent || "";
+      el.dataset.side = dir > 0 ? "right" : "left";
+    }
+    gesture.dir = dir;
+    gesture.progress = Math.max(0, Math.min(1, progress));
+    el.classList.remove("is-releasing", "is-done");
+    el.classList.toggle("is-on", gesture.progress > 0.04);
+    setProgress(gesture.progress);
+    if (gesture.progress >= 1) complete();
+  }
+
+  function release() {
+    clearTimeout(gesture.releaseTimer);
+    const el = $(".swipe-hint");
+    gesture.progress = 0;
+    if (!el) return;
+    el.classList.add("is-releasing");
+    el.classList.remove("is-on");
+    setProgress(0);
+  }
+
+  function complete() {
+    const dir = gesture.dir;
+    const el = hint();
+    el.classList.add("is-done");
+    gesture.blocked = true;
+    gesture.progress = 0;
+    clearTimeout(gesture.releaseTimer);
+    // Filet de sécurité si la page ne change pas (réseau coupé…).
+    clearTimeout(gesture.rearmTimer);
+    gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), 1500);
+    setTimeout(() => {
+      el.classList.add("is-releasing");
+      el.classList.remove("is-on", "is-done");
+    }, 120);
+    switchSpace(neighbour(dir), dir);
+  }
+
+  /** Vrai si un élément sous le pointeur peut encore défiler dans ce sens. */
+  function scrollsHorizontally(node, dir) {
+    for (let el = node; el instanceof Element && el !== document.body; el = el.parentElement) {
+      if (el.scrollWidth <= el.clientWidth + 1) continue;
+      const overflow = getComputedStyle(el).overflowX;
+      if (overflow !== "auto" && overflow !== "scroll") continue;
+      if (dir > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+      if (dir < 0 && el.scrollLeft > 0) return true;
+    }
+    return false;
+  }
+
+  /** Le geste est-il permis à cet endroit ? */
+  function swipeAllowed(target) {
+    if (!$("[data-island]") || $(".editor-page") || palette()?.open) return false;
+    if ($("#app")?.hasAttribute("data-nav-open")) return false;
+    return !(target instanceof Element && target.closest("input, textarea, select, [contenteditable], .cm-editor"));
+  }
+
+  // Trackpad (ou Maj + molette) : on cumule le défilement horizontal.
+  document.addEventListener(
+    "wheel",
+    (event) => {
+      // Inertie après un changement : on attend le calme avant de réarmer.
+      if (gesture.blocked) {
+        clearTimeout(gesture.rearmTimer);
+        gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), REARM_MS);
+        return;
+      }
+      const dx = event.deltaX * (event.deltaMode === 1 ? 16 : 1);
+      if (event.ctrlKey || Math.abs(dx) < 1 || Math.abs(dx) < Math.abs(event.deltaY) * 1.5) return;
+      const dir = Math.sign(dx);
+      if (!swipeAllowed(event.target) || scrollsHorizontally(event.target, dir)) return;
+
+      // Retour en arrière pendant le geste : le rond se vide d'abord.
+      let progress = gesture.dir === dir ? gesture.progress : -gesture.progress;
+      progress += Math.abs(dx) / WHEEL_DISTANCE;
+      if (progress < 0) {
+        showProgress(-dir, -progress);
+      } else if (neighbour(dir)) {
+        showProgress(dir, progress);
+      }
+      clearTimeout(gesture.releaseTimer);
+      gesture.releaseTimer = setTimeout(release, RELEASE_MS);
+    },
+    { passive: true },
+  );
+
+  // Doigt sur écran tactile.
+  let touch = null;
+
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      touch = null;
+      if (event.touches.length !== 1 || gesture.blocked) return;
+      const t = event.touches[0];
+      // Les bords de l'écran appartiennent au geste « retour » du système.
+      if (t.clientX < 24 || t.clientX > window.innerWidth - 24) return;
+      if (!swipeAllowed(event.target)) return;
+      touch = { x: t.clientX, y: t.clientY, target: event.target, horizontal: null };
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!touch || gesture.blocked) return;
+      const t = event.touches[0];
+      const dx = t.clientX - touch.x;
+      const dy = t.clientY - touch.y;
+      if (touch.horizontal === null) {
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+        // Le premier mouvement net décide : vertical = on laisse défiler la page.
+        touch.horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
+        if (touch.horizontal && scrollsHorizontally(touch.target, -Math.sign(dx))) touch.horizontal = false;
+      }
+      if (!touch.horizontal) return;
+      // Doigt vers la gauche = espace de droite, comme on tourne une page.
+      const dir = -Math.sign(dx);
+      if (dir && neighbour(dir)) showProgress(dir, Math.abs(dx) / (window.innerWidth * TOUCH_SHARE));
+      else if (gesture.progress) release();
+    },
+    { passive: true },
+  );
+
+  const endTouch = () => {
+    if (touch?.horizontal && !gesture.blocked) release();
+    touch = null;
+  };
+  document.addEventListener("touchend", endTouch, { passive: true });
+  document.addEventListener("touchcancel", endTouch, { passive: true });
+
+  // Nouvelle page : le geste repart de zéro (réarmé après le calme).
+  document.addEventListener("htmx:afterSettle", (event) => {
+    if (event.detail.target !== document.body) return;
+    gesture.dir = 0;
+    gesture.progress = 0;
+    clearTimeout(gesture.rearmTimer);
+    gesture.rearmTimer = setTimeout(() => (gesture.blocked = false), REARM_MS);
+  });
+
   // ------------------------------------------------- Palette de commandes
 
   const palette = () => $("#palette");
