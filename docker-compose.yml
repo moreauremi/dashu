@@ -22,6 +22,8 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       LOG_FORMAT: ${LOG_FORMAT:-}
+      API_TOKEN: ${API_TOKEN:-}
+      API_USER_EMAIL: ${API_USER_EMAIL:-}
     volumes:
       # Base SQLite.
       - data:/data

@@ -25,6 +25,28 @@ pub struct Config {
     pub google: Option<GoogleConfig>,
     /// Logs en JSON (une ligne par événement) plutôt qu'en texte.
     pub log_json: bool,
+    /// `None` si `API_TOKEN` n'est pas renseigné : toutes les routes `/api`
+    /// répondent alors 404.
+    pub api: Option<ApiConfig>,
+}
+
+/// Accès à l'API JSON (`/api/v1`) par un programme, par exemple un assistant.
+#[derive(Clone)]
+pub struct ApiConfig {
+    /// Jeton attendu dans l'en-tête `Authorization: Bearer …`.
+    pub token: String,
+    /// Compte au nom duquel agit l'API (doit figurer dans `ALLOWED_EMAILS`).
+    pub user_email: String,
+}
+
+/// Le jeton n'apparaît jamais dans un `{:?}` (logs, messages d'erreur).
+impl std::fmt::Debug for ApiConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiConfig")
+            .field("token", &"<masqué>")
+            .field("user_email", &self.user_email)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +91,27 @@ impl Config {
             _ => None,
         };
 
+        let api = match env.get("API_TOKEN") {
+            None => None,
+            Some(token) => {
+                let token = token.trim().to_string();
+                if token.len() < 32 {
+                    bail!(
+                        "API_TOKEN doit faire au moins 32 caractères (génère-le avec : openssl rand -hex 32)"
+                    );
+                }
+                let user_email = env
+                    .require("API_USER_EMAIL")
+                    .context("API_TOKEN est renseigné : il faut aussi API_USER_EMAIL")?
+                    .trim()
+                    .to_lowercase();
+                if !allowed_emails.contains(&user_email) {
+                    bail!("API_USER_EMAIL ({user_email}) doit figurer dans ALLOWED_EMAILS");
+                }
+                Some(ApiConfig { token, user_email })
+            }
+        };
+
         Ok(Self {
             database_url: env
                 .get("DATABASE_URL")
@@ -83,6 +126,7 @@ impl Config {
             session_secret,
             google,
             log_json: env.get("LOG_FORMAT").as_deref() == Some("json"),
+            api,
         })
     }
 
