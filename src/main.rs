@@ -174,7 +174,8 @@ async fn backup(destination: &str) -> anyhow::Result<()> {
     if check != "ok" {
         bail!("la sauvegarde {destination} est corrompue : {check}");
     }
-    eprintln!("Sauvegarde écrite et vérifiée : {destination} ({notes} notes).");
+    let pluriel = if notes > 1 { "s" } else { "" };
+    eprintln!("Sauvegarde écrite et vérifiée : {destination} ({notes} note{pluriel}).");
     Ok(())
 }
 
