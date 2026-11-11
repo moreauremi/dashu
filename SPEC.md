@@ -337,18 +337,21 @@ Les règles de la v1 restent valables : stack, sécurité, cibles de performance
 | Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Dossiers, client de synchronisation, versions d'un fichier, envoi par morceaux |
 | Notes | Image collée dans l'éditeur, lien vers un fichier de l'espace | Galerie, redimensionnement dans la note |
 | Partage | Lien temporaire (1 h, 1 jour ou 7 jours), révocable | Lien protégé par mot de passe, dépôt par un tiers |
-| Outils : conversions | Images, Markdown et texte, PDF, audio et vidéo ; DOCX et PPTX seulement si besoin | OCR (v3), retouche photo (v4) |
+| Outils : conversions | Images, Markdown et texte, PDF, audio et vidéo | DOCX et PPTX vers PDF (pas de LibreOffice), OCR (v3), retouche photo (v4) |
 | Outils : téléchargeur | YouTube, Instagram et TikTok vers MP4 ou MP3, réservé au compte de Rémi | Tout autre site, partage du résultat |
 | API | En option : lister et ajouter un fichier (pour Hermès) | Suppression de fichier par l'API |
 
 ## Prérequis serveur
 
-1. **Second disque.** Le disque de 465 Go est vidé, puis déclaré comme stockage Proxmox (LVM-thin). Un volume en est monté dans le conteneur dashu (point de montage Proxmox `mp0`) sur `/srv/dashu`, avec trois dossiers : `fichiers/`, `tmp/` (conversions en cours) et `sauvegardes/`. Proxmox gère lui-même les droits du volume dans un conteneur non privilégié.
+1. **Second disque.** Le disque de 465 Go est vidé, puis déclaré comme stockage Proxmox (LVM-thin, nommé `ssd2`). dashu n'y prend que **50 Go** ; le reste reste libre pour autre chose. Deux volumes, montés dans le conteneur dashu par des points de montage Proxmox (Proxmox gère lui-même les droits dans un conteneur non privilégié) :
+   - `mp0`, 45 Go, sur `/srv/dashu` : `fichiers/` et `tmp/` (conversions en cours) ;
+   - `mp1`, 5 Go, sur `/var/backups/dashu` : les sauvegardes de la base passent sur le second disque sans changer une ligne des scripts, qui écrivent déjà là.
+   Un volume se rallonge à chaud si besoin (`pct resize`).
 2. **Sauvegardes croisées.** Chaque donnée existe sur deux disques physiques :
-   - la base (premier disque) est sauvegardée chaque nuit sur le second disque, comme le demandait déjà la v1 ;
-   - les fichiers (second disque) sont copiés chaque nuit sur le premier disque, dans un volume dédié (`mp1`, 60 Go au départ, agrandissable). La copie est incrémentale : un fichier inchangé n'est pas recopié, et 14 jours d'historique sont gardés.
+   - la base (premier disque) est sauvegardée chaque nuit sur le second disque (`mp1`), comme le demandait déjà la v1 ;
+   - les fichiers (second disque) sont copiés chaque nuit sur le premier disque, dans un volume dédié créé à l'étape 6 (50 Go au plus, autant que les fichiers). La copie est incrémentale : un fichier inchangé n'est pas recopié, et 14 jours d'historique sont gardés.
 3. **Mémoire** du conteneur : de 2 à 4 Go (`pct set <n> --memory 4096`). L'hôte en a 16 ; gratuit.
-4. **Paquets** : ffmpeg, pandoc, poppler-utils, qpdf, ghostscript, libheif-examples ; Typst et yt-dlp en binaires officiels (trop anciens ou absents dans Debian) ; LibreOffice seulement si on le garde. `deploy/lxc/install.sh` et le README sont mis à jour.
+4. **Paquets** : ffmpeg, pandoc, poppler-utils, qpdf, ghostscript, libheif-examples ; Typst et yt-dlp en binaires officiels (trop anciens ou absents dans Debian). Pas de LibreOffice. `deploy/lxc/install.sh` et le README sont mis à jour.
 
 ## Fichiers
 
@@ -410,7 +413,6 @@ Une zone de dépôt : on lâche un fichier, dashu affiche les sorties possibles 
 | PNG, JPEG, WebP, GIF, HEIC (photos iPhone) | PNG, JPEG, WebP, PDF | crate `image` ; HEIC décodé par libheif (`heif-dec`) |
 | Markdown, TXT | PDF, HTML, DOCX | pandoc (moteur PDF : Typst) |
 | PDF | Images, texte ; fusion, découpe, compression | poppler-utils (images, texte), qpdf (fusion, découpe), Ghostscript (compression : qpdf seul ne recompresse pas les images) |
-| DOCX, PPTX | PDF | LibreOffice, seulement si Rémi en a besoin (plusieurs centaines de Mo) |
 | Vidéo, audio | MP4, MP3, compression | ffmpeg |
 
 ### File d'attente et isolement
@@ -494,20 +496,25 @@ La v2 est terminée quand toutes les cases sont cochées sur le serveur réel.
 
 Une PR par ligne, chacune utilisable seule :
 
-1. Prérequis : second disque, mémoire, sauvegardes croisées (scripts de `deploy/lxc/`)
+1. Prérequis : second disque, mémoire, sauvegardes de la base sur le second disque
 2. Fichiers : modèle, envoi, liste, téléchargement, suppression
 3. Aperçu, tags, recherche, palette, widget du dashboard
 4. Partage par lien temporaire
 5. Images collées et liens vers les fichiers dans les notes
-6. Sauvegarde étendue aux fichiers, exercice de restauration
+6. Sauvegarde des fichiers sur le premier disque, exercice de restauration
 7. Outils : file d'attente, isolement, conversions d'images et de PDF
 8. Conversions de documents, d'audio et de vidéo
 9. Téléchargeur de liens
 10. En option : API des fichiers pour Hermès
 
-## À trancher avant de commencer
+## Décisions
 
-- **Le contenu actuel du second disque** (une ancienne installation de Proxmox) : ce qui doit être gardé avant de le vider.
-- **LibreOffice** : utile seulement pour convertir des DOCX ou des PPTX en PDF. Sans lui, l'installation reste légère.
-- **Taille du volume de sauvegarde des fichiers** sur le premier disque : 60 Go proposés, sur environ 120 Go libres.
-- **Aperçu des PDF** : sous-domaine séparé ou téléchargement, si l'en-tête `sandbox` bloque le lecteur du navigateur.
+Prises le 11 novembre 2026 :
+
+- **Second disque** : il contenait une ancienne installation de Proxmox ; il est vidé entièrement. dashu n'en utilise que 50 Go.
+- **LibreOffice** : non. Les DOCX et PPTX ne sont pas convertis en PDF.
+
+Reste à trancher, dans la PR concernée :
+
+- **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go au plus.
+- **Aperçu des PDF** (étape 3) : sous-domaine séparé ou téléchargement, si l'en-tête `sandbox` bloque le lecteur du navigateur.

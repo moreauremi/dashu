@@ -167,7 +167,7 @@ Une autre méthode, avec Docker, est décrite plus bas : [Variante : Docker](#va
 
 ### 1. Le conteneur
 
-Sur l'hôte Proxmox, un conteneur Debian 13 non privilégié : 2 cœurs, 2 Go de mémoire (la compilation en a besoin, dashu seul tient dans 50 Mo), 16 Go de disque. Trouver puis télécharger le modèle Debian 13 :
+Sur l'hôte Proxmox, un conteneur Debian 13 non privilégié : 2 cœurs, 4 Go de mémoire (la compilation en demande environ 1,2 Go, les conversions de la v2 davantage ; dashu seul tient dans 50 Mo), 16 Go de disque. Trouver puis télécharger le modèle Debian 13 :
 
 ```bash
 pveam update && pveam available --section system | grep debian-13
@@ -180,7 +180,7 @@ pveam download local debian-13-standard_<version>_amd64.tar.zst
 Puis créer le conteneur (ici le numéro 120 ; `pvesh get /cluster/nextid` donne le prochain libre) :
 
 ```bash
-pct create 120 local:vztmpl/debian-13-standard_<version>_amd64.tar.zst --hostname dashu --cores 2 --memory 2048 --swap 1024 --rootfs local-lvm:16 --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features nesting=1 --onboot 1
+pct create 120 local:vztmpl/debian-13-standard_<version>_amd64.tar.zst --hostname dashu --cores 2 --memory 4096 --swap 1024 --rootfs local-lvm:16 --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features nesting=1 --onboot 1
 ```
 
 Tailscale a besoin de `/dev/net/tun` : ajouter ces deux lignes à `/etc/pve/lxc/120.conf`, puis démarrer le conteneur (`pct start 120`) :
@@ -189,6 +189,22 @@ Tailscale a besoin de `/dev/net/tun` : ajouter ces deux lignes à `/etc/pve/lxc/
 lxc.cgroup2.devices.allow: c 10:200 rwm
 lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 ```
+
+**Second disque.** Les sauvegardes, et à partir de la v2 les fichiers, vont sur un autre disque physique que la base. Sur l'hôte, le disque est déclaré comme stockage LVM-thin (ici `ssd2` ; dans l'interface : **Disques > LVM-Thin > Créer**, ou la commande ci-dessous), puis deux volumes en sont montés dans le conteneur. Proxmox les crée, les formate et gère leurs droits dans un conteneur non privilégié ; ils se branchent même à chaud.
+
+```bash
+pvesh create /nodes/<nœud>/disks/lvmthin --device /dev/disk/by-id/<disque> --name ssd2 --add_storage 1
+```
+
+```bash
+pct set 120 -mp0 ssd2:45,mp=/srv/dashu
+```
+
+```bash
+pct set 120 -mp1 ssd2:5,mp=/var/backups/dashu
+```
+
+`/srv/dashu` (45 Go) accueillera les fichiers de la v2. `/var/backups/dashu` (5 Go) reçoit les sauvegardes de la base : les scripts écrivent déjà là, rien d'autre à changer. Sur un conteneur déjà installé, copier d'abord le contenu de `/var/backups/dashu` ailleurs, monter le volume, puis remettre les fichiers (propriétaire `dashu:dashu`, droits `750`). Un volume s'agrandit à chaud : `pct resize 120 mp0 +10G`.
 
 ### 2. dashu
 
@@ -317,7 +333,7 @@ Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exerci
 2. `dashu-restore dashu-….db` avec la sauvegarde qui vient d'être faite : la note doit avoir disparu.
 3. `dashu-restore avant-restauration-….db` avec le fichier indiqué à la fin de l'étape 2 : la note doit être revenue.
 
-> Les sauvegardes sont sur le disque du conteneur, donc sur le même disque physique que la base. Elles protègent d'une erreur ou d'une mise à jour ratée, pas d'une panne du disque. Pour ça, monter un dossier d'un second disque sur `/var/backups/dashu` (option `mp0` du conteneur) ou sauvegarder le conteneur entier avec Proxmox (`vzdump`) vers un autre support.
+> `/var/backups/dashu` est un volume du second disque (`mp1`, voir « Le conteneur ») : une panne du disque de la base n'emporte pas ses sauvegardes. Sans second disque, les sauvegardes restent sur le disque du conteneur : elles protègent alors d'une erreur ou d'une mise à jour ratée, pas d'une panne du disque.
 
 ## Sécurité
 
