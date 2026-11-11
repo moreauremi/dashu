@@ -15,7 +15,16 @@
 #   4. Planifier, avec `crontab -e` (tous les jours à 3 h 30) :
 #        30 3 * * * /opt/dashu/scripts/backup.sh >> /var/log/dashu-backup.log 2>&1
 #
-# Restauration : voir la section « Sauvegardes » du README.
+# Restauration (le nom du projet Compose est celui du dossier, ici `dashu`) :
+#
+#   cd /opt/dashu && docker compose stop dashu
+#   docker run --rm -v dashu_data:/data -v /mnt/backup/dashu:/backups:ro alpine \
+#     sh -c "rm -f /data/dashu.db-wal /data/dashu.db-shm \
+#            && cp /backups/dashu-AAAA-MM-JJ_HHMMSS.db /data/dashu.db \
+#            && chown 10001:10001 /data/dashu.db"
+#   docker compose start dashu
+#
+# (Sans Docker, dans le conteneur LXC : dashu-restore, voir le README.)
 
 set -eu
 

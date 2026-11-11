@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Remet en service une sauvegarde de la base.
+#
+#   dashu-restore              liste les sauvegardes, la plus récente en premier
+#   dashu-restore <fichier>    restaure ce fichier (nom dans /var/backups/dashu,
+#                              ou chemin complet)
+#
+# Rien n'est perdu : avant de toucher à la base, sa version actuelle est
+# elle-même sauvegardée (avant-restauration-*.db). Pour annuler une
+# restauration, il suffit de restaurer ce fichier-là.
+#
+# Étapes : vérification du fichier choisi, copie de la base actuelle, arrêt de
+# dashu, remplacement, redémarrage. Si dashu ne répond pas ensuite, la base
+# d'avant est remise en place automatiquement.
+set -euo pipefail
+
+DIR=/var/backups/dashu
+DB=/var/lib/dashu/dashu.db
+
+healthy() {
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Contenu d'une base, pour comparer d'un coup d'œil avant et après.
+summary() {
+  sqlite3 -readonly "$1" \
+    "SELECT (SELECT COUNT(*) FROM notes) || ' notes, ' ||
+            (SELECT COUNT(*) FROM tasks) || ' tâches, ' ||
+            (SELECT COUNT(*) FROM calendar_sources) || ' agendas'"
+}
+
+# Met en place un fichier comme base de dashu, service arrêté.
+put_in_place() {
+  systemctl stop dashu
+  rm -f "$DB-wal" "$DB-shm"
+  install -o dashu -g dashu -m 640 "$1" "$DB"
+  systemctl start dashu
+}
+
+if [ "$#" -eq 0 ]; then
+  echo "Sauvegardes disponibles (la plus récente en premier) :"
+  find "$DIR" -maxdepth 1 -name '*.db' -printf '%T@\t%TF %TH:%TM\t%s\t%f\n' 2>/dev/null |
+    sort -rn | awk -F'\t' '{ printf "  %s  %6.0f Ko  %s\n", $2, $3 / 1024, $4 }'
+  echo
+  echo "Restaurer : dashu-restore <nom du fichier>"
+  exit 0
+fi
+
+FILE="$1"
+[ -f "$FILE" ] || FILE="$DIR/$1"
+[ -f "$FILE" ] || { echo "Sauvegarde introuvable : $1" >&2; exit 2; }
+
+if systemctl is-active --quiet dashu-update 2>/dev/null; then
+  echo "Une mise à jour est en cours : attends qu'elle se termine." >&2
+  exit 1
+fi
+
+# 1. Le fichier choisi doit être une base saine, sinon on ne touche à rien.
+CHECK="$(sqlite3 -readonly "$FILE" 'PRAGMA integrity_check;' 2>&1 || true)"
+if [ "$CHECK" != "ok" ]; then
+  echo "Ce fichier n'est pas une base saine, rien n'a été touché : $CHECK" >&2
+  exit 1
+fi
+CONTENT="$(summary "$FILE" 2>/dev/null)" || {
+  echo "Ce fichier n'est pas une base dashu, rien n'a été touché." >&2
+  exit 1
+}
+echo "Sauvegarde choisie : $(basename "$FILE") ($CONTENT)"
+
+# 2. Copie de la base actuelle : c'est elle qu'on restaure pour tout annuler.
+SAFE="$DIR/avant-restauration-$(date +%F_%H%M%S).db"
+runuser -u dashu -- env DATABASE_URL="sqlite://$DB" /usr/local/bin/dashu backup "$SAFE"
+echo "Base actuelle mise de côté : $(basename "$SAFE") ($(summary "$SAFE"))"
+
+# 3. Remplacement, puis vérification que dashu répond.
+put_in_place "$FILE"
+if healthy; then
+  echo "Restauration terminée : dashu tourne sur $(basename "$FILE")."
+  echo "Pour revenir à l'état d'avant : dashu-restore $(basename "$SAFE")"
+  exit 0
+fi
+
+echo "dashu ne répond pas avec cette sauvegarde : retour à la base d'avant." >&2
+put_in_place "$SAFE"
+if healthy; then
+  echo "Base d'avant remise en place, dashu répond." >&2
+else
+  echo "dashu ne répond toujours pas : regarde journalctl -u dashu -n 50." >&2
+fi
+exit 1

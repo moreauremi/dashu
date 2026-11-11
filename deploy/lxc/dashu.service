@@ -1,0 +1,17 @@
+[Unit]
+Description=dashu (dashboard, notes, emploi du temps)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=dashu
+Group=dashu
+EnvironmentFile=/etc/dashu/dashu.env
+WorkingDirectory=/var/lib/dashu
+ExecStart=/usr/local/bin/dashu
+Restart=on-failure
+RestartSec=3
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
