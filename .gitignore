@@ -22,3 +22,6 @@ Thumbs.db
 
 # Sauvegardes locales (voir scripts/backup.sh)
 /backups/
+
+# Passation privée pour Claude Code (infra, adresses) : jamais versionnée
+/PASSATION.md
