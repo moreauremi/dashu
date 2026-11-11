@@ -415,11 +415,15 @@ Une zone de dépôt : on lâche un fichier, dashu affiche les sorties possibles 
 | PDF | Images, texte ; fusion, découpe, compression | poppler-utils (images, texte), qpdf (fusion, découpe), Ghostscript (compression : qpdf seul ne recompresse pas les images) |
 | Vidéo, audio | MP4, MP3, compression | ffmpeg |
 
+### Compression (avancée le 11 novembre 2026)
+
+Demandée par Rémi avec l'envoi par morceaux : un bouton « Compresser » sur une vidéo, une photo (HEIC compris) ou un PDF crée une copie plus légère, « nom (compressé) », dans le même espace ; l'original est gardé. Vidéo : MP4 H.264, 1080p au plus, CRF 23, AAC 128 kb/s, HDR ramené en SDR. Photo : JPEG, 2560 px au plus, qualité 82. PDF : Ghostscript « ebook ». Une copie qui ne gagne rien n'est pas gardée. Elle pose les fondations de l'étape 7 (table `jobs`, service de conversion).
+
 ### File d'attente et isolement
 
-- Une table `jobs` : type, fichier d'entrée, paramètres, état, progression, erreur, fichier produit.
-- **dashu ne lance aucune conversion lui-même** : il est limité à 256 Mo et n'a aucun droit. Il dépose la demande dans `/srv/dashu/tmp/queue/`. Une unité systemd « path » surveille ce dossier et démarre le service `dashu-worker`.
-- `dashu-worker` (le même binaire, sous-commande `worker`) tourne sous un utilisateur à lui. Il n'a pas de réseau (`PrivateNetwork=yes`) et n'écrit que dans `tmp/`. Ses limites : 1,5 Go de mémoire, 10 minutes et 2 Go de sortie par conversion, priorité processeur basse. Il traite deux conversions à la fois au plus.
+- Une table `jobs` : type, fichier d'entrée, état, progression, erreur, fichier produit.
+- **dashu ne lance aucune conversion lui-même** : il est limité à 256 Mo et n'a aucun droit. Il prépare un dossier `/srv/dashu/tmp/jobs/<id>/` (une copie du fichier, puis `job.json`). Le service `dashu-worker`, qui tourne en permanence, relève ces dossiers toutes les 2 secondes ; dashu relève ses résultats au même rythme.
+- `dashu-worker` (le même binaire, sous-commande `worker`) tourne sous un utilisateur à lui, sans réseau (`PrivateNetwork=yes`), et ne voit que `tmp/` : ni la base, ni la configuration, ni les fichiers rangés. Ses limites : 1,5 Go de mémoire, une limite de temps par conversion (1 h pour une vidéo), priorité processeur basse. Il traite deux conversions à la fois au plus ; une conversion interrompue par un redémarrage reprend de zéro.
 - La progression est affichée (pourcentage pour ffmpeg, étapes pour le reste) ; une erreur s'affiche en clair.
 - Le résultat se télécharge, ou va dans les fichiers de l'espace en un clic.
 - Tout ce qui est dans `tmp/` disparaît après 24 heures (`systemd-tmpfiles`).
@@ -497,12 +501,12 @@ La v2 est terminée quand toutes les cases sont cochées sur le serveur réel.
 Une PR par ligne, chacune utilisable seule :
 
 1. Prérequis : second disque, mémoire, sauvegardes de la base sur le second disque
-2. Fichiers : modèle, envoi, liste, téléchargement, suppression
+2. Fichiers : modèle, envoi, liste, téléchargement, suppression ; puis envoi par morceaux et compression (avancés le 11 novembre)
 3. Aperçu, tags, recherche, palette, widget du dashboard
 4. Partage par lien temporaire
 5. Images collées et liens vers les fichiers dans les notes
 6. Sauvegarde des fichiers sur le premier disque, exercice de restauration
-7. Outils : file d'attente, isolement, conversions d'images et de PDF
+7. Outils : zone de dépôt et conversions d'images et de PDF (la file d'attente et l'isolement existent depuis la compression)
 8. Conversions de documents, d'audio et de vidéo
 9. Téléchargeur de liens
 10. En option : API des fichiers pour Hermès
@@ -513,6 +517,7 @@ Prises le 11 novembre 2026 :
 
 - **Second disque** : il contenait une ancienne installation de Proxmox ; il est vidé entièrement. dashu n'en utilise que 50 Go.
 - **LibreOffice** : non. Les DOCX et PPTX ne sont pas convertis en PDF.
+- **Gros fichiers** : envoi par morceaux de 50 Mo (limite de Cloudflare), puis compression à la demande, avancée de l'étape 7.
 
 Reste à trancher, dans la PR concernée :
 

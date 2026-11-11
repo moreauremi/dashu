@@ -1,0 +1,17 @@
+{#- Suivi des compressions. Tant qu'une tâche tourne, ce bloc se redemande
+    toutes les 2 secondes ; `active` dit au serveur combien il en restait. -#}
+<section id="file-jobs" class="job-list" aria-label="Compressions" aria-live="polite"
+  {%- if jobs.items.is_empty() %} hidden{% endif %}
+  {%- if jobs.active > 0 %} hx-get="/files/jobs?active={{ jobs.active }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {%- for job in jobs.items %}
+  <div class="job-row is-{{ job.state }}">
+    <span class="job-name">{{ crate::assets::icon("shrink")|safe }}<span>{{ job.name }}</span></span>
+    {%- if let Some(value) = job.progress %}
+    <progress max="100" value="{{ value }}"></progress>
+    {%- else if job.busy %}
+    <progress max="100"></progress>
+    {%- endif %}
+    <span class="job-status">{{ job.status }}</span>
+  </div>
+  {%- endfor %}
+</section>

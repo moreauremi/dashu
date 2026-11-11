@@ -31,6 +31,8 @@ healthy() {
 say "Paquets système"
 apt-get update -q
 apt-get -y -q install curl git ca-certificates build-essential pkg-config openssl sqlite3
+# Outils de conversion (compression des vidéos, photos HEIC et PDF)
+apt-get -y -q install ffmpeg ghostscript libheif-examples
 
 say "Rust (installé pour la machine, dans /opt/rust)"
 command -v cargo >/dev/null ||
@@ -65,13 +67,21 @@ chown root:dashu /etc/dashu/dashu.env
 chmod 640 /etc/dashu/dashu.env
 # Fichiers (v2) : seulement si un second disque est monté sur /srv/dashu
 # (README, « Second disque »). Sans lui, la page Fichiers reste désactivée.
+# Le dossier de travail des conversions est partagé, par le groupe
+# dashu-jobs, entre dashu et le service de conversion (son propre compte).
 if mountpoint -q /srv/dashu; then
   install -d -o dashu -g dashu -m 750 /srv/dashu/fichiers
   grep -q '^FILES_DIR=' /etc/dashu/dashu.env || echo 'FILES_DIR=/srv/dashu/fichiers' >> /etc/dashu/dashu.env
+  getent group dashu-jobs >/dev/null || groupadd --system dashu-jobs
+  id dashu-worker >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid dashu-jobs dashu-worker
+  usermod -a -G dashu-jobs dashu
+  install -d -o dashu -g dashu-jobs -m 2770 /srv/dashu/tmp /srv/dashu/tmp/jobs
+  grep -q '^WORK_DIR=' /etc/dashu/dashu.env || echo 'WORK_DIR=/srv/dashu/tmp' >> /etc/dashu/dashu.env
+  WORKER=1
 fi
 
 say "Services et scripts"
-install -m 644 deploy/lxc/dashu.service deploy/lxc/dashu-backup.service deploy/lxc/dashu-backup.timer /etc/systemd/system/
+install -m 644 deploy/lxc/dashu.service deploy/lxc/dashu-backup.service deploy/lxc/dashu-backup.timer deploy/lxc/dashu-worker.service /etc/systemd/system/
 install -d /etc/systemd/system/dashu.service.d
 install -m 644 deploy/lxc/hardening.conf /etc/systemd/system/dashu.service.d/
 for script in dashu-update dashu-backup dashu-restore dashu-admin; do
@@ -79,6 +89,7 @@ for script in dashu-update dashu-backup dashu-restore dashu-admin; do
 done
 systemctl daemon-reload
 systemctl enable --now dashu dashu-backup.timer
+[ "${WORKER:-0}" = 1 ] && systemctl enable --now dashu-worker
 if ! healthy; then
   echo "dashu ne démarre pas avec le durcissement systemd : nouvel essai sans."
   rm -f /etc/systemd/system/dashu.service.d/hardening.conf

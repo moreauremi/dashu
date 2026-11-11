@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO jobs (user_id, space_id, kind, source_name, source_size, created_at, updated_at)\n         VALUES (?, ?, 'compress', ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "6e5fd776bb21c57e2482c29f30c8b1c985ccf11ebe172cc7836fea1a81e6e54a"
+}

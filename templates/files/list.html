@@ -26,6 +26,13 @@
 </div>
 <ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
 
+{% include "files/_jobs.html" %}
+
+{#- Recharge la liste quand une compression se termine (événement envoyé par
+    /files/jobs). Élément à part et vide : posés sur #file-results, ces
+    attributs seraient hérités par les formulaires de la liste. -#}
+<div hidden hx-get="/files" hx-select="#file-results" hx-target="#file-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
+
 <div id="file-results">
   {% if items.is_empty() %}
   <div class="empty-state"><p>Aucun fichier dans l'espace {{ shell.active.name }}</p></div>
@@ -38,9 +45,16 @@
         {{ crate::assets::icon("file")|safe }}<span>{{ item.name }}</span>
       </a>
       <span class="file-meta">{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
-      <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
-        <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
-      </form>
+      <div class="file-actions">
+        {% if item.compressible %}
+        <form method="post" action="/files/{{ item.id }}/compress">
+          <button class="icon-btn" type="submit" aria-label="Compresser {{ item.name }}" title="Compresser : crée une copie plus légère, l'original est gardé">{{ crate::assets::icon("shrink")|safe }}</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
+          <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
+        </form>
+      </div>
     </li>
     {% endfor %}
   </ul>

@@ -1,0 +1,42 @@
+[Unit]
+Description=dashu : conversions de fichiers (compression), sans réseau
+After=local-fs.target
+
+# Les fichiers traités viennent d'utilisateurs : ffmpeg, Ghostscript et
+# libheif les lisent ici, dans un service à part, plutôt que dans dashu.
+#   * son propre utilisateur, sans shell ;
+#   * aucun réseau ;
+#   * il ne voit que /srv/dashu/tmp : ni la base, ni la configuration (et
+#     ses secrets), ni les fichiers rangés, ni les sauvegardes ;
+#   * 1,5 Go de mémoire au plus, priorité basse : dashu reste rapide.
+# Chaque conversion a en plus sa propre limite de temps (src/tools/worker.rs).
+
+[Service]
+User=dashu-worker
+Group=dashu-jobs
+Environment=WORK_DIR=/srv/dashu/tmp
+ExecStart=/usr/local/bin/dashu worker
+Restart=on-failure
+RestartSec=5
+UMask=0007
+
+MemoryMax=1536M
+TasksMax=64
+Nice=10
+CPUWeight=20
+IOWeight=20
+
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/srv/dashu/tmp
+InaccessiblePaths=-/var/lib/dashu -/etc/dashu -/srv/dashu/fichiers -/var/backups/dashu
+CapabilityBoundingSet=
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
