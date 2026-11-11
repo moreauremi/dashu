@@ -4,12 +4,23 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{ALICE, BOB, MAX_UPLOAD, TestApp, between};
+use common::{ALICE, BOB, MAX_UPLOAD, TestApp};
 
 /// Identifiant du premier fichier de la liste.
 fn first_file_id(page: &str) -> i64 {
-    between(page, "href=\"/files/", "/download\"")
-        .expect("un fichier dans la liste")
+    let at = page
+        .find("class=\"file-name\" href=\"/files/")
+        .expect("un fichier dans la liste");
+    digits_after(&page[at..], "href=\"/files/")
+}
+
+/// Nombre qui suit `marker` dans `text`.
+fn digits_after(text: &str, marker: &str) -> i64 {
+    let start = text.find(marker).unwrap() + marker.len();
+    text[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>()
         .parse()
         .unwrap()
 }
@@ -88,9 +99,8 @@ fn id_of(page: &str, name: &str) -> i64 {
         .find(&format!("<span>{name}</span>"))
         .expect("fichier listé");
     let before = &page[..at];
-    let start = before.rfind("href=\"/files/").unwrap() + "href=\"/files/".len();
-    let len = before[start..].find('/').unwrap();
-    before[start..start + len].parse().unwrap()
+    let start = before.rfind("class=\"file-name\" href=\"/files/").unwrap();
+    digits_after(&before[start..], "href=\"/files/")
 }
 
 #[tokio::test]

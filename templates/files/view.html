@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block title %}{{ name }} · Fichiers · dashu{% endblock %}
+{% block content %}
+<header class="page-head file-view-head">
+  <div class="file-view-title">
+    <a class="back-link" href="/files">{{ crate::assets::icon("arrow-left")|safe }}<span>Fichiers</span></a>
+    <h1>{{ name }}</h1>
+    <p class="muted">{{ meta }}</p>
+  </div>
+  <div class="file-view-actions">
+    <a class="btn btn-primary" href="/files/{{ id }}/download" download hx-boost="false">{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></a>
+    {% if compressible %}
+    <form method="post" action="/files/{{ id }}/compress">
+      <button class="btn" type="submit" title="Crée une copie plus légère, l'original est gardé">{{ crate::assets::icon("shrink")|safe }}<span>Compresser</span></button>
+    </form>
+    {% endif %}
+    <form method="post" action="/files/{{ id }}/delete" hx-confirm="Supprimer définitivement « {{ name }} » ?">
+      <button class="btn" type="submit">{{ crate::assets::icon("trash")|safe }}<span>Supprimer</span></button>
+    </form>
+  </div>
+</header>
+
+<section class="file-preview is-{{ show }}" aria-label="Aperçu">
+  {%- if show == "image" %}
+  <img src="/files/{{ id }}/raw" alt="{{ name }}">
+  {%- else if show == "picture" %}
+  <img src="/files/{{ id }}/preview" alt="Aperçu de {{ name }}">
+  {%- else if show == "video" %}
+  <video controls playsinline preload="metadata" src="/files/{{ id }}/raw"{% if poster %} poster="/files/{{ id }}/preview"{% endif %}>
+    <p>Ce navigateur ne lit pas cette vidéo : télécharge-la, ou compresse-la en MP4.</p>
+  </video>
+  {%- if quicktime %}
+  <p class="muted file-preview-hint">Une vidéo .mov d'iPhone ne se lit pas dans tous les navigateurs : « Compresser » en fait un MP4 qui se lit partout.</p>
+  {%- endif %}
+  {%- else if show == "audio" %}
+  <audio controls preload="metadata" src="/files/{{ id }}/raw"></audio>
+  {%- else if show == "markdown" %}
+  <div class="file-preview-doc prose">{{ text_html|safe }}</div>
+  {%- else if show == "text" %}
+  <pre class="file-preview-text">{{ text_html|safe }}</pre>
+  {%- else if show == "pending" %}
+  <div class="empty-state"><p>Aperçu en préparation : recharge la page dans un instant</p></div>
+  {%- else %}
+  <div class="empty-state file-preview-none">
+    {{ crate::assets::icon(icon)|safe }}
+    <p>Pas d'aperçu pour ce type de fichier</p>
+  </div>
+  {%- endif %}
+  {%- if truncated %}
+  <p class="muted file-preview-hint">Aperçu des 200 premiers Ko : télécharge le fichier pour la suite.</p>
+  {%- endif %}
+</section>
+{% endblock %}

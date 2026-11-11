@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT storage_key, thumb, preview FROM files WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "thumb",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "preview",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a3732c343c8ccc04c60a2b63747a3ce8ecb18cf4b4e78460f1682d30898b6b97"
+}

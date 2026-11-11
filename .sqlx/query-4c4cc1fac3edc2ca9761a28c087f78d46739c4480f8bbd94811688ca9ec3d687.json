@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE files SET thumb = 1, preview = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "4c4cc1fac3edc2ca9761a28c087f78d46739c4480f8bbd94811688ca9ec3d687"
+}

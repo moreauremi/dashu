@@ -1891,11 +1891,32 @@ input.note-title:focus-visible {
 .file-name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
   color: var(--text);
   font-weight: 500;
   text-decoration: none;
+}
+
+/* Vignette à gauche du nom : la photo, une image de la vidéo, la première
+   page du PDF ; sinon l'icône du type. */
+.file-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+
+.file-thumb-icon {
+  display: grid;
+  place-items: center;
+}
+
+.file-thumb-icon .i {
+  width: 20px;
+  height: 20px;
 }
 
 .file-name:hover > span {
@@ -1922,6 +1943,100 @@ input.note-title:focus-visible {
 .file-actions {
   display: flex;
   gap: 2px;
+}
+
+/* Page d'aperçu d'un fichier. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.file-view-title {
+  min-width: 0;
+}
+
+.file-view-title h1 {
+  overflow-wrap: anywhere;
+}
+
+.file-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-preview {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.file-preview img,
+.file-preview video {
+  max-width: 100%;
+  max-height: 75vh;
+  border-radius: var(--radius);
+}
+
+.file-preview video {
+  width: 100%;
+  background: var(--bg);
+}
+
+.file-preview audio {
+  width: 100%;
+}
+
+.file-preview.is-text,
+.file-preview.is-markdown {
+  justify-items: stretch;
+}
+
+.file-preview-text {
+  max-height: 75vh;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.file-preview-doc {
+  justify-self: center;
+  width: 100%;
+  max-width: 72ch;
+}
+
+.file-preview-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.file-preview-none {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.file-preview-none .i {
+  width: 32px;
+  height: 32px;
+  color: var(--text-3);
 }
 
 /* Suivi des compressions, au-dessus de la liste. */

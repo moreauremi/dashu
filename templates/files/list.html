@@ -40,12 +40,18 @@
   <ul class="file-list" role="list">
     {% for item in items %}
     <li class="file-row">
-      {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
-      <a class="file-name" href="/files/{{ item.id }}/download" download hx-boost="false">
-        {{ crate::assets::icon("file")|safe }}<span>{{ item.name }}</span>
+      <a class="file-name" href="/files/{{ item.id }}">
+        {%- if item.thumb %}
+        <img class="file-thumb" src="/files/{{ item.id }}/thumb" alt="" width="40" height="40" loading="lazy" decoding="async">
+        {%- else %}
+        <span class="file-thumb file-thumb-icon">{{ crate::assets::icon(item.icon)|safe }}</span>
+        {%- endif %}
+        <span>{{ item.name }}</span>
       </a>
       <span class="file-meta">{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
       <div class="file-actions">
+        {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
+        <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
         {% if item.compressible %}
         <form method="post" action="/files/{{ item.id }}/compress">
           <button class="icon-btn" type="submit" aria-label="Compresser {{ item.name }}" title="Compresser : crée une copie plus légère, l'original est gardé">{{ crate::assets::icon("shrink")|safe }}</button>

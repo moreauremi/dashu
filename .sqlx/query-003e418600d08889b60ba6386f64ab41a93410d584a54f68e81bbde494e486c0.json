@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", user_id, space_id, source_name, source_size, status, progress, created_at\n           FROM jobs WHERE status IN ('queued', 'running')",
+  "query": "SELECT id AS \"id!\", user_id, space_id, kind, file_id, source_name, source_size, status, progress, created_at\n           FROM jobs WHERE status IN ('queued', 'running')",
   "describe": {
     "columns": [
       {
@@ -19,28 +19,38 @@
         "type_info": "Integer"
       },
       {
-        "name": "source_name",
+        "name": "kind",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "source_size",
+        "name": "file_id",
         "ordinal": 4,
         "type_info": "Integer"
       },
       {
-        "name": "status",
+        "name": "source_name",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "progress",
+        "name": "source_size",
         "ordinal": 6,
         "type_info": "Integer"
       },
       {
-        "name": "created_at",
+        "name": "status",
         "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "progress",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
         "type_info": "Integer"
       }
     ],
@@ -52,11 +62,13 @@
       false,
       false,
       false,
+      true,
+      false,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "6929958e61335e837860101eb45a28c3d0b4569182fbf40aa926856da8472e5d"
+  "hash": "003e418600d08889b60ba6386f64ab41a93410d584a54f68e81bbde494e486c0"
 }

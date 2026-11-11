@@ -48,7 +48,7 @@ Fait le 11 novembre : script de mesure injecté par Cloudflare désactivé (Web 
 
 ## v2 : avancement
 
-Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Étape en cours : 1, prérequis.
+Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l'étape 1 (prérequis), l'étape 2 (fichiers), l'envoi par morceaux, la compression et l'aperçu (début de l'étape 3), avancés à la demande de Rémi. Une case reste vide tant que le critère n'est pas vérifié sur le serveur réel.
 
 - [ ] **Le second disque est monté dans le conteneur et le reste après un redémarrage de l'hôte**
   - Fait le 11 novembre 2026 : l'ancien contenu du disque de 465 Go est effacé, et le disque est déclaré comme stockage LVM-thin `ssd2`. Deux volumes y sont pris : `mp0` de 45 Go sur `/srv/dashu`, `mp1` de 5 Go sur `/var/backups/dashu`.
@@ -58,6 +58,23 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Étape en
   - La base : vérifié sur le serveur. Les 12 sauvegardes existantes ont été recopiées sur le volume, avec les mêmes empreintes SHA-256. Une sauvegarde lancée par `dashu-backup` y a été écrite.
   - Les fichiers : à l'étape 6.
 - [x] **Le conteneur a 4 Go de mémoire** : appliqué à chaud le 11 novembre 2026 (`pct set --memory 4096`).
+
+**Fichiers, envoi par morceaux, compression** (déployés le 11 novembre 2026, version 43a7b21)
+
+- Sur le serveur :
+  - `FILES_DIR=/srv/dashu/fichiers` et `WORK_DIR=/srv/dashu/tmp` ;
+  - `dashu-worker` actif, sous le compte `dashu-worker` (groupe `dashu-jobs`) ;
+  - ffmpeg 7.1.5 (avec `zscale`), Ghostscript 10.05.1, libheif.
+- Vérifié sur le serveur, en passant par le service de conversion réel :
+  - une photo HEIC de 4032 × 3024 devient un JPEG de 2560 × 1920 (816 Ko → 391 Ko, 7 s) ;
+  - un PDF avec une photo passe de 626 Ko à 57 Ko (7 s) ;
+  - une vidéo 4K HDR (HLG) de 10 s devient un MP4 1080p en couleurs SDR (bt709), de 54,8 Mo à 3,7 Mo, en 45 s : une vidéo d'une minute prendra environ 4 à 5 minutes ;
+  - mémoire du service au plus haut : 1086 Mo, pour une limite de 1536 Mo.
+- Isolement vérifié pendant une conversion :
+  - le service ne voit que l'interface réseau `lo` ;
+  - la base, les fichiers rangés et `dashu.env` lui sont invisibles.
+- Vérifié par les tests et dans un navigateur, sur un dashu local : envoi par morceaux d'un fichier de 120 Mo, identique à l'arrivée ; compression d'une vidéo ; vignettes ; aperçu, lecture et avance rapide d'une vidéo.
+- Reste à faire par Rémi, sur `app.dashu.dev` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
 
 ## Mesures de performance
 

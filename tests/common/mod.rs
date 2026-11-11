@@ -155,6 +155,7 @@ impl TestApp {
             cookies: BTreeMap::new(),
             csrf: None,
             ip: format!("203.0.113.{}", n % 250 + 1),
+            extra: Vec::new(),
         }
     }
 
@@ -272,6 +273,8 @@ pub struct Client {
     /// Jeton CSRF de la session, lu dans la dernière page reçue.
     pub csrf: Option<String>,
     ip: String,
+    /// En-têtes ajoutés à la prochaine requête seulement.
+    extra: Vec<(String, String)>,
 }
 
 pub struct TestResponse {
@@ -303,6 +306,12 @@ impl Client {
     pub async fn get(&mut self, path: &str) -> TestResponse {
         self.send(Method::GET, path, None, CsrfMode::Header, false)
             .await
+    }
+
+    /// GET avec un en-tête `Range` (lecture d'une vidéo par morceaux).
+    pub async fn get_range(&mut self, path: &str, range: &str) -> TestResponse {
+        self.extra.push(("range".into(), range.into()));
+        self.get(path).await
     }
 
     /// GET tel que l'envoie htmx pour un fragment (widget, résultats…).
@@ -478,6 +487,9 @@ impl Client {
         }
         if fragment {
             request = request.header("hx-request", "true");
+        }
+        for (name, value) in std::mem::take(&mut self.extra) {
+            request = request.header(name, value);
         }
         let body = match body {
             Some(SentBody::Form(form)) => {

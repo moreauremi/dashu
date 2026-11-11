@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\" FROM jobs WHERE status IN ('queued', 'running')",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "097a5f901b2fcdc755f926bbf5b881583e6d5f2dbcc21aecf2b54d8fd5749f16"
+}

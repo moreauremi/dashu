@@ -502,7 +502,7 @@ Une PR par ligne, chacune utilisable seule :
 
 1. Prérequis : second disque, mémoire, sauvegardes de la base sur le second disque
 2. Fichiers : modèle, envoi, liste, téléchargement, suppression ; puis envoi par morceaux et compression (avancés le 11 novembre)
-3. Aperçu, tags, recherche, palette, widget du dashboard
+3. Aperçu (fait le 11 novembre : vignettes dans la liste, page d'aperçu au clic), puis tags, recherche, palette, widget du dashboard
 4. Partage par lien temporaire
 5. Images collées et liens vers les fichiers dans les notes
 6. Sauvegarde des fichiers sur le premier disque, exercice de restauration
@@ -522,4 +522,4 @@ Prises le 11 novembre 2026 :
 Reste à trancher, dans la PR concernée :
 
 - **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go au plus.
-- **Aperçu des PDF** (étape 3) : sous-domaine séparé ou téléchargement, si l'en-tête `sandbox` bloque le lecteur du navigateur.
+- *(tranché le 11 novembre)* **Aperçu des PDF** : la première page, rendue en image par le service de conversion, et le bouton Télécharger. Le PDF n'est jamais servi pour être affiché par le navigateur.
