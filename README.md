@@ -109,7 +109,7 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 Gratuit, à faire une fois dans la [Google Cloud Console](https://console.cloud.google.com/).
 
 1. Créer un projet (par exemple « dashu »).
-2. Menu **Google Auth Platform** (ou **API et services > Écran de consentement OAuth**) : nom de l'application, adresse d'assistance, audience **Externe**. L'application peut rester en mode **Test** : dashu ne demande que l'identité, aucune vérification par Google n'est nécessaire. En mode Test, seules les adresses listées dans **Audience > Utilisateurs tests** peuvent passer l'écran de Google : y mettre ton adresse (et celle qui sert à tester le refus, voir STATUS.md).
+2. Menu **Google Auth Platform** (ou **API et services > Écran de consentement OAuth**) : nom de l'application, adresse d'assistance, audience **Externe**. L'application peut rester en mode **Test** : dashu ne demande que l'identité, aucune vérification par Google n'est nécessaire. En mode Test, seules les adresses listées dans **Audience > Utilisateurs tests** peuvent passer l'écran de Google : y mettre ton adresse, et une seconde adresse Google absente de `ALLOWED_EMAILS` pour vérifier que dashu la refuse.
 3. **Clients > Créer un client**, type **Application Web**. Dans **URI de redirection autorisés**, ajouter exactement :
    - `https://app.dashu.dev/auth/google/callback`
    - `http://localhost:3000/auth/google/callback` (pour tester en local)
@@ -221,6 +221,8 @@ Ce qui est installé :
 
 Après une modification de `/etc/dashu/dashu.env` : `systemctl restart dashu`.
 
+Si le shell ouvert par `pct enter` ne trouve pas `dashu-update` ou `dashu-restore`, c'est que `/usr/local/sbin` manque dans son `PATH` : `echo 'export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"' >> ~/.bashrc`, puis rouvrir le shell.
+
 ### 3. Tailscale
 
 Dans le conteneur :
@@ -282,7 +284,7 @@ Mise à jour : `git pull && docker compose up -d --build`. Sauvegarde : planifie
 
 ## Sauvegardes et restauration
 
-Chaque nuit à 3 h 30, `dashu-backup.timer` lance [`dashu-backup`](deploy/lxc/dashu-backup) : copie à chaud de la base (commande SQLite `VACUUM INTO`, par `dashu backup`), sans arrêter le service. La copie est **rouverte et vérifiée** (`PRAGMA integrity_check`) avant d'être gardée. Les copies vont dans `/var/backups/dashu` :
+Chaque nuit à 3 h 30 (heure du conteneur, UTC par défaut : 4 h 30 ou 5 h 30 à Paris), `dashu-backup.timer` lance [`dashu-backup`](deploy/lxc/dashu-backup) : copie à chaud de la base (commande SQLite `VACUUM INTO`, par `dashu backup`), sans arrêter le service. La copie est **rouverte et vérifiée** (`PRAGMA integrity_check`) avant d'être gardée. Les copies vont dans `/var/backups/dashu` :
 
 | Fichier | Fait par | Gardé |
 | --- | --- | --- |
@@ -304,7 +306,11 @@ dashu-restore dashu-2026-11-12_033000.db
 
 Le script vérifie que le fichier est une base dashu saine (sinon il ne touche à rien), met la base actuelle de côté dans `avant-restauration-*.db`, arrête dashu, remplace la base, redémarre et vérifie que `/health` répond. Si dashu ne démarre pas avec la sauvegarde, la base d'avant est remise en place automatiquement. Une restauration se défait donc en restaurant le fichier `avant-restauration-*.db` qu'elle indique. Les sessions étant dans la base, revenir à la veille peut déconnecter les appareils connectés depuis.
 
-Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exercice est décrit dans [STATUS.md](STATUS.md).
+Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exercice, sans rien perdre :
+
+1. `systemctl start dashu-backup` (le service que lance la minuterie chaque nuit), puis créer une note « test restauration » dans dashu.
+2. `dashu-restore dashu-….db` avec la sauvegarde qui vient d'être faite : la note doit avoir disparu.
+3. `dashu-restore avant-restauration-….db` avec le fichier indiqué à la fin de l'étape 2 : la note doit être revenue.
 
 > Les sauvegardes sont sur le disque du conteneur, donc sur le même disque physique que la base. Elles protègent d'une erreur ou d'une mise à jour ratée, pas d'une panne du disque. Pour ça, monter un dossier d'un second disque sur `/var/backups/dashu` (option `mp0` du conteneur) ou sauvegarder le conteneur entier avec Proxmox (`vzdump`) vers un autre support.
 
