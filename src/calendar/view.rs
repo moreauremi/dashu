@@ -20,6 +20,11 @@ const DEFAULT_LAST_HOUR: u32 = 18;
 const MIN_SLOTS: u32 = 3;
 /// Au-delà de 4 événements simultanés, les suivants partagent la dernière colonne.
 const MAX_COLUMNS: u8 = 4;
+/// Un événement horaire de 24 h ou plus (« Ecole » du lundi 9 h au vendredi
+/// 17 h dans un planning d'entreprise) s'affiche dans le bandeau « journée
+/// entière » de chaque jour qu'il couvre, comme le fait Google Agenda : dans
+/// la grille, il remplirait des colonnes entières et la ferait commencer à 0 h.
+const LONG_EVENT_SECONDS: i64 = 24 * 3600;
 
 /// Événement tel que lu en base.
 pub struct EventRow {
@@ -109,8 +114,13 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
             .iter()
             .filter(|e| e.ends_at > day_start && e.starts_at < day_end)
         {
-            if row.all_day {
-                all_day.push(row.title.clone());
+            if row.all_day || row.ends_at - row.starts_at >= LONG_EVENT_SECONDS {
+                // Dans la vue d'ensemble, on garde l'espace d'origine en tête.
+                all_day.push(if row.tag.is_empty() {
+                    row.title.clone()
+                } else {
+                    format!("{} · {}", row.tag, row.title)
+                });
                 continue;
             }
             // Un événement qui déborde sur la veille ou le lendemain est
@@ -387,5 +397,47 @@ mod tests {
         assert_eq!(grid.days[0].all_day, vec!["Férié".to_string()]);
         assert!(grid.days[0].events.is_empty());
         assert!(!grid.is_empty);
+    }
+
+    #[test]
+    fn evenement_de_plusieurs_jours_dans_le_bandeau() {
+        // « Ecole » du lundi 16 novembre 9 h au vendredi 20 novembre 17 h 30
+        // (heure de Paris), venu du planning de Taff, plus un vrai cours.
+        let days: Vec<NaiveDate> = (16..=20)
+            .map(|d| NaiveDate::from_ymd_opt(2026, 11, d).unwrap())
+            .collect();
+        let mut period = event("Ecole", utc(2026, 11, 16, 8, 0), utc(2026, 11, 20, 16, 30));
+        period.tag = "Taff".into();
+        period.tag_color = "green".into();
+        let course = event(
+            "ANGLAIS - HERMELIN",
+            utc(2026, 11, 17, 7, 30),
+            utc(2026, 11, 17, 11, 0),
+        );
+        let grid = build(&days, &[period, course], 0);
+
+        // Le bandeau de chaque jour, étiqueté avec l'espace d'origine.
+        for day in &grid.days {
+            assert_eq!(day.all_day, vec!["Taff · Ecole".to_string()]);
+        }
+        // Dans la grille, seul le cours reste, en pleine largeur.
+        assert!(grid.days[0].events.is_empty());
+        assert_eq!(grid.days[1].events.len(), 1);
+        assert_eq!(grid.days[1].events[0].columns, 1);
+        // La grille commence toujours à 8 h, pas à minuit.
+        assert_eq!(grid.first_hour, 8);
+    }
+
+    #[test]
+    fn une_journee_de_travail_reste_dans_la_grille() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
+        let events = [event(
+            "Paramétrage client",
+            utc(2026, 11, 18, 8, 0),
+            utc(2026, 11, 18, 16, 0),
+        )];
+        let grid = build(&[date], &events, 0);
+        assert!(grid.days[0].all_day.is_empty());
+        assert_eq!(grid.days[0].events.len(), 1);
     }
 }
