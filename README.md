@@ -261,6 +261,11 @@ Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sa
 - `https://app.dashu.dev/health` répond `ok` sans authentification : à interroger avec Uptime Kuma ou un équivalent.
 - Logs : `journalctl -u dashu -f`. Ajouter `LOG_FORMAT=json` dans `/etc/dashu/dashu.env` pour un format exploitable par un collecteur.
 - Un assistant (Hermès) peut administrer dashu en SSH sans avoir la main sur le conteneur : sa clé est limitée à [`dashu-admin`](deploy/lxc/dashu-admin) dans `/root/.ssh/authorized_keys` (`restrict,command="/usr/local/sbin/dashu-admin" ssh-ed25519 …`). Six actions existent : `status`, `logs [N]`, `restart`, `update`, `update-status`, `backup`. La restauration n'en fait pas partie.
+- Côté Hermès, tout est versionné dans [`deploy/hermes/`](deploy/hermes) : la commande `dashu` (Python, sans dépendance) qui appelle l'API avec l'adresse et le jeton rangés dans `~/.config/dashu/`, et le skill qui dit à Hermès quand et comment s'en servir. [`install.sh`](deploy/hermes/install.sh) installe ou met à jour les deux, et met en place l'accès d'admin s'il manque. Sans danger à relancer, il se lance en root sur l'hôte Proxmox après un `dashu-update` (remplacer `<n>` par le numéro du conteneur dashu) :
+
+```bash
+bash <(pct exec <n> -- cat /opt/dashu/src/deploy/hermes/install.sh)
+```
 
 ### Variante : Docker
 
@@ -357,6 +362,7 @@ dashu/
 ├── frontend/               source de l'éditeur CodeMirror
 ├── tests/                  tests d'intégration + fixtures/pronote.ics
 ├── deploy/lxc/             installation sans Docker : install.sh, services systemd, dashu-update, -backup, -restore, -admin
+├── deploy/hermes/          commande `dashu` et skill de l'assistant Hermès, et leur install.sh
 ├── scripts/                backup.sh (variante Docker), build-assets.mjs, dev.cmd
 ├── Dockerfile, docker-compose.yml
 └── website/                page d'accueil publique de dashu.dev (GitHub Pages)

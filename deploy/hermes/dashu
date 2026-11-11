@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""dashu : piloter le dashboard de Rémi depuis le terminal (utilisé par Hermès).
+
+Lit l'adresse et le jeton de l'API dans ~/.config/dashu/url et ~/.config/dashu/token :
+le jeton n'apparaît donc jamais dans une commande ni dans une conversation.
+
+Exemples :
+  dashu tasks --space ecole
+  dashu task-add "Réviser le VLAN" --space ecole --due 2026-11-20
+  dashu task-done 12
+  dashu notes --q vlan
+  dashu note 5
+  dashu note-add "Idée" --space perso --body "texte" --tag projet
+  dashu note-append 5 "Une ligne de plus"
+  dashu agenda --from 2026-11-16 --to 2026-11-20
+  dashu admin status
+
+Ajoute --json à n'importe quelle commande de lecture pour la réponse brute.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime
+
+CONFIG = os.path.expanduser("~/.config/dashu")
+DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
+SPACES = "perso, ecole ou taff"
+ADMIN_COMMANDS = ["status", "logs", "restart", "update", "update-status", "backup"]
+
+
+def fail(message, code=1):
+    print(f"erreur : {message}", file=sys.stderr)
+    sys.exit(code)
+
+
+def read_config(name):
+    path = os.path.join(CONFIG, name)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        fail(f"{path} introuvable : dashu n'est pas configuré sur cette machine")
+
+
+def call(method, path, params=None, body=None):
+    """Appelle l'API et renvoie le JSON décodé (None pour une réponse vide)."""
+    url = read_config("url").rstrip("/") + "/api/v1" + path
+    if params:
+        clean = {k: v for k, v in params.items() if v not in (None, "")}
+        if clean:
+            url += "?" + urllib.parse.urlencode(clean)
+    data = None
+    headers = {"Authorization": "Bearer " + read_config("token"), "Accept": "application/json"}
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as e:
+        try:
+            message = json.loads(e.read()).get("error", "")
+        except (ValueError, AttributeError):
+            message = ""
+        fail(f"{e.code} {message}".strip())
+    except urllib.error.URLError as e:
+        fail(f"dashu injoignable ({e.reason}) : le conteneur est-il allumé ?")
+    return json.loads(raw) if raw else None
+
+
+def day_label(iso_date):
+    """« 2026-11-16 » -> « lun. 16/11 »"""
+    d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
+    return f"{DAYS[d.weekday()]} {d.day:02d}/{d.month:02d}"
+
+
+def show(data, args, formatter):
+    if getattr(args, "json", False):
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        formatter(data)
+
+
+def fmt_task(t):
+    box = "[x]" if t["done"] else "[ ]"
+    due = f", pour {day_label(t['due_date'])}" if t.get("due_date") else ""
+    return f"#{t['id']} {box} {t['title']} ({t['space']}{due})"
+
+
+def fmt_tasks(tasks):
+    if not tasks:
+        print("Aucune tâche.")
+    for t in tasks:
+        print(fmt_task(t))
+
+
+def fmt_notes(notes):
+    if not notes:
+        print("Aucune note.")
+    for n in notes:
+        title = n["title"] or "Sans titre"
+        pin = " (épinglée)" if n["pinned"] else ""
+        tags = " " + " ".join("#" + t for t in n["tags"]) if n["tags"] else ""
+        excerpt = n["excerpt"].replace("\n", " ").strip()
+        line = f"#{n['id']} {title} [{n['space']}]{pin}{tags}"
+        print(line + (f" : {excerpt[:140]}" if excerpt else ""))
+
+
+def fmt_note(n):
+    tags = " ".join("#" + t for t in n["tags"]) or "aucun"
+    print(f"#{n['id']} {n['title'] or 'Sans titre'}")
+    print(f"Espace : {n['space']} · tags : {tags} · modifiée le {day_label(n['updated_at'])} à {n['updated_at'][11:16]}")
+    print()
+    print(n["body_md"] or "(vide)")
+
+
+def fmt_events(events):
+    if not events:
+        print("Rien à l'agenda sur cette période.")
+    current_day = None
+    for e in events:
+        day = day_label(e["start"])
+        if day != current_day:
+            print(day)
+            current_day = day
+        when = "journée" if e["all_day"] else f"{e['start'][11:16]}-{e['end'][11:16]}"
+        details = f" · {e['details']}" if e["details"] else ""
+        place = f" ({e['location']})" if e["location"] else ""
+        print(f"  {when} {e['subject']}{details}{place}")
+
+
+def admin(args):
+    command = [args.action]
+    if args.action == "logs":
+        command.append(str(args.lines))
+    try:
+        result = subprocess.run(
+            ["ssh", "dashu-admin", *command],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        fail("la commande d'admin n'a pas répondu en 2 minutes")
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    sys.exit(result.returncode)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="dashu", description="Piloter dashu (tâches, notes, agenda, admin).")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    def reader(name, help_text):
+        s = sub.add_parser(name, help=help_text)
+        s.add_argument("--json", action="store_true", help="réponse brute en JSON")
+        return s
+
+    reader("spaces", "liste des espaces")
+
+    s = reader("tasks", "liste des tâches")
+    s.add_argument("--space", help=SPACES)
+    s.add_argument("--status", choices=["open", "done", "all"], default="open")
+
+    s = sub.add_parser("task-add", help="ajoute une tâche")
+    s.add_argument("title")
+    s.add_argument("--space", required=True, help=SPACES)
+    s.add_argument("--due", help="AAAA-MM-JJ (par défaut : aujourd'hui)")
+
+    for name, help_text in [("task-done", "coche une tâche"), ("task-undone", "décoche une tâche"), ("task-rm", "supprime une tâche")]:
+        s = sub.add_parser(name, help=help_text)
+        s.add_argument("id", type=int)
+
+    s = sub.add_parser("task-edit", help="modifie une tâche")
+    s.add_argument("id", type=int)
+    s.add_argument("--title")
+    s.add_argument("--due", help="AAAA-MM-JJ")
+
+    s = reader("notes", "liste ou recherche des notes")
+    s.add_argument("--q", help="recherche plein texte")
+    s.add_argument("--space", help=SPACES)
+    s.add_argument("--tag")
+    s.add_argument("--limit", type=int, default=10)
+
+    s = reader("note", "affiche une note complète")
+    s.add_argument("id", type=int)
+
+    s = sub.add_parser("note-add", help="crée une note")
+    s.add_argument("title")
+    s.add_argument("--space", required=True, help=SPACES)
+    s.add_argument("--body", default="", help="texte Markdown")
+    s.add_argument("--body-file", help="lit le texte dans un fichier")
+    s.add_argument("--tag", action="append", default=[], help="répétable")
+
+    s = sub.add_parser("note-append", help="ajoute du texte à la fin d'une note")
+    s.add_argument("id", type=int)
+    s.add_argument("text")
+
+    s = sub.add_parser("note-edit", help="modifie une note")
+    s.add_argument("id", type=int)
+    s.add_argument("--title")
+    s.add_argument("--body", help="remplace tout le texte")
+    s.add_argument("--pin", action="store_true")
+    s.add_argument("--unpin", action="store_true")
+    s.add_argument("--move", help="nouvel espace : " + SPACES)
+    s.add_argument("--tag", action="append", default=[], help="ajoute un tag (répétable)")
+
+    s = reader("agenda", "événements de l'agenda (7 jours par défaut)")
+    s.add_argument("--from", dest="start", help="AAAA-MM-JJ (par défaut : aujourd'hui)")
+    s.add_argument("--to", dest="end", help="AAAA-MM-JJ, inclus")
+    s.add_argument("--space", help=SPACES)
+
+    sub.add_parser("agenda-refresh", help="resynchronise les flux iCal")
+
+    s = sub.add_parser("admin", help="administration du serveur dashu")
+    s.add_argument("action", choices=ADMIN_COMMANDS)
+    s.add_argument("lines", nargs="?", type=int, default=50, help="pour logs : nombre de lignes")
+
+    args = p.parse_args()
+
+    if args.cmd == "spaces":
+        show(call("GET", "/spaces"), args, lambda d: print("\n".join(f"{s['slug']} ({s['name']})" for s in d)))
+    elif args.cmd == "tasks":
+        show(call("GET", "/tasks", {"space": args.space, "status": args.status}), args, fmt_tasks)
+    elif args.cmd == "task-add":
+        body = {"title": args.title, "space": args.space}
+        if args.due:
+            body["due_date"] = args.due
+        print("Ajoutée : " + fmt_task(call("POST", "/tasks", body=body)))
+    elif args.cmd in ("task-done", "task-undone"):
+        t = call("PATCH", f"/tasks/{args.id}", body={"done": args.cmd == "task-done"})
+        print(fmt_task(t))
+    elif args.cmd == "task-edit":
+        body = {}
+        if args.title:
+            body["title"] = args.title
+        if args.due:
+            body["due_date"] = args.due
+        if not body:
+            fail("rien à modifier : --title et/ou --due")
+        print(fmt_task(call("PATCH", f"/tasks/{args.id}", body=body)))
+    elif args.cmd == "task-rm":
+        call("DELETE", f"/tasks/{args.id}")
+        print(f"Tâche #{args.id} supprimée.")
+    elif args.cmd == "notes":
+        params = {"q": args.q, "space": args.space, "tag": args.tag, "limit": args.limit}
+        show(call("GET", "/notes", params), args, fmt_notes)
+    elif args.cmd == "note":
+        show(call("GET", f"/notes/{args.id}"), args, fmt_note)
+    elif args.cmd == "note-add":
+        text = args.body
+        if args.body_file:
+            with open(args.body_file, encoding="utf-8") as f:
+                text = f.read()
+        n = call("POST", "/notes", body={"title": args.title, "body_md": text, "space": args.space, "tags": args.tag})
+        print(f"Note #{n['id']} créée dans {n['space']}.")
+    elif args.cmd == "note-append":
+        n = call("PATCH", f"/notes/{args.id}", body={"append": args.text})
+        print(f"Ajouté à la note #{n['id']} ({n['title'] or 'Sans titre'}).")
+    elif args.cmd == "note-edit":
+        body = {}
+        if args.title is not None:
+            body["title"] = args.title
+        if args.body is not None:
+            body["body_md"] = args.body
+        if args.pin or args.unpin:
+            body["pinned"] = bool(args.pin)
+        if args.move:
+            body["space"] = args.move
+        if args.tag:
+            body["add_tags"] = args.tag
+        if not body:
+            fail("rien à modifier")
+        n = call("PATCH", f"/notes/{args.id}", body=body)
+        print(f"Note #{n['id']} modifiée ({n['space']}).")
+    elif args.cmd == "agenda":
+        params = {"from": args.start, "to": args.end, "space": args.space}
+        show(call("GET", "/calendar", params), args, fmt_events)
+    elif args.cmd == "agenda-refresh":
+        r = call("POST", "/calendar/refresh")
+        print(f"{r['sources']} agenda(s) resynchronisé(s), {r['failures']} échec(s).")
+    elif args.cmd == "admin":
+        admin(args)
+
+
+if __name__ == "__main__":
+    main()
