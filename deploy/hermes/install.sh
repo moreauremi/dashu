@@ -103,7 +103,7 @@ say "Accès d'admin limité (clé SSH, six actions de dashu-admin)"
 if pct exec "$HID" -- test -f "$H/.ssh/dashu_admin"; then
   echo "  clé d'Hermès : déjà en place"
 else
-  HX ssh-keygen -q -t ed25519 -N "" -C hermes-dashu-admin -f "$H/.ssh/dashu_admin"
+  HX /usr/bin/ssh-keygen -q -t ed25519 -N "" -C hermes-dashu-admin -f "$H/.ssh/dashu_admin"
   echo "  clé d'Hermès : créée"
 fi
 PUBKEY="$(pct exec "$HID" -- cat "$H/.ssh/dashu_admin.pub")"
@@ -117,7 +117,7 @@ else
   pct exec "$CTID" -- systemctl enable --now ssh >/dev/null 2>&1 || warn "le serveur SSH du conteneur dashu ne démarre pas"
   echo "  autorisation dans dashu : ajoutée"
 fi
-if HX ssh-keygen -F "$FQDN" -f "$H/.ssh/known_hosts" >/dev/null 2>&1; then
+if HX /usr/bin/ssh-keygen -F "$FQDN" -f "$H/.ssh/known_hosts" >/dev/null 2>&1; then
   echo "  clé d'hôte de dashu : déjà connue"
 else
   TSIP="$(pct exec "$CTID" -- tailscale ip -4 | head -1)"
@@ -156,13 +156,18 @@ else
 fi
 
 say "Tests depuis le compte d'Hermès"
-HX dashu spaces || warn "dashu spaces échoue : l'API ne répond pas à Hermès."
-HX dashu admin status || warn "L'admin à distance ne répond pas."
+# Chemin complet : runuser ne met pas /usr/local/bin dans le PATH.
+echec=0
+HX /usr/local/bin/dashu spaces || { warn "dashu spaces échoue : l'API ne répond pas à Hermès."; echec=1; }
+HX /usr/local/bin/dashu admin status || { warn "L'admin à distance ne répond pas."; echec=1; }
 
 if [ "$restart" -eq 1 ]; then
   say "Redémarrage d'Hermès, pour qu'il relise son skill et SOUL.md"
   pct exec "$HID" -- systemctl restart hermes-gateway \
     && echo "  hermes-gateway redémarré" \
     || warn "hermes-gateway introuvable : redémarre Hermès à la main (hermes gateway restart)."
+fi
+if [ "$echec" -eq 1 ]; then
+  die "Installation faite, mais un test a échoué (voir plus haut)."
 fi
 say "Terminé"
