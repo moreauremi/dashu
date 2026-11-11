@@ -82,9 +82,24 @@
     if (today && scroller) scroller.scrollLeft = today.offsetLeft - $(".cal-corner").offsetWidth;
 
     bindWheel();
+    $$("[data-tab-picker]").forEach(limitTabs);
     updateClock();
     updateNowLine();
   }
+
+  // Réglages : quatre raccourcis au plus. Une fois le maximum atteint, les
+  // cases restantes se grisent (le serveur vérifie aussi).
+  function limitTabs(form) {
+    const max = Number(form.dataset.max) || 4;
+    const boxes = $$('input[type="checkbox"]', form);
+    const count = boxes.filter((box) => box.checked).length;
+    boxes.forEach((box) => (box.disabled = !box.checked && count >= max));
+  }
+
+  document.addEventListener("change", (event) => {
+    const form = event.target instanceof Element && event.target.closest("[data-tab-picker]");
+    if (form) limitTabs(form);
+  });
 
   document.addEventListener("DOMContentLoaded", onPage);
   document.addEventListener("htmx:afterSettle", (event) => {

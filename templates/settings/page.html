@@ -19,6 +19,25 @@
     </div>
   </section>
 
+  <section class="card" id="raccourcis" aria-labelledby="s-tabs">
+    <header class="card-head"><h2 id="s-tabs">Raccourcis du téléphone</h2></header>
+    <div class="card-body">
+      <p class="hint">Sur téléphone, une barre en bas de l'écran garde {{ tab_max }} raccourcis au plus. Choisis lesquels.</p>
+      <form class="tab-picker" method="post" action="/settings/tabs" data-tab-picker data-max="{{ tab_max }}">
+        <div class="tab-choices">
+          {% for (tab, checked) in tab_choices %}
+          <label class="tab-choice">
+            <input type="checkbox" name="tab_{{ tab.key }}"{% if checked %} checked{% endif %}>
+            {{ crate::assets::icon(tab.icon)|safe }}
+            <span>{{ tab.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+      </form>
+    </div>
+  </section>
+
   <section class="card" aria-labelledby="s-password">
     <header class="card-head"><h2 id="s-password">Mot de passe</h2></header>
     <div class="card-body">

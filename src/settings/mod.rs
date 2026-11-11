@@ -1,4 +1,7 @@
-//! Réglages : thème, mot de passe, compte Google lié, sources iCal.
+//! Réglages : thème, raccourcis du téléphone, mot de passe, compte Google lié,
+//! sources iCal.
+
+use std::collections::HashMap;
 
 use askama::Template;
 use axum::extract::{Path, State};
@@ -9,6 +12,7 @@ use crate::AppState;
 use crate::auth::password;
 use crate::auth::session::{Ctx, Shell};
 use crate::calendar::sync;
+use crate::tabbar::{self, Tab};
 use crate::time;
 use crate::web::{self, AppError, AppResult, local_path, see_other};
 
@@ -34,6 +38,9 @@ struct SettingsPage {
     google_enabled: bool,
     sources: Vec<SourceRow>,
     min_password: usize,
+    /// Toutes les entrées possibles de la barre du téléphone, et si elles y sont.
+    tab_choices: Vec<(&'static Tab, bool)>,
+    tab_max: usize,
 }
 
 /// `GET /settings`
@@ -64,7 +71,15 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     })
     .collect();
 
+    let current = tabbar::selected(ctx.user.mobile_tabs.as_deref());
+    let tab_choices = tabbar::ALL
+        .iter()
+        .map(|tab| (tab, current.contains(&tab)))
+        .collect();
+
     let page = SettingsPage {
+        tab_choices,
+        tab_max: tabbar::MAX,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),
@@ -103,6 +118,33 @@ pub async fn set_theme(
     .execute(&state.db)
     .await?;
     Ok(see_other(local_path(form.next.as_deref())))
+}
+
+/// `POST /settings/tabs` : choix des raccourcis du téléphone. Une case
+/// cochée arrive sous la forme `tab_<identifiant>=on`.
+pub async fn set_tabs(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    axum::Form(form): axum::Form<HashMap<String, String>>,
+) -> AppResult<Response> {
+    let keys: Vec<&str> = form
+        .keys()
+        .filter_map(|name| name.strip_prefix("tab_"))
+        .collect();
+    match tabbar::encode(&keys) {
+        Ok(value) => {
+            sqlx::query!(
+                "UPDATE users SET mobile_tabs = ? WHERE id = ?",
+                value,
+                ctx.user.id
+            )
+            .execute(&state.db)
+            .await?;
+            ctx.flash_ok("Raccourcis enregistrés").await?;
+        }
+        Err(message) => ctx.flash_error(message).await?,
+    }
+    Ok(see_other("/settings#raccourcis"))
 }
 
 #[derive(Deserialize)]
