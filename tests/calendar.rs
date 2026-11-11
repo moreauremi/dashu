@@ -133,14 +133,34 @@ async fn vue_semaine() {
     let mut alice = app.logged_in(ALICE).await;
     import_fixture(&app, "ecole").await;
 
-    // L'agenda est rattaché à l'espace École : rien dans Perso.
+    // L'agenda est rattaché à l'espace École : rien dans Taff.
+    alice.post("/space", &[("slug", "taff")]).await;
+    let taff = alice.get("/calendar?date=2026-11-10").await;
+    assert_eq!(taff.status, StatusCode::OK);
+    assert!(!taff.body.contains("RESEAUX"));
+    assert!(taff.body.contains("Aucun agenda dans l"));
+
+    // Perso est la vue d'ensemble : les cours d'École y sont, marqués « École ».
+    alice.post("/space", &[("slug", "perso")]).await;
     let perso = alice.get("/calendar?date=2026-11-10").await;
     assert_eq!(perso.status, StatusCode::OK);
-    assert!(!perso.body.contains("RESEAUX"));
-    assert!(perso.body.contains("Aucun agenda dans l"));
+    assert!(perso.body.contains("<strong>RESEAUX</strong>"));
+    assert!(
+        perso
+            .body
+            .contains("Vue d&#39;ensemble de tous les espaces")
+    );
+    assert!(
+        perso
+            .body
+            .contains(r#"<b class="ev-space" data-accent="blue">École</b> · 08:00 – 09:55 · B204"#),
+        "un cours d'École porte le nom de son espace dans la vue d'ensemble"
+    );
 
     alice.post("/space", &[("slug", "ecole")]).await;
     let week = alice.get("/calendar?date=2026-11-10").await;
+    // Dans son propre espace, un cours n'a pas d'étiquette.
+    assert!(!week.body.contains("ev-space"));
     assert_eq!(week.status, StatusCode::OK);
     assert!(week.body.contains("Semaine du 9 novembre 2026"));
     // Lundi 8 h : première rangée de la grille (gs0), fin à 9 h 55 (rangée 23).
@@ -305,4 +325,53 @@ async fn widget_prochains_cours() {
         assert!(widget.body.contains(&format!("Salle {i}")));
     }
     assert!(!widget.body.contains("COURS3"), "seulement les 3 prochains");
+}
+
+#[tokio::test]
+async fn perso_reunit_les_agendas_mais_pas_l_inverse() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let ecole = import_fixture(&app, "ecole").await;
+    let perso = import_fixture(&app, "perso").await;
+
+    // Les deux sources contiennent les mêmes cours : Perso les montre deux
+    // fois, l'un étiqueté « École », l'autre sans étiquette (il est chez lui).
+    let overview = alice.get("/calendar?date=2026-11-10").await;
+    assert_eq!(overview.body.matches("<strong>RESEAUX</strong>").count(), 2);
+    assert_eq!(
+        overview.body.matches(">École</b>").count(),
+        overview.body.matches("<strong>").count() / 2
+    );
+
+    // École ne voit que sa propre source.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let only = alice.get("/calendar?date=2026-11-10").await;
+    assert_eq!(only.body.matches("<strong>RESEAUX</strong>").count(), 1);
+
+    // « Rafraîchir » depuis École ne tente que sa source, depuis Perso toutes.
+    // Ici les tentatives échouent (rien n'écoute sur le port 1) : l'erreur
+    // enregistrée montre quelles sources ont été tentées.
+    let failed = |id: i64| {
+        let db = app.state.db.clone();
+        async move {
+            sqlx::query_scalar::<_, Option<String>>(
+                "SELECT last_error FROM calendar_sources WHERE id = ?",
+            )
+            .bind(id)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            .is_some()
+        }
+    };
+    alice
+        .post("/calendar/refresh", &[("next", "/calendar")])
+        .await;
+    assert!(failed(ecole).await);
+    assert!(!failed(perso).await, "École ne resynchronise pas Perso");
+    alice.post("/space", &[("slug", "perso")]).await;
+    alice
+        .post("/calendar/refresh", &[("next", "/calendar")])
+        .await;
+    assert!(failed(perso).await);
 }

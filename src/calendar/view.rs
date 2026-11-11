@@ -28,6 +28,11 @@ pub struct EventRow {
     pub starts_at: i64,
     pub ends_at: i64,
     pub all_day: bool,
+    /// Dans la vue d'ensemble de Perso : nom de l'espace d'où vient
+    /// l'événement (« École »). Vide pour un événement de l'espace affiché.
+    pub tag: String,
+    /// Couleur de cet espace (`blue`, `green`…), vide avec `tag`.
+    pub tag_color: String,
 }
 
 pub struct Grid {
@@ -77,6 +82,9 @@ pub struct EventBox {
     /// ligne), `is-medium` (deux lignes) ou vide (tout est affiché).
     pub density: &'static str,
     pub past: bool,
+    /// Espace d'origine dans la vue d'ensemble (voir [`EventRow::tag`]).
+    pub tag: String,
+    pub tag_color: String,
 }
 
 /// Événement d'une journée, en minutes depuis minuit (heure de Paris).
@@ -178,6 +186,8 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
                             _ => "",
                         },
                         past: p.row.ends_at <= now,
+                        tag: p.row.tag.clone(),
+                        tag_color: p.row.tag_color.clone(),
                     }
                 })
                 .collect();
@@ -290,6 +300,8 @@ mod tests {
             starts_at,
             ends_at,
             all_day: false,
+            tag: String::new(),
+            tag_color: String::new(),
         }
     }
 
@@ -368,6 +380,8 @@ mod tests {
             starts_at: start,
             ends_at: start + 86_400,
             all_day: true,
+            tag: String::new(),
+            tag_color: String::new(),
         }];
         let grid = build(&[date], &events, 0);
         assert_eq!(grid.days[0].all_day, vec!["Férié".to_string()]);
