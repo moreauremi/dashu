@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT name, size, storage_key FROM files WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "storage_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "89bec68f0b6d1f799b7bce6c0486e57cd34dff3c11fabdf1eb584f6d17a356b7"
+}

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use dashu::config::Config;
-use dashu::{AppState, auth, build_router, calendar, db};
+use dashu::{AppState, auth, build_router, calendar, db, files};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower_sessions::ExpiredDeletion;
 
@@ -41,6 +41,9 @@ async fn serve() -> anyhow::Result<()> {
         .await
         .context("ouverture de la base SQLite")?;
     let bind_addr = config.bind_addr;
+    if let Some(files) = &config.files {
+        files::prepare_storage(files);
+    }
     let state = AppState::new(config, pool.clone())?;
 
     // Tâches de fond : synchro des agendas toutes les heures, purge des
@@ -56,6 +59,7 @@ async fn serve() -> anyhow::Result<()> {
         addr = %bind_addr,
         base_url = %state.config.base_url,
         google = state.google.is_some(),
+        files = state.config.files.is_some(),
         "dashu démarré"
     );
 

@@ -17,6 +17,8 @@ pub enum AppError {
     NotFound,
     Forbidden,
     BadRequest(String),
+    /// Envoi plus gros que la limite (413), avec le message à afficher.
+    TooLarge(String),
     Internal(anyhow::Error),
 }
 
@@ -48,6 +50,7 @@ impl IntoResponse for AppError {
                 "Action refusée : la page a expiré. Recharge-la et réessaie.".to_string(),
             ),
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
+            Self::TooLarge(message) => (StatusCode::PAYLOAD_TOO_LARGE, message),
             Self::Internal(error) => {
                 // Le détail part dans les logs, jamais dans la page.
                 tracing::error!(error = format!("{error:#}"), "erreur interne");
@@ -116,6 +119,7 @@ pub async fn error_pages(request: Request, next: Next) -> Response {
         StatusCode::FORBIDDEN => "Action refusée",
         StatusCode::BAD_REQUEST => "Requête invalide",
         StatusCode::TOO_MANY_REQUESTS => "Trop de tentatives",
+        StatusCode::PAYLOAD_TOO_LARGE => "Trop volumineux",
         _ => "Erreur",
     };
     let page = ErrorPage {

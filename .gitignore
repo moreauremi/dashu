@@ -25,3 +25,6 @@ Thumbs.db
 
 # Passation privée pour Claude Code (infra, adresses) : jamais versionnée
 /PASSATION.md
+
+# Fichiers envoyés en local (FILES_DIR=fichiers dans .env)
+/fichiers/

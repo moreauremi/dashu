@@ -22,7 +22,7 @@ struct Command {
     keywords: &'static str,
 }
 
-const COMMANDS: [Command; 6] = [
+const COMMANDS: [Command; 7] = [
     Command {
         label: "Nouvelle note",
         href: "/notes/new",
@@ -43,6 +43,13 @@ const COMMANDS: [Command; 6] = [
         icon: "notes",
         keys: "G N",
         keywords: "liste",
+    },
+    Command {
+        label: "Fichiers",
+        href: "/files",
+        icon: "files",
+        keys: "G F",
+        keywords: "documents envoyer telecharger pdf photos",
     },
     Command {
         label: "Agenda",

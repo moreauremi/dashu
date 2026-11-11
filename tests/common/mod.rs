@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use dashu::config::{ApiConfig, Config};
+use dashu::config::{ApiConfig, Config, FilesConfig};
 use dashu::{AppState, auth, build_router, db};
 use tower::ServiceExt;
 
@@ -24,6 +24,8 @@ pub const BOB: &str = "bob@example.test";
 pub const PASSWORD: &str = "correct horse battery staple";
 /// Jeton de l'API des tests ; elle agit au nom d'Alice.
 pub const API_TOKEN: &str = "test-api-token-0123456789abcdef0123456789";
+/// Taille maximale d'un fichier dans les tests : petite, pour tester le refus.
+pub const MAX_UPLOAD: u64 = 64 * 1024;
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -31,6 +33,8 @@ pub struct TestApp {
     pub state: AppState,
     router: Router,
     db_path: PathBuf,
+    /// Dossier des fichiers envoyés (FILES_DIR), propre à ce test.
+    pub files_dir: PathBuf,
 }
 
 impl TestApp {
@@ -59,11 +63,33 @@ impl TestApp {
         app
     }
 
+    /// Comme [`TestApp::new`], mais sans FILES_DIR : les fichiers sont désactivés.
+    pub async fn without_files() -> Self {
+        let app = Self::build(
+            Some(ApiConfig {
+                token: API_TOKEN.into(),
+                user_email: ALICE.into(),
+            }),
+            false,
+        )
+        .await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
     async fn with_api(api: Option<ApiConfig>) -> Self {
+        Self::build(api, true).await
+    }
+
+    async fn build(api: Option<ApiConfig>, files: bool) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let db_path =
             std::env::temp_dir().join(format!("dashu-test-{}-{n}.db", std::process::id()));
         remove_db(&db_path);
+        let files_dir =
+            std::env::temp_dir().join(format!("dashu-test-{}-{n}-fichiers", std::process::id()));
+        let _ = std::fs::remove_dir_all(&files_dir);
 
         let config = Config {
             database_url: format!("sqlite://{}", db_path.display()),
@@ -74,6 +100,10 @@ impl TestApp {
             google: None,
             log_json: false,
             api,
+            files: files.then(|| FilesConfig {
+                dir: files_dir.clone(),
+                max_upload_bytes: MAX_UPLOAD,
+            }),
         };
         let pool = db::connect(&config.database_url)
             .await
@@ -83,7 +113,25 @@ impl TestApp {
             router: build_router(state.clone()),
             state,
             db_path,
+            files_dir,
         }
+    }
+
+    /// Fichiers présents sur le disque, hors envois en cours.
+    pub fn stored_files(&self) -> Vec<PathBuf> {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else {
+                    out.push(path);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.files_dir, &mut out);
+        out
     }
 
     pub async fn add_user(&self, email: &str) {
@@ -200,6 +248,7 @@ impl TestApp {
 impl Drop for TestApp {
     fn drop(&mut self) {
         remove_db(&self.db_path);
+        let _ = std::fs::remove_dir_all(&self.files_dir);
     }
 }
 
@@ -221,6 +270,8 @@ pub struct TestResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,
     pub body: String,
+    /// Corps brut (pour un fichier téléchargé).
+    pub bytes: Vec<u8>,
 }
 
 impl TestResponse {
@@ -257,7 +308,7 @@ impl Client {
         self.send(
             Method::POST,
             path,
-            Some(encode(form)),
+            Some(SentBody::Form(encode(form))),
             CsrfMode::Header,
             false,
         )
@@ -269,9 +320,50 @@ impl Client {
         self.send(
             Method::POST,
             path,
-            Some(encode(form)),
+            Some(SentBody::Form(encode(form))),
             CsrfMode::None,
             false,
+        )
+        .await
+    }
+
+    /// Envoi d'un fichier comme le fait static/js/files.js : le contenu brut
+    /// dans le corps, le nom dans l'adresse, le jeton CSRF dans l'en-tête.
+    pub async fn upload(&mut self, name: &str, content: &[u8]) -> TestResponse {
+        let path = format!("/files?name={}", encode_component(name));
+        self.send(
+            Method::POST,
+            &path,
+            Some(SentBody::Raw(content.to_vec(), true)),
+            CsrfMode::Header,
+            true,
+        )
+        .await
+    }
+
+    /// Envoi sans taille annoncée : seul le comptage des octets reçus peut
+    /// alors arrêter un fichier trop gros.
+    pub async fn upload_unannounced(&mut self, name: &str, content: &[u8]) -> TestResponse {
+        let path = format!("/files?name={}", encode_component(name));
+        self.send(
+            Method::POST,
+            &path,
+            Some(SentBody::Raw(content.to_vec(), false)),
+            CsrfMode::Header,
+            true,
+        )
+        .await
+    }
+
+    /// Même envoi, sans jeton CSRF.
+    pub async fn upload_without_csrf(&mut self, name: &str, content: &[u8]) -> TestResponse {
+        let path = format!("/files?name={}", encode_component(name));
+        self.send(
+            Method::POST,
+            &path,
+            Some(SentBody::Raw(content.to_vec(), true)),
+            CsrfMode::None,
+            true,
         )
         .await
     }
@@ -302,7 +394,13 @@ impl Client {
             .to_string();
         let form = encode(&[("_csrf", &token), ("email", email), ("password", password)]);
         let response = self
-            .send(Method::POST, "/login", Some(form), CsrfMode::None, false)
+            .send(
+                Method::POST,
+                "/login",
+                Some(SentBody::Form(form)),
+                CsrfMode::None,
+                false,
+            )
             .await;
         if response.status == StatusCode::SEE_OTHER {
             // La connexion change le jeton : on relit celui de la session ouverte.
@@ -325,7 +423,7 @@ impl Client {
         &mut self,
         method: Method,
         path: &str,
-        form: Option<String>,
+        body: Option<SentBody>,
         csrf: CsrfMode,
         fragment: bool,
     ) -> TestResponse {
@@ -348,10 +446,17 @@ impl Client {
         if fragment {
             request = request.header("hx-request", "true");
         }
-        let body = match form {
-            Some(form) => {
+        let body = match body {
+            Some(SentBody::Form(form)) => {
                 request = request.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
                 Body::from(form)
+            }
+            Some(SentBody::Raw(bytes, announce)) => {
+                request = request.header(header::CONTENT_TYPE, "application/octet-stream");
+                if announce {
+                    request = request.header(header::CONTENT_LENGTH, bytes.len());
+                }
+                Body::from(bytes)
             }
             None => Body::empty(),
         };
@@ -377,6 +482,7 @@ impl Client {
         }
 
         let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+        let bytes = bytes.to_vec();
         let body = String::from_utf8_lossy(&bytes).into_owned();
         // Les pages connectées portent le jeton dans l'attribut hx-headers.
         if let Some(token) = between(&body, "X-CSRF-Token&quot;:&quot;", "&quot;")
@@ -388,14 +494,25 @@ impl Client {
             status: parts.status,
             headers: parts.headers,
             body,
+            bytes,
         }
     }
+}
+
+enum SentBody {
+    Form(String),
+    /// Contenu brut ; le booléen dit si la taille est annoncée (Content-Length).
+    Raw(Vec<u8>, bool),
 }
 
 #[derive(Clone, Copy)]
 enum CsrfMode {
     Header,
     None,
+}
+
+fn encode_component(text: &str) -> String {
+    form_urlencoded::byte_serialize(text.as_bytes()).collect()
 }
 
 fn encode(form: &[(&str, &str)]) -> String {

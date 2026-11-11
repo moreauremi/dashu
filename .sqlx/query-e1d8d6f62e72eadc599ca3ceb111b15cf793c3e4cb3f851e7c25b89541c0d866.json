@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM files WHERE id = ? AND user_id = ? RETURNING storage_key AS \"storage_key!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e1d8d6f62e72eadc599ca3ceb111b15cf793c3e4cb3f851e7c25b89541c0d866"
+}
