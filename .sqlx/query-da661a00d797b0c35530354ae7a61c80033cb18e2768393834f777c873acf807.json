@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT t.id AS \"id!\", t.title, t.done AS \"done!: bool\", t.due_date, s.slug AS \"space!\"\n           FROM tasks t JOIN spaces s ON s.id = t.space_id\n           WHERE t.id = ? AND t.user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "done!: bool",
+        "ordinal": 2,
+        "type_info": "Bool"
+      },
+      {
+        "name": "due_date",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "space!",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "da661a00d797b0c35530354ae7a61c80033cb18e2768393834f777c873acf807"
+}

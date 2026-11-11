@@ -19,7 +19,7 @@ use crate::spaces::Space;
 use crate::time;
 use crate::web::{self, AppError, AppResult, escape, see_other};
 
-const TITLE_MAX_CHARS: usize = 200;
+pub(crate) const TITLE_MAX_CHARS: usize = 200;
 const TAG_MAX_CHARS: usize = 40;
 /// Marqueurs que SQLite place autour des mots trouvés ; remplacés par
 /// `<mark>` après échappement du texte (voir `mark_matches`).
@@ -463,7 +463,7 @@ pub async fn preview(_ctx: Ctx, axum::Form(form): axum::Form<PreviewForm>) -> Ht
 }
 
 /// Un formulaire HTML envoie les retours à la ligne en CRLF : on stocke en LF.
-fn normalize_newlines(text: &str) -> String {
+pub(crate) fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n")
 }
 
@@ -570,35 +570,51 @@ pub async fn add_tag(
 ) -> AppResult<Response> {
     let user = ctx.user.id;
     ensure_owned(&state.db, user, id).await?;
+    attach_tag(&state.db, user, id, &form.name).await?;
+    tags_fragment(&state.db, user, id).await
+}
 
-    let name: String = form
-        .name
+/// Nom de tag tel qu'il est stocké : sans `#`, en minuscules, 40 caractères au plus.
+pub(crate) fn normalize_tag(input: &str) -> String {
+    input
         .trim()
         .trim_start_matches('#')
         .trim()
         .to_lowercase()
         .chars()
         .take(TAG_MAX_CHARS)
-        .collect();
-    if !name.is_empty() {
-        sqlx::query!(
-            "INSERT OR IGNORE INTO tags (user_id, name) VALUES (?, ?)",
-            user,
-            name
-        )
-        .execute(&state.db)
-        .await?;
-        sqlx::query!(
-            "INSERT OR IGNORE INTO note_tags (note_id, tag_id)
-             SELECT ?, id FROM tags WHERE user_id = ? AND name = ?",
-            id,
-            user,
-            name
-        )
-        .execute(&state.db)
-        .await?;
+        .collect()
+}
+
+/// Pose un tag sur une note (créé au besoin). La note doit appartenir à
+/// `user` : à vérifier avant l'appel. Un nom vide est ignoré.
+pub(crate) async fn attach_tag(
+    db: &SqlitePool,
+    user: i64,
+    note_id: i64,
+    input: &str,
+) -> AppResult<()> {
+    let name = normalize_tag(input);
+    if name.is_empty() {
+        return Ok(());
     }
-    tags_fragment(&state.db, user, id).await
+    sqlx::query!(
+        "INSERT OR IGNORE INTO tags (user_id, name) VALUES (?, ?)",
+        user,
+        name
+    )
+    .execute(db)
+    .await?;
+    sqlx::query!(
+        "INSERT OR IGNORE INTO note_tags (note_id, tag_id)
+             SELECT ?, id FROM tags WHERE user_id = ? AND name = ?",
+        note_id,
+        user,
+        name
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// `DELETE /notes/{id}/tags/{tag_id}`
@@ -641,7 +657,7 @@ async fn ensure_owned(db: &SqlitePool, user: i64, id: i64) -> AppResult<()> {
     .ok_or(AppError::NotFound)
 }
 
-async fn tags_of(db: &SqlitePool, user: i64, note_id: i64) -> AppResult<Vec<NoteTag>> {
+pub(crate) async fn tags_of(db: &SqlitePool, user: i64, note_id: i64) -> AppResult<Vec<NoteTag>> {
     let tags = sqlx::query_as!(
         NoteTag,
         r#"SELECT t.id AS "id!", t.name AS "name!"

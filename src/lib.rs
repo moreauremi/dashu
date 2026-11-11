@@ -3,6 +3,7 @@
 //! Un dossier par module, chacun avec ses routes, ses handlers et ses
 //! requêtes SQL. Ce fichier assemble le tout : état partagé et routeur.
 
+pub mod api;
 pub mod assets;
 pub mod auth;
 pub mod calendar;
@@ -164,11 +165,14 @@ pub fn build_router(state: AppState) -> Router {
     // --- Routes sans session, puis middlewares communs --------------------
     // L'ordre des `.layer` se lit de bas en haut : la dernière ajoutée est la
     // première traversée par la requête.
+    // L'API JSON est ajoutée après la couche des pages d'erreur : ses erreurs
+    // restent en JSON, au lieu d'être transformées en pages HTML.
     Router::new()
         .route("/health", get(health))
         .route("/static/{*path}", get(assets::serve))
         .merge(app)
         .layer(from_fn(web::error::error_pages))
+        .merge(api::router())
         .layer(from_fn_with_state(
             state.clone(),
             web::headers::security_headers,

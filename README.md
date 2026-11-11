@@ -11,6 +11,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 - [Variables d'environnement](#variables-denvironnement)
 - [Comptes et connexion](#comptes-et-connexion)
 - [Créer les identifiants Google](#créer-les-identifiants-google)
+- [API pour un assistant](#api-pour-un-assistant)
 - [Déploiement : homelab et tunnel Cloudflare](#déploiement--homelab-et-tunnel-cloudflare)
 - [Sauvegardes et restauration](#sauvegardes-et-restauration)
 - [Sécurité](#sécurité)
@@ -84,6 +85,8 @@ En local elles sont lues dans le fichier `.env` ; en production c'est Docker Com
 | `BASE_URL` | oui | URL publique, sans barre finale (`https://dashu.dev`). En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
 | `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; dans Docker `sqlite:///data/dashu.db`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
+| `API_TOKEN` | non | Active l'API JSON (`/api/v1`) : jeton attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API répond 404. |
+| `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit l'API. Doit figurer dans `ALLOWED_EMAILS`. |
 | `TUNNEL_TOKEN` | en production | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
 | `BACKUP_DIR` | en production | Dossier de l'hôte où vont les sauvegardes. |
 | `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut. |
@@ -114,6 +117,34 @@ Gratuit, à faire une fois dans la [Google Cloud Console](https://console.cloud.
 5. Copier l'ID client et le code secret dans `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), puis redémarrer dashu.
 
 dashu ne demande à Google que l'identité et l'adresse email (`openid email`).
+
+## API pour un assistant
+
+Une API JSON permet à un programme (par exemple un assistant personnel) de gérer les tâches et les notes et de lire l'agenda. Elle est **désactivée par défaut** : il faut renseigner `API_TOKEN` (par exemple `openssl rand -hex 32`) et `API_USER_EMAIL` dans `.env`, puis redémarrer.
+
+Chaque requête porte l'en-tête `Authorization: Bearer <API_TOKEN>`. Il n'y a ni cookie ni session : la protection CSRF ne s'applique pas, et à l'inverse un cookie de session n'ouvre pas l'API. Les réponses et les erreurs sont en JSON (`{"error": "…"}`).
+
+| Méthode et route | Rôle |
+| --- | --- |
+| `GET /api/v1/spaces` | Les espaces : `perso`, `ecole`, `taff`. |
+| `GET /api/v1/tasks?space=ecole&status=open` | Tâches (`status` : `open` par défaut, `done` ou `all`). |
+| `POST /api/v1/tasks` | Crée une tâche : `{"title", "space", "due_date"?}` (date `AAAA-MM-JJ`, aujourd'hui par défaut). |
+| `GET`, `PATCH`, `DELETE /api/v1/tasks/{id}` | Lit, modifie (`title`, `done`, `due_date`) ou supprime une tâche. |
+| `GET /api/v1/notes?q=vlan&space=ecole&tag=bts&limit=20` | Notes récentes, ou recherche plein texte avec `q`. |
+| `POST /api/v1/notes` | Crée une note : `{"title", "body_md"?, "space", "tags"?}`. |
+| `GET /api/v1/notes/{id}` | Note complète, avec son Markdown. |
+| `PATCH /api/v1/notes/{id}` | `title`, `body_md` (remplace) ou `append` (ajoute à la fin), `pinned`, `space`, `add_tags`. |
+| `GET /api/v1/calendar?from=2026-11-16&to=2026-11-20&space=ecole` | Événements de l'agenda (7 jours à partir d'aujourd'hui par défaut, 62 au plus). |
+| `POST /api/v1/calendar/refresh` | Resynchronise tout de suite les flux iCal. |
+
+Exemple :
+
+```bash
+curl -s -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"title": "Réviser le VLAN", "space": "ecole"}' https://dashu.dev/api/v1/tasks
+```
+
+Volontairement absent : la suppression de notes, les réglages, le mot de passe et les sources iCal. Les dates renvoyées sont en heure de Paris, au format ISO 8601.
 
 ## Déploiement : homelab et tunnel Cloudflare
 
@@ -213,6 +244,7 @@ Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer : faire l
 - **Notes** : le HTML issu du Markdown passe toujours par ammonia (liste blanche de balises et d'attributs).
 - **Isolation** : toutes les requêtes SQL filtrent sur l'utilisateur connecté. Des tests vérifient qu'un second compte ne peut ni lire ni modifier les données du premier.
 - **Flux iCal** : l'URL Pronote contient un jeton d'accès. Elle n'est jamais réaffichée en entier ni écrite dans les logs. Seules les URL `https` publiques sont acceptées.
+- **API** : désactivée tant que `API_TOKEN` est vide. Le jeton (32 caractères minimum) est comparé en temps constant et n'apparaît jamais dans les logs. L'API n'agit que sur le compte `API_USER_EMAIL` et ne peut ni supprimer une note, ni toucher aux réglages, au mot de passe ou aux sources iCal.
 - **Image Docker** : image `scratch` (le binaire seul), utilisateur sans privilège, système de fichiers en lecture seule, aucune capacité Linux, aucun port publié.
 
 ## Développement

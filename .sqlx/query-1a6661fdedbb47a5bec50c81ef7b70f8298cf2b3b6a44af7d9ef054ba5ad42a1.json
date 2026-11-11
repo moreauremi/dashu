@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT nt.note_id AS \"note_id!\", t.name AS \"name!\"\n           FROM note_tags nt JOIN tags t ON t.id = nt.tag_id\n           WHERE t.user_id = ?\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "note_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1a6661fdedbb47a5bec50c81ef7b70f8298cf2b3b6a44af7d9ef054ba5ad42a1"
+}

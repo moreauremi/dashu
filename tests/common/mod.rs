@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use dashu::config::Config;
+use dashu::config::{ApiConfig, Config};
 use dashu::{AppState, auth, build_router, db};
 use tower::ServiceExt;
 
@@ -22,6 +22,8 @@ pub const ALICE: &str = "alice@example.test";
 pub const BOB: &str = "bob@example.test";
 /// Mot de passe commun aux comptes de test.
 pub const PASSWORD: &str = "correct horse battery staple";
+/// Jeton de l'API des tests ; elle agit au nom d'Alice.
+pub const API_TOKEN: &str = "test-api-token-0123456789abcdef0123456789";
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -42,6 +44,22 @@ impl TestApp {
 
     /// Application neuve sans aucun compte.
     pub async fn empty() -> Self {
+        Self::with_api(Some(ApiConfig {
+            token: API_TOKEN.into(),
+            user_email: ALICE.into(),
+        }))
+        .await
+    }
+
+    /// Comme [`TestApp::new`], mais sans API_TOKEN : l'API est désactivée.
+    pub async fn without_api() -> Self {
+        let app = Self::with_api(None).await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
+    async fn with_api(api: Option<ApiConfig>) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let db_path =
             std::env::temp_dir().join(format!("dashu-test-{}-{n}.db", std::process::id()));
@@ -55,6 +73,7 @@ impl TestApp {
             session_secret: "0123456789abcdef".repeat(4),
             google: None,
             log_json: false,
+            api,
         };
         let pool = db::connect(&config.database_url)
             .await
@@ -114,6 +133,67 @@ impl TestApp {
             .fetch_one(&self.state.db)
             .await
             .expect("utilisateur")
+    }
+}
+
+impl TestApp {
+    /// Appel de l'API JSON avec un jeton (ou sans, si `token` vaut `None`).
+    /// Renvoie le statut et le corps lu comme du JSON (`Null` s'il est vide).
+    pub async fn api(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        self.api_raw(method, path, body.map(|b| b.to_string()), token, &[])
+            .await
+    }
+
+    /// Variante bas niveau : corps brut et en-têtes supplémentaires.
+    pub async fn api_raw(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<String>,
+        token: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> (StatusCode, serde_json::Value) {
+        let mut request = Request::builder().method(method).uri(path);
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+        for (name, value) in extra_headers {
+            request = request.header(*name, *value);
+        }
+        let body = match body {
+            Some(body) => {
+                request = request.header(header::CONTENT_TYPE, "application/json");
+                Body::from(body)
+            }
+            None => Body::empty(),
+        };
+        let response = self
+            .router
+            .clone()
+            .oneshot(request.body(body).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json = if bytes.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+                panic!(
+                    "réponse non JSON ({status}) : {}",
+                    String::from_utf8_lossy(&bytes)
+                )
+            })
+        };
+        (status, json)
     }
 }
 
