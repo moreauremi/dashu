@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hermes Dashboard · tableau de bord, notes et emploi du temps auto-hébergés</title>
-<meta name="description" content="Hermes Dashboard réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote en trois espaces (Perso, École, Entreprise). Open source, un seul binaire Rust, hébergé chez soi.">
+<title>Hermes Dashboard · tableau de bord, notes, fichiers et emploi du temps auto-hébergés</title>
+<meta name="description" content="Hermes Dashboard réunit un tableau de bord modulaire, des notes Markdown, des fichiers et l'emploi du temps Pronote, rangés par espaces (Perso, École, Entreprise…). Open source, un seul binaire Rust, hébergé chez soi.">
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="Hermes Dashboard">
-<meta property="og:description" content="Dashboard, notes Markdown et emploi du temps, en trois espaces. Open source et auto-hébergé.">
+<meta property="og:description" content="Dashboard modulaire, notes Markdown, fichiers et emploi du temps, rangés par espaces. Open source et auto-hébergé.">
 <link rel="icon" href="favicon.svg?v=hermes" type="image/svg+xml">
 <link rel="preload" href="fonts/rethink-sans.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -27,6 +27,8 @@
   --orange:light-dark(#b04a0c,#f2935c);
   --blue:light-dark(#1e56c4,#7daaf8);
   --green:light-dark(#126b40,#5fcb99);
+  --violet:light-dark(#6d3fc0,#b69cf6);
+  --rose:light-dark(#b0245e,#f28cb6);
   --on-text:light-dark(#ffffff,#10100f);
   --font:"Rethink Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
@@ -91,33 +93,53 @@ h1 .spaces{display:block;color:var(--text-3)}
 .shot-bar{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
 .shot-bar span{width:10px;height:10px;border-radius:50%;background:var(--border-strong)}
 .shot-bar em{margin-left:12px;font:400 12px/1 var(--mono);font-style:normal;color:var(--text-3)}
-.app{display:grid;grid-template-columns:200px 1fr;min-height:420px}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:440px}
 .side{border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px}
 .side .logo{--logo-h:14px;margin:4px 8px 14px}
-.side .sp{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+.side svg.i{width:16px;height:16px;color:var(--text-3)}
+.side .sp,.side .nv{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
 .side .sp i{width:8px;height:8px;border-radius:50%}
 .side .sp.on{background:color-mix(in oklab,var(--blue) 13%,var(--surface));color:var(--blue);font-weight:500}
 .side hr{border:0;border-top:1px solid var(--border);margin:10px 4px}
-.side .nv{height:32px;display:flex;align-items:center;padding:0 8px;color:var(--text-2)}
+.side .nv.on{background:var(--surface-2);color:var(--text);font-weight:500}
+.side .nv.on svg.i{color:var(--text)}
+.side .foot{margin-top:auto;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.side .me{display:flex;align-items:center;gap:10px;height:40px;padding:0 8px;color:var(--text)}
+/* Photo de profil par défaut : les initiales sur une couleur tirée au hasard. */
+.av{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--violet);color:var(--on-text);font-size:11px;font-weight:600;letter-spacing:.02em}
 .main{padding:24px;display:flex;flex-direction:column;gap:20px;min-width:0}
 .main-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
 .main-head h3{font-size:22px;font-weight:500;letter-spacing:-.01em}
 .main-head p{font-size:14px;color:var(--text-3)}
-.main-head time{font:500 28px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface);font-size:14px;min-width:0}
-.card h4{margin:0 0 10px;font-size:13px;font-weight:500;color:var(--text-2)}
-.row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border)}
+.edit{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-2);white-space:nowrap}
+.edit svg.i{width:14px;height:14px}
+/* Grille bento, comme le dashboard de l'app : 4 colonnes, 2 sur téléphone. */
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:156px;gap:14px}
+.w{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface);font-size:14px}
+.w.wide{grid-column:span 2}
+.w.tall{grid-row:span 2}
+.w h4{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--text-2)}
+.row{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--border);min-width:0}
 .row:first-of-type{border-top:0}
-.chip{flex:none;width:4px;align-self:stretch;border-radius:2px}
-.row small{display:block;color:var(--text-3);font-size:12px}
+.row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;color:var(--text-3);font-size:12px;overflow:hidden;text-overflow:ellipsis}
 .box{flex:none;width:16px;height:16px;margin-top:2px;border:1.5px solid var(--border-strong);border-radius:4px}
 .box.done{background:var(--blue);border-color:var(--blue)}
 .row.done span{color:var(--text-3);text-decoration:line-through}
-.pin{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--surface-2);color:var(--text-2);margin-left:6px}
+.thumb{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:6px;background:var(--surface-2);color:var(--text-3);font:600 9px/1 var(--font);letter-spacing:.03em}
+.thumb.photo{background:linear-gradient(135deg,color-mix(in oklab,var(--blue) 45%,var(--surface)),color-mix(in oklab,var(--green) 40%,var(--surface)))}
+/* Widget Calendrier : trois jours de 8 h à 12 h 30, une ligne par demi-heure. */
+.cal{flex:1;min-height:0;display:grid;grid-template-columns:30px repeat(3,minmax(0,1fr));grid-template-rows:20px repeat(9,minmax(0,1fr));column-gap:4px;font-size:11px}
+.cal .d{grid-row:1;text-align:center;font-size:12px;color:var(--text-3)}
+.cal .d.today{color:var(--text);font-weight:600}
+.cal .hr{grid-column:1;align-self:start;transform:translateY(-50%);color:var(--text-3);font-variant-numeric:tabular-nums}
+.cal .ln{grid-column:2/-1;align-self:start;border-top:1px solid var(--border)}
+.ev{margin:1px 0;min-height:0;overflow:hidden;padding:3px 6px;border-radius:6px;border-left:3px solid var(--c);background:color-mix(in oklab,var(--c) 14%,var(--surface));line-height:1.25;font-size:11.5px;hyphens:auto;overflow-wrap:anywhere}
+.ev small{display:block;color:var(--text-3);font-size:10.5px}
+.cal .now{grid-column:2;grid-row:2;align-self:center;z-index:1;height:2px;border-radius:1px;background:var(--rose)}
 .shot-cap{margin-top:12px;font-size:13px;color:var(--text-3)}
-@media (max-width:899px){.cards{grid-template-columns:1fr 1fr}.card.c3{display:none}}
-@media (max-width:719px){.app{grid-template-columns:1fr}.side{display:none}.main{padding:16px}.cards{grid-template-columns:1fr}.card.c3{display:block}.main-head time{font-size:22px}}
+@media (max-width:899px){.bento{grid-template-columns:1fr 1fr}}
+@media (max-width:719px){.app{grid-template-columns:1fr}.side{display:none}.main{padding:16px}.main-head h3{font-size:19px}.bento{grid-auto-rows:150px;gap:12px}}
 
 /* Sections */
 section.block{padding-block:72px;border-top:1px solid var(--border)}
@@ -126,6 +148,7 @@ h2{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.025em;font-we
 .intro{margin-top:16px;max-width:620px;color:var(--text-2)}
 .grid{margin-top:40px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 @media (max-width:899px){.grid{grid-template-columns:1fr 1fr}}
+@media (min-width:600px) and (max-width:899px){.grid>li:last-child:nth-child(odd){grid-column:span 2}}
 @media (max-width:599px){.grid{grid-template-columns:1fr}}
 .feat{padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .feat .ic{display:grid;place-items:center;width:36px;height:36px;border-radius:8px;background:var(--surface-2);margin-bottom:16px;color:var(--text)}
@@ -147,10 +170,18 @@ h2{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.025em;font-we
 .step{position:relative;padding:0 0 28px 28px}
 .step:last-child{padding-bottom:0}
 .step::before{content:"";position:absolute;left:-7px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--bg);border:2px solid var(--border-strong)}
-.step.now::before{background:var(--green);border-color:var(--green)}
+.step.done::before{background:var(--green);border-color:var(--green)}
+.step.now::before{border-color:var(--green);box-shadow:0 0 0 4px color-mix(in oklab,var(--green) 22%,transparent)}
 .step h3{font-size:17px;font-weight:500}
 .step h3 small{font-size:13px;font-weight:400;color:var(--text-3);margin-left:8px}
+.step.now h3 small{color:var(--green)}
 .step p{font-size:15px;color:var(--text-2);margin-top:2px}
+/* Avancement de la version en cours : coché = en service sur le serveur. */
+.todo{margin-top:10px;display:grid;gap:6px;font-size:15px;color:var(--text-3)}
+.todo li{display:flex;gap:10px;align-items:flex-start}
+.todo svg.i{width:16px;height:16px;margin-top:4px}
+.todo li.ok{color:var(--text)}
+.todo li.ok svg.i{color:var(--green)}
 
 pre{margin:32px 0 0;padding:20px;border-radius:12px;background:var(--surface);border:1px solid var(--border);overflow-x:auto;font:400 14px/1.7 var(--mono)}
 pre .c{color:var(--text-3)}
@@ -176,6 +207,13 @@ footer a{color:var(--text-2);text-underline-offset:3px}
   <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
   <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
   <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M2 13v3M22 13v3"/></symbol>
+  <symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.9 2.9L7 18.8l-4 1 1-4Z"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="todo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
 </svg>
 
 <header class="bar">
@@ -193,9 +231,9 @@ footer a{color:var(--text-2);text-underline-offset:3px}
 
 <main>
   <section class="wrap hero">
-    <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source · auto-hébergé · v1</span>
-    <h1>Dashboard, notes et emploi du temps. <span class="spaces">Au même endroit.</span></h1>
-    <p class="lead">Hermes Dashboard réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote, rangés en trois espaces (Perso, École et Entreprise) derrière une seule connexion. Un seul binaire Rust, hébergé chez soi.</p>
+    <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source · auto-hébergé · v2 en cours</span>
+    <h1>Dashboard, notes, fichiers et agenda. <span class="spaces">Au même endroit.</span></h1>
+    <p class="lead">Hermes Dashboard réunit un tableau de bord modulaire, des notes Markdown, des fichiers et l'emploi du temps Pronote, rangés par espaces (Perso, École, Entreprise, ou ceux qu'on crée) derrière une seule connexion. Un seul binaire Rust, hébergé chez soi.</p>
     <div class="cta">
       <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
       <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
@@ -210,58 +248,85 @@ footer a{color:var(--text-2);text-underline-offset:3px}
           <div class="sp on"><i style="background:var(--blue)"></i>École</div>
           <div class="sp"><i style="background:var(--green)"></i>Entreprise</div>
           <hr>
-          <div class="nv">Dashboard</div>
-          <div class="nv">Notes</div>
-          <div class="nv">Agenda</div>
-          <div class="nv">Réglages</div>
+          <div class="nv on"><svg class="i"><use href="#grid"/></svg>Dashboard</div>
+          <div class="nv"><svg class="i"><use href="#note"/></svg>Notes</div>
+          <div class="nv"><svg class="i"><use href="#folder"/></svg>Fichiers</div>
+          <div class="nv"><svg class="i"><use href="#cal"/></svg>Agenda</div>
+          <div class="foot">
+            <div class="nv"><svg class="i"><use href="#cog"/></svg>Réglages</div>
+            <div class="me"><span class="av">AM</span>Alex Martin</div>
+          </div>
         </div>
         <div class="main">
           <div class="main-head">
-            <div><h3>Lundi 16 novembre</h3><p>Bonjour · École</p></div>
-            <time>08:12</time>
+            <div><h3>Lundi 16 novembre</h3><p>Bonjour Alex · École</p></div>
+            <span class="edit"><svg class="i"><use href="#pen"/></svg>Modifier</span>
           </div>
-          <div class="cards">
-            <div class="card">
-              <h4>Prochains cours</h4>
-              <div class="row"><i class="chip" style="background:var(--blue)"></i><span>Réseaux<small>Aujourd'hui · 08:30 – 10:30 · B204</small></span></div>
-              <div class="row"><i class="chip" style="background:var(--green)"></i><span>Cybersécurité<small>Aujourd'hui · 10:45 – 12:15 · B110</small></span></div>
-              <div class="row"><i class="chip" style="background:var(--orange)"></i><span>Anglais<small>Demain · 09:00 – 11:00 · A12</small></span></div>
+          <div class="bento">
+            <div class="w wide tall">
+              <h4>Calendrier</h4>
+              <div class="cal">
+                <span class="d today" style="grid-column:2">Lun. 16</span>
+                <span class="d" style="grid-column:3">Mar. 17</span>
+                <span class="d" style="grid-column:4">Mer. 18</span>
+                <span class="hr" style="grid-row:2">8 h</span><span class="ln" style="grid-row:2"></span>
+                <span class="hr" style="grid-row:4">9 h</span><span class="ln" style="grid-row:4"></span>
+                <span class="hr" style="grid-row:6">10 h</span><span class="ln" style="grid-row:6"></span>
+                <span class="hr" style="grid-row:8">11 h</span><span class="ln" style="grid-row:8"></span>
+                <span class="hr" style="grid-row:10">12 h</span><span class="ln" style="grid-row:10"></span>
+                <div class="ev" style="grid-column:2;grid-row:3/7;--c:var(--blue)">Réseaux<small>08:30 · B204</small></div>
+                <div class="ev" style="grid-column:2;grid-row:7/10;--c:var(--green)">Cyber&shy;sécurité<small>10:30 · B110</small></div>
+                <div class="ev" style="grid-column:3;grid-row:4/8;--c:var(--orange)">Anglais<small>09:00 · A12</small></div>
+                <div class="ev" style="grid-column:3;grid-row:8/11;--c:var(--violet)">Projet tutoré<small>11:00 · C02</small></div>
+                <div class="ev" style="grid-column:4;grid-row:2/6;--c:var(--rose)">Systèmes<small>08:00 · B110</small></div>
+                <div class="ev" style="grid-column:4;grid-row:7/11;--c:var(--blue)">Gestion de projet<small>10:30 · A07</small></div>
+                <span class="now"></span>
+              </div>
             </div>
-            <div class="card">
+            <div class="w wide">
               <h4>Tâches du jour</h4>
               <div class="row done"><i class="box done"></i><span>Relire le cours sur les VLAN</span></div>
               <div class="row"><i class="box"></i><span>Finir le TP de routage</span></div>
               <div class="row"><i class="box"></i><span>Préparer l'oral de veille</span></div>
             </div>
-            <div class="card c3">
-              <h4>Notes récentes</h4>
-              <div class="row"><span>Cours réseau : VLAN et trunk<span class="pin">épinglée</span><small>modifiée il y a 2 h</small></span></div>
+            <div class="w">
+              <h4>Notes</h4>
+              <div class="row"><span>Cours réseau : VLAN<small>il y a 2 h</small></span></div>
               <div class="row"><span>Fiche révision : STP<small>hier</small></span></div>
-              <div class="row"><span>Idées pour le portfolio<small>ven. 13 nov.</small></span></div>
+            </div>
+            <div class="w">
+              <h4>Fichiers</h4>
+              <div class="row"><i class="thumb">PDF</i><span>TP-routage.pdf<small>1,2 Mo</small></span></div>
+              <div class="row"><i class="thumb photo"></i><span>Tableau.heic<small>2,4 Mo</small></span></div>
             </div>
           </div>
         </div>
       </div>
     </figure>
-    <p class="shot-cap">Aperçu avec des données d'exemple. Thème clair ou sombre selon le système.</p>
+    <p class="shot-cap">Aperçu avec des données d'exemple. Chaque widget se déplace et s'agrandit ; thème clair ou sombre selon le système.</p>
   </section>
 
   <section class="block" id="fonctions">
     <div class="wrap">
-      <p class="kicker">Ce que fait la v1</p>
+      <p class="kicker">Ce qui tourne aujourd'hui</p>
       <h2>Tout ce qui sert au quotidien, sans rien de plus.</h2>
-      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, et le dashboard, les notes et l'agenda suivent.</p>
+      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, ou d'un balayage sur téléphone, et le dashboard, les notes, les fichiers et l'agenda suivent.</p>
       <ul class="grid">
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
-          <h3>Trois espaces</h3>
-          <p>Perso, École et Entreprise, chacun avec sa couleur. Rien ne se mélange.</p>
+          <h3>Espaces à la carte</h3>
+          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso réunit les agendas de tous les autres. Supprimer un espace propose d'abord d'en transférer le contenu.</p>
           <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Entreprise</span></div>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#grid"/></svg></div>
-          <h3>Dashboard</h3>
-          <p>Prochains cours, tâches du jour et notes récentes. Chaque widget se charge seul : un widget lent ne retarde pas les autres.</p>
+          <h3>Dashboard modulaire</h3>
+          <p>Une grille bento propre à chaque espace : calendrier, prochains cours, tâches, notes, fichiers, réglages rapides. Chaque widget se déplace et s'agrandit, à la souris comme au doigt.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
+          <h3>Fichiers</h3>
+          <p>Rangés par espace, envoyés par glisser-déposer, même les gros. Aperçu des photos, vidéos et PDF, et compression en un clic dans un service isolé, sans réseau.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
@@ -271,7 +336,17 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
           <h3>Emploi du temps</h3>
-          <p>Le flux iCal de Pronote importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine.</p>
+          <p>Le flux iCal de Pronote importé par son lien et resynchronisé toutes les heures. En vue jour ou semaine, et en calendrier sur le dashboard.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#phone"/></svg></div>
+          <h3>Comme une app sur iPhone</h3>
+          <p>Installée sur l'écran d'accueil : barre de raccourcis en bas, changement d'espace d'un balayage, pas de zoom intempestif.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#sliders"/></svg></div>
+          <h3>À sa main</h3>
+          <p>Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée sur le côté, profil avec photo ou initiales.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#lock"/></svg></div>
@@ -291,14 +366,14 @@ footer a{color:var(--text-2);text-underline-offset:3px}
     <div class="wrap">
       <p class="kicker">Sous le capot</p>
       <h2>Léger, rapide, et rien à exposer.</h2>
-      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardé à chaud chaque nuit.</p>
+      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardé à chaud chaque nuit sur un second disque. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
       <div class="facts">
-        <div class="fact"><strong>1</strong><span>binaire Rust d'environ 17 Mo, et rien d'autre à installer</span></div>
-        <div class="fact"><strong>&lt; 40 Ko</strong><span>par page hors éditeur, CSS et JavaScript compris</span></div>
-        <div class="fact"><strong>3 à 6 ms</strong><span>de temps de réponse serveur</span></div>
+        <div class="fact"><strong>1</strong><span>binaire Rust : l'application et son service de conversion</span></div>
+        <div class="fact"><strong>0,5 ms</strong><span>de temps de réponse du serveur</span></div>
+        <div class="fact"><strong>7,6 Mo</strong><span>de mémoire au repos</span></div>
         <div class="fact"><strong>98 – 100</strong><span>au score Lighthouse mobile</span></div>
       </div>
-      <p class="stack">Mesures faites en local sur la v1. Rust, axum, SQLite, htmx, askama. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
+      <p class="stack">Mesures faites sur le serveur réel, via Cloudflare, en 4G simulée. Rust, axum, SQLite, htmx, askama ; ffmpeg, Ghostscript et libheif pour les fichiers. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
     </div>
   </section>
 
@@ -307,9 +382,22 @@ footer a{color:var(--text-2);text-underline-offset:3px}
       <p class="kicker">Feuille de route</p>
       <h2>Une version à la fois, utilisée avant la suivante.</h2>
       <div class="road">
-        <div class="step now"><h3>v1 · Dashboard, notes, emploi du temps<small>en ligne</small></h3><p>Espaces, widgets, notes Markdown, agenda Pronote, API pour un assistant.</p></div>
-        <div class="step"><h3>v2 · Fichiers</h3><p>Un cloud de fichiers par espace, partage par lien temporaire.</p></div>
-        <div class="step"><h3>v3 · Outils fichiers</h3><p>Conversion d'images, fusion, découpe et compression de PDF, OCR.</p></div>
+        <div class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>terminée, en service</small></h3><p>Espaces, notes Markdown, agenda Pronote, API pour un assistant. Depuis : espaces à la carte, dashboard modulaire, profil et réglages d'affichage.</p></div>
+        <div class="step now">
+          <h3>v2 · Fichiers et outils<small>en cours</small></h3>
+          <ul class="todo">
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Vignettes et aperçu des photos (HEIC compris), vidéos et PDF</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Compression des vidéos, photos et PDF, dans un service isolé</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Widget Fichiers sur le dashboard</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Tags et recherche dans les fichiers</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Partage par lien temporaire et révocable</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Images collées et pièces jointes dans les notes</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Sauvegarde nocturne des fichiers</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Onglet Outils : convertir images, PDF, documents, audio et vidéo</span></li>
+          </ul>
+        </div>
+        <div class="step"><h3>v3 · OCR</h3><p>Le texte des images et des PDF scannés.</p></div>
         <div class="step"><h3>v4 · Médias</h3><p>Retouche et détourage de photos dans le navigateur.</p></div>
         <div class="step"><h3>v5 · Audio</h3><p>Lecture des notes à voix haute, transcription des vocaux et des cours.</p></div>
         <div class="step"><h3>v6 · IA</h3><p>Un assistant qui cherche dans les notes et les fichiers.</p></div>
@@ -321,14 +409,14 @@ footer a{color:var(--text-2);text-underline-offset:3px}
     <div class="wrap">
       <p class="kicker">Installer</p>
       <h2>Chez soi, sur un vieux PC ou un mini-serveur.</h2>
-<pre><span class="c"># Récupérer le code et le configurer</span>
-git clone https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
+<pre><span class="c"># Récupérer le code (branche v1) et le configurer</span>
+git clone -b v1 https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
 cp .env.example .env
 
 <span class="c"># Lancer (Docker) puis créer son compte</span>
 docker compose up -d --build
 docker compose exec dashu /dashu set-password toi@example.com</pre>
-      <p class="after">Le <a href="https://github.com/moreauremi/dashu#readme">README</a> détaille les variables, le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
+      <p class="after">Le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a> détaille les variables, l'installation sans Docker telle qu'elle tourne en vrai (conteneur LXC, systemd, service de conversion des fichiers), le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
     </div>
   </section>
 
