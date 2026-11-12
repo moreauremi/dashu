@@ -3475,6 +3475,64 @@ input.note-title:focus-visible {
   margin-top: -8px;
 }
 
+/* Écran de lancement (layout.html, au chargement complet seulement) : fond
+   noir, grand logo Hermes/ qui se replie en H/ (même mouvement que le logo
+   animé de dashu.dev), puis l'écran s'efface. 1,5 s en tout. « ermes »
+   disparaît, la barre rejoint le H (728 unités du logo vers la gauche) et
+   l'ensemble glisse de 364 unités pour que H/ reste au centre. Retiré par
+   app.js à la fin ; caché si l'utilisateur réduit les animations. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: #f0eee6;
+  animation: splash-out 0.35s ease-in 1.15s forwards;
+}
+
+.splash .logo {
+  --logo-h: min(6.5vw, 48px);
+}
+
+.splash .logo-ermes {
+  animation: splash-fade 0.3s ease-in 0.25s forwards;
+}
+
+.splash .logo-slash {
+  animation: splash-join 0.65s cubic-bezier(0.7, 0, 0.2, 1) 0.3s forwards;
+}
+
+.splash-all {
+  animation: splash-center 0.65s cubic-bezier(0.7, 0, 0.2, 1) 0.3s forwards;
+}
+
+@keyframes splash-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-join {
+  to {
+    transform: translateX(-728px);
+  }
+}
+
+@keyframes splash-center {
+  to {
+    transform: translateX(364px);
+  }
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 .divider {
   display: flex;
   align-items: center;
@@ -3918,5 +3976,10 @@ input.note-title:focus-visible {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Sans animation, l'écran de lancement ne s'effacerait jamais. */
+  .splash {
+    display: none;
   }
 }

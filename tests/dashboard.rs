@@ -260,3 +260,37 @@ async fn widget_calendrier() {
     assert!(!taff.body.contains("RESEAUX"));
     assert!(taff.body.contains("Pas d'agenda dans cet espace"));
 }
+
+#[tokio::test]
+async fn ecran_de_lancement_au_chargement_seulement() {
+    // Au chargement complet (adresse tapée, app ouverte), la page commence
+    // par l'écran de lancement : fond noir et logo Hermes qui se replie.
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let page = alice.get("/").await;
+    assert_eq!(page.status, StatusCode::OK);
+    let splash =
+        common::between(&page.body, "<div class=\"splash\"", "</div>").expect("écran de lancement");
+    assert!(splash.contains("aria-hidden=\"true\""));
+    for part in ["#h\"", "#ermes\"", "#slash\""] {
+        assert!(splash.contains(part), "{part}");
+    }
+    // Il passe avant le reste de la page, pour être affiché en premier.
+    assert!(page.body.find("data-splash") < page.body.find("id=\"app\""));
+    // Aussi sur les autres pages, quand on les ouvre directement.
+    assert!(alice.get("/notes").await.body.contains("data-splash"));
+
+    // Pendant une navigation htmx (lien hx-boost, retour arrière) ou pour un
+    // fragment, il ne revient pas.
+    let page = alice.get_boosted("/").await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.body.contains("id=\"app\""));
+    assert!(!page.body.contains("data-splash"));
+    assert!(
+        !alice
+            .get_boosted("/notes")
+            .await
+            .body
+            .contains("data-splash")
+    );
+}

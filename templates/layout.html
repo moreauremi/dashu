@@ -5,6 +5,16 @@
 {% block html_attrs %}{% if !shell.theme.is_empty() %} data-theme="{{ shell.theme }}"{% endif %}{% endblock %}
 
 {% block body %}
+{#- Écran de lancement : au chargement complet de la page (pas pendant une
+    navigation htmx), fond noir et grand logo Hermes/ qui se replie en H/,
+    puis l'écran s'efface sur la page, déjà prête dessous. Tout est en CSS
+    (.splash dans app.css) : il s'affiche dès le premier rendu, sans attendre
+    le JavaScript, qui se contente de le retirer à la fin. -#}
+{% if shell.launch %}
+<div class="splash" aria-hidden="true" data-splash>
+  <svg class="logo" viewBox="127 54 972 186" focusable="false"><g class="splash-all"><use href="{{ crate::assets::url("logo.svg") }}#h"/><use class="logo-ermes" href="{{ crate::assets::url("logo.svg") }}#ermes"/><use class="logo-slash" href="{{ crate::assets::url("logo.svg") }}#slash"/></g></svg>
+</div>
+{% endif %}
 {#- #app porte tout ce qui dépend de la session. htmx (hx-boost) remplace le
     contenu de <body> à chaque navigation, donc ces attributs suivent :
       data-accent  couleur de l'espace actif

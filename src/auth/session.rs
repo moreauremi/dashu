@@ -100,6 +100,9 @@ pub struct Ctx {
     pub session: Session,
     /// Chemin + query de la requête, pour y revenir après un changement d'espace.
     pub path: String,
+    /// Chargement complet de la page (adresse tapée, rechargement, ouverture
+    /// de l'app), par opposition à une requête htmx : navigation, fragment.
+    pub launch: bool,
 }
 
 /// Ce que le gabarit `layout.html` affiche autour de chaque page.
@@ -126,6 +129,9 @@ pub struct Shell {
     pub flash: Option<Flash>,
     /// Barre de raccourcis du téléphone.
     pub tabs: Vec<&'static Tab>,
+    /// Écran de lancement (logo sur fond noir) : seulement au chargement
+    /// complet, jamais pendant une navigation htmx.
+    pub launch: bool,
 }
 
 impl Ctx {
@@ -149,6 +155,7 @@ impl Ctx {
             path: self.path.clone(),
             flash,
             tabs: tabbar::selected(self.user.mobile_tabs.as_deref()),
+            launch: self.launch,
         })
     }
 
@@ -282,6 +289,9 @@ impl FromRequestParts<AppState> for Ctx {
             .path_and_query()
             .map(|p| p.as_str().to_string())
             .unwrap_or_else(|| "/".into());
+        // htmx joint HX-Request à tout ce qu'il demande (navigation hx-boost,
+        // retour arrière, fragment) : sans cet en-tête, la page se lance.
+        let launch = !parts.headers.contains_key("hx-request");
 
         Ok(Self {
             user,
@@ -290,6 +300,7 @@ impl FromRequestParts<AppState> for Ctx {
             csrf,
             session,
             path,
+            launch,
         })
     }
 }

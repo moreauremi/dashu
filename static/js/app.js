@@ -102,6 +102,14 @@
     if (form) limitTabs(form);
   });
 
+  // Écran de lancement : une fois effacé (fin de son animation en CSS), on le
+  // retire de la page. Les animations du logo, à l'intérieur, sont ignorées.
+  document.addEventListener("animationend", (event) => {
+    if (event.target instanceof Element && event.target.matches("[data-splash]")) {
+      event.target.remove();
+    }
+  });
+
   document.addEventListener("DOMContentLoaded", onPage);
   document.addEventListener("htmx:afterSettle", (event) => {
     if (event.detail.target !== document.body) return;
