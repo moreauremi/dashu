@@ -95,9 +95,19 @@ const icons = {
   link: "link",
   info: "info",
   user: "user",
+  // Icônes au choix d'un espace (voir ICONS dans src/spaces/mod.rs).
   home: "house",
   school: "graduation-cap",
   work: "briefcase-business",
+  building: "building-2",
+  book: "book-open",
+  code: "code-xml",
+  users: "users",
+  heart: "heart",
+  dumbbell: "dumbbell",
+  music: "music",
+  plane: "plane",
+  folder: "folder",
 };
 
 let sprite =

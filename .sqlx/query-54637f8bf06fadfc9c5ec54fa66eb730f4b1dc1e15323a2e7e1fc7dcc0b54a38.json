@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tasks SET space_id = ? WHERE space_id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "54637f8bf06fadfc9c5ec54fa66eb730f4b1dc1e15323a2e7e1fc7dcc0b54a38"
+}

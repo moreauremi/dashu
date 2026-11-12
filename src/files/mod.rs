@@ -578,17 +578,23 @@ pub async fn delete(
     .ok_or(AppError::NotFound)?;
 
     if let Some(files) = &state.config.files {
-        let path = stored_path(&files.dir, &key);
-        for path in [thumb_path(&path), preview_path(&path), path] {
-            if let Err(error) = tokio::fs::remove_file(&path).await
-                && error.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(%error, path = %path.display(), "suppression d'un fichier du disque");
-            }
-        }
+        remove_stored(files, &key).await;
     }
     ctx.flash_ok("Fichier supprimé").await?;
     Ok(see_other("/files"))
+}
+
+/// Efface du disque le contenu d'un fichier, sa vignette et son grand aperçu.
+/// À appeler une fois la ligne de `files` supprimée.
+pub async fn remove_stored(config: &FilesConfig, key: &str) {
+    let path = stored_path(&config.dir, key);
+    for path in [thumb_path(&path), preview_path(&path), path] {
+        if let Err(error) = tokio::fs::remove_file(&path).await
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(%error, path = %path.display(), "suppression d'un fichier du disque");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------

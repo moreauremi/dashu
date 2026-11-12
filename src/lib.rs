@@ -172,6 +172,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/password", post(settings::set_password))
         .route("/settings/tabs", post(settings::set_tabs))
         .route("/settings/google/unlink", post(settings::unlink_google))
+        .route("/settings/spaces", post(spaces::create))
+        .route("/settings/spaces/{id}", post(spaces::update))
+        .route(
+            "/settings/spaces/{id}/delete",
+            get(spaces::delete_page).post(spaces::delete),
+        )
         .route("/settings/calendars", post(settings::add_calendar))
         .route(
             "/settings/calendars/{id}/delete",

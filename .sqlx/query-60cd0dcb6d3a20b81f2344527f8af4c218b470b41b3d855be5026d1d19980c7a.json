@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO spaces (user_id, slug, name, color, icon, position) VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "60cd0dcb6d3a20b81f2344527f8af4c218b470b41b3d855be5026d1d19980c7a"
+}

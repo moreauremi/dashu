@@ -1,5 +1,38 @@
 {% extends "layout.html" %}
 {% block title %}Réglages · {{ crate::assets::APP_NAME }}{% endblock %}
+
+{#- Champs communs aux formulaires d'espace : nom, couleur, icône. Couleurs et
+    icônes sont des boutons radio dessinés (voir .color-pick et .icon-pick). -#}
+{% macro space_fields(name, color, icon) %}
+<label class="field">
+  <span class="field-label">Nom</span>
+  <input type="text" name="name" value="{{ name }}" maxlength="{{ name_max }}" required autocomplete="off">
+</label>
+<fieldset class="picker">
+  <legend class="field-label">Couleur</legend>
+  <div class="color-picks">
+    {% for (key, label, checked) in crate::spaces::color_choices(color) %}
+    <label class="color-pick" data-accent="{{ key }}" title="{{ label }}">
+      <input type="radio" name="color" value="{{ key }}"{% if checked %} checked{% endif %} required>
+      <span class="sr-only">{{ label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+<fieldset class="picker">
+  <legend class="field-label">Icône</legend>
+  <div class="icon-picks">
+    {% for (key, label, checked) in crate::spaces::icon_choices(icon) %}
+    <label class="icon-pick" title="{{ label }}">
+      <input type="radio" name="icon" value="{{ key }}"{% if checked %} checked{% endif %} required>
+      {{ crate::assets::icon(key)|safe }}
+      <span class="sr-only">{{ label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+{% endmacro %}
+
 {% block content %}
 <header class="page-head">
   <h1>Réglages</h1>
@@ -16,6 +49,49 @@
         <button name="theme" value="light" aria-pressed="{{ shell.theme == "light" }}">{{ crate::assets::icon("sun")|safe }}Clair</button>
       </form>
       <p class="hint">Le choix est enregistré sur ton compte : il te suit d'un appareil à l'autre.</p>
+    </div>
+  </section>
+
+  <section class="card" id="espaces" aria-labelledby="s-spaces">
+    <header class="card-head"><h2 id="s-spaces">Espaces</h2></header>
+    <div class="card-body">
+      <ul class="space-list" role="list">
+        {% for space in shell.spaces %}
+        <li>
+          <details class="space-row" data-accent="{{ space.color }}">
+            <summary>
+              <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
+              <span class="space-name">{{ space.name }}</span>
+              {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
+              <span class="space-more">Modifier{{ crate::assets::icon("chevron-right")|safe }}</span>
+            </summary>
+            <form class="space-form" method="post" action="/settings/spaces/{{ space.id }}">
+              {% call space_fields(space.name.as_str(), space.color.as_str(), space.icon()) %}{% endcall %}
+              <div class="space-actions">
+                <button class="btn btn-primary" type="submit">Enregistrer</button>
+                {% if shell.spaces.len() > 1 %}
+                <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete">{{ crate::assets::icon("trash")|safe }}Supprimer l'espace</a>
+                {% endif %}
+              </div>
+            </form>
+          </details>
+        </li>
+        {% endfor %}
+      </ul>
+
+      {% if shell.spaces.len() < max_spaces %}
+      <details class="space-new">
+        <summary class="btn">{{ crate::assets::icon("plus")|safe }}Nouvel espace</summary>
+        <form class="space-form" method="post" action="/settings/spaces">
+          {% call space_fields("", new_color, new_icon) %}{% endcall %}
+          <div class="space-actions">
+            <button class="btn btn-primary" type="submit">Créer l'espace</button>
+          </div>
+        </form>
+      </details>
+      {% else %}
+      <p class="hint">{{ max_spaces }} espaces au plus : au-delà, ils ne tiendraient plus en haut de l'écran du téléphone.</p>
+      {% endif %}
     </div>
   </section>
 

@@ -11,7 +11,7 @@ metadata:
 
 # dashu
 
-dashu est le dashboard perso de Rémi : des tâches, des notes Markdown et son emploi du temps Pronote, rangés dans trois espaces : `perso`, `ecole` et `taff`. On le pilote avec la commande `dashu` dans le terminal. L'adresse et la clé sont déjà configurées : ne les cherche pas et ne les affiche jamais.
+dashu est le dashboard perso de Rémi : des tâches, des notes Markdown et son emploi du temps Pronote, rangés en espaces : au départ `perso`, `ecole` et `taff`, mais Rémi peut en créer, en renommer ou en supprimer. `dashu spaces` donne la liste à jour (slug et nom) : un espace renommé garde son slug. On le pilote avec la commande `dashu` dans le terminal. L'adresse et la clé sont déjà configurées : ne les cherche pas et ne les affiche jamais.
 
 ## Quand l'utiliser
 
@@ -20,7 +20,7 @@ dashu est le dashboard perso de Rémi : des tâches, des notes Markdown et son e
 - Il demande ses cours ou son emploi du temps de l'école : `dashu agenda`. Ses rendez-vous perso sont plutôt dans Google Agenda (skill google-workspace) : pour « mon agenda » au sens large, regarde les deux.
 - Il demande si dashu marche, ou de le mettre à jour : `dashu admin …`.
 
-Choisis l'espace selon le sujet : cours, BTS, révisions → `ecole` ; 1Life, Open-Prod, alternance → `taff` ; le reste → `perso`. En cas de doute, demande.
+Choisis l'espace selon le sujet : cours, BTS, révisions → `ecole` ; 1Life, Open-Prod, alternance → `taff` ; le reste → `perso`. Si le sujet correspond mieux à un autre espace de `dashu spaces`, prends-le. En cas de doute, demande.
 
 ## Commandes
 

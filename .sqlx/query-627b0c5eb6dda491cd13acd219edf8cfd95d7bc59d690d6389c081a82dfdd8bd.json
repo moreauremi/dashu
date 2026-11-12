@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", slug, name, color FROM spaces WHERE user_id = ? ORDER BY position",
+  "query": "SELECT id AS \"id!\", slug, name, color, icon FROM spaces WHERE user_id = ? ORDER BY position, id",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "name": "color",
         "ordinal": 3,
         "type_info": "Text"
+      },
+      {
+        "name": "icon",
+        "ordinal": 4,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -31,8 +36,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "2db8ba21a78fbb0094ae2bf90859b16745fcc21e4a58c8dd2feb3609607eda0b"
+  "hash": "627b0c5eb6dda491cd13acd219edf8cfd95d7bc59d690d6389c081a82dfdd8bd"
 }

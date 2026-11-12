@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}Supprimer {{ space.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Supprimer l'espace « {{ space.name }} »</h1>
+</header>
+
+<section class="card space-delete" data-accent="{{ space.color }}">
+  <div class="card-body">
+    {% if others.is_empty() %}
+    <p>C'est ton seul espace : il en faut au moins un. Crée-en un autre avant de supprimer celui-ci.</p>
+    <div class="space-actions"><a class="btn" href="/settings#espaces">Retour aux réglages</a></div>
+    {% else %}
+    <form class="stack" method="post" action="/settings/spaces/{{ space.id }}/delete">
+      <input type="hidden" name="_csrf" value="{{ shell.csrf }}">
+      {% if content.is_empty() %}
+      <p>Cet espace est vide : le supprimer ne fait rien perdre.</p>
+      <input type="hidden" name="content" value="delete">
+      {% else %}
+      <div class="alert alert-warn" role="alert">
+        {{ crate::assets::icon("alert")|safe }}
+        <p>
+          <strong>Cet espace contient {{ content.summary() }}.</strong>
+          {% if content.files > 0 %}Si tu le supprimes avec son contenu, ses fichiers seront effacés du serveur, sans retour possible.{% else %}Si tu le supprimes avec son contenu, il sera effacé sans retour possible.{% endif %}
+        </p>
+      </div>
+      <fieldset class="picker">
+        <legend class="field-label">Que faire de son contenu ?</legend>
+        <div class="choices">
+          <label class="choice">
+            <input type="radio" name="content" value="move" checked>
+            <span>Le transférer dans</span>
+            <select name="target" aria-label="Espace qui reçoit le contenu">
+              {% for other in others %}
+              <option value="{{ other.id }}">{{ other.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="choice">
+            <input type="radio" name="content" value="delete">
+            <span>Le supprimer avec l'espace</span>
+          </label>
+        </div>
+      </fieldset>
+      {% endif %}
+
+      {% if overview %}
+      <p class="hint">L'agenda de cet espace réunit ceux de tous les autres. Sans lui, cette vue d'ensemble disparaît.</p>
+      {% endif %}
+
+      <div class="space-actions">
+        <a class="btn" href="/settings#espaces">Annuler</a>
+        <button class="btn btn-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer l'espace</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

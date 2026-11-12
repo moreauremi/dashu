@@ -30,7 +30,7 @@ from datetime import datetime
 
 CONFIG = os.path.expanduser("~/.config/dashu")
 DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
-SPACES = "perso, ecole ou taff"
+SPACES = "slug d'un espace (dashu spaces les liste : perso, ecole, taff…)"
 ADMIN_COMMANDS = ["status", "logs", "restart", "update", "update-status", "backup"]
 
 

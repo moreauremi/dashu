@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO spaces (user_id, slug, name, color, icon, position)\n         VALUES (?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM spaces WHERE user_id = ?))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "d76bf82c0245e34b7bbda2a5703167f8c3a04429cfc453f1590e3651593c9984"
+}

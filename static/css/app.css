@@ -52,6 +52,10 @@
   --orange: light-dark(#b04a0c, #f2935c);
   --blue: light-dark(#1e56c4, #7daaf8);
   --green: light-dark(#126b40, #5fcb99);
+  /* Accents de plus, pour les espaces créés (src/spaces/mod.rs, COLORS). */
+  --violet: light-dark(#6d3fc0, #b69cf6);
+  --rose: light-dark(#b0245e, #f28cb6);
+  --teal: light-dark(#0a6b74, #58c6cf);
   /* Hors d'un espace (connexion, erreurs) l'accent est neutre. */
   --accent: var(--text);
   --on-accent: light-dark(#ffffff, #10100f);
@@ -92,6 +96,9 @@
 [data-accent="orange"] { --accent: var(--orange); }
 [data-accent="blue"] { --accent: var(--blue); }
 [data-accent="green"] { --accent: var(--green); }
+[data-accent="violet"] { --accent: var(--violet); }
+[data-accent="rose"] { --accent: var(--rose); }
+[data-accent="teal"] { --accent: var(--teal); }
 
 /* Jetons dérivés de l'accent. Ils sont redéclarés sur chaque élément qui change
    d'accent : une variable qui en cite une autre est figée là où elle est écrite. */
@@ -2610,6 +2617,246 @@ input.note-title:focus-visible {
 .tab-choice:has(input:disabled) {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* Réglages : espaces. Une ligne par espace, qui s'ouvre sur son formulaire. */
+.space-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.space-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.space-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.space-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.space-badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.space-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.space-tag {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.space-more {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.space-more .i {
+  transition: transform var(--fast) var(--ease);
+}
+
+.space-row[open] .space-more .i {
+  transform: rotate(90deg);
+}
+
+.space-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  padding: 4px 0 20px 44px;
+}
+
+.space-new {
+  margin-top: 16px;
+}
+
+.space-new > summary {
+  width: fit-content;
+  list-style: none;
+}
+
+.space-new > summary::-webkit-details-marker {
+  display: none;
+}
+
+.space-new[open] > summary {
+  margin-bottom: 16px;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.space-new .space-form {
+  padding: 0;
+}
+
+.space-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.space-delete {
+  max-width: 560px;
+}
+
+.space-delete .alert-warn {
+  margin-bottom: 0;
+}
+
+/* Choix de couleur et d'icône : des boutons radio dessinés. L'input reste
+   dans la pastille, transparent, pour le clavier et les lecteurs d'écran. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.color-picks,
+.icon-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-pick,
+.icon-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.color-pick input,
+.icon-pick input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-pick {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.color-pick:has(input:checked) {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+.icon-pick {
+  width: var(--control);
+  height: var(--control);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.icon-pick:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.color-pick:has(input:focus-visible),
+.icon-pick:has(input:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+/* Suppression d'un espace : que faire du contenu. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control);
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.choice input[type="radio"] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.choice:has(input[type="radio"]:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.choice select {
+  width: auto;
+  min-width: 0;
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--on-accent);
+}
+
+.btn-danger:hover {
+  background: color-mix(in oklab, var(--danger) 88%, var(--text));
+}
+
+.btn-danger-outline {
+  border-color: color-mix(in oklab, var(--danger) 45%, transparent);
+  color: var(--danger);
+}
+
+.btn-danger-outline:hover {
+  background: color-mix(in oklab, var(--danger) 10%, var(--surface));
+}
+
+@media (max-width: 640px) {
+  .space-form {
+    padding-left: 0;
+  }
 }
 
 .sources {

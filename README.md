@@ -2,7 +2,7 @@
 
 Depuis le 12 novembre 2026, l'application s'affiche sous le nom **Hermes Dashboard**, avec le logo Hermes commun aux projets de Rémi. Le nom de code reste dashu : dépôt, binaire, commandes (`dashu set-password`, `dashu-update`…), services et variables d'environnement ne changent pas.
 
-Espace de travail personnel tout-en-un, auto-hébergé : un dashboard, des notes Markdown et un emploi du temps, répartis sur trois espaces (Perso, École, Taff) derrière une seule connexion.
+Espace de travail personnel tout-en-un, auto-hébergé : un dashboard, des notes Markdown et un emploi du temps, répartis en espaces (Perso, École et Taff au départ, puis ceux qu'on crée) derrière une seule connexion.
 
 dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur et htmx s'occupe de l'interactivité. Le cahier des charges complet est dans [SPEC.md](SPEC.md), l'état d'avancement dans [STATUS.md](STATUS.md).
 
@@ -26,7 +26,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Module | Contenu |
 | --- | --- |
 | Authentification | Email + mot de passe (Argon2id) ou Google, sur le même compte. Inscription fermée : seuls les emails de `ALLOWED_EMAILS` entrent. |
-| Espaces | Perso, École, Taff. Chaque contenu appartient à un espace ; on en change en un clic, sans rechargement. |
+| Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on en change en un clic, sans rechargement. |
 | Dashboard | Prochains cours, tâches du jour, notes récentes. Chaque widget se charge indépendamment. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
@@ -131,7 +131,7 @@ Chaque requête porte l'en-tête `Authorization: Bearer <API_TOKEN>`. Il n'y a n
 
 | Méthode et route | Rôle |
 | --- | --- |
-| `GET /api/v1/spaces` | Les espaces : `perso`, `ecole`, `taff`. |
+| `GET /api/v1/spaces` | Les espaces du compte : slug, nom, couleur. Le slug (`perso`, `ecole`, `taff`, ou tiré du nom à la création) ne change pas quand on renomme un espace. |
 | `GET /api/v1/tasks?space=ecole&status=open` | Tâches (`status` : `open` par défaut, `done` ou `all`). |
 | `POST /api/v1/tasks` | Crée une tâche : `{"title", "space", "due_date"?}` (date `AAAA-MM-JJ`, aujourd'hui par défaut). |
 | `GET`, `PATCH`, `DELETE /api/v1/tasks/{id}` | Lit, modifie (`title`, `done`, `due_date`) ou supprime une tâche. |
@@ -468,6 +468,12 @@ dashu/
 
 ```bash
 cargo install sqlx-cli@0.8.6 --no-default-features --features sqlite
+```
+
+Toujours sur une base jetable, jamais sur `dashu.db` : sqlx-cli active les clés étrangères, alors que certaines migrations (0007) exigent qu'elles soient coupées, comme le fait dashu au démarrage (`src/db.rs`). Sur une base qui a du contenu, la migration 0007 refuse de tourner dans ces conditions plutôt que de tout effacer.
+
+```bash
+export DATABASE_URL=sqlite://target/prepare.db
 ```
 
 ```bash

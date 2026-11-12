@@ -1,5 +1,5 @@
-//! Réglages : thème, raccourcis du téléphone, mot de passe, compte Google lié,
-//! sources iCal.
+//! Réglages : thème, espaces (gérés par `crate::spaces`), raccourcis du
+//! téléphone, mot de passe, compte Google lié, sources iCal.
 
 use std::collections::HashMap;
 
@@ -12,6 +12,7 @@ use crate::AppState;
 use crate::auth::password;
 use crate::auth::session::{Ctx, Shell};
 use crate::calendar::sync;
+use crate::spaces;
 use crate::tabbar::{self, Tab};
 use crate::time;
 use crate::web::{self, AppError, AppResult, local_path, see_other};
@@ -41,6 +42,11 @@ struct SettingsPage {
     /// Toutes les entrées possibles de la barre du téléphone, et si elles y sont.
     tab_choices: Vec<(&'static Tab, bool)>,
     tab_max: usize,
+    /// Couleur et icône présélectionnées pour un nouvel espace.
+    new_color: &'static str,
+    new_icon: &'static str,
+    max_spaces: usize,
+    name_max: usize,
 }
 
 /// `GET /settings`
@@ -77,9 +83,14 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         .map(|tab| (tab, current.contains(&tab)))
         .collect();
 
+    let (new_color, new_icon) = spaces::suggestion(&ctx.spaces);
     let page = SettingsPage {
         tab_choices,
         tab_max: tabbar::MAX,
+        new_color,
+        new_icon,
+        max_spaces: spaces::MAX_SPACES,
+        name_max: spaces::NAME_MAX_CHARS,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),
