@@ -321,14 +321,14 @@ footer a{color:var(--text-2);text-underline-offset:3px}
     <div class="wrap">
       <p class="kicker">Installer</p>
       <h2>Chez soi, sur un vieux PC ou un mini-serveur.</h2>
-<pre><span class="c"># Récupérer le code et le configurer</span>
-git clone https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
+<pre><span class="c"># Récupérer le code (branche v1) et le configurer</span>
+git clone -b v1 https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
 cp .env.example .env
 
 <span class="c"># Lancer (Docker) puis créer son compte</span>
 docker compose up -d --build
 docker compose exec dashu /dashu set-password toi@example.com</pre>
-      <p class="after">Le <a href="https://github.com/moreauremi/dashu#readme">README</a> détaille les variables, le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
+      <p class="after">Le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a> détaille les variables, le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
     </div>
   </section>
 
