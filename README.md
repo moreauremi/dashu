@@ -21,7 +21,8 @@ Le nom de code du projet reste **dashu** : c'est le nom du dépôt, du binaire e
 ## Où en est le projet
 
 - **v1 terminée et en service.** Tous les critères d'acceptation sont vérifiés, la plupart sur le serveur réel. L'application sert au quotidien, sur ordinateur et sur iPhone.
-- **v2 en cours : les fichiers.** L'envoi, la compression et l'aperçu sont en service depuis le 11 novembre 2026. La suite : tags et recherche, partage par lien temporaire, images dans les notes, onglet Outils.
+- **Ajouté depuis, le 12 novembre 2026** : espaces à la carte, dashboard modulaire (grille bento propre à chaque espace, widget Calendrier), profil avec photo, taille de l'interface et barre latérale détachable.
+- **v2 en cours : les fichiers.** L'envoi, la compression et l'aperçu sont en service depuis le 11 novembre 2026. La suite : tags et recherche, partage par lien temporaire, images dans les notes, onglet Outils (voir la [feuille de route](#feuille-de-route)).
 
 Le détail, critère par critère, est dans [STATUS.md](https://github.com/moreauremi/dashu/blob/v1/STATUS.md). Le cahier des charges est dans [SPEC.md](https://github.com/moreauremi/dashu/blob/v1/SPEC.md).
 
@@ -29,11 +30,12 @@ Le détail, critère par critère, est dans [STATUS.md](https://github.com/morea
 
 | Module | Contenu |
 | --- | --- |
-| Espaces | Le contenu est rangé par espaces (par exemple Perso, École, Entreprise), chacun avec sa couleur et son icône, jusqu'à 8 en tout. On passe de l'un à l'autre en un clic, ou par balayage sur téléphone. Perso sert de vue d'ensemble : son agenda réunit ceux de tous les espaces. |
-| Dashboard | Prochains cours, tâches du jour, notes récentes. Chaque widget se charge seul : un widget lent ne retarde pas les autres. |
+| Espaces | Le contenu est rangé par espaces (par exemple Perso, École, Entreprise), chacun avec sa couleur et son icône, jusqu'à 8 en tout. On passe de l'un à l'autre en un clic, ou par balayage sur téléphone. Perso sert de vue d'ensemble : son agenda réunit ceux de tous les espaces, et il ne se supprime pas. Avant de supprimer un autre espace, l'application montre ce qu'il contient et propose de tout transférer ailleurs. |
+| Dashboard | Une grille bento propre à chaque espace : calendrier (aujourd'hui, trois jours ou la semaine selon la largeur), prochains cours, tâches, notes, fichiers, réglages rapides. On ajoute, déplace et agrandit chaque widget (petit, moyen, grand, ou jusqu'à 4 × 4 cases) à la souris, au clavier ou au doigt ; deux colonnes sur téléphone. Chaque widget se charge seul : un widget lent ne retarde pas les autres. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, épinglage, recherche plein texte qui ignore les accents. |
 | Agenda | Flux iCal de Pronote importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine. |
 | Fichiers (v2) | Envoi par glisser-déposer, jusqu'à 2 Go par fichier. Vignettes et aperçu des photos (HEIC comprises), vidéos, PDF et textes. Compression des vidéos, photos et PDF en une copie plus légère. |
+| Profil et affichage | Prénom, nom et photo de profil (sans photo, les initiales sur une couleur tirée au hasard). Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée à gauche, qui apparaît au survol du bord. |
 | Connexion | Mot de passe ou Google, sur le même compte. Pas d'inscription publique : seuls les emails autorisés entrent. |
 | API | Une API JSON, désactivée par défaut et protégée par une clé, pour qu'un assistant gère les tâches et les notes et lise l'agenda. |
 
@@ -43,7 +45,7 @@ Le détail, critère par critère, est dans [STATUS.md](https://github.com/morea
 
 Rust (axum), SQLite, htmx et askama. Les pages sont rendues par le serveur et htmx s'occupe de l'interactivité. Pas de framework JavaScript : htmx et l'éditeur CodeMirror, rien d'autre.
 
-Mesures de la v1 sur le serveur réel : Lighthouse mobile de 99 à 100, 7,6 Mo de mémoire, 0,5 ms de réponse serveur, image Docker de 7 Mo.
+Mesures de la v1 sur le serveur réel, via Cloudflare en 4G simulée : Lighthouse mobile de 98 à 100, 7,6 Mo de mémoire, 0,5 ms de réponse serveur, image Docker de 7 Mo.
 
 **Sécurité.** Mots de passe en Argon2id, connexion Google par OpenID Connect avec PKCE, protection CSRF, limite de tentatives de connexion, Content-Security-Policy stricte (aucun script en ligne). Chaque requête SQL filtre sur l'utilisateur connecté, et des tests vérifient qu'un second compte ne voit rien du premier. Un fichier envoyé n'est jamais exécuté dans la page. Les conversions tournent dans un service à part, sans réseau, qui ne voit ni la base ni les secrets.
 
@@ -83,12 +85,24 @@ Une version à la fois, utilisée au quotidien avant de passer à la suivante.
 
 | Version | Contenu | État |
 | --- | --- | --- |
-| v1 | Espaces, dashboard, notes Markdown, agenda Pronote, API pour un assistant | En service |
-| v2 | Fichiers par espace, partage par lien temporaire, onglet Outils (conversions) | En cours |
+| v1 | Espaces, dashboard, notes Markdown, agenda Pronote, API pour un assistant ; puis espaces à la carte, dashboard modulaire, profil et affichage | En service |
+| v2 | Fichiers par espace, partage par lien temporaire, onglet Outils (conversions) | En cours, détail ci-dessous |
 | v3 | OCR : texte des images et des PDF scannés | Prévue |
 | v4 | Médias : retouche et détourage de photos dans le navigateur | Prévue |
 | v5 | Audio : lecture des notes à voix haute, transcription des vocaux et des cours | Prévue |
 | v6 | IA : un assistant qui cherche dans les notes et les fichiers | Prévue |
+
+Avancement de la v2 (une case cochée : en service sur le serveur) :
+
+- [x] Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux de 50 Mo
+- [x] Vignettes et aperçu des photos (HEIC comprises), vidéos et PDF
+- [x] Compression des vidéos, photos et PDF, dans un service isolé
+- [x] Widget Fichiers sur le dashboard
+- [ ] Tags et recherche dans les fichiers
+- [ ] Partage par lien temporaire et révocable
+- [ ] Images collées et pièces jointes dans les notes
+- [ ] Sauvegarde nocturne des fichiers
+- [ ] Onglet Outils : convertir images, PDF, documents, audio et vidéo
 
 ## Branches du dépôt
 
