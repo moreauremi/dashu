@@ -56,7 +56,7 @@ pub async fn login_page(
     let error = match query.e.as_deref() {
         // Le visiteur a prouvé à Google que ce compte est le sien : lui dire
         // qu'il n'a pas accès ne révèle rien sur les autres adresses.
-        Some("refuse") => Some("Ce compte Google n'a pas accès à dashu."),
+        Some("refuse") => Some("Ce compte Google n'a pas accès à Hermes Dashboard."),
         Some("google") => Some("La connexion avec Google n'a pas abouti. Réessaie."),
         _ => None,
     };

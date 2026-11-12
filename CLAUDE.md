@@ -2,6 +2,8 @@
 
 dashu est le tableau de bord perso de Rémi (tâches, notes Markdown, emploi du temps Pronote, trois espaces Perso, École et Taff). Un seul binaire Rust, en service sur son homelab. `SPEC.md` est le cahier des charges, `STATUS.md` l'état vérifié de chaque critère, `README.md` l'installation et l'exploitation. Les lire avant tout changement de fond.
 
+**Nom affiché : Hermes Dashboard** (depuis le 12 novembre 2026, même identité visuelle que les autres projets de Rémi). dashu reste le nom de code : on ne le renomme pas dans le code, les commandes, les services ni les variables, seulement là où l'utilisateur le voit. Le nom passe par `assets::APP_NAME`, le logo par `assets::logo()` (`static/logo.svg`).
+
 Le contexte privé (infra, adresses, historique, suite prévue) est dans `PASSATION.md`, qui n'est jamais versionné. S'il est présent à la racine, le lire en début de session.
 
 ## Façon de travailler

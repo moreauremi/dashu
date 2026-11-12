@@ -232,7 +232,7 @@ pub async fn callback(
             set_flash(
                 &session,
                 "error",
-                "Ce compte Google n'a pas la même adresse email que ton compte dashu.",
+                "Ce compte Google n'a pas la même adresse email que ton compte Hermes Dashboard.",
             )
             .await?;
         }

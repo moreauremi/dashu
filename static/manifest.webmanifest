@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "dashu",
-  "short_name": "dashu",
+  "name": "Hermes Dashboard",
+  "short_name": "Dashboard",
   "description": "Tâches, notes et agenda, par espace.",
   "lang": "fr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f0f0e",
+  "background_color": "#141413",
   "theme_color": "#181817",
   "icons": [
     { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

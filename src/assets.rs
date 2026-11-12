@@ -54,6 +54,20 @@ pub fn icon(name: &str) -> String {
     )
 }
 
+/// Nom affiché de l'application. Le projet, le binaire et les commandes
+/// gardent leur nom de code, dashu.
+pub const APP_NAME: &str = "Hermes Dashboard";
+
+/// Logo Hermes (`static/logo.svg`) en trois morceaux : le H, « ermes » et la
+/// barre. La page de connexion les anime séparément (`.logo-anim` dans
+/// app.css). Il prend la couleur du texte et porte le nom de l'application.
+pub fn logo() -> String {
+    let file = url("logo.svg");
+    format!(
+        r#"<svg class="logo" viewBox="127 54 972 186" role="img" aria-label="{APP_NAME}" focusable="false"><use href="{file}#h"/><use class="logo-ermes" href="{file}#ermes"/><use class="logo-slash" href="{file}#slash"/></svg>"#
+    )
+}
+
 /// `GET /static/{*path}`
 pub async fn serve(Path(path): Path<String>) -> Response {
     let requested = format!("/static/{path}");

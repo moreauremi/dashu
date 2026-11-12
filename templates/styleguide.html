@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Guide de style · dashu{% endblock %}
+{% block title %}Guide de style · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div>
@@ -36,7 +36,7 @@
 
     <h3 class="sg-title">Typographie</h3>
     <div class="sg-type">
-      <p class="wordmark">dashu</p>
+      <p class="wordmark">{{ crate::assets::logo()|safe }}</p>
       <h1>Titre de page · Rethink Sans 24</h1>
       <h2>Titre de carte · 13 semi-gras</h2>
       <p>Texte courant en 14 px. L'interface est dense : on travaille longtemps dessus, tout ce qui sert doit tenir à l'écran.</p>

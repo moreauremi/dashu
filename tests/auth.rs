@@ -109,7 +109,7 @@ async fn compte_google_refuse_message_clair() {
     assert_eq!(page.status, StatusCode::OK);
     assert!(
         page.body
-            .contains("Ce compte Google n&#39;a pas accès à dashu.")
+            .contains("Ce compte Google n&#39;a pas accès à Hermes Dashboard.")
     );
     assert!(!page.body.contains(BAD_CREDENTIALS));
 }
@@ -287,6 +287,7 @@ async fn manifeste_pour_l_ecran_d_accueil() {
     let json: serde_json::Value = serde_json::from_str(&response.body).expect("JSON valide");
     assert_eq!(json["display"], "standalone");
     assert_eq!(json["start_url"], "/");
+    assert_eq!(json["name"], "Hermes Dashboard");
     // Les icônes citées portent une empreinte et existent.
     for icon in json["icons"].as_array().expect("icônes") {
         let src = icon["src"].as_str().unwrap();
@@ -296,6 +297,50 @@ async fn manifeste_pour_l_ecran_d_accueil() {
         );
         assert_eq!(visitor.get(src).await.status, StatusCode::OK, "{src}");
     }
+}
+
+#[tokio::test]
+async fn nom_et_logo_hermes_dashboard() {
+    // Le nom affiché est « Hermes Dashboard » et le logo vient de
+    // static/logo.svg ; le code, lui, garde le nom dashu.
+    let app = TestApp::new().await;
+    let mut visitor = app.client();
+    let page = visitor.get("/login").await;
+    assert!(
+        page.body
+            .contains("<title>Connexion · Hermes Dashboard</title>")
+    );
+    assert!(!page.body.contains(">dashu<"));
+
+    // Les trois morceaux du logo viennent du même fichier, avec empreinte.
+    let hash = common::between(&page.body, "<use href=\"/static/logo.", "#h\"")
+        .expect("logo sur la page de connexion");
+    let logo = format!("/static/logo.{hash}");
+    assert!(
+        logo.ends_with(".svg") && logo != "/static/logo.svg",
+        "{logo}"
+    );
+    for part in ["#ermes", "#slash"] {
+        assert!(page.body.contains(&format!("{logo}{part}")), "{part}");
+    }
+    let response = visitor.get(&logo).await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.header("content-type"), "image/svg+xml");
+    for id in ["id=\"h\"", "id=\"ermes\"", "id=\"slash\""] {
+        assert!(response.body.contains(id), "{id}");
+    }
+
+    // Une fois connecté : même nom dans l'onglet, logo nommé dans la barre latérale.
+    let mut alice = app.logged_in(ALICE).await;
+    let page = alice.get("/").await;
+    assert!(
+        page.body
+            .contains("<title>Dashboard · Hermes Dashboard</title>")
+    );
+    assert!(
+        page.body
+            .contains("role=\"img\" aria-label=\"Hermes Dashboard\"")
+    );
 }
 
 #[tokio::test]

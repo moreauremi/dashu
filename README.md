@@ -1,4 +1,6 @@
-# dashu
+# Hermes Dashboard (dashu)
+
+Depuis le 12 novembre 2026, l'application s'affiche sous le nom **Hermes Dashboard**, avec le logo Hermes commun aux projets de Rémi. Le nom de code reste dashu : dépôt, binaire, commandes (`dashu set-password`, `dashu-update`…), services et variables d'environnement ne changent pas.
 
 Espace de travail personnel tout-en-un, auto-hébergé : un dashboard, des notes Markdown et un emploi du temps, répartis sur trois espaces (Perso, École, Taff) derrière une seule connexion.
 

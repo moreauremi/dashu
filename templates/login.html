@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Connexion · dashu{% endblock %}
+{% block title %}Connexion · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block body %}
 <main class="auth">
   <div class="auth-card">
-    <h1 class="wordmark wordmark-lg">dashu</h1>
+    <h1 class="wordmark wordmark-lg logo-anim">{{ crate::assets::logo()|safe }}</h1>
     <p class="muted auth-lead">Connecte-toi pour retrouver ton espace</p>
 
     {% if let Some(error) = error %}

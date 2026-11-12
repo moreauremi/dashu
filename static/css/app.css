@@ -308,12 +308,19 @@ html {
   top: 12px;
 }
 
+/* Logo Hermes (assets::logo, static/logo.svg) : il prend la couleur du texte.
+   --logo-h fixe sa hauteur, la largeur suit le rapport du viewBox (972 × 186). */
+.logo {
+  --logo-h: 16px;
+  display: block;
+  width: calc(var(--logo-h) * 972 / 186);
+  height: var(--logo-h);
+  fill: currentColor;
+  fill-rule: evenodd;
+}
+
 .wordmark {
   color: var(--text);
-  font-size: 18px;
-  font-weight: 500;
-  line-height: 24px;
-  letter-spacing: 0.24em;
   text-decoration: none;
 }
 
@@ -334,7 +341,7 @@ html {
 }
 
 .sidebar > .wordmark {
-  padding: 4px 12px;
+  padding: 8px 12px;
 }
 
 /* ---------- L'île : sélecteur d'espace flottant ---------- */
@@ -2675,8 +2682,32 @@ input.note-title:focus-visible {
   background: var(--surface);
 }
 
-.wordmark-lg {
-  font-size: 24px;
+.wordmark-lg .logo {
+  --logo-h: 28px;
+}
+
+/* Connexion : le logo se déplie une fois, de l'icône H/ au mot Hermes/. La
+   barre glisse du H jusqu'à sa place pendant que « ermes » apparaît (même
+   mouvement que le logo animé, sans le recentrage). Coupé si l'utilisateur
+   réduit les animations (voir la fin du fichier). */
+.logo-anim .logo-slash {
+  animation: logo-slash 1s cubic-bezier(0.7, 0, 0.2, 1) 0.3s both;
+}
+
+.logo-anim .logo-ermes {
+  animation: logo-ermes 0.6s ease-out 0.8s both;
+}
+
+@keyframes logo-slash {
+  from {
+    transform: translateX(-728px);
+  }
+}
+
+@keyframes logo-ermes {
+  from {
+    opacity: 0;
+  }
 }
 
 .auth-lead {

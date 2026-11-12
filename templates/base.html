@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{% block title %}dashu{% endblock %}</title>
+<title>{% block title %}{{ crate::assets::APP_NAME }}{% endblock %}</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="dark light">
 {#- Configuration de htmx :
@@ -21,7 +21,7 @@
     système ; app.js la corrige si un thème est imposé dans les réglages. -#}
 <link rel="manifest" href="{{ crate::assets::url("manifest.webmanifest") }}">
 <link rel="apple-touch-icon" href="{{ crate::assets::url("icons/apple-touch-icon.png") }}">
-<meta name="apple-mobile-web-app-title" content="dashu">
+<meta name="apple-mobile-web-app-title" content="Dashboard">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#181817" media="(prefers-color-scheme: dark)">
 <script src="{{ crate::assets::url("js/htmx.js") }}" defer></script>
