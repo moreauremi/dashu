@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>dashu · dashboard, notes et emploi du temps auto-hébergés</title>
-<meta name="description" content="dashu réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote en trois espaces (Perso, École, Taff). Open source, un seul binaire Rust, hébergé chez soi.">
+<title>Hermes Dashboard · tableau de bord, notes et emploi du temps auto-hébergés</title>
+<meta name="description" content="Hermes Dashboard réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote en trois espaces (Perso, École, Taff). Open source, un seul binaire Rust, hébergé chez soi.">
 <meta name="color-scheme" content="light dark">
-<meta property="og:title" content="dashu">
+<meta property="og:title" content="Hermes Dashboard">
 <meta property="og:description" content="Dashboard, notes Markdown et emploi du temps, en trois espaces. Open source et auto-hébergé.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/rethink-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -55,8 +55,15 @@ svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-widt
 /* Barre */
 .bar{position:sticky;top:0;z-index:10;background:color-mix(in oklab,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
 .bar-in{height:60px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.wordmark{display:flex;align-items:center;gap:10px;font-weight:500;font-size:18px;letter-spacing:.02em;text-decoration:none}
-.wordmark i{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:var(--text);color:var(--on-text);font-style:normal;font-size:18px;line-height:1}
+/* Logo Hermes (logo.svg, le même que dans l'application) : couleur du texte,
+   --logo-h fixe la hauteur, la largeur suit le viewBox (972 × 186). */
+.logo{--logo-h:20px;display:block;width:calc(var(--logo-h)*972/186);height:var(--logo-h);fill:currentColor;fill-rule:evenodd}
+.wordmark{display:flex;align-items:center;color:var(--text);text-decoration:none}
+/* Au chargement, le logo se déplie une fois de l'icône H/ au mot Hermes/. */
+.logo-anim .logo-slash{animation:logo-slash 1s cubic-bezier(.7,0,.2,1) .3s both}
+.logo-anim .logo-ermes{animation:logo-ermes .6s ease-out .8s both}
+@keyframes logo-slash{from{transform:translateX(-728px)}}
+@keyframes logo-ermes{from{opacity:0}}
 .nav{display:flex;align-items:center;gap:4px}
 .nav a.link{padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--text-2);font-size:15px}
 .nav a.link:hover{color:var(--text);background:var(--surface-2)}
@@ -79,7 +86,7 @@ h1 .spaces{display:block;color:var(--text-3)}
 .shot-bar em{margin-left:12px;font:400 12px/1 var(--mono);font-style:normal;color:var(--text-3)}
 .app{display:grid;grid-template-columns:200px 1fr;min-height:420px}
 .side{border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px}
-.side b{padding:0 8px 12px;font-weight:500;letter-spacing:.02em}
+.side .logo{--logo-h:14px;margin:4px 8px 14px}
 .side .sp{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
 .side .sp i{width:8px;height:8px;border-radius:50%}
 .side .sp.on{background:color-mix(in oklab,var(--blue) 13%,var(--surface));color:var(--blue);font-weight:500}
@@ -149,7 +156,7 @@ pre .c{color:var(--text-3)}
 footer{border-top:1px solid var(--border);padding-block:28px;font-size:14px;color:var(--text-3)}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 footer a{color:var(--text-2);text-underline-offset:3px}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.logo-anim use{animation:none}}
 </style>
 </head>
 <body>
@@ -166,7 +173,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
 
 <header class="bar">
   <div class="wrap bar-in">
-    <a class="wordmark" href="#" aria-label="dashu, accueil"><i aria-hidden="true">d</i>dashu</a>
+    <a class="wordmark" href="#" aria-label="Hermes Dashboard, accueil"><svg class="logo logo-anim" viewBox="127 54 972 186" aria-hidden="true"><use href="logo.svg#h"/><use class="logo-ermes" href="logo.svg#ermes"/><use class="logo-slash" href="logo.svg#slash"/></svg></a>
     <nav class="nav" aria-label="Navigation principale">
       <a class="link" href="#fonctions">Fonctionnalités</a>
       <a class="link" href="#feuille-de-route">Feuille de route</a>
@@ -181,17 +188,17 @@ footer a{color:var(--text-2);text-underline-offset:3px}
   <section class="wrap hero">
     <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source · auto-hébergé · v1</span>
     <h1>Dashboard, notes et emploi du temps. <span class="spaces">Au même endroit.</span></h1>
-    <p class="lead">dashu réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote, rangés en trois espaces (Perso, École et Taff) derrière une seule connexion. Un seul binaire Rust, hébergé chez soi.</p>
+    <p class="lead">Hermes Dashboard réunit un tableau de bord, des notes Markdown et l'emploi du temps Pronote, rangés en trois espaces (Perso, École et Taff) derrière une seule connexion. Un seul binaire Rust, hébergé chez soi.</p>
     <div class="cta">
       <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
       <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
     </div>
 
-    <figure class="shot" aria-label="Aperçu du dashboard de dashu, avec des données d'exemple" style="margin-inline:0">
+    <figure class="shot" aria-label="Aperçu d'Hermes Dashboard, avec des données d'exemple" style="margin-inline:0">
       <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span><em>app.dashu.dev</em></div>
       <div class="app" aria-hidden="true">
         <div class="side">
-          <b>dashu</b>
+          <svg class="logo" viewBox="127 54 972 186"><use href="logo.svg#h"/><use href="logo.svg#ermes"/><use href="logo.svg#slash"/></svg>
           <div class="sp"><i style="background:var(--orange)"></i>Perso</div>
           <div class="sp on"><i style="background:var(--blue)"></i>École</div>
           <div class="sp"><i style="background:var(--green)"></i>Taff</div>
@@ -332,7 +339,7 @@ docker compose exec dashu /dashu set-password toi@example.com</pre>
 
 <footer>
   <div class="wrap">
-    <span>dashu · open source, en développement</span>
+    <span>Hermes Dashboard (nom de code dashu) · open source, en développement</span>
     <span><a href="https://github.com/moreauremi/dashu">GitHub</a> · <a href="https://app.dashu.dev">app.dashu.dev</a></span>
   </div>
 </footer>
