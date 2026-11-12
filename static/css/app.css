@@ -274,10 +274,24 @@ mark {
 
 /* ---------- 4. Habillage : barre latérale, contenu ---------- */
 
+/* Taille de l'interface (data-size, réglée par l'utilisateur) : un zoom de
+   toute l'app. Le zoom grossit aussi les unités d'écran (dvh, vw) des
+   éléments zoomés : on les divise par --zoom pour garder la hauteur de
+   l'écran. */
 .app {
+  --zoom: 1;
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  min-height: 100dvh;
+  min-height: calc(100dvh / var(--zoom));
+  zoom: var(--zoom);
+}
+
+.app[data-size="small"] {
+  --zoom: 0.9;
+}
+
+.app[data-size="large"] {
+  --zoom: 1.12;
 }
 
 /* La barre latérale occupe la colonne de gauche ; l'île et le contenu
@@ -340,15 +354,77 @@ html {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  height: 100dvh;
+  height: calc(100dvh / var(--zoom, 1));
   padding: 16px 12px 12px;
   overflow-y: auto;
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
 
-.sidebar > .wordmark {
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-head .wordmark {
   padding: 8px 12px;
+}
+
+.sidebar-pin .icon-btn {
+  color: var(--text-3);
+}
+
+.sidebar-pin .icon-btn:hover {
+  color: var(--text);
+}
+
+.sidebar-edge {
+  display: none;
+}
+
+/* Barre détachée (ordinateur) : façon mode compact du navigateur Zen. Elle
+   quitte la grille, se cache à gauche et glisse par-dessus la page quand on
+   survole le bord de l'écran ; elle repart un instant après qu'on la quitte. */
+@media (min-width: 861px) {
+  .app[data-sidebar="floating"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app[data-sidebar="floating"] > .island,
+  .app[data-sidebar="floating"] > .main {
+    grid-column: 1;
+  }
+
+  .app[data-sidebar="floating"] > .sidebar-edge {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 39;
+    display: block;
+    width: 12px;
+  }
+
+  .app[data-sidebar="floating"] > .sidebar {
+    position: fixed;
+    top: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 40;
+    width: var(--sidebar-w);
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.45);
+    translate: calc(-100% - 16px) 0;
+    transition: translate var(--enter) var(--ease) 0.3s;
+  }
+
+  .app[data-sidebar="floating"] > .sidebar-edge:hover + .sidebar,
+  .app[data-sidebar="floating"] > .sidebar:hover,
+  .app[data-sidebar="floating"] > .sidebar:focus-within {
+    translate: 0 0;
+    transition-delay: 0s;
+  }
 }
 
 /* ---------- L'île : sélecteur d'espace flottant ---------- */
@@ -646,7 +722,7 @@ html {
   border-top: 1px solid var(--border);
 }
 
-.theme-switch {
+.mini-switch {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
@@ -655,7 +731,7 @@ html {
   background: color-mix(in oklab, var(--text) 7%, transparent);
 }
 
-.theme-switch button {
+.mini-switch button {
   display: grid;
   place-items: center;
   height: 28px;
@@ -665,31 +741,138 @@ html {
   color: var(--text-2);
 }
 
-.theme-switch button:hover {
+.mini-switch button:hover {
   color: var(--text);
 }
 
-.theme-switch button[aria-pressed="true"] {
+.mini-switch button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 0 0 1px var(--border);
 }
 
+/* Taille de l'interface : trois « A » de plus en plus grands. */
+.size-a {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.size-a-s {
+  font-size: 10px;
+}
+
+.size-a-l {
+  font-size: 16px;
+}
+
+.sidebar-foot > .nav {
+  margin: 0;
+}
+
 .account {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 12px;
+  gap: 4px;
 }
 
-.account-email {
+.account-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--row);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.account-link:hover {
+  background: var(--surface-2);
+}
+
+.account-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--text-2);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Avatar : photo ronde, ou initiales sur l'accent tiré pour le compte. */
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-lg .avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+}
+
+/* Réglages : la carte Profil. */
+.profile-photo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Le vrai champ fichier, invisible, couvre le bouton : un clic l'ouvre. */
+.file-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-btn:has(input:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.profile-names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  align-items: end;
+  gap: 12px;
+}
+
+.profile-names > div {
+  grid-column: 1 / -1;
 }
 
 .topbar,
@@ -728,7 +911,7 @@ html {
   left: 50%;
   bottom: 24px;
   z-index: 40;
-  max-width: calc(100vw - 32px);
+  max-width: calc((100vw - 32px) / var(--zoom, 1));
   padding: 8px 16px;
   translate: -50% 0;
   border: 1px solid var(--border-strong);
@@ -1239,10 +1422,18 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+/* Un widget ne défile jamais : ce qui ne tient pas est retiré à l'arrivée
+   (dashboard.js, « fit »), avec un compteur de ce qui manque. */
 .dw .widget-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.widget-more {
+  padding: 2px 16px 8px;
+  color: var(--text-3);
+  font-size: 12px;
 }
 
 .w1 { grid-column: span 1; }
@@ -1368,7 +1559,7 @@ select:focus-visible {
 
 /* Catalogue des widgets. */
 .dash-catalog {
-  width: min(520px, calc(100vw - 32px));
+  width: min(520px, calc((100vw - 32px) / var(--zoom, 1)));
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -1434,6 +1625,48 @@ select:focus-visible {
 
 .dash-option.is-used .dash-sizes {
   display: none;
+}
+
+/* Widget Calendrier : la grille de l'agenda remplit la carte et défile
+   dans les deux sens ; les jours restent en haut, les heures à gauche. */
+.dw .widget-cal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.widget-cal .cal {
+  --gutter: 44px;
+  --col-min: 0px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Pas de défilement à la main : les jours se resserrent pour tenir en
+   largeur, et dashboard.js place la vue sur l'heure en cours. */
+.widget-cal .cal-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.widget-cal .cal-heads {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--surface);
+}
+
+.widget-cal .cal-corner {
+  z-index: 5;
+}
+
+.widget-cal .cal-empty {
+  flex: none;
 }
 
 /* Widgets Fichiers et Réglages rapides. */
@@ -1756,7 +1989,7 @@ ul.note-links {
 .main:has(.editor-page) {
   display: flex;
   max-width: none;
-  height: 100dvh;
+  height: calc(100dvh / var(--zoom, 1));
   padding: 0;
 }
 
@@ -2432,8 +2665,8 @@ input.note-title:focus-visible {
 /* ---------- 8. Palette de commandes ---------- */
 
 .palette {
-  width: min(600px, calc(100vw - 24px));
-  max-height: min(560px, calc(100dvh - 24px));
+  width: min(600px, calc((100vw - 24px) / var(--zoom, 1)));
+  max-height: min(560px, calc((100dvh - 24px) / var(--zoom, 1)));
   margin-top: 12vh;
   padding: 0;
   overflow: hidden;
@@ -2605,6 +2838,10 @@ input.note-title:focus-visible {
 .cal-d1 {
   --days: 1;
   --slot: 5px;
+}
+
+.cal-d3 {
+  --days: 3;
 }
 
 .cal-d5 {
@@ -3514,7 +3751,7 @@ input.note-title:focus-visible {
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 31;
-    width: min(280px, 86vw);
+    width: min(280px, calc(86vw / var(--zoom, 1)));
     translate: -100% 0;
     visibility: hidden;
     transition: translate var(--enter) var(--ease), visibility var(--enter);
@@ -3539,7 +3776,7 @@ input.note-title:focus-visible {
   }
 
   .main:has(.editor-page) {
-    height: calc(100dvh - 56px);
+    height: calc((100dvh - 56px) / var(--zoom, 1));
   }
 
   .clock {

@@ -29,18 +29,19 @@ async fn disposition_par_espace() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
 
-    // Par défaut : agenda, tâches, notes, fichiers.
+    // Par défaut : calendrier, prochains cours, tâches, notes, fichiers.
     let page = alice.get("/").await;
     assert_eq!(page.status, StatusCode::OK);
     let default = layout(&[
-        ("courses", "w2 h2"),
+        ("calendar", "w2 h3"),
+        ("courses", "w2 h1"),
         ("tasks", "w2 h2"),
         ("notes", "w2 h1"),
         ("files", "w2 h1"),
     ]);
     assert_eq!(widgets(&page.body), default);
-    // Le catalogue propose les cinq outils, en trois tailles.
-    for kind in ["courses", "tasks", "notes", "files", "settings"] {
+    // Le catalogue propose tous les widgets, en trois tailles.
+    for kind in ["calendar", "courses", "tasks", "notes", "files", "settings"] {
         assert!(
             page.body.contains(&format!(
                 "data-dash-pick data-kind=\"{kind}\" data-w=\"2\" data-h=\"2\""
@@ -189,8 +190,73 @@ async fn sans_fichiers_le_widget_disparait() {
     assert!(!page.body.contains("data-kind=\"files\""));
     assert_eq!(
         widgets(&page.body),
-        layout(&[("courses", "w2 h2"), ("tasks", "w2 h2"), ("notes", "w2 h1")])
+        layout(&[
+            ("calendar", "w2 h3"),
+            ("courses", "w2 h1"),
+            ("tasks", "w2 h2"),
+            ("notes", "w2 h1")
+        ])
     );
     let widget = alice.get_fragment("/widgets/files").await;
     assert!(widget.body.contains("pas activés"));
+}
+
+/// Ajoute une source à l'espace de `slug` d'Alice, avec un cours aujourd'hui
+/// à 10 h (heure de Paris).
+async fn course_today(app: &TestApp, slug: &str, title: &str) {
+    let now = dashu::time::now();
+    let ten = dashu::time::day_start(dashu::time::paris_date(now)) + 10 * 3600;
+    let source = sqlx::query(
+        "INSERT INTO calendar_sources (user_id, space_id, name, ical_url, created_at)
+         VALUES (?, ?, 'Pronote', 'http://127.0.0.1:1/a.ics', ?)",
+    )
+    .bind(app.user_id(ALICE).await)
+    .bind(app.space_id(ALICE, slug).await)
+    .bind(now)
+    .execute(&app.state.db)
+    .await
+    .unwrap()
+    .last_insert_rowid();
+    sqlx::query(
+        "INSERT INTO calendar_events (source_id, uid, title, location, starts_at, ends_at)
+         VALUES (?, 'u', ?, 'B204', ?, ?)",
+    )
+    .bind(source)
+    .bind(title)
+    .bind(ten)
+    .bind(ten + 3600)
+    .execute(&app.state.db)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn widget_calendrier() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+
+    // Sans agenda : de quoi en ajouter.
+    let empty = alice.get_fragment("/widgets/calendar?w=2&h=3").await;
+    assert_eq!(empty.status, StatusCode::OK);
+    assert!(empty.body.contains("Ajouter un flux iCal"));
+
+    // La grille de la page Agenda : la largeur choisit les jours montrés.
+    course_today(&app, "ecole", "RESEAUX - MARTIN P.").await;
+    let days = |body: &str| body.matches("class=\"cal-dayhead").count();
+    let one = alice.get_fragment("/widgets/calendar?w=1&h=2").await;
+    assert!(one.body.contains("class=\"cal cal-d1\""));
+    assert_eq!(days(&one.body), 1);
+    assert!(one.body.contains("cal-dayhead is-today"));
+    let three = alice.get_fragment("/widgets/calendar?w=2&h=3").await;
+    assert_eq!(days(&three.body), 3);
+    let week = alice.get_fragment("/widgets/calendar?w=4&h=3").await;
+    assert!(days(&week.body) == 5 || days(&week.body) == 7);
+
+    // Depuis Perso, le cours d'École y est, marqué « École » ; depuis Taff, rien.
+    assert!(three.body.contains("<strong>RESEAUX</strong>"));
+    assert!(three.body.contains(">École</b>"));
+    alice.post("/space", &[("slug", "taff")]).await;
+    let taff = alice.get_fragment("/widgets/calendar?w=2&h=3").await;
+    assert!(!taff.body.contains("RESEAUX"));
+    assert!(taff.body.contains("Pas d'agenda dans cet espace"));
 }

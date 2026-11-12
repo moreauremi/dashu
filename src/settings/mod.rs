@@ -1,6 +1,8 @@
 //! Réglages : thème, espaces (gérés par `crate::spaces`), raccourcis du
 //! téléphone, mot de passe, compte Google lié, sources iCal.
 
+pub mod profile;
+
 use std::collections::HashMap;
 
 use askama::Template;
@@ -42,6 +44,9 @@ struct SettingsPage {
     /// Toutes les entrées possibles de la barre du téléphone, et si elles y sont.
     tab_choices: Vec<(&'static Tab, bool)>,
     tab_max: usize,
+    first_name: String,
+    last_name: String,
+    profile_max: usize,
     /// Couleur et icône présélectionnées pour un nouvel espace.
     new_color: &'static str,
     new_icon: &'static str,
@@ -85,6 +90,9 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
 
     let (new_color, new_icon) = spaces::suggestion(&ctx.spaces);
     let page = SettingsPage {
+        first_name: ctx.user.first_name.clone(),
+        last_name: ctx.user.last_name.clone(),
+        profile_max: profile::NAME_MAX_CHARS,
         tab_choices,
         tab_max: tabbar::MAX,
         new_color,

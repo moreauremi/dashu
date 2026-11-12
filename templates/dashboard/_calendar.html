@@ -1,0 +1,11 @@
+<div id="w-calendar" class="widget-body widget-cal">
+  {% if !has_sources %}
+    {% if overview %}
+    <p class="empty">Aucun agenda pour l'instant : ici, ceux de tous les espaces se rejoignent. <a href="/settings#agendas">Ajouter un flux iCal</a></p>
+    {% else %}
+    <p class="empty">Pas d'agenda dans cet espace. <a href="/settings#agendas">Ajouter un flux iCal</a></p>
+    {% endif %}
+  {% else %}
+  {% include "calendar/_grid.html" %}
+  {% endif %}
+</div>

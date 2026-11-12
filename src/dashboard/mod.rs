@@ -107,6 +107,37 @@ pub async fn save_layout(
 }
 
 // ---------------------------------------------------------------------
+// Widget « Calendrier »
+// ---------------------------------------------------------------------
+
+#[derive(Template)]
+#[template(path = "dashboard/_calendar.html")]
+struct CalendarWidget {
+    grid: calendar::view::Grid,
+    has_sources: bool,
+    overview: bool,
+}
+
+/// `GET /widgets/calendar?w=2&h=3` : la grille de la page Agenda, sur
+/// aujourd'hui (1 colonne), trois jours (2 colonnes) ou la semaine (au-delà ;
+/// aussi sans taille). La hauteur ne change que la part visible : le widget
+/// défile et s'ouvre sur l'heure en cours (static/js/dashboard.js).
+pub async fn calendar_widget(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Query(size): Query<SizeQuery>,
+) -> AppResult<Response> {
+    let columns = size.get().map_or(layout::MAX_SPAN, |(w, _)| w);
+    let (grid, has_sources) =
+        calendar::widget_grid(&state.db, ctx.user.id, &ctx.active, columns, time::now()).await?;
+    Ok(web::html(CalendarWidget {
+        grid,
+        has_sources,
+        overview: calendar::is_overview(&ctx.active),
+    }))
+}
+
+// ---------------------------------------------------------------------
 // Widget « Prochains cours »
 // ---------------------------------------------------------------------
 

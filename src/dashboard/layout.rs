@@ -22,12 +22,19 @@ pub struct Kind {
     pub link: Option<(&'static str, &'static str)>,
 }
 
-pub const KINDS: [Kind; 5] = [
+pub const KINDS: [Kind; 6] = [
+    Kind {
+        key: "calendar",
+        title: "Calendrier",
+        tool: "Agenda",
+        icon: "calendar",
+        link: Some(("/calendar", "Agenda")),
+    },
     Kind {
         key: "courses",
         title: "Prochains cours",
         tool: "Agenda",
-        icon: "calendar",
+        icon: "clock",
         link: Some(("/calendar", "Agenda")),
     },
     Kind {
@@ -71,8 +78,10 @@ pub const SIZES: [(&str, &str, u8, u8); 3] = [
 /// Colonnes et rangées qu'un widget peut couvrir au plus.
 pub const MAX_SPAN: u8 = 4;
 
-/// Disposition d'un espace qui n'a jamais été réglée.
-pub const DEFAULT: &str = "courses:2x2,tasks:2x2,notes:2x1,files:2x1";
+/// Disposition d'un espace qui n'a jamais été réglée : le calendrier à
+/// gauche sur trois rangées, les prochains cours et les tâches à droite,
+/// puis les notes et les fichiers.
+pub const DEFAULT: &str = "calendar:2x3,courses:2x1,tasks:2x2,notes:2x1,files:2x1";
 
 #[derive(Clone, Copy)]
 pub struct Widget {

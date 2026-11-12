@@ -171,11 +171,14 @@
     handle.setPointerCapture?.(event.pointerId);
 
     // Pas d'une colonne et d'une rangée, écarts compris, pour l'agrandissement.
+    // Les mesures du CSS ignorent le zoom de l'interface (taille réglable),
+    // le pointeur non : `zoom` ramène tout à l'échelle de l'écran.
     const style = getComputedStyle(grid());
-    const columns = style.gridTemplateColumns.split(" ").length;
-    const gap = parseFloat(style.columnGap) || 0;
-    const rowGap = parseFloat(style.rowGap) || 0;
     const width = grid().getBoundingClientRect().width;
+    const zoom = width / (parseFloat(style.width) || width);
+    const columns = style.gridTemplateColumns.split(" ").length;
+    const gap = (parseFloat(style.columnGap) || 0) * zoom;
+    const rowGap = (parseFloat(style.rowGap) || 0) * zoom;
     drag = {
       mode: handle.dataset.dw,
       widget,
@@ -184,7 +187,7 @@
       w: +widget.dataset.w,
       h: +widget.dataset.h,
       stepX: (width - gap * (columns - 1)) / columns + gap,
-      stepY: (parseFloat(style.gridAutoRows) || 140) + rowGap,
+      stepY: (parseFloat(style.gridAutoRows) || 140) * zoom + rowGap,
       changed: false,
     };
     widget.classList.add("dragging");
@@ -245,6 +248,76 @@
     sibling[backward ? "before" : "after"](widget);
     handle.focus();
     save();
+  });
+
+  // --- Widget Calendrier : à son arrivée, la grille s'ouvre sur l'heure en
+  // cours (ou sur le premier cours de la période), et la colonne du jour
+  // vient à l'écran si la semaine défile de côté.
+
+  function placeCalendar() {
+    const scroller = $("#w-calendar .cal-scroll:not([data-placed])");
+    if (!scroller) return;
+    scroller.dataset.placed = "";
+    const box = scroller.getBoundingClientRect();
+    // Les positions à l'écran sont zoomées (taille de l'interface), le
+    // défilement non : on divise par le zoom.
+    const zoom = box.height / (scroller.clientHeight || box.height);
+    const heads = $(".cal-heads", scroller)?.offsetHeight ?? 0;
+    const mark = $("[data-nowline]:not([hidden])", scroller) ?? $(".ev", scroller);
+    if (mark) {
+      const y = (mark.getBoundingClientRect().top - box.top) / zoom + scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, y - heads - scroller.clientHeight / 4);
+    }
+    const today = $(".cal-dayhead.is-today", scroller);
+    const corner = $(".cal-corner", scroller);
+    if (today && corner) scroller.scrollLeft = Math.max(0, today.offsetLeft - corner.offsetWidth);
+  }
+  // --- Un widget ne défile pas : à l'arrivée de son contenu, les éléments
+  // de liste qui dépassent sont retirés en partant de la fin, et une ligne
+  // « + N de plus » le dit. Le calendrier, lui, est placé (placeCalendar).
+
+  function fit(body) {
+    body.dataset.fitted = "";
+    const overflows = () => body.scrollHeight > body.clientHeight + 1;
+    if (!overflows()) return;
+    const items = [...body.querySelectorAll("li")];
+    let hidden = 0;
+    let more = null;
+    while (overflows() && items.length) {
+      const item = items.pop();
+      const list = item.parentElement;
+      item.remove();
+      if (list && !list.children.length) list.remove();
+      hidden += 1;
+      if (!more) {
+        more = document.createElement("p");
+        more.className = "widget-more";
+        body.append(more);
+      }
+      more.textContent = `+ ${hidden} de plus`;
+    }
+  }
+
+  function settle() {
+    placeCalendar();
+    for (const body of document.querySelectorAll(".dw .widget-body:not([data-fitted]):not(.widget-cal)")) {
+      // Le squelette de chargement n'est pas un contenu à ajuster.
+      if (!body.hasAttribute("hx-get")) fit(body);
+    }
+  }
+  document.addEventListener("htmx:afterSettle", settle);
+
+  // La fenêtre change de taille : chaque widget recharge son contenu, qui
+  // s'ajustera à sa nouvelle place (ce qui avait été retiré peut revenir).
+  // Seule la largeur compte (les rangées ont une hauteur fixe) : sur iPhone,
+  // la barre d'adresse qui se replie change la hauteur à chaque défilement.
+  let resizeTimer = 0;
+  let lastWidth = window.innerWidth;
+  window.addEventListener("resize", () => {
+    if (window.innerWidth === lastWidth) return;
+    lastWidth = window.innerWidth;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => widgets().forEach(reloadBody), 300);
   });
 
   // Échap quitte le mode édition (le catalogue ouvert se ferme d'abord, seul).

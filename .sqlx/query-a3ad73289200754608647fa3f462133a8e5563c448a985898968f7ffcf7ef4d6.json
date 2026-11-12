@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET avatar = ?, avatar_version = avatar_version + 1 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a3ad73289200754608647fa3f462133a8e5563c448a985898968f7ffcf7ef4d6"
+}

@@ -199,6 +199,52 @@ async fn events_between(
     Ok(events)
 }
 
+/// Grille du widget « Calendrier » du dashboard, avec les mêmes règles que
+/// la page Agenda (Perso réunit tous les espaces) : aujourd'hui pour un
+/// widget d'une colonne, trois jours à partir d'aujourd'hui pour deux, la
+/// semaine au-delà (le week-end seulement s'il s'y passe quelque chose).
+/// Renvoie aussi s'il existe au moins un agenda à montrer.
+pub async fn widget_grid(
+    db: &SqlitePool,
+    user: i64,
+    space: &Space,
+    columns: u8,
+    now: i64,
+) -> AppResult<(Grid, bool)> {
+    let overview = is_overview(space);
+    let today = time::paris_date(now);
+    let monday = time::monday_of(today);
+    let (first, last) = match columns {
+        1 => (today, today),
+        2 => (today, today + Duration::days(2)),
+        _ => (monday, monday + Duration::days(6)),
+    };
+    let events = events_between(db, user, space.id, overview, first, last).await?;
+    let dates: Vec<NaiveDate> = match columns {
+        1 | 2 => (0..=(last - first).num_days())
+            .map(|i| first + Duration::days(i))
+            .collect(),
+        _ => {
+            let saturday = time::day_start(monday + Duration::days(5));
+            let weekend = events.iter().any(|e| e.ends_at > saturday);
+            (0..if weekend { 7 } else { 5 })
+                .map(|i| monday + Duration::days(i))
+                .collect()
+        }
+    };
+    let has_sources = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!: i64" FROM calendar_sources
+           WHERE user_id = ?1 AND (?3 OR space_id = ?2)"#,
+        user,
+        space.id,
+        overview
+    )
+    .fetch_one(db)
+    .await?
+        > 0;
+    Ok((view::build(&dates, &events, now), has_sources))
+}
+
 #[derive(Deserialize)]
 pub struct RefreshForm {
     next: Option<String>,

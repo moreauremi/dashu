@@ -108,6 +108,10 @@ const icons = {
   music: "music",
   plane: "plane",
   folder: "folder",
+  // Barre latérale ancrée ou détachée, photo de profil.
+  "panel-pin": "panel-left",
+  "panel-float": "panel-left-close",
+  camera: "camera",
 };
 
 let sprite =

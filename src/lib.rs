@@ -136,6 +136,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/widgets/tasks", get(dashboard::tasks))
         .route("/widgets/notes", get(dashboard::recent_notes))
         .route("/widgets/files", get(dashboard::recent_files))
+        .route("/widgets/calendar", get(dashboard::calendar_widget))
         .route("/widgets/settings", get(dashboard::quick_settings))
         .route("/dashboard/grid", get(dashboard::grid))
         .route("/dashboard/layout", post(dashboard::save_layout))
@@ -173,6 +174,15 @@ pub fn build_router(state: AppState) -> Router {
         // Réglages
         .route("/settings", get(settings::page))
         .route("/settings/theme", post(settings::set_theme))
+        .route("/settings/profile", post(settings::profile::save_profile))
+        .route("/settings/avatar", post(settings::profile::upload_avatar))
+        .route(
+            "/settings/avatar/delete",
+            post(settings::profile::delete_avatar),
+        )
+        .route("/profile/avatar", get(settings::profile::avatar))
+        .route("/settings/size", post(settings::profile::set_size))
+        .route("/settings/sidebar", post(settings::profile::set_sidebar))
         .route("/settings/password", post(settings::set_password))
         .route("/settings/tabs", post(settings::set_tabs))
         .route("/settings/google/unlink", post(settings::unlink_google))

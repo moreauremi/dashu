@@ -40,43 +40,6 @@
   <a class="btn btn-primary" href="/settings#agendas">Ajouter un flux iCal</a>
 </div>
 {% else %}
-{#- La grille : une colonne par jour, une rangée par tranche de 5 minutes.
-    Les classes gs…/ge… (début/fin) et k…/p… (colonnes d'événements
-    simultanés) placent chaque cours sans aucun style en ligne. -#}
-<div class="cal cal-d{{ grid.days.len() }}" data-first-hour="{{ grid.first_hour }}" data-hours="{{ grid.hours_count }}">
-  <div class="cal-scroll">
-    <div class="cal-row cal-heads">
-      <div class="cal-corner"></div>
-      {% for day in grid.days %}
-      <div class="cal-dayhead{% if day.is_today %} is-today{% endif %}">
-        <a href="/calendar?view=day&amp;date={{ day.iso }}" aria-label="{{ day.label }}">
-          <span class="cal-wd">{{ day.weekday }}</span><span class="cal-dn">{{ day.day }}</span>
-        </a>
-        {% for name in day.all_day %}<span class="cal-allday" title="{{ name }}">{{ name }}</span>{% endfor %}
-      </div>
-      {% endfor %}
-    </div>
-
-    <div class="cal-row cal-grid">
-      <div class="cal-hours tg tgh{{ grid.hours_count }}" aria-hidden="true">
-        {% for hour in grid.hours %}<span class="gs{{ hour.slot }}">{{ hour.label }}</span>{% endfor %}
-      </div>
-      {% for day in grid.days %}
-      <div class="cal-col tg tgh{{ grid.hours_count }}{% if day.is_today %} is-today{% endif %}" role="list" aria-label="{{ day.label }}">
-        {% for ev in day.events %}
-        <article class="ev ev-c{{ ev.color }} gs{{ ev.start_slot }} ge{{ ev.end_slot }} k{{ ev.columns }} p{{ ev.column }} {{ ev.density }}{% if ev.past %} is-past{% endif %}"
-                 role="listitem" title="{% if !ev.tag.is_empty() %}{{ ev.tag }} · {% endif %}{{ ev.subject }} · {{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}">
-          <strong>{{ ev.subject }}</strong>
-          <span class="ev-time">{% if !ev.tag.is_empty() %}<b class="ev-space" data-accent="{{ ev.tag_color }}">{{ ev.tag }}</b> · {% endif %}{{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}</span>
-          {% if !ev.details.is_empty() %}<span class="ev-details">{{ ev.details }}</span>{% endif %}
-        </article>
-        {% endfor %}
-        {% if let Some(slot) = day.now_slot %}<div class="nowline gs{{ slot }}" data-nowline aria-hidden="true"></div>{% endif %}
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% if grid.is_empty %}<p class="cal-empty muted">Rien de prévu sur cette période</p>{% endif %}
-</div>
+{% include "calendar/_grid.html" %}
 {% endif %}
 {% endblock %}

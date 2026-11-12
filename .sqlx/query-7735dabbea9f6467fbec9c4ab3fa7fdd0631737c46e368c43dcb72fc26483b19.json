@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET sidebar_floating = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7735dabbea9f6467fbec9c4ab3fa7fdd0631737c46e368c43dcb72fc26483b19"
+}

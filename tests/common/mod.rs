@@ -410,6 +410,19 @@ impl Client {
         .await
     }
 
+    /// `POST` d'un corps brut (une image, par exemple), jeton CSRF en en-tête
+    /// comme le fait static/js/app.js.
+    pub async fn post_raw(&mut self, path: &str, bytes: &[u8]) -> TestResponse {
+        self.send(
+            Method::POST,
+            path,
+            Some(SentBody::Raw(bytes.to_vec(), true)),
+            CsrfMode::Header,
+            true,
+        )
+        .await
+    }
+
     pub async fn delete(&mut self, path: &str) -> TestResponse {
         self.send(Method::DELETE, path, None, CsrfMode::Header, false)
             .await

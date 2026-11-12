@@ -13,7 +13,9 @@
       hx-swap      les changements de page passent par une View Transition
                    (fondu court, sans écran vide) là où le navigateur la gère ;
                    les fragments (widgets, recherche…) gardent leur propre hx-swap -#}
-<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}" hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
+{#- data-size : taille de l'interface (zoom de toute l'app) ; data-sidebar :
+    barre latérale détachée, cachée à gauche (voir .sidebar-edge). -#}
+<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
   <a class="skip-link" href="#main">Aller au contenu</a>
 
   <header class="topbar">
@@ -37,8 +39,21 @@
     {% endfor %}
   </div>
 
+  {#- Barre détachée : survoler ce liseré, au bord gauche de l'écran, la fait
+      glisser par-dessus la page (comme le mode compact du navigateur Zen). -#}
+  <div class="sidebar-edge" aria-hidden="true"></div>
   <nav id="sidebar" class="sidebar" aria-label="Navigation principale">
-    <a class="wordmark" href="/">{{ crate::assets::logo()|safe }}</a>
+    <div class="sidebar-head">
+      <a class="wordmark" href="/">{{ crate::assets::logo()|safe }}</a>
+      <form class="sidebar-pin" method="post" action="/settings/sidebar">
+        <input type="hidden" name="next" value="{{ shell.path }}">
+        {% if shell.sidebar_floating %}
+        <button class="icon-btn" name="floating" value="0" aria-label="Ancrer la barre latérale" title="Ancrer la barre latérale">{{ crate::assets::icon("panel-pin")|safe }}</button>
+        {% else %}
+        <button class="icon-btn" name="floating" value="1" aria-label="Détacher la barre latérale (elle se cache à gauche)" title="Détacher la barre latérale">{{ crate::assets::icon("panel-float")|safe }}</button>
+        {% endif %}
+      </form>
+    </div>
 
     <div class="sidebar-nav">
       <button class="search-btn" type="button" data-palette-open>
@@ -52,21 +67,28 @@
         <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
         <li><a href="/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
         <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
-        <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
       </ul>
 
       <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
     </div>
 
+    {#- En bas : les réglages, la taille de l'interface, le compte. Le thème
+        se choisit dans Réglages. -#}
     <div class="sidebar-foot">
-      <form class="theme-switch" method="post" action="/settings/theme" role="group" aria-label="Thème">
+      <ul class="nav" role="list">
+        <li><a href="/settings"{% if shell.nav == "settings" %} aria-current="page"{% endif %}>{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a></li>
+      </ul>
+      <form class="mini-switch size-switch" method="post" action="/settings/size" role="group" aria-label="Taille de l'interface">
         <input type="hidden" name="next" value="{{ shell.path }}">
-        <button name="theme" value="system" aria-pressed="{{ shell.theme.is_empty() }}" aria-label="Thème du système" title="Thème du système">{{ crate::assets::icon("monitor")|safe }}</button>
-        <button name="theme" value="dark" aria-pressed="{{ shell.theme == "dark" }}" aria-label="Thème sombre" title="Thème sombre">{{ crate::assets::icon("moon")|safe }}</button>
-        <button name="theme" value="light" aria-pressed="{{ shell.theme == "light" }}" aria-label="Thème clair" title="Thème clair">{{ crate::assets::icon("sun")|safe }}</button>
+        <button name="size" value="small" aria-pressed="{{ shell.ui_size == "small" }}" aria-label="Interface plus petite" title="Plus petite"><span class="size-a size-a-s" aria-hidden="true">A</span></button>
+        <button name="size" value="normal" aria-pressed="{{ shell.ui_size.is_empty() }}" aria-label="Interface de taille normale" title="Normale"><span class="size-a" aria-hidden="true">A</span></button>
+        <button name="size" value="large" aria-pressed="{{ shell.ui_size == "large" }}" aria-label="Interface plus grande" title="Plus grande"><span class="size-a size-a-l" aria-hidden="true">A</span></button>
       </form>
       <div class="account">
-        <span class="account-email" title="{{ shell.email }}">{{ shell.email }}</span>
+        <a class="account-link" href="/settings#profil" title="{{ shell.email }}">
+          {% include "_avatar.html" %}
+          <span class="account-name">{{ shell.name }}</span>
+        </a>
         {#- Déconnexion sans htmx : une vraie navigation, pour repartir d'une page vierge. -#}
         <form method="post" action="/logout" hx-boost="false">
           <input type="hidden" name="_csrf" value="{{ shell.csrf }}">

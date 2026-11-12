@@ -533,4 +533,43 @@
       go("n");
     }
   });
+
+  // ------------------------------------------------- Photo de profil
+
+  // Réglages : la photo choisie est recadrée au carré et réduite à 256 px
+  // ici même (canvas), puis envoyée en JPEG. Le serveur ne reçoit qu'une
+  // petite image, qu'il relit et réenregistre (src/settings/profile.rs).
+  document.addEventListener("change", async (event) => {
+    const input = event.target.closest?.("[data-avatar-input]");
+    const file = input?.files?.[0];
+    if (!file) return;
+    const status = $("[data-avatar-status]");
+    const say = (text) => {
+      if (status) status.textContent = text;
+    };
+    say("Envoi de la photo…");
+    try {
+      const bitmap = await createImageBitmap(file);
+      const side = Math.min(bitmap.width, bitmap.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 256;
+      canvas
+        .getContext("2d")
+        .drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 256, 256);
+      const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      if (!jpeg) throw new Error("canvas");
+      const token = JSON.parse($("#app").getAttribute("hx-headers"))["X-CSRF-Token"];
+      const response = await fetch("/settings/avatar", {
+        method: "POST",
+        headers: { "X-CSRF-Token": token, "Content-Type": "image/jpeg" },
+        body: jpeg,
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      // La page se recharge : la nouvelle photo apparaît partout, avec le message.
+      window.location.reload();
+    } catch {
+      say("Cette image n'a pas pu être lue. Essaie une photo JPEG ou PNG.");
+      input.value = "";
+    }
+  });
 })();

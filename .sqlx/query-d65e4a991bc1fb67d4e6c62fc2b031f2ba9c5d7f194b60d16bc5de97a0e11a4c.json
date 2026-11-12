@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT abs(random() % 1000) AS \"n!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d65e4a991bc1fb67d4e6c62fc2b031f2ba9c5d7f194b60d16bc5de97a0e11a4c"
+}

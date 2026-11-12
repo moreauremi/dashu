@@ -1,0 +1,3 @@
+{#- Avatar de l'utilisateur connecté : sa photo, sinon ses initiales sur un
+    fond tiré au hasard à la création du compte. Décoratif : le nom est à côté. -#}
+<span class="avatar" data-accent="{{ shell.avatar_color }}" aria-hidden="true">{% if let Some(url) = shell.avatar_url %}<img src="{{ url }}" alt="" width="64" height="64">{% else %}{{ shell.initials }}{% endif %}</span>

@@ -40,6 +40,48 @@ pub struct User {
     pub google_linked: bool,
     /// Raccourcis du téléphone (voir [`crate::tabbar`]), `None` = par défaut.
     pub mobile_tabs: Option<String>,
+    pub first_name: String,
+    pub last_name: String,
+    /// Fond de l'avatar par défaut : un accent (voir `spaces::COLORS`).
+    pub avatar_color: String,
+    pub has_avatar: bool,
+    pub avatar_version: i64,
+    /// `small`, `large`, ou `None` pour la taille normale.
+    pub ui_size: Option<String>,
+    pub sidebar_floating: bool,
+}
+
+impl User {
+    /// « Prénom Nom », ou l'email tant que le profil est vide.
+    pub fn display_name(&self) -> String {
+        let name = format!("{} {}", self.first_name, self.last_name);
+        match name.trim() {
+            "" => self.email.clone(),
+            name => name.to_string(),
+        }
+    }
+
+    /// Initiales de l'avatar par défaut : celles du prénom et du nom, ou la
+    /// première lettre de l'email.
+    pub fn initials(&self) -> String {
+        let first = |s: &str| s.trim().chars().next();
+        let letters: String = [first(&self.first_name), first(&self.last_name)]
+            .into_iter()
+            .flatten()
+            .collect();
+        let letters = if letters.is_empty() {
+            first(&self.email).map(String::from).unwrap_or_default()
+        } else {
+            letters
+        };
+        letters.to_uppercase()
+    }
+
+    /// Adresse de la photo de profil, avec sa version (cache d'un an).
+    pub fn avatar_url(&self) -> Option<String> {
+        self.has_avatar
+            .then(|| format!("/profile/avatar?v={}", self.avatar_version))
+    }
 }
 
 /// Message affiché une seule fois sur la page suivante (après une redirection).
@@ -65,6 +107,16 @@ pub struct Shell {
     /// Entrée de menu active : `dashboard`, `notes`, `calendar`, `settings`.
     pub nav: &'static str,
     pub email: String,
+    /// « Prénom Nom », ou l'email si le profil est vide.
+    pub name: String,
+    /// Avatar : photo s'il y en a une, sinon initiales sur un fond coloré.
+    pub initials: String,
+    pub avatar_color: String,
+    pub avatar_url: Option<String>,
+    /// Taille de l'interface : `small`, `large`, ou vide (normale).
+    pub ui_size: String,
+    /// Barre latérale détachée (cachée à gauche) plutôt qu'ancrée.
+    pub sidebar_floating: bool,
     /// `dark`, `light` ou chaîne vide (suivre le système).
     pub theme: String,
     pub spaces: Vec<Space>,
@@ -84,6 +136,12 @@ impl Ctx {
         Ok(Shell {
             nav,
             email: self.user.email.clone(),
+            name: self.user.display_name(),
+            initials: self.user.initials(),
+            avatar_color: self.user.avatar_color.clone(),
+            avatar_url: self.user.avatar_url(),
+            ui_size: self.user.ui_size.clone().unwrap_or_default(),
+            sidebar_floating: self.user.sidebar_floating,
             theme: self.user.theme.clone().unwrap_or_default(),
             spaces: self.spaces.clone(),
             active: self.active.clone(),
@@ -119,6 +177,23 @@ pub async fn set_flash(session: &Session, kind: &str, text: impl Into<String>) -
         )
         .await?;
     Ok(())
+}
+
+/// Tire au hasard (par SQLite) la couleur de l'avatar par défaut et la garde.
+async fn draw_avatar_color(db: &sqlx::SqlitePool, user_id: i64) -> AppResult<String> {
+    let draw: i64 = sqlx::query_scalar!(r#"SELECT abs(random() % 1000) AS "n!: i64""#)
+        .fetch_one(db)
+        .await?;
+    let index = usize::try_from(draw).unwrap_or(0) % spaces::COLORS.len();
+    let color = spaces::COLORS[index].0;
+    sqlx::query!(
+        "UPDATE users SET avatar_color = ? WHERE id = ? AND avatar_color = ''",
+        color,
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(color.to_string())
 }
 
 /// Ouvre la session d'un utilisateur qui vient de s'authentifier.
@@ -158,7 +233,9 @@ impl FromRequestParts<AppState> for Ctx {
             r#"SELECT id AS "id!", email, theme,
                       password_hash IS NOT NULL AS "has_password!: bool",
                       google_sub IS NOT NULL AS "google_linked!: bool",
-                      mobile_tabs
+                      mobile_tabs, first_name, last_name, avatar_color,
+                      avatar IS NOT NULL AS "has_avatar!: bool", avatar_version,
+                      ui_size, sidebar_floating AS "sidebar_floating!: bool"
                FROM users WHERE id = ?"#,
             user_id
         )
@@ -168,13 +245,20 @@ impl FromRequestParts<AppState> for Ctx {
 
         // Compte supprimé, ou email retiré de ALLOWED_EMAILS : la session ne
         // vaut plus rien, même si son cookie est encore valide.
-        let user = match user {
+        let mut user = match user {
             Some(user) if state.config.is_allowed(&user.email) => user,
             _ => {
                 let _ = session.flush().await;
                 return Err(login_redirect(parts));
             }
         };
+
+        // Fond de l'avatar par défaut : tiré au hasard la première fois, puis gardé.
+        if user.avatar_color.is_empty() {
+            user.avatar_color = draw_avatar_color(&state.db, user.id)
+                .await
+                .map_err(internal)?;
+        }
 
         let spaces = spaces::list(&state.db, user.id).await.map_err(internal)?;
         let wanted = session

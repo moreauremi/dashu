@@ -39,6 +39,42 @@
 </header>
 
 <div class="settings">
+  <section class="card" id="profil" aria-labelledby="s-profile">
+    <header class="card-head"><h2 id="s-profile">Profil</h2></header>
+    <div class="card-body">
+      <div class="profile-photo">
+        <span class="avatar-lg">{% include "_avatar.html" %}</span>
+        <div class="stack">
+          {#- La photo est recadrée et réduite dans le navigateur, puis envoyée
+              (app.js, « Photo de profil »). -#}
+          <div class="profile-actions">
+            <label class="btn file-btn">
+              {{ crate::assets::icon("camera")|safe }}{% if shell.avatar_url.is_some() %}Changer la photo{% else %}Ajouter une photo{% endif %}
+              <input type="file" accept="image/*" data-avatar-input>
+            </label>
+            {% if shell.avatar_url.is_some() %}
+            <form method="post" action="/settings/avatar/delete">
+              <button class="btn" type="submit">Retirer la photo</button>
+            </form>
+            {% endif %}
+          </div>
+          <p class="hint" data-avatar-status role="status">{% if shell.avatar_url.is_some() %}La photo est recadrée en carré au centre.{% else %}Sans photo, tes initiales s'affichent sur un fond de couleur.{% endif %}</p>
+        </div>
+      </div>
+      <form class="profile-names" method="post" action="/settings/profile">
+        <label class="field">
+          <span class="field-label">Prénom</span>
+          <input type="text" name="first_name" value="{{ first_name }}" maxlength="{{ profile_max }}" autocomplete="given-name">
+        </label>
+        <label class="field">
+          <span class="field-label">Nom</span>
+          <input type="text" name="last_name" value="{{ last_name }}" maxlength="{{ profile_max }}" autocomplete="family-name">
+        </label>
+        <div><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+      </form>
+    </div>
+  </section>
+
   <section class="card" aria-labelledby="s-theme">
     <header class="card-head"><h2 id="s-theme">Apparence</h2></header>
     <div class="card-body">
@@ -48,7 +84,13 @@
         <button name="theme" value="dark" aria-pressed="{{ shell.theme == "dark" }}">{{ crate::assets::icon("moon")|safe }}Sombre</button>
         <button name="theme" value="light" aria-pressed="{{ shell.theme == "light" }}">{{ crate::assets::icon("sun")|safe }}Clair</button>
       </form>
-      <p class="hint">Le choix est enregistré sur ton compte : il te suit d'un appareil à l'autre.</p>
+      <form class="segmented" method="post" action="/settings/size" role="group" aria-label="Taille de l'interface">
+        <input type="hidden" name="next" value="/settings">
+        <button name="size" value="small" aria-pressed="{{ shell.ui_size == "small" }}">Petite</button>
+        <button name="size" value="normal" aria-pressed="{{ shell.ui_size.is_empty() }}">Normale</button>
+        <button name="size" value="large" aria-pressed="{{ shell.ui_size == "large" }}">Grande</button>
+      </form>
+      <p class="hint">Thème et taille sont enregistrés sur ton compte : ils te suivent d'un appareil à l'autre. La taille se change aussi en bas de la barre latérale.</p>
     </div>
   </section>
 

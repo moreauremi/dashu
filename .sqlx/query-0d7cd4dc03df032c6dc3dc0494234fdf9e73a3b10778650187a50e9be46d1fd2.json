@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET avatar_color = ? WHERE id = ? AND avatar_color = ''",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "0d7cd4dc03df032c6dc3dc0494234fdf9e73a3b10778650187a50e9be46d1fd2"
+}
