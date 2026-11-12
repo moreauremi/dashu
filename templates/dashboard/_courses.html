@@ -2,6 +2,8 @@
   {% if items.is_empty() %}
     {% if has_sources %}
     <p class="empty">Aucun cours à venir</p>
+    {% else if overview %}
+    <p class="empty">Aucun agenda pour l'instant : ici, ceux de tous les espaces se rejoignent. <a href="/settings#agendas">Ajouter un flux iCal</a></p>
     {% else %}
     <p class="empty">Pas d'agenda dans cet espace. <a href="/settings#agendas">Ajouter un flux iCal</a></p>
     {% endif %}
@@ -16,6 +18,7 @@
       <div class="course-meta">
         <span>{{ course.day }} · {{ course.time }}</span>
         {% if !course.location.is_empty() %}<span class="with-icon">{{ crate::assets::icon("map-pin")|safe }}{{ course.location }}</span>{% endif %}
+        {% if !course.tag.is_empty() %}<span class="pal-space" data-accent="{{ course.tag_color }}"><span class="dot" aria-hidden="true"></span>{{ course.tag }}</span>{% endif %}
       </div>
       {% if course.ongoing %}<span class="live"><span class="dot" aria-hidden="true"></span>en cours</span>{% endif %}
     </li>

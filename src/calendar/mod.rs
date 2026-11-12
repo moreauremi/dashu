@@ -19,10 +19,11 @@ use crate::web::{self, AppResult, local_path, see_other};
 use view::{EventRow, Grid};
 
 /// Perso sert de vue d'ensemble : son agenda réunit les agendas de tous les
-/// espaces (cours d'École, planning de Taff, et ses propres sources). Les
-/// autres espaces n'affichent que leurs propres sources.
+/// espaces (cours d'École, planning de Taff, ceux des espaces créés, et ses
+/// propres sources). Les autres espaces n'affichent que leurs propres sources.
+/// Même règle pour le widget « Prochains cours » et l'API.
 pub fn is_overview(space: &Space) -> bool {
-    space.slug == "perso"
+    space.is_overview()
 }
 
 #[derive(Deserialize)]

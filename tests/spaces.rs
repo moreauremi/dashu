@@ -279,12 +279,39 @@ async fn supprimer_un_espace_avec_son_contenu() {
 }
 
 #[tokio::test]
-async fn espace_vide_et_dernier_espace() {
+async fn espace_vide_et_perso_protege() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     let perso = app.space_id(ALICE, "perso").await;
     let ecole = app.space_id(ALICE, "ecole").await;
     let taff = app.space_id(ALICE, "taff").await;
+
+    // Perso ne se supprime pas, même quand il reste d'autres espaces : pas de
+    // bouton, une page qui explique, et un refus si on force.
+    let settings = alice.get("/settings").await;
+    assert!(
+        !settings
+            .body
+            .contains(&format!("/settings/spaces/{perso}/delete"))
+    );
+    assert!(
+        settings
+            .body
+            .contains(&format!("/settings/spaces/{ecole}/delete"))
+    );
+    assert!(settings.body.contains("il ne se supprime pas"));
+    let page = alice.get(&format!("/settings/spaces/{perso}/delete")).await;
+    assert!(page.body.contains("ne se supprime pas"));
+    assert!(!page.body.contains("name=\"content\""));
+    let refused = alice
+        .post(
+            &format!("/settings/spaces/{perso}/delete"),
+            &[("content", "move"), ("target", &ecole.to_string())],
+        )
+        .await;
+    let page = alice.follow(refused).await;
+    assert!(page.body.contains("« Perso » ne se supprime pas"));
+    assert_eq!(spaces_of(&app, ALICE).await.len(), 3);
 
     // Un espace vide : pas d'alerte, rien à transférer.
     let page = alice.get(&format!("/settings/spaces/{ecole}/delete")).await;
@@ -300,9 +327,13 @@ async fn espace_vide_et_dernier_espace() {
         assert_eq!(deleted.status, StatusCode::SEE_OTHER);
     }
 
-    // Il en faut au moins un.
-    let page = alice.get(&format!("/settings/spaces/{perso}/delete")).await;
-    assert!(page.body.contains("seul espace"));
+    // Seul, Perso reste là ; renommé, il reste protégé.
+    alice
+        .post(
+            &format!("/settings/spaces/{perso}"),
+            &[("name", "Maison"), ("color", "orange"), ("icon", "home")],
+        )
+        .await;
     let refused = alice
         .post(
             &format!("/settings/spaces/{perso}/delete"),
@@ -310,13 +341,77 @@ async fn espace_vide_et_dernier_espace() {
         )
         .await;
     let page = alice.follow(refused).await;
-    assert!(page.body.contains("Il faut garder au moins un espace."));
-    assert!(
-        !page
-            .body
-            .contains(&format!("/settings/spaces/{perso}/delete"))
+    assert!(page.body.contains("« Maison » ne se supprime pas"));
+    assert_eq!(
+        spaces_of(&app, ALICE).await,
+        [row("perso", "Maison", "orange", "home")]
     );
-    assert_eq!(spaces_of(&app, ALICE).await.len(), 1);
+}
+
+/// Perso a pu être supprimé avant d'être protégé : la migration 0008 le rend,
+/// vide et en tête, aux comptes qui ne l'ont plus.
+#[tokio::test]
+async fn migration_0008_rend_perso() {
+    let path = std::env::temp_dir().join(format!("dashu-migration-0008-{}.db", std::process::id()));
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+    let url = format!("sqlite://{}", path.display());
+    let mut conn = SqliteConnectOptions::from_str(&url)
+        .unwrap()
+        .create_if_missing(true)
+        .connect()
+        .await
+        .unwrap();
+    let mut before = sqlx::migrate!();
+    before.migrations = Cow::Owned(
+        before
+            .migrations
+            .iter()
+            .filter(|m| m.version < 8)
+            .cloned()
+            .collect(),
+    );
+    before.run(&mut conn).await.unwrap();
+    // Compte 1 : Perso supprimé. Compte 2 : Perso supprimé, puis un espace
+    // renommé « Perso ». Compte 3 : intact. Compte 4 : jamais connecté.
+    sqlx::raw_sql(
+        "INSERT INTO users (id, email, created_at) VALUES
+           (1, 'a@example.test', 0), (2, 'b@example.test', 0), (3, 'c@example.test', 0),
+           (4, 'd@example.test', 0);
+         INSERT INTO spaces (user_id, slug, name, color, icon, position) VALUES
+           (1, 'ecole', 'École', 'blue', 'school', 1), (1, 'taff', 'Taff', 'green', 'work', 2),
+           (2, 'taff', 'Perso', 'green', 'work', 2),
+           (3, 'perso', 'Perso', 'orange', 'home', 0), (3, 'ecole', 'École', 'blue', 'school', 1);",
+    )
+    .execute(&mut conn)
+    .await
+    .unwrap();
+    conn.close().await.unwrap();
+
+    let db = dashu::db::connect(&url).await.expect("migration 0008");
+    let spaces: Vec<(i64, String, String, i64)> = sqlx::query_as(
+        "SELECT user_id, slug, name, position FROM spaces ORDER BY user_id, position",
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        spaces,
+        [
+            (1, "perso".into(), "Perso".into(), 0),
+            (1, "ecole".into(), "École".into(), 1),
+            (1, "taff".into(), "Taff".into(), 2),
+            (2, "perso".into(), "Vue d'ensemble".into(), 1),
+            (2, "taff".into(), "Perso".into(), 2),
+            (3, "perso".into(), "Perso".into(), 0),
+            (3, "ecole".into(), "École".into(), 1),
+        ]
+    );
+    db.close().await;
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
 }
 
 #[tokio::test]

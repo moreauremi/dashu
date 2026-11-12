@@ -328,6 +328,60 @@ async fn widget_prochains_cours() {
 }
 
 #[tokio::test]
+async fn widget_de_perso_reunit_les_agendas() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    // Un cours à venir dans École, aucun agenda dans Perso ni dans Taff.
+    let source_id = import_fixture(&app, "ecole").await;
+    let now = time::now();
+    let upcoming = [ParsedEvent {
+        uid: "futur".into(),
+        title: "RESEAUX - MARTIN P.".into(),
+        location: "B204".into(),
+        starts_at: now + 3600,
+        ends_at: now + 7200,
+        all_day: false,
+    }];
+    sync::store(&app.state.db, source_id, &upcoming, now)
+        .await
+        .unwrap();
+
+    // Depuis Perso (l'espace par défaut) : le cours d'École, marqué « École ».
+    let widget = alice.get_fragment("/widgets/courses").await;
+    assert!(widget.body.contains("<strong>RESEAUX</strong>"));
+    assert!(
+        widget
+            .body
+            .contains("class=\"pal-space\" data-accent=\"blue\"")
+    );
+    assert!(widget.body.contains("École</span>"));
+
+    // Depuis École : le même cours, sans étiquette.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let widget = alice.get_fragment("/widgets/courses").await;
+    assert!(widget.body.contains("<strong>RESEAUX</strong>"));
+    assert!(!widget.body.contains("pal-space"));
+
+    // Depuis Taff : rien, il n'a pas d'agenda.
+    alice.post("/space", &[("slug", "taff")]).await;
+    let widget = alice.get_fragment("/widgets/courses").await;
+    assert!(!widget.body.contains("RESEAUX"));
+    assert!(widget.body.contains("Pas d'agenda dans cet espace"));
+
+    // Renommé, Perso reste la vue d'ensemble.
+    let perso = app.space_id(ALICE, "perso").await;
+    alice
+        .post(
+            &format!("/settings/spaces/{perso}"),
+            &[("name", "Maison"), ("color", "orange"), ("icon", "home")],
+        )
+        .await;
+    alice.post("/space", &[("slug", "perso")]).await;
+    let widget = alice.get_fragment("/widgets/courses").await;
+    assert!(widget.body.contains("<strong>RESEAUX</strong>"));
+}
+
+#[tokio::test]
 async fn perso_reunit_les_agendas_mais_pas_l_inverse() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;

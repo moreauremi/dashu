@@ -62,14 +62,18 @@
             <summary>
               <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
               <span class="space-name">{{ space.name }}</span>
+              {% if space.is_overview() %}<span class="space-tag">vue d'ensemble</span>{% endif %}
               {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
               <span class="space-more">Modifier{{ crate::assets::icon("chevron-right")|safe }}</span>
             </summary>
             <form class="space-form" method="post" action="/settings/spaces/{{ space.id }}">
               {% call space_fields(space.name.as_str(), space.color.as_str(), space.icon()) %}{% endcall %}
+              {% if space.is_overview() %}
+              <p class="hint">Son agenda réunit ceux de tous les espaces : il ne se supprime pas. On peut le renommer, il garde ce rôle.</p>
+              {% endif %}
               <div class="space-actions">
                 <button class="btn btn-primary" type="submit">Enregistrer</button>
-                {% if shell.spaces.len() > 1 %}
+                {% if !space.is_overview() && shell.spaces.len() > 1 %}
                 <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete">{{ crate::assets::icon("trash")|safe }}Supprimer l'espace</a>
                 {% endif %}
               </div>

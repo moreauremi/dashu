@@ -896,13 +896,19 @@ struct CalendarQuery {
 }
 
 /// `GET /api/v1/calendar?from=2026-11-16&to=2026-11-20&space=ecole`
+///
+/// `space=perso` donne, comme dans l'application, les agendas de tous les
+/// espaces ; chaque événement garde le slug de son espace.
 async fn calendar(
     user: ApiUser,
     State(state): State<AppState>,
     query: Result<Query<CalendarQuery>, QueryRejection>,
 ) -> ApiResult<Json<Vec<EventOut>>> {
     let Query(query) = query?;
-    let space = user.space_filter(query.space.as_deref())?;
+    let space = match query.space.as_deref() {
+        Some(slug) if user.space(slug)?.is_overview() => None,
+        other => user.space_filter(other)?,
+    };
     let first = match query.from.as_deref() {
         Some(d) => parse_date(d, "from")?,
         None => time::paris_date(time::now()),

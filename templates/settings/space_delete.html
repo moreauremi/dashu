@@ -7,7 +7,10 @@
 
 <section class="card space-delete" data-accent="{{ space.color }}">
   <div class="card-body">
-    {% if others.is_empty() %}
+    {% if space.is_overview() %}
+    <p>« {{ space.name }} » ne se supprime pas : son agenda réunit ceux de tous les espaces, c'est ta vue d'ensemble. Tu peux le renommer, changer sa couleur ou son icône : il garde ce rôle.</p>
+    <div class="space-actions"><a class="btn" href="/settings#espaces">Retour aux réglages</a></div>
+    {% else if others.is_empty() %}
     <p>C'est ton seul espace : il en faut au moins un. Crée-en un autre avant de supprimer celui-ci.</p>
     <div class="space-actions"><a class="btn" href="/settings#espaces">Retour aux réglages</a></div>
     {% else %}
@@ -42,10 +45,6 @@
           </label>
         </div>
       </fieldset>
-      {% endif %}
-
-      {% if overview %}
-      <p class="hint">L'agenda de cet espace réunit ceux de tous les autres. Sans lui, cette vue d'ensemble disparaît.</p>
       {% endif %}
 
       <div class="space-actions">

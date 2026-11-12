@@ -31,6 +31,11 @@ pub struct Space {
     pub icon: String,
 }
 
+/// Slug de Perso, l'espace « vue d'ensemble » : son agenda (page Agenda,
+/// widget « Prochains cours », API) réunit les agendas de tous les espaces.
+/// Il ne se supprime pas ; renommé, il garde ce rôle (le slug ne change pas).
+pub const OVERVIEW: &str = "perso";
+
 impl Space {
     /// Icône du sprite associée à l'espace.
     pub fn icon(&self) -> &str {
@@ -39,6 +44,11 @@ impl Space {
         } else {
             "home"
         }
+    }
+
+    /// Vrai pour Perso (voir [`OVERVIEW`]).
+    pub fn is_overview(&self) -> bool {
+        self.slug == OVERVIEW
     }
 }
 
@@ -426,12 +436,11 @@ struct DeletePage {
     /// Espaces qui peuvent recevoir le contenu.
     others: Vec<Space>,
     content: Content,
-    /// Perso réunit les agendas de tous les espaces : le dire avant de le supprimer.
-    overview: bool,
 }
 
 /// `GET /settings/spaces/{id}/delete` : confirmation, avec ce que contient
-/// l'espace et la proposition de transférer ce contenu dans un autre.
+/// l'espace et la proposition de transférer ce contenu dans un autre. Pour
+/// Perso, la page explique pourquoi il ne se supprime pas.
 pub async fn delete_page(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -441,7 +450,6 @@ pub async fn delete_page(
     let others = ctx.spaces.iter().filter(|s| s.id != id).cloned().collect();
     let content = Content::of(&state.db, ctx.user.id, id).await?;
     let page = DeletePage {
-        overview: crate::calendar::is_overview(&space),
         space,
         others,
         content,
@@ -467,6 +475,14 @@ pub async fn delete(
     axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).cloned().ok_or(AppError::NotFound)?;
+    if space.is_overview() {
+        ctx.flash_error(format!(
+            "« {} » ne se supprime pas : son agenda réunit ceux de tous les espaces.",
+            space.name
+        ))
+        .await?;
+        return Ok(see_other(BACK));
+    }
     if ctx.spaces.len() <= 1 {
         ctx.flash_error("Il faut garder au moins un espace.")
             .await?;

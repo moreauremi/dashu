@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT COUNT(*) AS \"n!: i64\" FROM calendar_sources WHERE user_id = ? AND space_id = ?",
+  "query": "SELECT COUNT(*) AS \"n!: i64\" FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 OR space_id = ?2)",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,11 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 3
     },
     "nullable": [
       false
     ]
   },
-  "hash": "75503928b2701bae845db118f1d6618fa1d1edd623c1dc85c1712de37c1a6196"
+  "hash": "b756cb5ce7cdd524674ba34516bd6d3450e49478de6842381d562f62e3ca9cda"
 }

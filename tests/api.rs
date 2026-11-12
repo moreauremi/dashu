@@ -358,6 +358,8 @@ async fn agenda_en_lecture() {
     assert_eq!(events[0]["start"], "2026-11-16T08:00:00+01:00");
     assert_eq!(events[0]["space"], "ecole");
 
+    // Perso réunit les agendas de tous les espaces, comme dans l'application ;
+    // l'événement garde le slug de son espace. Un autre espace filtre vraiment.
     let (_, perso) = app
         .api(
             Method::GET,
@@ -366,7 +368,18 @@ async fn agenda_en_lecture() {
             T,
         )
         .await;
-    assert!(perso.as_array().unwrap().is_empty());
+    let perso = perso.as_array().unwrap();
+    assert_eq!(perso.len(), 1);
+    assert_eq!(perso[0]["space"], "ecole");
+    let (_, taff) = app
+        .api(
+            Method::GET,
+            "/api/v1/calendar?from=2026-11-16&to=2026-11-20&space=taff",
+            None,
+            T,
+        )
+        .await;
+    assert!(taff.as_array().unwrap().is_empty());
 
     let (status, body) = app
         .api(
