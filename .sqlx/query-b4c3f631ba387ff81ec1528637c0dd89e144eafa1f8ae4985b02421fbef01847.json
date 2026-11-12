@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT dashboard FROM spaces WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "dashboard",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b4c3f631ba387ff81ec1528637c0dd89e144eafa1f8ae4985b02421fbef01847"
+}

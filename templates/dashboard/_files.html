@@ -1,0 +1,24 @@
+<div id="w-files" class="widget-body">
+  {% if !enabled %}
+  <p class="empty">Les fichiers ne sont pas activés sur ce serveur.</p>
+  {% else if items.is_empty() %}
+  <p class="empty">Aucun fichier dans cet espace. <a href="/files">En envoyer un</a></p>
+  {% else %}
+  <ul class="note-links file-links" role="list">
+    {% for file in items %}
+    <li><a href="/files/{{ file.id }}">
+      {% if file.thumb %}
+      <img class="file-link-thumb" src="/files/{{ file.id }}/thumb" alt="" width="28" height="28" loading="lazy">
+      {% else %}
+      <span class="file-link-icon">{{ crate::assets::icon(file.icon)|safe }}</span>
+      {% endif %}
+      <span class="note-link-title">{{ file.name }}</span>
+      <span class="muted">{{ file.meta }}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% if total > items.len() as i64 %}
+  <p class="widget-count">{{ total }} fichiers dans cet espace</p>
+  {% endif %}
+  {% endif %}
+</div>

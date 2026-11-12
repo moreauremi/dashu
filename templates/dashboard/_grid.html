@@ -1,0 +1,27 @@
+{#- Grille bento : chaque widget couvre w colonnes et h rangées (classes w1…w4,
+    h1…h4). Les outils de disposition n'apparaissent qu'en mode édition. -#}
+<div id="dash-grid" class="bento" data-dash-grid>
+  {% for widget in widgets %}
+  {% let kind = widget.kind %}
+  <section class="card widget dw w{{ widget.w }} h{{ widget.h }}" data-kind="{{ kind.key }}" data-w="{{ widget.w }}" data-h="{{ widget.h }}" aria-labelledby="w-{{ kind.key }}-title">
+    <header class="card-head">
+      <h2 id="w-{{ kind.key }}-title">{{ kind.title }}</h2>
+      {% if let Some((href, label)) = kind.link %}<a class="card-link" href="{{ href }}">{{ label }}</a>{% endif %}
+      <div class="dw-tools" role="group" aria-label="Disposition de {{ kind.title }}">
+        <button class="icon-btn dw-move" type="button" data-dw="move" aria-label="Déplacer {{ kind.title }} (glisser, ou flèches ; Maj + flèches pour la taille)" title="Glisser pour déplacer">{{ crate::assets::icon("move")|safe }}</button>
+        {% for (letter, label, w, h) in crate::dashboard::layout::SIZES %}
+        <button class="dw-size" type="button" data-dw="size" data-w="{{ w }}" data-h="{{ h }}" aria-pressed="{{ widget.is_size(w, h) }}" title="{{ label }}" aria-label="{{ kind.title }} : taille {{ label|lower }}">{{ letter }}</button>
+        {% endfor %}
+        <button class="icon-btn icon-btn-danger" type="button" data-dw="remove" aria-label="Retirer {{ kind.title }}" title="Retirer">{{ crate::assets::icon("x")|safe }}</button>
+      </div>
+    </header>
+    <div id="w-{{ kind.key }}" class="widget-body" hx-get="/widgets/{{ kind.key }}?w={{ widget.w }}&amp;h={{ widget.h }}" hx-trigger="load" hx-swap="outerHTML">
+      <div class="skeleton" role="status" aria-label="Chargement : {{ kind.title }}"></div>
+    </div>
+    <span class="dw-resize" data-dw="resize" title="Glisser pour agrandir" aria-hidden="true"></span>
+  </section>
+  {% endfor %}
+  {% if widgets.is_empty() %}
+  <p class="empty dash-empty">Aucun widget dans cet espace. <button class="btn" type="button" data-dash-add>{{ crate::assets::icon("plus")|safe }}Ajouter un widget</button></p>
+  {% endif %}
+</div>

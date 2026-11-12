@@ -1,0 +1,25 @@
+<div id="w-settings" class="widget-body quick-settings">
+  <form class="segmented" method="post" action="/settings/theme" role="group" aria-label="Thème">
+    <input type="hidden" name="next" value="/">
+    <button name="theme" value="system" aria-pressed="{{ theme.is_empty() }}" title="Thème du système">{{ crate::assets::icon("monitor")|safe }}{% if !compact %}<span>Système</span>{% else %}<span class="sr-only">Système</span>{% endif %}</button>
+    <button name="theme" value="dark" aria-pressed="{{ theme == "dark" }}" title="Thème sombre">{{ crate::assets::icon("moon")|safe }}{% if !compact %}<span>Sombre</span>{% else %}<span class="sr-only">Sombre</span>{% endif %}</button>
+    <button name="theme" value="light" aria-pressed="{{ theme == "light" }}" title="Thème clair">{{ crate::assets::icon("sun")|safe }}{% if !compact %}<span>Clair</span>{% else %}<span class="sr-only">Clair</span>{% endif %}</button>
+  </form>
+  {% if !compact %}
+  <ul class="quick-facts" role="list">
+    <li>
+      {{ crate::assets::icon("calendar")|safe }}
+      {% if calendars.is_empty() %}
+      <a href="/settings#agendas">Ajouter un agenda iCal</a>
+      {% else %}
+      <a href="/settings#agendas">{{ calendars }}</a>
+      {% endif %}
+      {% if calendar_errors > 0 %}<span class="with-icon status-warn">{{ crate::assets::icon("alert")|safe }}{{ calendar_errors }} en échec</span>{% endif %}
+    </li>
+    {% if !storage.is_empty() %}
+    <li>{{ crate::assets::icon("files")|safe }}<a href="/files">{{ storage }}</a></li>
+    {% endif %}
+    <li>{{ crate::assets::icon("home")|safe }}<a href="/settings#espaces">Gérer les espaces</a></li>
+  </ul>
+  {% endif %}
+</div>

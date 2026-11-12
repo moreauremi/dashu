@@ -306,6 +306,8 @@
   function swipeAllowed(target) {
     if (!$("[data-island]") || $(".editor-page") || palette()?.open) return false;
     if ($("#app")?.hasAttribute("data-nav-open")) return false;
+    // Dashboard en mode édition : le doigt déplace les widgets, pas l'espace.
+    if ($(".dash.editing")) return false;
     return !(target instanceof Element && target.closest("input, textarea, select, [contenteditable], .cm-editor"));
   }
 

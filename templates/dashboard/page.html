@@ -1,46 +1,52 @@
 {% extends "layout.html" %}
 {% block title %}Dashboard · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
-<header class="page-head dash-head">
-  {#- La date fait le titre ; la salutation (demandée par la spec) passe dessous. -#}
-  <div>
-    <h1 class="cap-first">{{ date }}</h1>
-    <p class="muted">{{ greeting }} · {{ shell.active.name }}</p>
+{#- [data-dash] porte le mode édition (classe .editing, posée par
+    static/js/dashboard.js) : la grille, rechargée après un ajout, le garde. -#}
+<div class="dash" data-dash>
+  <header class="page-head dash-head">
+    {#- La date fait le titre ; la salutation (demandée par la spec) passe dessous. -#}
+    <div>
+      <h1 class="cap-first">{{ date }}</h1>
+      <p class="muted">{{ greeting }} · {{ shell.active.name }}</p>
+    </div>
+    <div class="dash-head-end">
+      {#- L'heure est rendue par le serveur puis tenue à jour par app.js. -#}
+      <time class="clock" data-clock aria-label="Heure à Paris">{{ time }}</time>
+      <button class="btn dash-edit" type="button" data-dash-edit>{{ crate::assets::icon("pencil")|safe }}Modifier</button>
+    </div>
+  </header>
+
+  <div class="dash-bar" role="toolbar" aria-label="Modifier le dashboard de {{ shell.active.name }}">
+    <p class="hint">Glisse un widget par {{ crate::assets::icon("move")|safe }} pour le déplacer, et son coin pour l'agrandir. La disposition est propre à cet espace.</p>
+    <span class="dash-status muted" data-dash-status role="status"></span>
+    <button class="btn" type="button" data-dash-add>{{ crate::assets::icon("plus")|safe }}Ajouter un widget</button>
+    <button class="btn" type="button" data-dash-reset>{{ crate::assets::icon("refresh")|safe }}Disposition par défaut</button>
+    <button class="btn btn-primary" type="button" data-dash-done>{{ crate::assets::icon("check")|safe }}Terminé</button>
   </div>
-  {#- L'heure est rendue par le serveur puis tenue à jour par app.js. -#}
-  <time class="clock" data-clock aria-label="Heure à Paris">{{ time }}</time>
-</header>
 
-{#- Chaque widget se charge tout seul : l'emplacement ci-dessous est remplacé
-    par le fragment renvoyé par /widgets/…, sans attendre les autres. -#}
-<div class="widgets">
-  <section class="card widget widget-courses" aria-labelledby="w-courses-title">
-    <header class="card-head">
-      <h2 id="w-courses-title">Prochains cours</h2>
-      <a class="card-link" href="/calendar">Agenda</a>
-    </header>
-    <div id="w-courses" class="widget-body" hx-get="/widgets/courses" hx-trigger="load" hx-swap="outerHTML">
-      <div class="skeleton skeleton-3" role="status" aria-label="Chargement des prochains cours"></div>
-    </div>
-  </section>
+  {% include "dashboard/_grid.html" %}
 
-  <section class="card widget widget-tasks" aria-labelledby="w-tasks-title">
+  <dialog class="dash-catalog" data-dash-catalog aria-labelledby="dash-catalog-title">
     <header class="card-head">
-      <h2 id="w-tasks-title">Tâches du jour</h2>
+      <h2 id="dash-catalog-title">Ajouter un widget</h2>
+      <button class="icon-btn" type="button" data-dash-close aria-label="Fermer">{{ crate::assets::icon("x")|safe }}</button>
     </header>
-    <div id="w-tasks" class="widget-body" hx-get="/widgets/tasks" hx-trigger="load" hx-swap="outerHTML">
-      <div class="skeleton skeleton-3" role="status" aria-label="Chargement des tâches"></div>
-    </div>
-  </section>
-
-  <section class="card widget widget-notes" aria-labelledby="w-notes-title">
-    <header class="card-head">
-      <h2 id="w-notes-title">Notes récentes</h2>
-      <a class="card-link" href="/notes">Toutes les notes</a>
-    </header>
-    <div id="w-notes" class="widget-body" hx-get="/widgets/notes" hx-trigger="load" hx-swap="outerHTML">
-      <div class="skeleton skeleton-5" role="status" aria-label="Chargement des notes"></div>
-    </div>
-  </section>
+    <ul class="dash-options" role="list">
+      {% for kind in catalog %}
+      <li class="dash-option" data-dash-option data-kind="{{ kind.key }}">
+        <span class="space-badge">{{ crate::assets::icon(kind.icon)|safe }}</span>
+        <span class="dash-option-name"><strong>{{ kind.title }}</strong><span class="muted">{{ kind.tool }}</span></span>
+        <span class="dash-option-used muted">Déjà sur le dashboard</span>
+        <span class="dash-sizes" role="group" aria-label="Taille de {{ kind.title }}">
+          {% for (letter, label, w, h) in crate::dashboard::layout::SIZES %}
+          <button class="btn" type="button" data-dash-pick data-kind="{{ kind.key }}" data-w="{{ w }}" data-h="{{ h }}" title="{{ label }}" aria-label="Ajouter {{ kind.title }}, taille {{ label|lower }}">{{ letter }}</button>
+          {% endfor %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </dialog>
 </div>
+<script src="{{ crate::assets::url("js/dashboard.js") }}"></script>
 {% endblock %}

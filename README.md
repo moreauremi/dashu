@@ -27,7 +27,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | --- | --- |
 | Authentification | Email + mot de passe (Argon2id) ou Google, sur le même compte. Inscription fermée : seuls les emails de `ALLOWED_EMAILS` entrent. |
 | Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on en change en un clic, sans rechargement. |
-| Dashboard | Prochains cours, tâches du jour, notes récentes. Chaque widget se charge indépendamment. |
+| Dashboard | Grille bento modulaire, propre à chaque espace : widgets Agenda (prochains cours), Tâches du jour, Notes, Fichiers récents et Réglages rapides. Bouton « Modifier » : on déplace un widget en le glissant (ou aux flèches du clavier), on change sa taille (S, M, L d'un clic, ou n'importe quelle taille par le coin, jusqu'à 4 × 4 cases), on en ajoute, on en retire. Chaque widget se charge indépendamment et n'affiche que ce qui tient à sa taille. Sur téléphone, la grille passe à 2 colonnes. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
 | Fichiers (v2, en cours) | Envoi par glisser-déposer ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, suppression. Compression des vidéos, photos et PDF en une copie plus légère. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |

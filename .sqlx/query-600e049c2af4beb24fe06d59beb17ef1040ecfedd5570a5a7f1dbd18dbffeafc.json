@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT last_fetched_at, last_error IS NOT NULL AS \"failed!: bool\"\n           FROM calendar_sources WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "last_fetched_at",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed!: bool",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "600e049c2af4beb24fe06d59beb17ef1040ecfedd5570a5a7f1dbd18dbffeafc"
+}
