@@ -59,9 +59,16 @@ svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-widt
    --logo-h fixe la hauteur, la largeur suit le viewBox (972 × 186). */
 .logo{--logo-h:20px;display:block;width:calc(var(--logo-h)*972/186);height:var(--logo-h);fill:currentColor;fill-rule:evenodd}
 .wordmark{display:flex;align-items:center;color:var(--text);text-decoration:none}
-/* Au chargement, le logo se déplie une fois de l'icône H/ au mot Hermes/. */
-.logo-anim .logo-slash{animation:logo-slash 1s cubic-bezier(.7,0,.2,1) .3s both}
-.logo-anim .logo-ermes{animation:logo-ermes .6s ease-out .8s both}
+/* Logo de l'en-tête. Au chargement, il se déplie une fois de l'icône H/ au mot
+   Hermes/. Dès qu'on fait défiler la page, il se replie en H/ : « ermes »
+   s'efface puis la barre rejoint le H (classe .compact, posée par le script en
+   bas de page). Revenu en haut, il se déplie dans l'autre sens. */
+.bar .logo-slash{transition:transform .8s cubic-bezier(.7,0,.2,1)}
+.bar .logo-ermes{transition:opacity .45s cubic-bezier(.7,0,.2,1) .5s}
+.bar.compact .logo-slash{transform:translateX(-728px);transition-delay:.2s}
+.bar.compact .logo-ermes{opacity:0;transition-delay:0s}
+.logo-anim .logo-slash{animation:logo-slash 1s cubic-bezier(.7,0,.2,1) .3s backwards}
+.logo-anim .logo-ermes{animation:logo-ermes .6s ease-out .8s backwards}
 @keyframes logo-slash{from{transform:translateX(-728px)}}
 @keyframes logo-ermes{from{opacity:0}}
 .nav{display:flex;align-items:center;gap:4px}
@@ -156,7 +163,7 @@ pre .c{color:var(--text-3)}
 footer{border-top:1px solid var(--border);padding-block:28px;font-size:14px;color:var(--text-3)}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 footer a{color:var(--text-2);text-underline-offset:3px}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.logo-anim use{animation:none}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.logo use{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -343,5 +350,21 @@ docker compose exec dashu /dashu set-password toi@example.com</pre>
     <span><a href="https://github.com/moreauremi/dashu">GitHub</a> · <a href="https://app.dashu.dev">app.dashu.dev</a></span>
   </div>
 </footer>
+<script>
+/* En-tête : le logo se replie en H/ dès que la page défile (voir .compact). */
+(() => {
+  const bar = document.querySelector(".bar");
+  const logo = bar.querySelector(".logo");
+  const update = () => {
+    const compact = scrollY > 24;
+    // Le dépliage du chargement ne sert qu'une fois : sans cela, il se
+    // rejouerait à chaque retour en haut de page.
+    if (compact) logo.classList.remove("logo-anim");
+    bar.classList.toggle("compact", compact);
+  };
+  addEventListener("scroll", update, { passive: true });
+  update();
+})();
+</script>
 </body>
 </html>
