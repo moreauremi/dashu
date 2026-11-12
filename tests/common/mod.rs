@@ -320,6 +320,12 @@ impl Client {
             .await
     }
 
+    /// GET tel que l'envoie htmx pour changer de page (lien hx-boost).
+    pub async fn get_boosted(&mut self, path: &str) -> TestResponse {
+        self.extra.push(("hx-boosted".into(), "true".into()));
+        self.get_fragment(path).await
+    }
+
     /// POST d'un formulaire, avec le jeton CSRF dans l'en-tête (comme htmx).
     pub async fn post(&mut self, path: &str, form: &[(&str, &str)]) -> TestResponse {
         self.send(
