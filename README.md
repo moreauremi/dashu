@@ -39,7 +39,7 @@ Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes, `N` cr
 Il faut [Rust](https://rustup.rs) (stable, 1.85 ou plus récent) et un compilateur C (gcc, clang ou MSVC : SQLite est compilé avec le projet). Node n'est pas nécessaire.
 
 ```bash
-git clone https://github.com/moreauremi/dashu.git
+git clone -b v1 https://github.com/moreauremi/dashu.git
 ```
 
 ```bash
@@ -366,7 +366,7 @@ Vérifier : `systemctl status dashu-worker`, puis `journalctl -u dashu-worker -n
 Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push. Dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
 
 ```bash
-git clone https://github.com/moreauremi/dashu.git /opt/dashu && cd /opt/dashu && cp .env.example .env
+git clone -b v1 https://github.com/moreauremi/dashu.git /opt/dashu && cd /opt/dashu && cp .env.example .env
 ```
 
 Remplir `.env` (avec `DATABASE_URL=sqlite:///data/dashu.db`, `TUNNEL_TOKEN` et `BACKUP_DIR`), puis :
