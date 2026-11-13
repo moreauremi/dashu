@@ -223,6 +223,11 @@ async fn remplacer_l_original_par_sa_copie() {
     );
     let view = alice.get(&format!("/files/{copy}")).await;
     assert!(view.body.contains("Remplacer l'original"));
+    // Dans Perso, le suivi couvre tous les espaces : il ne renvoie pas pour
+    // autant vers l'onglet Outils (bug du 13 novembre 2026).
+    let all = alice.get_fragment("/files/jobs?active=0&all=1").await;
+    assert!(all.body.contains("Remplacer l'original"));
+    assert!(!all.body.contains("value=\"/tools\""));
 
     // Un autre compte ne le peut pas.
     let mut bob = app.logged_in(BOB).await;
@@ -234,8 +239,12 @@ async fn remplacer_l_original_par_sa_copie() {
     );
 
     let stored_before = app.stored_files().len();
-    let replaced = alice.post(&format!("/files/jobs/{job}/replace"), &[]).await;
-    assert_eq!(replaced.location(), format!("/files/{copy}"));
+    // Cliqué depuis la liste des fichiers : retour à cette liste.
+    let replaced = alice
+        .with_header("hx-current-url", "http://localhost:3001/e/perso/files")
+        .post(&format!("/files/jobs/{job}/replace"), &[])
+        .await;
+    assert_eq!(replaced.location(), "/e/perso/files");
     assert!(
         alice
             .follow(replaced)

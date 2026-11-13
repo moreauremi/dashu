@@ -20,7 +20,7 @@ use std::path::{Path as FsPath, PathBuf};
 use anyhow::Context as _;
 use askama::Template;
 use axum::extract::{Path, Query, State};
-use axum::http::HeaderValue;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
@@ -1099,6 +1099,7 @@ pub async fn replace_original(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    headers: HeaderMap,
     axum::Form(form): axum::Form<ReplaceForm>,
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
@@ -1152,11 +1153,29 @@ pub async fn replace_original(
 
     ctx.flash_ok(format!("Original remplacé : il reste « {name} »"))
         .await?;
-    let back = format!("/files/{}", row.result);
-    Ok(see_other(match form.next.as_deref() {
-        Some(next) => web::local_path(Some(next)),
-        None => &back,
-    }))
+    // Retour à la page d'où vient le clic (la liste des fichiers, l'onglet
+    // Outils…), que htmx nomme dans HX-Current-URL ; sinon l'aperçu de la copie.
+    let back = form
+        .next
+        .as_deref()
+        .map(|next| web::local_path(Some(next)).to_string())
+        .or_else(|| current_path(&headers))
+        .unwrap_or_else(|| format!("/files/{}", row.result));
+    Ok(see_other(&back))
+}
+
+/// Chemin de la page d'où vient une requête htmx (`HX-Current-URL`, une
+/// adresse complète), s'il reste dans le site.
+fn current_path(headers: &HeaderMap) -> Option<String> {
+    let url = headers.get("hx-current-url")?.to_str().ok()?;
+    let path = match url.split_once("://") {
+        Some((_, rest)) => &rest[rest.find('/')?..],
+        None => url,
+    };
+    let path = path.split('#').next().unwrap_or(path);
+    // Même règle que web::local_path : pas d'autre domaine, pas de « \ ».
+    (path.starts_with('/') && !path.starts_with("//") && !path.contains('\\'))
+        .then(|| path.to_string())
 }
 
 /// Conversions en cours d'un utilisateur, tous espaces : leur nombre, et si
@@ -1391,6 +1410,23 @@ mod tests {
             assert_eq!(Conversion::from_key(c.key()), Some(c));
         }
         assert_eq!(Conversion::from_key("exe"), None);
+    }
+
+    #[test]
+    fn page_d_origine() {
+        let with = |url: &str| {
+            let mut headers = HeaderMap::new();
+            headers.insert("hx-current-url", HeaderValue::from_str(url).unwrap());
+            current_path(&headers)
+        };
+        assert_eq!(
+            with("https://app.dashu.dev/e/perso/files?seul=1"),
+            Some("/e/perso/files?seul=1".into())
+        );
+        assert_eq!(with("http://localhost:3001/tools#x"), Some("/tools".into()));
+        assert_eq!(with("https://evil.example"), None);
+        assert_eq!(with("https://app.dashu.dev//evil.example/"), None);
+        assert_eq!(current_path(&HeaderMap::new()), None);
     }
 
     #[test]
