@@ -8,7 +8,7 @@
     {% if crumbs.len() > 1 %}
     <nav class="crumbs" aria-label="Emplacement">
       {%- for crumb in crumbs %}{% if let Some(href) = crumb.href %}
-      <a class="crumb" href="{{ href }}">{{ crumb.label }}</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+      <a class="crumb" href="{{ href }}"{% if let Some(at) = crumb.drop %} data-drop-space="{{ at.space }}" data-drop-folder="{% if let Some(folder) = at.folder %}{{ folder }}{% endif %}"{% endif %}>{{ crumb.label }}</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
       {%- endif %}{% endfor %}
     </nav>
     {% endif %}
@@ -16,6 +16,12 @@
   </div>
   {% if enabled %}
   <div class="files-actions">
+    {% if let Some(action) = new_note %}
+    {#- La note naît dans le dossier montré, puis l'éditeur s'ouvre. -#}
+    <form method="post" action="{{ action }}">
+      <button class="btn" type="submit">{{ crate::assets::icon("notes")|safe }}<span>Nouvelle note</span></button>
+    </form>
+    {% endif %}
     {% if let Some((space_id, parent)) = new_folder %}
     <button class="btn" type="button" popovertarget="pm-new-folder">{{ crate::assets::icon("plus")|safe }}<span>Nouveau dossier</span></button>
     <div id="pm-new-folder" class="pop-menu" popover>
@@ -97,7 +103,10 @@
   <ul class="file-list" role="list">
     {#- Dossiers d'abord : à la racine, ceux des espaces et Temporaire. -#}
     {% for folder in folders %}
-    <li class="file-row folder-row">
+    {#- Glisser-déposer (files.js, « Ranger en glissant ») : ce qu'on lâche sur
+        un dossier y est rangé ; un dossier se glisse lui-même ailleurs. La
+        fenêtre « Ranger » fait la même chose au clavier et au doigt. -#}
+    <li class="file-row folder-row"{% if let Some(at) = folder.drop %} data-drop-space="{{ at.space }}" data-drop-folder="{% if let Some(f) = at.folder %}{{ f }}{% endif %}"{% endif %}{% if let Some(id) = folder.id %} draggable="true" data-drag-move="/folders/{{ id }}/move" data-drag-folder="{{ id }}"{% endif %}>
       <a class="folder-name" href="{{ folder.href }}"{% if let Some(color) = folder.color %} data-accent="{{ color }}"{% endif %}>
         <span class="file-thumb file-thumb-icon folder-icon">{{ crate::assets::icon(folder.icon)|safe }}</span>
         <span>{{ folder.name }}</span>
@@ -105,6 +114,9 @@
       <span class="file-meta">{{ folder.summary }}</span>
       {% if let Some(id) = folder.id %}
       <div class="file-actions">
+        {% if let Some(picker) = folder.picker %}
+        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="Déplacer le dossier" aria-label="Déplacer le dossier « {{ folder.name }} »">{{ crate::assets::icon("move")|safe }}</button>
+        {% endif %}
         <button class="icon-btn" type="button" popovertarget="pm-rename-{{ id }}" title="Renommer" aria-label="Renommer le dossier « {{ folder.name }} »">{{ crate::assets::icon("pencil")|safe }}</button>
         <div id="pm-rename-{{ id }}" class="pop-menu" popover>
           <p class="pop-title">Renommer le dossier</p>
@@ -143,7 +155,7 @@
     {% endfor %}
 
     {% for note in notes %}
-    <li class="file-row note-file-row">
+    <li class="file-row note-file-row" draggable="true" data-drag-move="/notes/{{ note.id }}/move">
       <a class="note-file-name" href="/notes/{{ note.id }}">
         <span class="file-thumb file-thumb-icon">{{ crate::assets::icon("notes")|safe }}</span>
         <span>{{ note.title }}</span>
@@ -157,7 +169,7 @@
     {% endfor %}
 
     {% for item in items %}
-    <li class="file-row">
+    <li class="file-row"{% if item.expires.is_none() %} draggable="true" data-drag-move="/files/{{ item.id }}/move"{% endif %}>
       <a class="file-name" href="/files/{{ item.id }}">
         {%- if item.thumb %}
         <img class="file-thumb" src="/files/{{ item.id }}/thumb" alt="" width="40" height="40" loading="lazy" decoding="async">

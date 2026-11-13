@@ -69,6 +69,13 @@ pub struct FileItem {
     pub expires: Option<String>,
 }
 
+/// Un endroit où lâcher ce qu'on glisse (onglet Fichiers) : un espace et,
+/// sans dossier, sa racine.
+pub struct DropAt {
+    pub space: i64,
+    pub folder: Option<i64>,
+}
+
 /// Une ligne « dossier » : le dossier d'un espace ou Temporaire (à la
 /// racine), ou un dossier.
 pub struct FolderRow {
@@ -85,6 +92,10 @@ pub struct FolderRow {
     pub color: Option<String>,
     /// Où va son contenu si on le supprime en le transférant : « École ».
     pub parent_label: String,
+    /// Ce qu'on y lâche y est rangé (pas Temporaire).
+    pub drop: Option<DropAt>,
+    /// Fenêtre « Ranger » du dossier (pas pour le dossier d'un espace).
+    pub picker: Option<String>,
 }
 
 /// Une note rangée dans le dossier montré.
@@ -100,6 +111,8 @@ pub struct NoteRow {
 pub struct Crumb {
     pub label: String,
     pub href: Option<String>,
+    /// Un pas du fil d'Ariane reçoit aussi ce qu'on glisse (pas « Fichiers »).
+    pub drop: Option<DropAt>,
 }
 
 #[derive(Template)]
@@ -133,6 +146,9 @@ struct ListPage {
     /// Création d'un dossier ici : (espace, dossier parent). Rien à la racine,
     /// dans Temporaire et dans un sous-dossier (trois niveaux au plus).
     new_folder: Option<(i64, Option<i64>)>,
+    /// « Nouvelle note » : l'adresse qui la crée ici (dossier d'un espace et
+    /// dossiers seulement).
+    new_note: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -190,6 +206,7 @@ pub async fn list(
     let root_crumb = Crumb {
         label: "Fichiers".into(),
         href: Some("/files?dossier=racine".into()),
+        drop: None,
     };
     // Dossier montré (`None` : la racine de l'espace), pour les vues d'un espace.
     let (name, here, crumbs, inside) = match &view {
@@ -210,6 +227,7 @@ pub async fn list(
                 Crumb {
                     label: "Temporaire".into(),
                     href: None,
+                    drop: None,
                 },
             ],
             None,
@@ -224,11 +242,19 @@ pub async fn list(
                 Crumb {
                     label: space.name.clone(),
                     href: Some(view_url(&space.slug, None)),
+                    drop: Some(DropAt {
+                        space: space.id,
+                        folder: None,
+                    }),
                 },
             ];
             crumbs.extend(folders::chain(&all, folder).into_iter().map(|f| Crumb {
                 label: f.name.clone(),
                 href: Some(view_url(&space.slug, Some(f.id))),
+                drop: Some(DropAt {
+                    space: space.id,
+                    folder: Some(f.id),
+                }),
             }));
             if let Some(last) = crumbs.last_mut() {
                 last.href = None;
@@ -259,6 +285,11 @@ pub async fn list(
                     icon: "folder",
                     color: None,
                     parent_label: folders::label(&space.name, &all, f.parent_id),
+                    drop: Some(DropAt {
+                        space: space.id,
+                        folder: Some(f.id),
+                    }),
+                    picker: Some(folders::picker_url("dossier", f.id, Some(&here))),
                 }
             })
             .collect(),
@@ -339,6 +370,11 @@ pub async fn list(
         View::Folder(f) if f.is_top() => Some((space.id, Some(f.id))),
         _ => None,
     };
+    let new_note = match &view {
+        View::Space => Some("/notes".to_string()),
+        View::Folder(f) => Some(format!("/notes?dossier={}", f.id)),
+        _ => None,
+    };
     let files = state.config.files.as_ref();
     let page = ListPage {
         shell: ctx.shell("files").await?,
@@ -364,6 +400,7 @@ pub async fn list(
             _ => None,
         },
         new_folder,
+        new_note,
     };
     Ok(web::html(page))
 }
@@ -415,6 +452,11 @@ async fn root_rows(
                 icon: "folder",
                 color: Some(space.color.clone()),
                 parent_label: String::new(),
+                drop: Some(DropAt {
+                    space: space.id,
+                    folder: None,
+                }),
+                picker: None,
             }
         })
         .collect();
@@ -444,6 +486,8 @@ async fn root_rows(
         icon: "clock",
         color: None,
         parent_label: String::new(),
+        drop: None,
+        picker: None,
     });
     Ok(rows)
 }

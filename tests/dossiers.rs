@@ -1043,3 +1043,352 @@ async fn l_api_range_a_la_racine_du_nouvel_espace() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(place_of(&app, "notes", "Cours").await, (taff, None));
 }
+
+#[tokio::test]
+async fn deplacer_un_dossier_entier() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let [math, francais, exercices, projet] = school_folders(&app, &mut alice).await;
+    let (ecole, taff) = (
+        app.space_id(ALICE, "ecole").await,
+        app.space_id(ALICE, "taff").await,
+    );
+    // Math : une note et un fichier ; Exercices (dans Math) : une note.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let cours = note(&mut alice, "Cours").await;
+    file_note(&mut alice, cours, math).await;
+    let exo = note(&mut alice, "Exo").await;
+    file_note_any(&app, exo, exercices).await;
+    alice.upload_in_folder("td.pdf", b"%PDF td", math).await;
+
+    // La fenêtre d'un dossier qui a des sous-dossiers : les espaces seulement.
+    let picker = alice
+        .get_fragment(&format!("/destinations?dossier={math}"))
+        .await;
+    assert!(
+        picker
+            .body
+            .contains(&format!("action=\"/folders/{math}/move\""))
+    );
+    assert!(!picker.body.contains("dest-d1") && !picker.body.contains("dest-d2"));
+    // Sans sous-dossier : aussi les dossiers du premier niveau, sauf lui-même.
+    let picker = alice
+        .get_fragment(&format!("/destinations?dossier={francais}"))
+        .await;
+    assert!(
+        picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{projet}\""))
+    );
+    assert!(
+        picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{math}\""))
+    );
+    assert!(
+        !picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{francais}\""))
+    );
+    assert!(!picker.body.contains("dest-d2"));
+    // La liste propose de le déplacer.
+    let page = alice.get("/files").await;
+    assert!(
+        page.body
+            .contains(&format!("hx-get=\"/destinations?dossier={math}"))
+    );
+
+    // Math part dans Taff avec tout son contenu.
+    let moved = alice
+        .post(
+            &format!("/folders/{math}/move"),
+            &[
+                ("space_id", &taff.to_string()),
+                ("folder_id", ""),
+                ("next", "/e/ecole/files?dossier=espace"),
+            ],
+        )
+        .await;
+    assert_eq!(moved.location(), "/e/ecole/files?dossier=espace");
+    let page = alice.follow(moved).await;
+    assert!(page.body.contains("Dossier « Math » déplacé dans « Taff »"));
+    assert!(!page.body.contains(&format!("dossier={math}\"")));
+    assert_eq!(folder_place(&app, math).await, (taff, None));
+    assert_eq!(folder_place(&app, exercices).await, (taff, Some(math)));
+    assert_eq!(place_of(&app, "notes", "Cours").await, (taff, Some(math)));
+    assert_eq!(
+        place_of(&app, "notes", "Exo").await,
+        (taff, Some(exercices))
+    );
+    assert_eq!(place_of(&app, "files", "td.pdf").await, (taff, Some(math)));
+
+    // Un dossier sans sous-dossier devient le sous-dossier d'un autre.
+    alice
+        .post(
+            &format!("/folders/{francais}/move"),
+            &[
+                ("space_id", &taff.to_string()),
+                ("folder_id", &projet.to_string()),
+            ],
+        )
+        .await;
+    assert_eq!(folder_place(&app, francais).await, (taff, Some(projet)));
+    // Et un sous-dossier remonte à la racine d'un espace.
+    alice
+        .post(
+            &format!("/folders/{exercices}/move"),
+            &[("space_id", &ecole.to_string()), ("folder_id", "")],
+        )
+        .await;
+    assert_eq!(folder_place(&app, exercices).await, (ecole, None));
+    assert_eq!(
+        place_of(&app, "notes", "Exo").await,
+        (ecole, Some(exercices))
+    );
+
+    // Refus dits, rien ne bouge : un dossier qui a des sous-dossiers dans un
+    // dossier, un dossier dans un sous-dossier, dans lui-même, à côté d'un
+    // homonyme.
+    create_in_folder(&mut alice, projet, "Annexes").await;
+    let refusals = [
+        (projet, taff, Some(math), "contient des sous-dossiers"),
+        (
+            math,
+            taff,
+            Some(francais),
+            "Pas de dossier dans un sous-dossier",
+        ),
+        (
+            math,
+            taff,
+            Some(math),
+            "Un dossier ne va pas dans lui-même.",
+        ),
+    ];
+    for (folder_id, space, parent, message) in refusals {
+        let parent = parent.map(|p| p.to_string()).unwrap_or_default();
+        let refused = alice
+            .post(
+                &format!("/folders/{folder_id}/move"),
+                &[("space_id", &space.to_string()), ("folder_id", &parent)],
+            )
+            .await;
+        assert_eq!(refused.status, StatusCode::SEE_OTHER, "{message}");
+        assert!(
+            alice.follow(refused).await.body.contains(message),
+            "{message}"
+        );
+    }
+    create_in_space(&mut alice, ecole, "Projet").await;
+    let refused = alice
+        .post(
+            &format!("/folders/{projet}/move"),
+            &[("space_id", &ecole.to_string()), ("folder_id", "")],
+        )
+        .await;
+    assert!(
+        alice
+            .follow(refused)
+            .await
+            .body
+            .contains("Un dossier « Projet » existe déjà dans « École ».")
+    );
+    assert_eq!(folder_place(&app, projet).await, (taff, None));
+    assert_eq!(folder_place(&app, math).await, (taff, None));
+
+    // Un autre compte ne déplace ni ce dossier ni le sien chez Alice.
+    let mut bob = app.logged_in(BOB).await;
+    let bob_perso = app.space_id(BOB, "perso").await;
+    let refused = bob
+        .post(
+            &format!("/folders/{math}/move"),
+            &[("space_id", &bob_perso.to_string()), ("folder_id", "")],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
+    create_in_space(&mut bob, bob_perso, "Perso de Bob").await;
+    let bob_folder = folder(&app, "Perso de Bob").await;
+    for (space, parent) in [(taff, String::new()), (bob_perso, math.to_string())] {
+        let refused = bob
+            .post(
+                &format!("/folders/{bob_folder}/move"),
+                &[("space_id", &space.to_string()), ("folder_id", &parent)],
+            )
+            .await;
+        assert_eq!(refused.status, StatusCode::NOT_FOUND);
+    }
+    assert_eq!(
+        bob.get_fragment(&format!("/destinations?dossier={math}"))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(folder_place(&app, bob_folder).await, (bob_perso, None));
+}
+
+#[tokio::test]
+async fn creer_une_note_depuis_fichiers() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let [_, _, exercices, projet] = school_folders(&app, &mut alice).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+
+    // Les boutons de la page Fichiers (la barre latérale a aussi le sien).
+    async fn actions(client: &mut Client, path: &str) -> String {
+        let page = client.get(path).await.body;
+        common::between(&page, "<div class=\"files-actions\">", "</label>")
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    // Le bouton, dans le dossier d'un espace et dans un dossier.
+    let here = actions(&mut alice, "/files").await;
+    assert!(here.contains("<form method=\"post\" action=\"/notes\">"));
+    assert!(here.contains("Nouvelle note"));
+    let here = actions(&mut alice, &format!("/files?dossier={exercices}")).await;
+    assert!(here.contains(&format!("action=\"/notes?dossier={exercices}\"")));
+    // Pas à la racine de l'onglet ni dans Temporaire.
+    assert!(
+        !actions(&mut alice, "/files?dossier=racine")
+            .await
+            .contains("Nouvelle note")
+    );
+    let temp = alice.get("/files?dossier=temporaire").await.body;
+    let temp = common::between(&temp, "<div class=\"files-actions\">", "</div>").unwrap();
+    assert!(!temp.contains("Nouvelle note"));
+
+    // La note naît dans le dossier ouvert, puis l'éditeur s'ouvre.
+    let created = alice
+        .post(&format!("/notes?dossier={exercices}"), &[])
+        .await;
+    let id = common::note_id(&created);
+    let editor = alice.get(&format!("/notes/{id}")).await;
+    assert!(
+        editor
+            .body
+            .contains("<span>École / Math / Exercices</span>")
+    );
+    let folder_of: Option<i64> = sqlx::query_scalar("SELECT folder_id FROM notes WHERE id = ?")
+        .bind(id)
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert_eq!(folder_of, Some(exercices));
+
+    // Encore vierge, elle est réutilisée par la création suivante : à la
+    // racine, elle quitte son dossier.
+    let again = alice.post("/notes", &[]).await;
+    assert_eq!(common::note_id(&again), id);
+    let place: (i64, Option<i64>) =
+        sqlx::query_as("SELECT space_id, folder_id FROM notes WHERE id = ?")
+            .bind(id)
+            .fetch_one(&app.state.db)
+            .await
+            .unwrap();
+    assert_eq!(place, (ecole, None));
+
+    // Un dossier d'un autre espace : refusé, rien n'est créé.
+    let count = |app: &TestApp| {
+        let db = app.state.db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM notes")
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    let before = count(&app).await;
+    let refused = alice.post(&format!("/notes?dossier={projet}"), &[]).await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
+    assert_eq!(count(&app).await, before);
+}
+
+#[tokio::test]
+async fn glisser_deposer_dans_l_onglet_fichiers() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let [math, francais, _, _] = school_folders(&app, &mut alice).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let id = note(&mut alice, "Cours").await;
+    alice.upload("td.pdf", b"%PDF td").await;
+    let td: i64 = sqlx::query_scalar("SELECT id FROM files WHERE name = 'td.pdf'")
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    alice.upload_to_tools("scan.pdf", b"%PDF scan").await;
+
+    // Ce qui se glisse porte l'adresse de son rangement ; les dossiers et le
+    // fil d'Ariane disent où ils rangent.
+    let page = alice.get("/files").await.body;
+    assert!(page.contains(&format!(
+        "draggable=\"true\" data-drag-move=\"/notes/{id}/move\""
+    )));
+    assert!(page.contains(&format!(
+        "draggable=\"true\" data-drag-move=\"/files/{td}/move\""
+    )));
+    assert!(page.contains(&format!(
+        "data-drop-space=\"{ecole}\" data-drop-folder=\"{math}\" draggable=\"true\" data-drag-move=\"/folders/{math}/move\" data-drag-folder=\"{math}\""
+    )));
+    let page = alice.get(&format!("/files?dossier={math}")).await.body;
+    let crumbs = common::between(&page, "<nav class=\"crumbs\"", "</nav>").unwrap();
+    assert!(crumbs.contains(&format!(
+        "data-drop-space=\"{ecole}\" data-drop-folder=\"\""
+    )));
+    // À la racine, le dossier d'un espace reçoit (sa racine), Temporaire non ;
+    // rien n'y est glissable.
+    let root = alice.get("/files?dossier=racine").await.body;
+    assert!(root.contains(&format!(
+        "data-drop-space=\"{ecole}\" data-drop-folder=\"\""
+    )));
+    let temp_row = common::between(&root, "<li class=\"file-row folder-row\">", "</li>").unwrap();
+    assert!(temp_row.contains("Temporaire"));
+    assert!(!root.contains("data-drag-move"));
+    // Un fichier de Temporaire se garde, il ne se glisse pas.
+    let temp = alice.get("/files?dossier=temporaire").await.body;
+    assert!(temp.contains("scan.pdf") && !temp.contains("data-drag-move"));
+
+    // Lâcher, c'est le formulaire de la fenêtre « Ranger » (files.js) : la
+    // note et le fichier vont dans Français, Français dans Math.
+    let here = "/e/ecole/files?dossier=espace";
+    for url in [format!("/notes/{id}/move"), format!("/files/{td}/move")] {
+        let moved = alice
+            .post(
+                &url,
+                &[
+                    ("space_id", &ecole.to_string()),
+                    ("folder_id", &francais.to_string()),
+                    ("next", here),
+                ],
+            )
+            .await;
+        assert_eq!(moved.location(), here, "{url}");
+    }
+    assert_eq!(
+        place_of(&app, "notes", "Cours").await,
+        (ecole, Some(francais))
+    );
+    assert_eq!(
+        place_of(&app, "files", "td.pdf").await,
+        (ecole, Some(francais))
+    );
+    alice
+        .post(
+            &format!("/folders/{francais}/move"),
+            &[
+                ("space_id", &ecole.to_string()),
+                ("folder_id", &math.to_string()),
+                ("next", here),
+            ],
+        )
+        .await;
+    assert_eq!(folder_place(&app, francais).await, (ecole, Some(math)));
+    // Des fichiers de l'ordinateur lâchés sur un dossier y arrivent.
+    let sent = alice.upload_in_folder("photo.png", b"png", francais).await;
+    assert_eq!(sent.status, StatusCode::CREATED);
+    assert_eq!(
+        place_of(&app, "files", "photo.png").await,
+        (ecole, Some(francais))
+    );
+}

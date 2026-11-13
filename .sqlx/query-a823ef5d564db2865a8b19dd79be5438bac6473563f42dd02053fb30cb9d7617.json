@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "a823ef5d564db2865a8b19dd79be5438bac6473563f42dd02053fb30cb9d7617"
+}
