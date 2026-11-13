@@ -81,6 +81,22 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - Après `dashu-update`, dashu demande au démarrage les vignettes manquantes (200 fichiers au plus à la fois).
 - Reste à faire par Rémi, sur `app.dashu.dev`, après `dashu-update` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
 
+## Espaces et outils : avancement
+
+Cahier des charges dans `SPEC.md` (« Espaces et outils »), accepté en entier le 13 novembre 2026. Tout est écrit et vérifié par les tests d'intégration ; **rien n'est encore vérifié sur le serveur** (il faut `dashu-update`, puis essayer depuis le téléphone et l'ordinateur).
+
+- [x] **B. Ranger après coup** : espace au choix pour une tâche et un envoi, « Déplacer vers… » pour les tâches et les fichiers (la vignette suit). Tests `tests/ranger.rs`.
+- [x] **D. Savoir où on est** : titre de l'onglet, rappel au-dessus du titre des pages, liseré de la couleur de l'espace. Test `on_sait_toujours_dans_quel_espace_on_est`.
+- [x] **G. Menu « Convertir » et onglet Outils** : sorties possibles selon le type, refus de toute autre ; fichiers de l'onglet Outils hors des listes, gardés ou effacés au bout de 24 heures. Tests `tests/conversions.rs`, tests unitaires des formats d'image et des arguments ffmpeg et Ghostscript.
+  - Les vraies conversions (ffmpeg, Ghostscript, libheif) ne sont vérifiées que par les tests unitaires de leurs arguments : à essayer sur le serveur avec une photo HEIC, une vidéo `.mov` et un PDF.
+- [x] **H. Suivi partout** : « 1 conversion en cours » dans la barre latérale de toutes les pages, puis « Prêt : … ». Test `une_conversion_va_jusqu_au_resultat`.
+- [x] **A. Perso montre tout** : dashboard, notes, fichiers et agenda de tous les espaces, filtre « Seulement Perso ». Test `perso_montre_tous_les_espaces`.
+- [x] **C. L'espace dans l'adresse** : `/e/<slug>/…`, en-tête `X-Espace` par onglet, redirections et historique qui gardent l'espace. Tests `tests/adresse.rs`.
+- [x] **E. Archiver un espace** ; **I. règles par espace** ; **J. remplacer l'original** ; **F. espace du moment**. Tests `tests/espaces_suite.rs`.
+- [x] **K. Déposer partout, coller une image dans une note** ; **L. la palette connaît la page**. Tests `deposer_partout_et_coller_une_image`, `la_palette_connait_la_page`. Le glisser-déposer et le collage eux-mêmes (JavaScript) se vérifient dans le navigateur.
+- Migrations 0011 (`files.expires_at`, `uploads.for_tools`, `jobs.target`) et 0012 (`spaces.archived_at`, `auto_mp4`, `auto_heic_jpeg`, `users.moment_space`).
+- **Barre latérale détachée** (13 novembre 2026) : le glissement était saccadé ; elle a maintenant sa propre couche (`will-change`) et une courbe par sens. Mesuré dans le navigateur de la démo : une image toutes les 16 ms à l'arrivée comme au départ.
+
 ## Mesures de performance
 
 ### Sur le serveur réel

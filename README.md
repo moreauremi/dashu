@@ -26,14 +26,14 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Module | Contenu |
 | --- | --- |
 | Authentification | Email + mot de passe (Argon2id) ou Google, sur le même compte. Inscription fermée : seuls les emails de `ALLOWED_EMAILS` entrent. |
-| Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on en change en un clic, sans rechargement. |
+| Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, on les archive (cachés du sélecteur, contenu toujours cherchable, restaurables) et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on le choisit à la création (tâche, envoi de fichier) et on le corrige après (« Déplacer vers… » pour les notes, tâches et fichiers). Perso est la vue d'ensemble : son dashboard, ses notes, ses fichiers et son agenda réunissent tous les espaces (filtre « Seulement Perso »). Les pages d'un espace ont une adresse qui le nomme (`/e/ecole/notes`), et chaque onglet garde le sien. L'espace se voit dans le titre de l'onglet, au-dessus du titre des pages et dans un liseré de sa couleur. Réglage optionnel : ouvrir l'app sur l'espace du cours en cours. |
 | Dashboard | Grille bento modulaire, propre à chaque espace : widgets Agenda (calendrier en grille comme la page Agenda : aujourd'hui, trois jours ou la semaine selon la largeur ; prochains cours), Tâches du jour, Notes, Fichiers récents et Réglages rapides. Bouton « Modifier » : on déplace un widget en le glissant (ou aux flèches du clavier), on change sa taille (S, M, L d'un clic, ou n'importe quelle taille par le coin, jusqu'à 4 × 4 cases), on en ajoute, on en retire. Chaque widget se charge indépendamment et ne défile jamais : ce qui ne tient pas à sa taille est retiré, avec un « + N de plus ». Sur téléphone, la grille passe à 2 colonnes. |
 | Profil et affichage | Prénom, nom et photo de profil (recadrée et réduite dans le navigateur, réenregistrée par le serveur en JPEG de 256 px) ; sans photo, les initiales sur un fond tiré au hasard. Thème dans Réglages ; taille de l'interface (petite, normale, grande) en bas de la barre latérale. La barre latérale reste ancrée ou se détache : cachée à gauche, elle glisse par-dessus la page au survol du bord de l'écran. |
 | Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
-| Fichiers (v2, en cours) | Envoi par glisser-déposer ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, suppression. Compression des vidéos, photos et PDF en une copie plus légère. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
+| Fichiers (v2, en cours) | Envoi par glisser-déposer (sur n'importe quelle page) ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, déplacement, suppression. Une image collée dans une note y est rangée et insérée. Menu « Convertir » par fichier : compression, photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF ; puis « Remplacer l'original » si on veut. Règles par espace (vidéos en MP4, HEIC doublées d'un JPEG à l'arrivée). Onglet Outils : un fichier déposé y reste 24 heures hors des espaces, le temps de le convertir et de le garder ou le télécharger. Les conversions en cours se voient dans la barre latérale de toutes les pages. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
 
-Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes, `N` crée une note, `G` puis `D`, `N`, `F` ou `C` mène au Dashboard, aux Notes, aux Fichiers ou à l'Agenda. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
+Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes (sur un fichier ou une note, elle propose aussi ses conversions et ses déplacements), `N` crée une note, `G` puis `D`, `N`, `F`, `C` ou `O` mène au Dashboard, aux Notes, aux Fichiers, à l'Agenda ou aux Outils. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 
 ## Installation locale
 
@@ -320,9 +320,22 @@ Le service n'écrit que dans les dossiers listés par `ReadWritePaths` ([`harden
 install -m 644 /opt/dashu/src/deploy/lxc/hardening.conf /etc/systemd/system/dashu.service.d/ && systemctl daemon-reload && systemctl restart dashu
 ```
 
-### 8. Compression (v2)
+### 8. Compression et conversions (v2)
 
-Le bouton « Compresser » d'une vidéo, d'une photo ou d'un PDF crée une copie plus légère, « nom (compressé) », dans le même espace. L'original est gardé.
+Le menu « Convertir » d'un fichier (sur sa ligne, sur son aperçu, ou dans la palette) ne propose que ce que son type permet. Chaque sortie est une copie, dans le même espace ; l'original est gardé, sauf si on choisit ensuite « Remplacer l'original » (la copie prend alors son nom).
+
+| Fichier | Conversions |
+| --- | --- |
+| Photo JPEG, PNG, WebP, GIF, HEIC | Compresser (ci-dessous), en JPEG, en PNG, en WebP (sans perte), dans sa définition d'origine |
+| Vidéo | Compresser, en MP4 (H.264 et AAC, définition d'origine, HDR ramené en SDR), le son en MP3 |
+| Son | En MP3 |
+| PDF | Compresser, extraire des pages (« 2-4 ») |
+
+Markdown et texte vers PDF, HTML ou DOCX viendront avec pandoc et Typst (étape 8 de la v2). Une règle par espace (Réglages > Espaces) peut convertir à l'arrivée : vidéos en MP4, photos HEIC doublées d'un JPEG.
+
+L'onglet **Outils** reçoit un fichier pas encore rangé : il y reste 24 heures, hors des listes, le temps de le convertir, puis de le garder dans un espace ou de le télécharger. Passé ce délai, le nettoyage horaire l'efface.
+
+La compression crée une copie plus légère, « nom (compressé) » :
 
 | Fichier | Résultat | Outil |
 | --- | --- | --- |
