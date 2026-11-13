@@ -324,3 +324,101 @@ async fn ouvrir_sur_l_espace_du_moment() {
     alice.post("/settings/moment", &[("space", "")]).await;
     assert_eq!(alice.get("/").await.status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn deposer_partout_et_coller_une_image() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    // Le script d'envoi est chargé sur toutes les pages (dépôt partout).
+    for path in ["/", "/notes", "/calendar", "/settings"] {
+        assert!(
+            alice.get(path).await.body.contains("/static/js/files."),
+            "{path}"
+        );
+    }
+
+    // Une image collée dans une note : rangée dans l'espace de la note, son
+    // identifiant revient au navigateur, et la note l'affiche.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let created = alice.post("/notes", &[]).await;
+    let note = created.location().to_string();
+    let sent = alice
+        .upload("collage-2026-11-13-140512.png", b"\x89PNG")
+        .await;
+    let id = file_id(&app, "collage-2026-11-13-140512.png").await;
+    assert_eq!(sent.header("x-file-id"), id.to_string());
+    let space: i64 = sqlx::query_scalar("SELECT space_id FROM files WHERE id = ?")
+        .bind(id)
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert_eq!(space, app.space_id(ALICE, "ecole").await);
+
+    let body = format!("Schéma :\n\n![collage-2026-11-13-140512.png](/files/{id}/raw)\n");
+    alice
+        .post(&note, &[("title", "TP réseau"), ("body_md", &body)])
+        .await;
+    let page = alice.get(&note).await;
+    assert!(
+        page.body.contains(&format!("<img src=\"/files/{id}/raw\"")),
+        "{}",
+        page.body
+    );
+    // L'image est servie à sa propriétaire, à personne d'autre.
+    assert_eq!(
+        alice.get(&format!("/files/{id}/raw")).await.status,
+        StatusCode::OK
+    );
+    let mut bob = app.logged_in(BOB).await;
+    assert_eq!(
+        bob.get(&format!("/files/{id}/raw")).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn la_palette_connait_la_page() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.upload("IMG_1.HEIC", b"heic").await;
+    let photo = file_id(&app, "IMG_1.HEIC").await;
+
+    let palette = alice
+        .get_fragment(&format!("/search/palette?q=&page=/files/{photo}"))
+        .await;
+    assert!(palette.body.contains("Sur cette page"));
+    assert!(palette.body.contains("Compresser ce fichier"));
+    assert!(palette.body.contains("Convertir en JPEG"));
+    assert!(palette.body.contains("Déplacer vers École"));
+    assert!(
+        palette
+            .body
+            .contains(&format!("action=\"/files/{photo}/convert\""))
+    );
+    // La saisie filtre aussi ces actions.
+    let filtered = alice
+        .get_fragment(&format!("/search/palette?q=deplacer&page=/files/{photo}"))
+        .await;
+    assert!(filtered.body.contains("Déplacer vers École"));
+    assert!(!filtered.body.contains("Compresser ce fichier"));
+
+    // Sur une note : la déplacer.
+    let created = alice.post("/notes", &[]).await;
+    let note = created.location().to_string();
+    let palette = alice
+        .get_fragment(&format!("/search/palette?q=&page={note}"))
+        .await;
+    assert!(palette.body.contains("Déplacer vers Taff"));
+    assert!(palette.body.contains(&format!("action=\"{note}/move\"")));
+
+    // Le fichier d'un autre compte, ou une autre page : rien.
+    let mut bob = app.logged_in(BOB).await;
+    let palette = bob
+        .get_fragment(&format!("/search/palette?q=&page=/files/{photo}"))
+        .await;
+    assert!(!palette.body.contains("Sur cette page"));
+    let palette = alice
+        .get_fragment("/search/palette?q=&page=/settings")
+        .await;
+    assert!(!palette.body.contains("Sur cette page"));
+}

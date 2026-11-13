@@ -1,5 +1,8 @@
-// Envoi des fichiers, sur la page Fichiers : glisser-déposer ou bouton,
-// plusieurs fichiers, une barre de progression par fichier.
+// Envoi des fichiers : sur les pages Fichiers et Outils (zone de dépôt ou
+// bouton), mais aussi partout ailleurs (un fichier lâché sur n'importe quelle
+// page part dans l'espace de la page) et depuis l'éditeur de notes (image
+// collée, voir frontend/editor.js et `window.dashuUpload`). Plusieurs
+// fichiers, une barre de progression par fichier.
 //
 // Chaque fichier part en morceaux de 50 Mo : Cloudflare refuse toute requête
 // de plus de 100 Mo. POST /files/uploads ouvre l'envoi, puis chaque morceau
@@ -9,8 +12,8 @@
 // reprend de là. On passe par XMLHttpRequest plutôt que fetch : lui seul donne
 // la progression d'un envoi. Quand tout est parti, htmx recharge la liste.
 //
-// Ce script est chargé par la page à chaque visite (hx-boost) ; les écouteurs
-// sont posés sur `document` une seule fois.
+// Ce script est chargé une fois par base.html ; les écouteurs sont posés sur
+// `document`, et survivent donc aux navigations htmx.
 
 (() => {
   "use strict";
@@ -58,8 +61,23 @@
     status.className = "upload-status";
     status.textContent = "En attente";
     row.append(name, bar, status);
-    $("[data-upload-queue]").append(row);
+    queue().append(row);
     return { row, bar, status };
+  }
+
+  /** La file d'envoi de la page, ou une file flottante (dépôt hors des pages
+   *  Fichiers et Outils), posée sur `body` : elle survit aux navigations. */
+  function queue() {
+    let list = $("[data-upload-queue]");
+    if (!list) {
+      list = document.createElement("ul");
+      list.className = "upload-queue is-floating";
+      list.setAttribute("role", "list");
+      list.setAttribute("aria-live", "polite");
+      list.dataset.uploadQueue = "";
+      document.body.append(list);
+    }
+    return list;
   }
 
   function fail(job, text) {
@@ -70,8 +88,7 @@
 
   function addFiles(files) {
     const zone = $("[data-dropzone]");
-    if (!zone || !$("[data-upload-queue]")) return;
-    const max = Number(zone.dataset.max) || 0;
+    const max = Number(zone?.dataset.max) || 0;
     for (const file of files) {
       const job = { file, ...addRow(file) };
       if (max && file.size > max) fail(job, `Trop volumineux : ${zone.dataset.maxLabel} au plus`);
@@ -79,6 +96,14 @@
     }
     pump();
   }
+
+  /** Envoie un fichier dans l'espace de la page et rend son identifiant
+   *  (éditeur de notes : image collée). `name` remplace le nom du fichier. */
+  window.dashuUpload = (file, name) =>
+    new Promise((resolve, reject) => {
+      waiting.push({ file, name, resolve, reject, ...addRow({ name: name || file.name }) });
+      pump();
+    });
 
   function pump() {
     while (running < PARALLEL && waiting.length) send(waiting.shift());
@@ -111,20 +136,30 @@
   async function send(job) {
     running += 1;
     try {
-      await upload(job);
+      const id = await upload(job);
       job.bar.value = 100;
-      job.status.textContent = "Envoyé";
       job.row.classList.add("is-done");
+      // Hors des pages Fichiers et Outils : un lien vers le fichier arrivé.
+      if (id && !$("#file-results, #tool-results")) {
+        const link = document.createElement("a");
+        link.href = `/files/${id}`;
+        link.textContent = "Envoyé · voir";
+        job.status.replaceChildren(link);
+      } else {
+        job.status.textContent = "Envoyé";
+      }
       received += 1;
+      job.resolve?.(id);
     } catch (error) {
       fail(job, error.message);
+      job.reject?.(error);
     }
     finished();
   }
 
   async function upload(job) {
     const { file } = job;
-    const name = encodeURIComponent(file.name);
+    const name = encodeURIComponent(job.name || file.name);
     // Espace choisi au-dessus de la zone de dépôt (l'espace actif par défaut) ;
     // onglet Outils : un fichier pas encore rangé.
     const space = document.querySelector("[data-upload-space]")?.value;
@@ -149,7 +184,8 @@
       const xhr = await request("PUT", `/files/uploads/${id}?offset=${offset}`, chunk, (sent) =>
         show(offset + sent),
       );
-      if (xhr && xhr.status === 201) return;
+      // Dernier morceau : le serveur donne l'identifiant du fichier rangé.
+      if (xhr && xhr.status === 201) return xhr.getResponseHeader("x-file-id");
       if (xhr && xhr.status === 200) {
         offset = Number(xhr.getResponseHeader("x-upload-received"));
         tries = 0;
@@ -203,27 +239,52 @@
     input.value = "";
   });
 
-  // --- Glisser-déposer : partout sur la page Fichiers
+  // --- Glisser-déposer : sur les pages Fichiers et Outils, la zone de dépôt
+  // s'allume ; ailleurs, un voile dit dans quel espace le fichier va partir.
+  // L'éditeur de notes gère lui-même ce qu'on y lâche (image insérée).
   const carriesFiles = (event) => event.dataTransfer && [...event.dataTransfer.types].includes("Files");
+  const inEditor = (event) => event.target instanceof Element && !!event.target.closest(".cm-editor");
+
+  /** Voile du dépôt hors des pages Fichiers et Outils. */
+  function veil(show) {
+    let el = $(".drop-veil");
+    if (!show) {
+      el?.classList.remove("is-visible");
+      return;
+    }
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "drop-veil";
+      el.setAttribute("aria-hidden", "true");
+      el.append(document.createElement("p"));
+      document.body.append(el);
+    }
+    const space = $("[data-island] .isl-btn[aria-current='true'] .isl-label")?.textContent?.trim();
+    el.firstChild.textContent = space ? `Lâcher pour envoyer dans ${space}` : "Lâcher pour envoyer";
+    el.classList.add("is-visible");
+  }
 
   document.addEventListener("dragover", (event) => {
-    const zone = $("[data-dropzone]");
-    if (!zone || !carriesFiles(event)) return;
+    if (!carriesFiles(event) || !$("#app") || inEditor(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
-    zone.classList.add("is-over");
+    const zone = $("[data-dropzone]");
+    if (zone) zone.classList.add("is-over");
+    else veil(true);
   });
 
   document.addEventListener("dragleave", (event) => {
     // relatedTarget vide : le pointeur a quitté la fenêtre.
-    if (event.relatedTarget === null) $("[data-dropzone]")?.classList.remove("is-over");
+    if (event.relatedTarget !== null) return;
+    $("[data-dropzone]")?.classList.remove("is-over");
+    veil(false);
   });
 
   document.addEventListener("drop", (event) => {
-    const zone = $("[data-dropzone]");
-    if (!zone || !carriesFiles(event)) return;
+    if (!carriesFiles(event) || !$("#app") || event.defaultPrevented || inEditor(event)) return;
     event.preventDefault();
-    zone.classList.remove("is-over");
+    $("[data-dropzone]")?.classList.remove("is-over");
+    veil(false);
     addFiles(event.dataTransfer.files);
   });
 })();

@@ -150,10 +150,12 @@
   <dialog id="palette" class="palette" aria-label="Palette de commandes">
     <div class="palette-field">
       {{ crate::assets::icon("search")|safe }}
+      {#- La page ouverte : la palette propose ses actions (fichier, note). -#}
+      <input id="palette-page" type="hidden" name="page" value="{{ shell.path }}">
       <input id="palette-q" type="search" name="q" autocomplete="off" spellcheck="false"
              placeholder="Note, page ou action"
              aria-label="Chercher une note, une page ou une action" aria-controls="palette-results"
-             hx-get="/search/palette" hx-trigger="input changed delay:120ms, palette-open"
+             hx-get="/search/palette" hx-include="#palette-page" hx-trigger="input changed delay:120ms, palette-open"
              hx-target="#palette-results" hx-swap="innerHTML">
       <kbd>Échap</kbd>
     </div>

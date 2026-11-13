@@ -2182,6 +2182,55 @@ ul.note-links {
   min-width: 240px;
 }
 
+/* Dépôt hors des pages Fichiers et Outils : un voile dit où part le
+   fichier, et la file d'envoi flotte en bas à droite. */
+.drop-veil {
+  position: fixed;
+  z-index: 60;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--bg) 82%, transparent);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.drop-veil.is-visible {
+  opacity: 1;
+}
+
+.upload-queue.is-floating {
+  position: fixed;
+  z-index: 55;
+  right: 16px;
+  bottom: 16px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.35);
+}
+
+.upload-queue.is-floating:empty {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* Au-dessus de la barre de raccourcis du téléphone. */
+  .upload-queue.is-floating {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
 .upload-space {
   display: flex;
   align-items: center;

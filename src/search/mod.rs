@@ -82,9 +82,20 @@ struct NoteHit {
     space_color: String,
 }
 
+/// Action sur l'élément de la page ouverte (fichier, note) : un formulaire.
+struct PageAction {
+    label: String,
+    icon: &'static str,
+    action: String,
+    /// Champs cachés du formulaire.
+    fields: Vec<(&'static str, String)>,
+}
+
 #[derive(Template)]
 #[template(path = "search/_palette.html")]
 struct PaletteResults<'a> {
+    /// « Sur cette page » : conversions et déplacements de l'élément ouvert.
+    actions: Vec<PageAction>,
     commands: Vec<&'a Command>,
     /// Espaces vers lesquels on peut basculer.
     spaces: Vec<&'a Space>,
@@ -96,6 +107,81 @@ struct PaletteResults<'a> {
 #[derive(Deserialize)]
 pub struct PaletteQuery {
     q: Option<String>,
+    /// Page ouverte (sans l'espace de l'adresse) : `/files/12`, `/notes/3`…
+    page: Option<String>,
+}
+
+/// Identifiant de `/files/12` ou `/notes/3`, selon le préfixe.
+fn item_id(page: &str, prefix: &str) -> Option<i64> {
+    page.strip_prefix(prefix)?.parse().ok()
+}
+
+/// Actions de l'élément de la page ouverte, filtrées par la saisie.
+async fn page_actions(
+    ctx: &Ctx,
+    state: &AppState,
+    page: &str,
+    needle: &str,
+) -> AppResult<Vec<PageAction>> {
+    let mut actions = Vec::new();
+    let mut move_to = |kind: &str, id: i64, space_id: i64, back: String| {
+        for space in ctx.spaces.iter().filter(|s| s.id != space_id) {
+            actions.push(PageAction {
+                label: format!("Déplacer vers {}", space.name),
+                icon: "move",
+                action: format!("/{kind}/{id}/move"),
+                fields: vec![("space_id", space.id.to_string()), ("next", back.clone())],
+            });
+        }
+    };
+    if let Some(id) = item_id(page, "/files/") {
+        let file = sqlx::query!(
+            "SELECT space_id, mime, expires_at FROM files WHERE id = ? AND user_id = ?",
+            id,
+            ctx.user.id
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        if let Some(file) = file {
+            let mut converts = Vec::new();
+            if state.config.work_dir.is_some() {
+                for to in crate::tools::conversions_for(&file.mime) {
+                    let label = match to {
+                        crate::tools::Conversion::Compress => "Compresser ce fichier".to_string(),
+                        crate::tools::Conversion::Mp3 => "Extraire le son en MP3".to_string(),
+                        crate::tools::Conversion::Pages => continue,
+                        // « En JPEG » -> « Convertir en JPEG ».
+                        other => {
+                            format!("Convertir en {}", other.label().trim_start_matches("En "))
+                        }
+                    };
+                    converts.push(PageAction {
+                        label,
+                        icon: "convert",
+                        action: format!("/files/{id}/convert"),
+                        fields: vec![("to", to.key().into()), ("next", format!("/files/{id}"))],
+                    });
+                }
+            }
+            if file.expires_at.is_none() {
+                move_to("files", id, file.space_id, format!("/files/{id}"));
+            }
+            actions.splice(0..0, converts);
+        }
+    } else if let Some(id) = item_id(page, "/notes/") {
+        let space_id = sqlx::query_scalar!(
+            "SELECT space_id FROM notes WHERE id = ? AND user_id = ?",
+            id,
+            ctx.user.id
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        if let Some(space_id) = space_id {
+            move_to("notes", id, space_id, "/notes".into());
+        }
+    }
+    actions.retain(|a| needle.is_empty() || fold(&a.label).contains(needle));
+    Ok(actions)
 }
 
 /// `GET /search/palette?q=…`
@@ -106,6 +192,13 @@ pub async fn palette(
 ) -> AppResult<Response> {
     let q = query.q.unwrap_or_default();
     let needle = fold(q.trim());
+    let actions = page_actions(
+        &ctx,
+        &state,
+        query.page.as_deref().unwrap_or_default(),
+        &needle,
+    )
+    .await?;
 
     let commands: Vec<&Command> = COMMANDS
         .iter()
@@ -194,6 +287,7 @@ pub async fn palette(
     };
 
     Ok(web::html(PaletteResults {
+        actions,
         commands,
         spaces,
         notes,

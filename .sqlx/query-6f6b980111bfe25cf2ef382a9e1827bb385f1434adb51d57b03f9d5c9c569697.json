@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, mime, expires_at FROM files WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "mime",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6f6b980111bfe25cf2ef382a9e1827bb385f1434adb51d57b03f9d5c9c569697"
+}

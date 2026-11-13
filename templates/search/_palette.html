@@ -1,7 +1,21 @@
 {#- Résultats de la palette. Chaque entrée porte la classe .pal-item : app.js
     s'en sert pour la navigation au clavier (flèches, Entrée). -#}
-{% if commands.is_empty() && spaces.is_empty() && notes.is_empty() %}
+{% if actions.is_empty() && commands.is_empty() && spaces.is_empty() && notes.is_empty() %}
 <p class="palette-empty">Aucun résultat</p>
+{% endif %}
+
+{% if !actions.is_empty() %}
+<p class="palette-heading">Sur cette page</p>
+{% for action in actions %}
+<form method="post" action="{{ action.action }}">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  {% for (name, value) in action.fields %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <button class="pal-item" type="submit">
+    {{ crate::assets::icon(action.icon)|safe }}
+    <span class="pal-main"><span class="pal-title">{{ action.label }}</span></span>
+  </button>
+</form>
+{% endfor %}
 {% endif %}
 
 {% if !commands.is_empty() %}

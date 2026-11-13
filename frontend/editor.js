@@ -125,6 +125,17 @@ function initEditor() {
           ...historyKeymap,
         ]),
         EditorView.contentAttributes.of({ "aria-label": "Contenu de la note en Markdown" }),
+        // Image collée ou fichier lâché : rangé dans l'espace de la note
+        // (static/js/files.js), puis inséré en Markdown.
+        EditorView.domEventHandlers({
+          paste: (event, editor) => attach(event.clipboardData?.files, editor, null),
+          drop: (event, editor) => {
+            const at = editor.posAtCoords({ x: event.clientX, y: event.clientY });
+            if (!attach(event.dataTransfer?.files, editor, at)) return false;
+            event.preventDefault();
+            return true;
+          },
+        }),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           textarea.value = update.state.doc.toString();
@@ -134,6 +145,43 @@ function initEditor() {
       ],
     }),
   });
+
+  /** Envoie les fichiers collés ou lâchés et insère leur lien à leur place :
+   *  une image en `![nom](/files/id/raw)`, le reste en `[nom](/files/id)`.
+   *  Un texte provisoire marque l'endroit pendant l'envoi. */
+  let pending = 0;
+  function attach(files, editor, at) {
+    if (!files || files.length === 0 || !window.dashuUpload) return false;
+    for (const file of files) {
+      pending += 1;
+      const mark = `![Envoi de ${file.name || "l'image"}…](#envoi-${pending})`;
+      const pos = at ?? editor.state.selection.main.head;
+      editor.dispatch({ changes: { from: pos, insert: `${mark}\n` } });
+      const pasted = !file.name || file.name === "image.png";
+      const name = pasted ? `collage-${stamp()}.${(file.type.split("/")[1] || "png").replace("jpeg", "jpg")}` : file.name;
+      const replace = (text) => {
+        const doc = editor.state.doc.toString();
+        const from = doc.indexOf(mark);
+        if (from < 0) return;
+        editor.dispatch({ changes: { from, to: from + mark.length, insert: text } });
+      };
+      window
+        .dashuUpload(file, name)
+        .then((id) => {
+          const image = /^image\/(png|jpeg|gif|webp)$/.test(file.type);
+          replace(image ? `![${name}](/files/${id}/raw)` : `[${name}](/files/${id})`);
+        })
+        .catch(() => replace(""));
+    }
+    return true;
+  }
+
+  /** « 2026-11-13-140512 » : nom d'une image collée. */
+  function stamp() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
 
   // Sauvegarde immédiate (Ctrl+S) : déclenche le même envoi htmx que l'autosave.
   function flush() {
