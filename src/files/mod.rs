@@ -826,6 +826,15 @@ pub async fn view(
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
+    // Fichier d'un autre espace : il s'ouvre dans le sien (sauf ceux de
+    // l'onglet Outils, qui n'appartiennent encore à aucune liste).
+    if row.space_id != ctx.active.id && row.expires_at.is_none() {
+        let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
+        return Ok(see_other(&crate::spaces::url::prefixed(
+            &space.slug,
+            &format!("/files/{id}"),
+        )));
+    }
     let tools = state.config.work_dir.is_some();
 
     let mut text_html = String::new();

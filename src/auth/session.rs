@@ -15,7 +15,7 @@ use tower_sessions::cookie::time::Duration;
 use tower_sessions::{Expiry, Session};
 
 use crate::AppState;
-use crate::spaces::{self, Space, SpaceTag};
+use crate::spaces::{self, Space, SpaceTag, url};
 use crate::tabbar::{self, Tab};
 use crate::web::{self, AppError, AppResult, csrf};
 
@@ -135,6 +135,8 @@ pub struct Shell {
     /// Écran de lancement (logo sur fond noir) : seulement au chargement
     /// complet, jamais pendant une navigation htmx.
     pub launch: bool,
+    /// Début des adresses de l'espace actif : `/e/ecole`.
+    pub base: String,
     /// Conversions en cours : l'indicateur de la barre latérale.
     pub jobs_active: i64,
     /// L'une d'elles part de l'onglet Outils : le lien y mène.
@@ -157,6 +159,7 @@ impl Ctx {
             sidebar_floating: self.user.sidebar_floating,
             theme: self.user.theme.clone().unwrap_or_default(),
             spaces: self.spaces.clone(),
+            base: format!("/e/{}", self.active.slug),
             active: self.active.clone(),
             csrf: self.csrf.clone(),
             path: self.path.clone(),
@@ -298,16 +301,41 @@ impl FromRequestParts<AppState> for Ctx {
             .get::<String>(ACTIVE_SPACE)
             .await
             .map_err(|e| internal(e.into()))?;
-        let active = spaces
-            .iter()
-            .find(|s| Some(&s.slug) == wanted.as_ref())
-            .or_else(|| spaces.first())
-            .cloned()
-            .ok_or_else(|| {
-                internal(AppError::Internal(anyhow::anyhow!(
-                    "utilisateur sans espace"
-                )))
-            })?;
+        // L'espace actif : celui de l'adresse (`/e/<slug>/…`, retenu comme
+        // dernier espace utilisé), sinon celui de l'onglet (en-tête des
+        // requêtes htmx), sinon celui de la session.
+        let from_url = parts.extensions.get::<url::UrlSpace>().map(|s| s.0.clone());
+        let from_tab = parts
+            .headers
+            .get(url::HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let by_slug = |slug: &str| spaces.iter().find(|s| s.slug == slug);
+        let active = if let Some(slug) = from_url {
+            // Un espace inconnu (ou d'un autre compte) dans l'adresse : 404.
+            let space = by_slug(&slug)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound.into_response())?;
+            if wanted.as_deref() != Some(slug.as_str()) {
+                session
+                    .insert(ACTIVE_SPACE, &slug)
+                    .await
+                    .map_err(|e| internal(e.into()))?;
+            }
+            space
+        } else {
+            from_tab
+                .as_deref()
+                .and_then(by_slug)
+                .or_else(|| wanted.as_deref().and_then(by_slug))
+                .or_else(|| spaces.first())
+                .cloned()
+                .ok_or_else(|| {
+                    internal(AppError::Internal(anyhow::anyhow!(
+                        "utilisateur sans espace"
+                    )))
+                })?
+        };
 
         let csrf = csrf::token(&session).await.map_err(internal)?;
         let path = parts

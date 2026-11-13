@@ -14,7 +14,7 @@ use serde::Deserialize;
 use sqlx::SqlitePool;
 
 use crate::AppState;
-use crate::auth::session::{ACTIVE_SPACE, Ctx, Shell};
+use crate::auth::session::{Ctx, Shell};
 use crate::spaces::Space;
 use crate::time;
 use crate::web::{self, AppError, AppResult, escape, see_other};
@@ -403,14 +403,14 @@ pub async fn edit_page(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    // Note ouverte depuis la recherche globale alors qu'on est dans un autre
-    // espace : on bascule sur son espace, puis on recharge la page.
+    // Note ouverte depuis un autre espace (recherche globale, Perso) : elle
+    // s'ouvre dans le sien, par l'adresse de cet espace.
     if note.space_id != ctx.active.id {
-        if let Some(space) = ctx.space_by_id(note.space_id) {
-            ctx.session.insert(ACTIVE_SPACE, &space.slug).await?;
-            return Ok(see_other(&format!("/notes/{id}")));
-        }
-        return Err(AppError::NotFound);
+        let space = ctx.space_by_id(note.space_id).ok_or(AppError::NotFound)?;
+        return Ok(see_other(&crate::spaces::url::prefixed(
+            &space.slug,
+            &format!("/notes/{id}"),
+        )));
     }
 
     let page = EditPage {

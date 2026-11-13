@@ -338,10 +338,13 @@ async fn la_page_fichiers_est_dans_la_navigation() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     let page = alice.get("/").await;
-    assert!(page.body.contains("href=\"/files\" data-key=\"g f\""));
+    assert!(
+        page.body
+            .contains("href=\"/e/perso/files\" data-key=\"g f\"")
+    );
     let page = alice.get("/files").await;
     assert!(
         page.body
-            .contains("href=\"/files\" data-key=\"g f\" aria-current=\"page\"")
+            .contains("href=\"/e/perso/files\" data-key=\"g f\" aria-current=\"page\"")
     );
 }

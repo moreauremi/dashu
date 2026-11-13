@@ -308,6 +308,13 @@ impl Client {
             .await
     }
 
+    /// Ajoute un en-tête à la prochaine requête (par exemple `x-espace`,
+    /// l'espace de l'onglet que htmx joint à chaque requête).
+    pub fn with_header(&mut self, name: &str, value: &str) -> &mut Self {
+        self.extra.push((name.into(), value.into()));
+        self
+    }
+
     /// GET avec un en-tête `Range` (lecture d'une vidéo par morceaux).
     pub async fn get_range(&mut self, path: &str, range: &str) -> TestResponse {
         self.extra.push(("range".into(), range.into()));

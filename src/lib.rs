@@ -29,6 +29,7 @@ use axum::http::{Extensions, HeaderMap, StatusCode, Version, header};
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::routing::{delete, get, post, put};
 use sqlx::SqlitePool;
+use tower::Layer as _;
 use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::compression::CompressionLayer;
@@ -216,7 +217,7 @@ pub fn build_router(state: AppState) -> Router {
     // première traversée par la requête.
     // L'API JSON est ajoutée après la couche des pages d'erreur : ses erreurs
     // restent en JSON, au lieu d'être transformées en pages HTML.
-    Router::new()
+    let router = Router::new()
         .route("/health", get(health))
         .route("/static/{*path}", get(assets::serve))
         .merge(app)
@@ -228,7 +229,12 @@ pub fn build_router(state: AppState) -> Router {
         ))
         .layer(CompressionLayer::new().compress_when(DefaultPredicate::new().and(not_a_download)))
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(state);
+
+    // L'espace dans l'adresse (`/e/<slug>/…`) : le préfixe doit être retiré
+    // avant le routage, donc autour du routeur entier (une couche de
+    // `Router::layer` ne s'applique qu'après le choix de la route).
+    Router::new().fallback_service(from_fn(spaces::url::rewrite).layer(router))
 }
 
 /// Un fichier téléchargé n'est pas recompressé : souvent déjà compressé

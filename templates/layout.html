@@ -25,7 +25,7 @@
                    les fragments (widgets, recherche…) gardent leur propre hx-swap -#}
 {#- data-size : taille de l'interface (zoom de toute l'app) ; data-sidebar :
     barre latérale détachée, cachée à gauche (voir .sidebar-edge). -#}
-<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}"}'>
+<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}","X-Espace":"{{ shell.active.slug }}"}'>
   <a class="skip-link" href="#main">Aller au contenu</a>
 
   <header class="topbar">
@@ -54,7 +54,7 @@
   <div class="sidebar-edge" aria-hidden="true"></div>
   <nav id="sidebar" class="sidebar" aria-label="Navigation principale">
     <div class="sidebar-head">
-      <a class="wordmark" href="/">{{ crate::assets::logo()|safe }}</a>
+      <a class="wordmark" href="{{ shell.base }}/">{{ crate::assets::logo()|safe }}</a>
       <form class="sidebar-pin" method="post" action="/settings/sidebar">
         <input type="hidden" name="next" value="{{ shell.path }}">
         {% if shell.sidebar_floating %}
@@ -73,10 +73,10 @@
       </button>
 
       <ul class="nav" role="list">
-        <li><a href="/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
-        <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
-        <li><a href="/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
-        <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
+        <li><a href="{{ shell.base }}/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
+        <li><a href="{{ shell.base }}/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
+        <li><a href="{{ shell.base }}/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
+        <li><a href="{{ shell.base }}/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
         <li><a href="/tools" data-key="g o"{% if shell.nav == "tools" %} aria-current="page"{% endif %}>{{ crate::assets::icon("tools")|safe }}<span>Outils</span></a></li>
       </ul>
 
@@ -135,7 +135,7 @@
     {% if tab.href.is_empty() %}
     <button class="tab" type="button" data-palette-open>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></button>
     {% else %}
-    <a class="tab" href="{{ tab.href }}"{% if tab.key == shell.nav %} aria-current="page"{% endif %}>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></a>
+    <a class="tab" href="{% if crate::spaces::url::is_scoped(tab.href) %}{{ shell.base }}{% endif %}{{ tab.href }}"{% if tab.key == shell.nav %} aria-current="page"{% endif %}>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></a>
     {% endif %}
     {% endfor %}
   </nav>

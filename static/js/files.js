@@ -36,6 +36,14 @@
     }
   }
 
+  function tabSpace() {
+    try {
+      return JSON.parse($("[hx-headers]").getAttribute("hx-headers"))["X-Espace"] || "";
+    } catch {
+      return "";
+    }
+  }
+
   /** Une ligne dans la file d'envoi : nom, barre, état. */
   function addRow(file) {
     const row = document.createElement("li");
@@ -86,6 +94,8 @@
       const xhr = new XMLHttpRequest();
       xhr.open(method, url);
       xhr.setRequestHeader("X-CSRF-Token", csrfToken());
+      // L'espace de l'onglet, comme pour une requête htmx.
+      xhr.setRequestHeader("X-Espace", tabSpace());
       // Les erreurs reviennent alors en une ligne, comme pour un fragment htmx.
       xhr.setRequestHeader("HX-Request", "true");
       if (body) xhr.setRequestHeader("Content-Type", "application/octet-stream");

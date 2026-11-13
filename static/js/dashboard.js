@@ -21,11 +21,14 @@
   const widgets = () => [...(grid()?.querySelectorAll(".dw") ?? [])];
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
-  function csrf() {
+  /** En-têtes de la page : jeton CSRF et espace de l'onglet (la disposition
+   *  enregistrée est celle de cet espace). */
+  function headers() {
     try {
-      return JSON.parse($("#app").getAttribute("hx-headers"))["X-CSRF-Token"];
+      const all = JSON.parse($("#app").getAttribute("hx-headers"));
+      return { "X-CSRF-Token": all["X-CSRF-Token"] || "", "X-Espace": all["X-Espace"] || "" };
     } catch {
-      return "";
+      return {};
     }
   }
 
@@ -51,7 +54,7 @@
       .then(() =>
         fetch("/dashboard/layout", {
           method: "POST",
-          headers: { "X-CSRF-Token": csrf() },
+          headers: headers(),
           body,
         }),
       )

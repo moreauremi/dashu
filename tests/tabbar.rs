@@ -27,7 +27,7 @@ async fn quatre_raccourcis_par_defaut() {
     // La page courante est signalée, la recherche ouvre la palette.
     assert!(
         page.body
-            .contains(r#"<a class="tab" href="/notes" aria-current="page">"#)
+            .contains(r#"<a class="tab" href="/e/perso/notes" aria-current="page">"#)
     );
     assert!(
         page.body

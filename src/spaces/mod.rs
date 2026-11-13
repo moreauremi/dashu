@@ -12,6 +12,8 @@ use axum::response::Response;
 use serde::Deserialize;
 use sqlx::SqlitePool;
 
+pub mod url;
+
 use crate::AppState;
 use crate::auth::session::{ACTIVE_SPACE, Ctx, Shell};
 use crate::files;
@@ -156,12 +158,19 @@ pub async fn switch(ctx: Ctx, axum::Form(form): axum::Form<SwitchForm>) -> AppRe
     ctx.session.insert(ACTIVE_SPACE, &form.slug).await?;
 
     let next = local_path(form.next.as_deref());
-    // Une note ouverte appartient à l'ancien espace : on revient à la liste.
+    // Une note ou un fichier ouvert appartient à l'ancien espace : on revient
+    // à la liste.
     let next = if next.starts_with("/notes/") {
         "/notes"
+    } else if next.starts_with("/files/") {
+        "/files"
     } else {
         next
     };
+    // La page d'un espace prend l'adresse du nouvel espace.
+    if url::is_scoped(next) {
+        return Ok(see_other(&url::prefixed(&form.slug, next)));
+    }
     Ok(see_other(next))
 }
 

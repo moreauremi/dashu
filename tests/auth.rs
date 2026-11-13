@@ -411,7 +411,8 @@ async fn le_changement_d_espace_filtre_le_contenu() {
         .post("/space", &[("slug", "ecole"), ("next", "/notes")])
         .await;
     assert_eq!(response.status, StatusCode::SEE_OTHER);
-    assert_eq!(response.location(), "/notes");
+    // L'adresse nomme désormais l'espace (/e/<slug>/…).
+    assert_eq!(response.location(), "/e/ecole/notes");
 
     let notes = alice.get("/notes").await;
     assert!(notes.body.contains("data-accent=\"blue\""));
@@ -446,7 +447,7 @@ async fn le_changement_d_espace_filtre_le_contenu() {
             &[("slug", "taff"), ("next", "https://evil.example/")],
         )
         .await;
-    assert_eq!(response.location(), "/");
+    assert_eq!(response.location(), "/e/taff/");
 }
 
 #[tokio::test]
