@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT name, last_fetched_at, last_error FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 OR space_id = ?2) ORDER BY name",
+  "query": "SELECT name, last_fetched_at, last_error FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -28,5 +28,5 @@
       true
     ]
   },
-  "hash": "5da80b7177c12ec831b642b729c26905705864dc8fc310b70713f0264c28ce7f"
+  "hash": "61b41005ad5eca082e05b9809373507627e53cc15edb8ff7a29c585ffbd7d43b"
 }

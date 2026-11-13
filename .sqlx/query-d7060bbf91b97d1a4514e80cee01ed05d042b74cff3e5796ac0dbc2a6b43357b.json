@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT src.id AS \"source!: i64\", src.name AS source_name, src.storage_key AS source_key,\n                  src.space_id AS source_space, src.expires_at AS source_expires,\n                  res.id AS \"result!: i64\", res.name AS result_name\n           FROM jobs j\n           JOIN files src ON src.id = j.file_id AND src.user_id = j.user_id\n           JOIN files res ON res.id = j.result_file_id AND res.user_id = j.user_id\n           WHERE j.id = ? AND j.user_id = ? AND j.status = 'done'",
+  "describe": {
+    "columns": [
+      {
+        "name": "source!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_space",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_expires",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result!: i64",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result_name",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d7060bbf91b97d1a4514e80cee01ed05d042b74cff3e5796ac0dbc2a6b43357b"
+}

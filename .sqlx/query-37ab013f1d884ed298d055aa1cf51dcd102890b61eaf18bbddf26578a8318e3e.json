@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", space_id, title, done AS \"done!: bool\", due_date\n           FROM tasks\n           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)\n             AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))\n               OR (done = 1 AND done_at >= ?4))\n           ORDER BY done, due_date, created_at",
+  "query": "SELECT id AS \"id!\", space_id, title, pinned AS \"pinned!: bool\", updated_at\n           FROM notes\n           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)\n           ORDER BY pinned DESC, updated_at DESC\n           LIMIT 40",
   "describe": {
     "columns": [
       {
@@ -19,26 +19,26 @@
         "type_info": "Text"
       },
       {
-        "name": "done!: bool",
+        "name": "pinned!: bool",
         "ordinal": 3,
         "type_info": "Bool"
       },
       {
-        "name": "due_date",
+        "name": "updated_at",
         "ordinal": 4,
-        "type_info": "Text"
+        "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 4
+      "Right": 2
     },
     "nullable": [
       true,
       false,
       false,
       false,
-      true
+      false
     ]
   },
-  "hash": "7455925de0bb70280d9dac97dec68417c263fbe0be6072162bfa891ee7ed7f35"
+  "hash": "37ab013f1d884ed298d055aa1cf51dcd102890b61eaf18bbddf26578a8318e3e"
 }

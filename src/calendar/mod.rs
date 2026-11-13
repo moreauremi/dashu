@@ -114,7 +114,7 @@ pub async fn page(
 
     let sources = sqlx::query!(
         r#"SELECT name, last_fetched_at, last_error FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 OR space_id = ?2) ORDER BY name"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) ORDER BY name"#,
         user,
         space,
         overview
@@ -186,7 +186,7 @@ async fn events_between(
            FROM calendar_events e
            JOIN calendar_sources s ON s.id = e.source_id
            JOIN spaces sp ON sp.id = s.space_id
-           WHERE s.user_id = ?1 AND (?3 OR s.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
+           WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
            ORDER BY e.starts_at, e.ends_at"#,
         user,
         space,
@@ -234,7 +234,7 @@ pub async fn widget_grid(
     };
     let has_sources = sqlx::query_scalar!(
         r#"SELECT count(*) AS "n!: i64" FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 OR space_id = ?2)"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space.id,
         overview
@@ -261,7 +261,7 @@ pub async fn refresh(
     let overview = is_overview(&ctx.active);
     let sources = sqlx::query!(
         r#"SELECT id AS "id!", ical_url FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 OR space_id = ?2)"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
         ctx.user.id,
         ctx.active.id,
         overview

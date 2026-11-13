@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE spaces SET auto_mp4 = ?, auto_heic_jpeg = ? WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "960f061a07f812060c1f261d0d9115e98e53d84e1095c6e62a265a14fc21b84d"
+}

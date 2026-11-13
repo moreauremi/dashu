@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE spaces SET archived_at = NULL WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b14e4d37fb302c8576ed4acfd7bcb1cf3bf71e56b17e3272cbaaf16b8ac94744"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE files SET name = ?, mime = ?, space_id = ?, expires_at = ?, updated_at = ?\n         WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "f69c692f7c5d9dc8ff4624472d17bb9aa797420674c48397c9e42c0390d094e9"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT nt.note_id AS \"note_id!\", t.name AS \"name!\"\n           FROM note_tags nt\n           JOIN tags t ON t.id = nt.tag_id\n           JOIN notes n ON n.id = nt.note_id\n           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "note_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4f120ba0442ec8c212798ce16d7dcebec4668f6c2cc49fbd8642d172e5c76cbf"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT t.name AS \"name!\", COUNT(*) AS \"count!: i64\"\n           FROM tags t\n           JOIN note_tags nt ON nt.tag_id = t.id\n           JOIN notes n ON n.id = nt.note_id\n           WHERE t.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)\n           GROUP BY t.id\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "name!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "count!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "c751935b1fc4ea47ceb4d9946a4d6fe85537abbafcb5b9b2372babe4fbd36b8b"
+}

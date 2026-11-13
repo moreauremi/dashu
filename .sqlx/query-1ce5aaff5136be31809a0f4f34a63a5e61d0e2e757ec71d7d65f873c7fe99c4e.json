@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", email, theme,\n                      password_hash IS NOT NULL AS \"has_password!: bool\",\n                      google_sub IS NOT NULL AS \"google_linked!: bool\",\n                      mobile_tabs, first_name, last_name, avatar_color,\n                      avatar IS NOT NULL AS \"has_avatar!: bool\", avatar_version,\n                      ui_size, sidebar_floating AS \"sidebar_floating!: bool\"\n               FROM users WHERE id = ?",
+  "query": "SELECT id AS \"id!\", email, theme,\n                      password_hash IS NOT NULL AS \"has_password!: bool\",\n                      google_sub IS NOT NULL AS \"google_linked!: bool\",\n                      mobile_tabs, first_name, last_name, avatar_color,\n                      avatar IS NOT NULL AS \"has_avatar!: bool\", avatar_version,\n                      ui_size, sidebar_floating AS \"sidebar_floating!: bool\",\n                      moment_space\n               FROM users WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -67,6 +67,11 @@
         "name": "sidebar_floating!: bool",
         "ordinal": 12,
         "type_info": "Bool"
+      },
+      {
+        "name": "moment_space",
+        "ordinal": 13,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -85,8 +90,9 @@
       false,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "17da7eeaee725a8c51564ced92e86cbc84c3ea67e7c2e6aaa7d230119c17610c"
+  "hash": "1ce5aaff5136be31809a0f4f34a63a5e61d0e2e757ec71d7d65f873c7fe99c4e"
 }

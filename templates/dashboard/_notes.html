@@ -12,7 +12,7 @@
     {% for note in recent %}
     <li><a href="/notes/{{ note.id }}">
       <span class="note-link-title">{{ note.title }}</span>
-      {% if let Some(space) = note.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
+      {% if let Some(space) = note.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
       <span class="muted">{{ note.updated }}</span>
     </a></li>
     {% endfor %}

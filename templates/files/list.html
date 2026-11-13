@@ -63,7 +63,7 @@
         {%- endif %}
         <span>{{ item.name }}</span>
       </a>
-      <span class="file-meta">{% if let Some(space) = item.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span> · {% endif %}{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
+      <span class="file-meta">{% if let Some(space) = item.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span> · {% endif %}{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>

@@ -49,6 +49,9 @@ pub struct User {
     /// `small`, `large`, ou `None` pour la taille normale.
     pub ui_size: Option<String>,
     pub sidebar_floating: bool,
+    /// « Espace du moment » à l'ouverture : l'espace des jours sans cours,
+    /// `None` si le réglage est désactivé.
+    pub moment_space: Option<i64>,
 }
 
 impl User {
@@ -94,7 +97,12 @@ pub struct Flash {
 
 pub struct Ctx {
     pub user: User,
+    /// Espaces en service (sélecteur, choix d'un espace).
     pub spaces: Vec<Space>,
+    /// Espaces archivés : ouverts seulement par leur adresse, restaurables.
+    pub archived: Vec<Space>,
+    /// L'espace actif vient de l'adresse (`/e/<slug>/…`).
+    pub from_url: bool,
     pub active: Space,
     pub csrf: String,
     pub session: Session,
@@ -126,6 +134,8 @@ pub struct Shell {
     /// `dark`, `light` ou chaîne vide (suivre le système).
     pub theme: String,
     pub spaces: Vec<Space>,
+    /// Espaces archivés (Réglages).
+    pub archived: Vec<Space>,
     pub active: Space,
     pub csrf: String,
     pub path: String,
@@ -159,6 +169,7 @@ impl Ctx {
             sidebar_floating: self.user.sidebar_floating,
             theme: self.user.theme.clone().unwrap_or_default(),
             spaces: self.spaces.clone(),
+            archived: self.archived.clone(),
             base: format!("/e/{}", self.active.slug),
             active: self.active.clone(),
             csrf: self.csrf.clone(),
@@ -179,9 +190,17 @@ impl Ctx {
         set_flash(&self.session, "error", text).await
     }
 
-    /// Espace de l'utilisateur portant cet identifiant, s'il existe.
+    /// Espace de l'utilisateur portant cet identifiant, archivé ou non.
     pub fn space_by_id(&self, id: i64) -> Option<&Space> {
-        self.spaces.iter().find(|s| s.id == id)
+        self.spaces
+            .iter()
+            .chain(&self.archived)
+            .find(|s| s.id == id)
+    }
+
+    /// Tous les espaces, archivés compris.
+    pub fn all_spaces(&self) -> Vec<Space> {
+        self.spaces.iter().chain(&self.archived).cloned().collect()
     }
 
     /// Espace dont montrer le contenu : `None` pour tous (Perso, vue
@@ -271,7 +290,8 @@ impl FromRequestParts<AppState> for Ctx {
                       google_sub IS NOT NULL AS "google_linked!: bool",
                       mobile_tabs, first_name, last_name, avatar_color,
                       avatar IS NOT NULL AS "has_avatar!: bool", avatar_version,
-                      ui_size, sidebar_floating AS "sidebar_floating!: bool"
+                      ui_size, sidebar_floating AS "sidebar_floating!: bool",
+                      moment_space
                FROM users WHERE id = ?"#,
             user_id
         )
@@ -296,7 +316,11 @@ impl FromRequestParts<AppState> for Ctx {
                 .map_err(internal)?;
         }
 
-        let spaces = spaces::list(&state.db, user.id).await.map_err(internal)?;
+        let (archived, spaces): (Vec<Space>, Vec<Space>) = spaces::list(&state.db, user.id)
+            .await
+            .map_err(internal)?
+            .into_iter()
+            .partition(|s| s.archived);
         let wanted = session
             .get::<String>(ACTIVE_SPACE)
             .await
@@ -311,9 +335,12 @@ impl FromRequestParts<AppState> for Ctx {
             .and_then(|v| v.to_str().ok())
             .map(str::to_string);
         let by_slug = |slug: &str| spaces.iter().find(|s| s.slug == slug);
+        let in_url = from_url.is_some();
         let active = if let Some(slug) = from_url {
             // Un espace inconnu (ou d'un autre compte) dans l'adresse : 404.
+            // Un espace archivé s'ouvre par son adresse.
             let space = by_slug(&slug)
+                .or_else(|| archived.iter().find(|s| s.slug == slug))
                 .cloned()
                 .ok_or_else(|| AppError::NotFound.into_response())?;
             if wanted.as_deref() != Some(slug.as_str()) {
@@ -358,6 +385,8 @@ impl FromRequestParts<AppState> for Ctx {
         Ok(Self {
             user,
             spaces,
+            archived,
+            from_url: in_url,
             active,
             csrf,
             session,

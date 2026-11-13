@@ -106,7 +106,7 @@ pub async fn list(
     let items = sqlx::query!(
         r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
            FROM files
-           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL
+           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC"#,
         ctx.user.id,
         scope
@@ -518,6 +518,13 @@ async fn finish(
             if let Err(error) = crate::tools::enqueue_thumbnail(state, file_id).await {
                 tracing::warn!(error = format!("{error:#}"), "demande de vignette");
             }
+            // Règles de l'espace (vidéo en MP4, HEIC doublée d'un JPEG). Un
+            // fichier de l'onglet Outils n'est encore dans aucun espace.
+            if !for_tools
+                && let Err(error) = crate::tools::apply_rules(state, user_id, file_id).await
+            {
+                tracing::warn!(error = format!("{error:?}"), "règles de l'espace");
+            }
             Ok(file_id)
         }
         Err(error) => {
@@ -781,6 +788,9 @@ struct ViewPage {
     conversions: Vec<(&'static str, &'static str)>,
     /// Fichier de l'onglet Outils pas encore gardé : « encore 23 h ».
     expires: Option<String>,
+    /// Copie compressée ou convertie dont l'original existe encore : la
+    /// tâche, pour « Remplacer l'original ».
+    replace_job: Option<i64>,
     /// Ce que la page montre : `image` (le fichier), `picture` (le grand
     /// aperçu), `video`, `audio`, `text`, `markdown`, `pending` (aperçu en
     /// préparation) ou `none`.
@@ -836,6 +846,15 @@ pub async fn view(
         )));
     }
     let tools = state.config.work_dir.is_some();
+    let replace_job = sqlx::query_scalar!(
+        r#"SELECT id AS "id!" FROM jobs
+           WHERE result_file_id = ? AND user_id = ? AND status = 'done' AND file_id IS NOT NULL
+           ORDER BY id DESC LIMIT 1"#,
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?;
 
     let mut text_html = String::new();
     let mut truncated = false;
@@ -879,6 +898,7 @@ pub async fn view(
             time::ago(row.updated_at, time::now())
         ),
         conversions: menu(tools, &row.mime, true),
+        replace_job,
         expires: row.expires_at.map(|at| {
             format!(
                 "Onglet Outils : pas encore rangé, effacé dans {}",

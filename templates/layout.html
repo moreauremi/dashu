@@ -123,6 +123,13 @@
     {% endif %}
     {#- Rappel de l'espace au-dessus du titre (le dashboard le dit déjà sous
         la date). -#}
+    {% if shell.active.archived %}
+    <form class="archived-banner" method="post" action="/settings/spaces/{{ shell.active.id }}/restore">
+      {{ crate::assets::icon("archive")|safe }}
+      <span>Espace archivé : il n'est plus dans le sélecteur.</span>
+      <button class="btn" type="submit">{{ crate::assets::icon("unarchive")|safe }}<span>Restaurer</span></button>
+    </form>
+    {% endif %}
     {% if shell.nav == "notes" || shell.nav == "files" || shell.nav == "calendar" %}
     <p class="space-kicker"><span class="dot" aria-hidden="true"></span><span class="sr-only">Espace </span>{{ shell.active.name }}</p>
     {% endif %}

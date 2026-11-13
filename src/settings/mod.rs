@@ -52,6 +52,9 @@ struct SettingsPage {
     new_icon: &'static str,
     max_spaces: usize,
     name_max: usize,
+    /// Réglage « espace du moment » : l'espace des jours sans cours, 0 si
+    /// le réglage est désactivé.
+    moment_id: i64,
 }
 
 /// `GET /settings`
@@ -99,6 +102,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         new_icon,
         max_spaces: spaces::MAX_SPACES,
         name_max: spaces::NAME_MAX_CHARS,
+        moment_id: ctx.user.moment_space.unwrap_or(0),
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),
@@ -323,4 +327,45 @@ pub async fn delete_calendar(
     }
     ctx.flash_ok("Agenda supprimé").await?;
     Ok(see_other("/settings#agendas"))
+}
+
+#[derive(Deserialize)]
+pub struct MomentForm {
+    /// Identifiant de l'espace des jours sans cours ; vide pour désactiver.
+    space: String,
+}
+
+/// `POST /settings/moment` : réglage « espace du moment » à l'ouverture.
+pub async fn set_moment(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    axum::Form(form): axum::Form<MomentForm>,
+) -> AppResult<Response> {
+    let space = match form.space.trim() {
+        "" => None,
+        id => {
+            let id: i64 = id.parse().map_err(|_| AppError::NotFound)?;
+            // Un espace en service de l'utilisateur.
+            Some(
+                ctx.spaces
+                    .iter()
+                    .find(|s| s.id == id)
+                    .ok_or(AppError::NotFound)?
+                    .id,
+            )
+        }
+    };
+    sqlx::query!(
+        "UPDATE users SET moment_space = ? WHERE id = ?",
+        space,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
+    ctx.flash_ok(match space {
+        Some(_) => "L'app s'ouvrira sur l'espace du moment",
+        None => "L'app s'ouvrira sur le dernier espace utilisé",
+    })
+    .await?;
+    Ok(see_other("/settings#ouverture"))
 }

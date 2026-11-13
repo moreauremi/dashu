@@ -1995,6 +1995,12 @@ ul.note-links {
   }
 }
 
+.job-replace .btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .job-name .muted {
   margin-left: 8px;
   font-size: 12px;
@@ -2079,7 +2085,7 @@ ul.note-links {
 
 /* Élément d'un autre espace dans la vue d'ensemble de Perso : le point de
    couleur de son espace et son nom. */
-.space-tag {
+.space-of {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -2090,13 +2096,90 @@ ul.note-links {
   white-space: nowrap;
 }
 
-.space-tag .dot {
+.space-of .dot {
   width: 6px;
   height: 6px;
 }
 
 .scope-filter {
   margin-bottom: 12px;
+}
+
+/* Espace archivé ouvert par son adresse. */
+.archived-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.archived-banner > .i {
+  color: var(--text-3);
+}
+
+.archived-banner span {
+  flex: 1;
+}
+
+.space-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.space-rules legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.space-archived-title {
+  margin: 24px 0 8px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.space-archived-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.space-archived-row .space-name {
+  flex: 1;
+}
+
+.moment-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.moment-form .field {
+  flex: 1;
+  min-width: 240px;
 }
 
 .upload-space {
@@ -2848,7 +2931,7 @@ input.note-title:focus-visible {
 
 .job-row.is-done,
 .job-row.is-failed {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .job-name {

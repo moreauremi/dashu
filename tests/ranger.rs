@@ -338,7 +338,7 @@ async fn perso_montre_tous_les_espaces() {
     alice.post("/tasks", &[("title", "Courses")]).await;
 
     // Dans Perso : tout, et ce qui vient d'École porte son nom.
-    let tag = "<span class=\"space-tag\" data-accent=\"blue\"><span class=\"dot\" aria-hidden=\"true\"></span>École</span>";
+    let tag = "<span class=\"space-of\" data-accent=\"blue\"><span class=\"dot\" aria-hidden=\"true\"></span>École</span>";
     let tasks = alice.get_fragment("/widgets/tasks").await;
     assert!(tasks.body.contains("Rendre le TP") && tasks.body.contains("Courses"));
     assert!(tasks.body.contains(tag));
@@ -367,7 +367,7 @@ async fn perso_montre_tous_les_espaces() {
     let ecole_notes = alice.get("/notes").await;
     assert!(ecole_notes.body.contains("Cours de réseau"));
     assert!(!ecole_notes.body.contains("Liste de courses"));
-    assert!(!ecole_notes.body.contains("space-tag"));
+    assert!(!ecole_notes.body.contains("space-of"));
     assert!(!ecole_notes.body.contains("Seulement"));
     let ecole_tasks = alice.get_fragment("/widgets/tasks").await;
     assert!(!ecole_tasks.body.contains("Courses</span>"));

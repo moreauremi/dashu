@@ -57,7 +57,7 @@
         </span>
         <span class="note-row-excerpt">{{ item.excerpt_html|safe }}</span>
         <span class="note-row-meta">
-          {% if let Some(space) = item.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
+          {% if let Some(space) = item.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
           {% for name in item.tags %}<span class="tag">#{{ name }}</span>{% endfor %}
           <span class="muted">{{ item.updated }}</span>
         </span>

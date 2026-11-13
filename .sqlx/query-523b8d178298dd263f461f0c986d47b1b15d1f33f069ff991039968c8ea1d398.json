@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", space_id, name, mime, size, updated_at, thumb\n           FROM files\n           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL\n           ORDER BY updated_at DESC, id DESC",
+  "query": "SELECT id AS \"id!\", space_id, name, mime, size, updated_at, thumb\n           FROM files WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL\n           ORDER BY updated_at DESC, id DESC\n           LIMIT ?3",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 3
     },
     "nullable": [
       true,
@@ -52,5 +52,5 @@
       false
     ]
   },
-  "hash": "1dfdc75d23aa72d3ca338dd1f09949c6b3edf1275b7d79119ecef8f8bdb01f93"
+  "hash": "523b8d178298dd263f461f0c986d47b1b15d1f33f069ff991039968c8ea1d398"
 }

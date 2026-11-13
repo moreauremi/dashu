@@ -172,6 +172,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/compress", post(tools::compress))
         .route("/files/{id}/convert", post(tools::convert))
         .route("/files/jobs", get(tools::jobs_fragment))
+        .route("/files/jobs/{id}/replace", post(tools::replace_original))
         .route("/jobs/indicator", get(tools::indicator))
         .route("/tools", get(tools::page))
         // Agenda
@@ -196,6 +197,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/google/unlink", post(settings::unlink_google))
         .route("/settings/spaces", post(spaces::create))
         .route("/settings/spaces/{id}", post(spaces::update))
+        .route("/settings/spaces/{id}/archive", post(spaces::archive))
+        .route("/settings/spaces/{id}/restore", post(spaces::restore))
+        .route("/settings/moment", post(settings::set_moment))
         .route(
             "/settings/spaces/{id}/delete",
             get(spaces::delete_page).post(spaces::delete),

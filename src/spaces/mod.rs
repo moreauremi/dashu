@@ -31,6 +31,12 @@ pub struct Space {
     pub color: String,
     /// Nom d'une icône du sprite (voir [`ICONS`]).
     pub icon: String,
+    /// Archivé : caché du sélecteur et des listes, restaurable.
+    pub archived: bool,
+    /// Règle : une vidéo qui arrive est convertie en MP4.
+    pub auto_mp4: bool,
+    /// Règle : une photo HEIC qui arrive est doublée d'un JPEG.
+    pub auto_heic_jpeg: bool,
 }
 
 /// Slug de Perso, l'espace « vue d'ensemble » : son agenda (page Agenda,
@@ -135,7 +141,10 @@ pub async fn ensure_defaults(db: &SqlitePool, user_id: i64) -> AppResult<()> {
 pub async fn list(db: &SqlitePool, user_id: i64) -> AppResult<Vec<Space>> {
     let spaces = sqlx::query_as!(
         Space,
-        r#"SELECT id AS "id!", slug, name, color, icon FROM spaces WHERE user_id = ? ORDER BY position, id"#,
+        r#"SELECT id AS "id!", slug, name, color, icon,
+                  archived_at IS NOT NULL AS "archived!: bool",
+                  auto_mp4 AS "auto_mp4!: bool", auto_heic_jpeg AS "auto_heic_jpeg!: bool"
+           FROM spaces WHERE user_id = ? ORDER BY position, id"#,
         user_id
     )
     .fetch_all(db)
@@ -214,6 +223,10 @@ pub struct SpaceForm {
     name: String,
     color: String,
     icon: String,
+    /// Présent quand le formulaire montre les règles (modification d'un espace).
+    rules: Option<String>,
+    auto_mp4: Option<String>,
+    auto_heic_jpeg: Option<String>,
 }
 
 /// Nom, couleur et icône vérifiés.
@@ -306,14 +319,16 @@ pub async fn create(
         .await?;
         return Ok(see_other(BACK));
     }
-    let valid = match validate(&form, &ctx.spaces, None) {
+    let all = ctx.all_spaces();
+    let valid = match validate(&form, &all, None) {
         Ok(valid) => valid,
         Err(message) => {
             ctx.flash_error(message).await?;
             return Ok(see_other(BACK));
         }
     };
-    let taken: Vec<&str> = ctx.spaces.iter().map(|s| s.slug.as_str()).collect();
+    // Les slugs des espaces archivés restent pris (leurs adresses aussi).
+    let taken: Vec<&str> = all.iter().map(|s| s.slug.as_str()).collect();
     let slug = new_slug(&valid.name, &taken);
     sqlx::query!(
         "INSERT INTO spaces (user_id, slug, name, color, icon, position)
@@ -341,7 +356,7 @@ pub async fn update(
     axum::Form(form): axum::Form<SpaceForm>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
-    let valid = match validate(&form, &ctx.spaces, Some(id)) {
+    let valid = match validate(&form, &ctx.all_spaces(), Some(id)) {
         Ok(valid) => valid,
         Err(message) => {
             ctx.flash_error(message).await?;
@@ -358,12 +373,94 @@ pub async fn update(
     )
     .execute(&state.db)
     .await?;
+    if form.rules.is_some() {
+        let (mp4, heic) = (form.auto_mp4.is_some(), form.auto_heic_jpeg.is_some());
+        sqlx::query!(
+            "UPDATE spaces SET auto_mp4 = ?, auto_heic_jpeg = ? WHERE id = ? AND user_id = ?",
+            mp4,
+            heic,
+            id,
+            ctx.user.id
+        )
+        .execute(&state.db)
+        .await?;
+    }
     let message = if valid.name == space.name {
         format!("Espace « {} » modifié", valid.name)
     } else {
         format!("« {} » s'appelle maintenant « {} »", space.name, valid.name)
     };
     ctx.flash_ok(message).await?;
+    Ok(see_other(BACK))
+}
+
+/// `POST /settings/spaces/{id}/archive` : archive un espace (pas Perso). Il
+/// quitte le sélecteur, les listes et la vue d'ensemble ; son contenu reste
+/// cherchable par la palette, et il se rouvre ou se restaure depuis Réglages.
+pub async fn archive(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    let space = ctx
+        .spaces
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or(AppError::NotFound)?;
+    if space.is_overview() || ctx.spaces.len() <= 1 {
+        ctx.flash_error(format!("{} ne s'archive pas.", space.name))
+            .await?;
+        return Ok(see_other(BACK));
+    }
+    let now = crate::time::now();
+    sqlx::query!(
+        "UPDATE spaces SET archived_at = ? WHERE id = ? AND user_id = ?",
+        now,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
+    // L'espace actif part : on revient au premier espace en service.
+    if ctx.active.id == id {
+        ctx.session.remove::<String>(ACTIVE_SPACE).await?;
+    }
+    ctx.flash_ok(format!(
+        "{} archivé : il n'est plus dans le sélecteur, ses notes restent cherchables",
+        space.name
+    ))
+    .await?;
+    Ok(see_other(BACK))
+}
+
+/// `POST /settings/spaces/{id}/restore` : remet un espace archivé en service.
+pub async fn restore(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    let space = ctx
+        .archived
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or(AppError::NotFound)?;
+    if ctx.spaces.len() >= MAX_SPACES {
+        ctx.flash_error(format!(
+            "{MAX_SPACES} espaces au plus : archive ou supprime-en un pour restaurer {}.",
+            space.name
+        ))
+        .await?;
+        return Ok(see_other(BACK));
+    }
+    sqlx::query!(
+        "UPDATE spaces SET archived_at = NULL WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
+    ctx.flash_ok(format!("{} est de retour dans le sélecteur", space.name))
+        .await?;
     Ok(see_other(BACK))
 }
 

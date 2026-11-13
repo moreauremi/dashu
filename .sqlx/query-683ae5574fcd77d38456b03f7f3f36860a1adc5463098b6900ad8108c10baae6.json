@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT e.title, e.location, e.starts_at, e.ends_at, e.all_day AS \"all_day!: bool\",\n                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.name END AS \"tag!: String\",\n                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.color END AS \"tag_color!: String\"\n           FROM calendar_events e\n           JOIN calendar_sources s ON s.id = e.source_id\n           JOIN spaces sp ON sp.id = s.space_id\n           WHERE s.user_id = ?1 AND (?3 OR s.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5\n           ORDER BY e.starts_at, e.ends_at",
+  "query": "SELECT e.title, e.location, e.starts_at, e.ends_at, e.all_day AS \"all_day!: bool\",\n                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.name END AS \"tag!: String\",\n                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.color END AS \"tag_color!: String\"\n           FROM calendar_events e\n           JOIN calendar_sources s ON s.id = e.source_id\n           JOIN spaces sp ON sp.id = s.space_id\n           WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5\n           ORDER BY e.starts_at, e.ends_at",
   "describe": {
     "columns": [
       {
@@ -52,5 +52,5 @@
       null
     ]
   },
-  "hash": "a207487c1274f689d0eb0867ed44f7d517f8b667b41866ebc85e46b938a47f1a"
+  "hash": "683ae5574fcd77d38456b03f7f3f36860a1adc5463098b6900ad8108c10baae6"
 }

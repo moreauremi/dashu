@@ -13,7 +13,7 @@
       <span class="file-link-icon">{{ crate::assets::icon(file.icon)|safe }}</span>
       {% endif %}
       <span class="note-link-title">{{ file.name }}</span>
-      {% if let Some(space) = file.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
+      {% if let Some(space) = file.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
       <span class="muted">{{ file.meta }}</span>
     </a></li>
     {% endfor %}

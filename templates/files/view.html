@@ -10,6 +10,12 @@
   </div>
   <div class="file-view-actions">
     <a class="btn btn-primary" href="/files/{{ id }}/download" download hx-boost="false">{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></a>
+    {% if let Some(job) = replace_job %}
+    <form method="post" action="/files/jobs/{{ job }}/replace" hx-confirm="Supprimer l'original et ne garder que cette copie ?">
+      <input type="hidden" name="next" value="/files/{{ id }}">
+      <button class="btn" type="submit" title="L'original est supprimé, cette copie prend son nom">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
+    </form>
+    {% endif %}
     {% if !other_spaces.is_empty() %}
     <details class="menu">
       <summary class="btn" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}<span>Déplacer</span></summary>

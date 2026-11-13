@@ -111,11 +111,18 @@
             <form class="space-form" method="post" action="/settings/spaces/{{ space.id }}">
               {% call space_fields(space.name.as_str(), space.color.as_str(), space.icon()) %}{% endcall %}
               {% if space.is_overview() %}
-              <p class="hint">Son agenda réunit ceux de tous les espaces : il ne se supprime pas. On peut le renommer, il garde ce rôle.</p>
+              <p class="hint">Il réunit le contenu de tous les espaces : il ne se supprime pas et ne s'archive pas. On peut le renommer, il garde ce rôle.</p>
               {% endif %}
+              <fieldset class="space-rules">
+                <legend>À l'arrivée d'un fichier dans cet espace</legend>
+                <input type="hidden" name="rules" value="1">
+                <label class="check-row"><input type="checkbox" name="auto_mp4"{% if space.auto_mp4 %} checked{% endif %}><span>Vidéos : les convertir en MP4</span></label>
+                <label class="check-row"><input type="checkbox" name="auto_heic_jpeg"{% if space.auto_heic_jpeg %} checked{% endif %}><span>Photos HEIC : un JPEG en plus</span></label>
+              </fieldset>
               <div class="space-actions">
                 <button class="btn btn-primary" type="submit">Enregistrer</button>
                 {% if !space.is_overview() && shell.spaces.len() > 1 %}
+                <button class="btn" type="submit" formaction="/settings/spaces/{{ space.id }}/archive">{{ crate::assets::icon("archive")|safe }}Archiver</button>
                 <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete">{{ crate::assets::icon("trash")|safe }}Supprimer l'espace</a>
                 {% endif %}
               </div>
@@ -124,6 +131,23 @@
         </li>
         {% endfor %}
       </ul>
+
+      {% if !shell.archived.is_empty() %}
+      <h3 class="space-archived-title">Archivés</h3>
+      <ul class="space-list space-archived" role="list">
+        {% for space in shell.archived %}
+        <li class="space-archived-row" data-accent="{{ space.color }}">
+          <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
+          <span class="space-name">{{ space.name }}</span>
+          <a class="btn" href="/e/{{ space.slug }}/">Ouvrir</a>
+          <form method="post" action="/settings/spaces/{{ space.id }}/restore">
+            <button class="btn" type="submit">{{ crate::assets::icon("unarchive")|safe }}Restaurer</button>
+          </form>
+          <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete" aria-label="Supprimer {{ space.name }}">{{ crate::assets::icon("trash")|safe }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
 
       {% if shell.spaces.len() < max_spaces %}
       <details class="space-new">
@@ -138,6 +162,25 @@
       {% else %}
       <p class="hint">{{ max_spaces }} espaces au plus : au-delà, ils ne tiendraient plus en haut de l'écran du téléphone.</p>
       {% endif %}
+    </div>
+  </section>
+
+  <section class="card" id="ouverture" aria-labelledby="s-moment">
+    <header class="card-head"><h2 id="s-moment">Ouverture de l'app</h2></header>
+    <div class="card-body">
+      <p class="hint">L'app s'ouvre sur l'espace du cours en cours, ou du prochain cours de la journée. Un jour sans cours, sur l'espace choisi ici.</p>
+      <form class="moment-form" method="post" action="/settings/moment">
+        <label class="field">
+          <span class="field-label">Espace du moment</span>
+          <select name="space">
+            <option value=""{% if moment_id == 0 %} selected{% endif %}>Désactivé : le dernier espace utilisé</option>
+            {%- for space in shell.spaces %}
+            <option value="{{ space.id }}"{% if space.id == moment_id %} selected{% endif %}>Un jour sans cours : {{ space.name }}</option>
+            {%- endfor %}
+          </select>
+        </label>
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </form>
     </div>
   </section>
 

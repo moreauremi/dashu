@@ -57,8 +57,45 @@ fn catalog(state: &AppState) -> Vec<&'static Kind> {
         .collect()
 }
 
+/// Réglage « espace du moment » : l'espace du cours en cours ou du prochain
+/// cours de la journée, sinon l'espace choisi pour les jours sans cours.
+async fn moment_space(db: &SqlitePool, ctx: &Ctx, fallback: i64) -> AppResult<i64> {
+    let now = time::now();
+    let tomorrow = time::day_start(time::paris_date(now) + chrono::Days::new(1));
+    let current = sqlx::query_scalar!(
+        r#"SELECT s.space_id AS "space_id!: i64"
+           FROM calendar_events e
+           JOIN calendar_sources s ON s.id = e.source_id
+           JOIN spaces sp ON sp.id = s.space_id
+           WHERE s.user_id = ? AND sp.archived_at IS NULL AND e.all_day = 0
+             AND e.ends_at > ? AND e.starts_at < ?
+           ORDER BY e.starts_at
+           LIMIT 1"#,
+        ctx.user.id,
+        now,
+        tomorrow
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(current.unwrap_or(fallback))
+}
+
 /// `GET /`
 pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+    // À l'ouverture de l'app (chargement complet, sans espace dans l'adresse),
+    // le réglage « espace du moment » choisit l'espace.
+    if ctx.launch
+        && !ctx.from_url
+        && let Some(fallback) = ctx.user.moment_space
+    {
+        let target = moment_space(&state.db, &ctx, fallback).await?;
+        if let Some(space) = ctx.spaces.iter().find(|s| s.id == target) {
+            return Ok(web::see_other(&crate::spaces::url::prefixed(
+                &space.slug,
+                "/",
+            )));
+        }
+    }
     let now = time::now();
     let greeting = match time::paris(now).hour() {
         5..=11 => "Bonjour",
@@ -190,7 +227,7 @@ pub async fn courses(
            FROM calendar_events e
            JOIN calendar_sources s ON s.id = e.source_id
            JOIN spaces sp ON sp.id = s.space_id
-           WHERE s.user_id = ?1 AND (?3 OR s.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
+           WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
            ORDER BY e.starts_at
            LIMIT ?5"#,
         user,
@@ -217,7 +254,7 @@ pub async fn courses(
 
     let has_sources = sqlx::query_scalar!(
         r#"SELECT COUNT(*) AS "n!: i64" FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 OR space_id = ?2)"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space,
         overview
@@ -279,7 +316,7 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> App
     let tasks: Vec<TaskItem> = sqlx::query!(
         r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
-           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)
+           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
              AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))
                OR (done = 1 AND done_at >= ?4))
            ORDER BY done, due_date, created_at"#,
@@ -467,7 +504,7 @@ pub async fn recent_notes(
     let rows = sqlx::query!(
         r#"SELECT id AS "id!", space_id, title, pinned AS "pinned!: bool", updated_at
            FROM notes
-           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)
+           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
            ORDER BY pinned DESC, updated_at DESC
            LIMIT 40"#,
         ctx.user.id,
@@ -541,7 +578,7 @@ pub async fn recent_files(
     let scope = ctx.scope(false);
     let items = sqlx::query!(
         r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
-           FROM files WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL
+           FROM files WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC
            LIMIT ?3"#,
         ctx.user.id,
@@ -566,7 +603,7 @@ pub async fn recent_files(
     })
     .collect();
     let total = sqlx::query_scalar!(
-        "SELECT count(*) FROM files WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL",
+        "SELECT count(*) FROM files WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL",
         ctx.user.id,
         scope
     )

@@ -353,13 +353,55 @@ async fn start(
     to: Conversion,
     pages: Option<(u32, u32)>,
 ) -> AppResult<()> {
+    queue(state, ctx.user.id, id, to, pages).await
+}
+
+/// Règles automatiques de l'espace d'un fichier qui vient d'arriver : vidéo
+/// convertie en MP4, photo HEIC doublée d'un JPEG.
+pub async fn apply_rules(state: &AppState, user_id: i64, file_id: i64) -> AppResult<()> {
+    if state.config.work_dir.is_none() {
+        return Ok(());
+    }
+    let Some(row) = sqlx::query!(
+        r#"SELECT f.mime, s.auto_mp4 AS "auto_mp4!: bool", s.auto_heic_jpeg AS "auto_heic_jpeg!: bool"
+           FROM files f JOIN spaces s ON s.id = f.space_id
+           WHERE f.id = ? AND f.user_id = ? AND f.expires_at IS NULL"#,
+        file_id,
+        user_id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    else {
+        return Ok(());
+    };
+    let wanted = conversions_for(&row.mime);
+    if row.auto_mp4 && wanted.contains(&Conversion::Mp4) {
+        queue(state, user_id, file_id, Conversion::Mp4, None).await?;
+    }
+    if row.auto_heic_jpeg
+        && matches!(row.mime.as_str(), "image/heic" | "image/heif")
+        && wanted.contains(&Conversion::Jpg)
+    {
+        queue(state, user_id, file_id, Conversion::Jpg, None).await?;
+    }
+    Ok(())
+}
+
+/// Met en file la conversion `to` d'un fichier de `user_id`.
+async fn queue(
+    state: &AppState,
+    user_id: i64,
+    id: i64,
+    to: Conversion,
+    pages: Option<(u32, u32)>,
+) -> AppResult<()> {
     let (Some(files), Some(work_dir)) = (&state.config.files, &state.config.work_dir) else {
         return Err(AppError::NotFound);
     };
     let file = sqlx::query!(
         "SELECT space_id, name, mime, size, storage_key FROM files WHERE id = ? AND user_id = ?",
         id,
-        ctx.user.id
+        user_id
     )
     .fetch_optional(&state.db)
     .await?
@@ -388,7 +430,7 @@ async fn start(
     let job_id = sqlx::query!(
         "INSERT INTO jobs (user_id, space_id, kind, target, source_name, source_size, file_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ctx.user.id,
+        user_id,
         file.space_id,
         kind,
         target,
@@ -908,6 +950,9 @@ pub struct JobItem {
     pub busy: bool,
     /// Résultat rangé : lien vers son aperçu.
     pub result_id: Option<i64>,
+    pub job_id: i64,
+    /// Terminée, résultat et original encore là : « Remplacer l'original ».
+    pub can_replace: bool,
 }
 
 /// Tâches affichées au-dessus de la liste : celles en cours, et celles
@@ -936,11 +981,11 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
     }
     let since = time::now() - RECENT_JOB_SECONDS;
     let rows = sqlx::query!(
-        r#"SELECT j.kind, j.target, j.source_name, j.source_size, j.status, j.progress, j.error,
-                  j.result_file_id, f.size AS "result_size?: i64"
+        r#"SELECT j.id AS "id!", j.kind, j.target, j.source_name, j.source_size, j.status, j.progress, j.error,
+                  j.result_file_id, j.file_id, f.size AS "result_size?: i64"
            FROM jobs j
            LEFT JOIN files f ON f.id = j.result_file_id
-           WHERE j.user_id = ?1 AND (?2 IS NULL OR j.space_id = ?2)
+           WHERE j.user_id = ?1 AND (?2 IS NULL AND j.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR j.space_id = ?2)
              AND j.kind IN ('compress', 'convert')
              AND (j.status IN ('queued', 'running') OR j.updated_at > ?3)
            ORDER BY j.id DESC
@@ -987,6 +1032,9 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
         if matches!(row.status.as_str(), "queued" | "running") {
             panel.active += 1;
         }
+        // `file_id` s'efface avec l'original (ON DELETE CASCADE sur la tâche).
+        let can_replace =
+            row.status == "done" && row.result_file_id.is_some() && row.file_id.is_some();
         panel.items.push(JobItem {
             name: row.source_name,
             what: job_label(&row.kind, row.target.as_deref()),
@@ -994,7 +1042,9 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
             status,
             progress,
             busy,
+            can_replace,
             result_id: row.result_file_id,
+            job_id: row.id,
         });
     }
     Ok(panel)
@@ -1034,6 +1084,79 @@ pub async fn jobs_fragment(
             .insert("hx-trigger", HeaderValue::from_static("files-changed"));
     }
     Ok(response.into_response())
+}
+
+#[derive(Deserialize)]
+pub struct ReplaceForm {
+    /// Page où revenir ; l'aperçu du résultat sans précision.
+    next: Option<String>,
+}
+
+/// `POST /files/jobs/{id}/replace` : après une compression ou une
+/// conversion, l'original est supprimé et la copie prend son nom (avec sa
+/// propre extension : « IMG_1.HEIC » -> « IMG_1.jpg »).
+pub async fn replace_original(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<ReplaceForm>,
+) -> AppResult<Response> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    let row = sqlx::query!(
+        r#"SELECT src.id AS "source!: i64", src.name AS source_name, src.storage_key AS source_key,
+                  src.space_id AS source_space, src.expires_at AS source_expires,
+                  res.id AS "result!: i64", res.name AS result_name
+           FROM jobs j
+           JOIN files src ON src.id = j.file_id AND src.user_id = j.user_id
+           JOIN files res ON res.id = j.result_file_id AND res.user_id = j.user_id
+           WHERE j.id = ? AND j.user_id = ? AND j.status = 'done'"#,
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    let ext = row
+        .result_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext)
+        .unwrap_or_default();
+    let name = files::clean_name(&format!("{}.{ext}", stem(&row.source_name)));
+    let mime = files::mime_for(&name);
+    let now = time::now();
+    let mut tx = state.db.begin().await?;
+    // La tâche part avec l'original (ON DELETE CASCADE) : le bouton disparaît.
+    sqlx::query!(
+        "DELETE FROM files WHERE id = ? AND user_id = ?",
+        row.source,
+        ctx.user.id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE files SET name = ?, mime = ?, space_id = ?, expires_at = ?, updated_at = ?
+         WHERE id = ? AND user_id = ?",
+        name,
+        mime,
+        row.source_space,
+        row.source_expires,
+        now,
+        row.result,
+        ctx.user.id
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    files::remove_stored(files, &row.source_key).await;
+
+    ctx.flash_ok(format!("Original remplacé : il reste « {name} »"))
+        .await?;
+    let back = format!("/files/{}", row.result);
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => &back,
+    }))
 }
 
 /// Conversions en cours d'un utilisateur, tous espaces : leur nombre, et si

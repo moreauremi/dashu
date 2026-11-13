@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT s.space_id AS \"space_id!: i64\"\n           FROM calendar_events e\n           JOIN calendar_sources s ON s.id = e.source_id\n           JOIN spaces sp ON sp.id = s.space_id\n           WHERE s.user_id = ? AND sp.archived_at IS NULL AND e.all_day = 0\n             AND e.ends_at > ? AND e.starts_at < ?\n           ORDER BY e.starts_at\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "91c2bc83e2195d56d4130095a7128d579dc291aaf082ec4d70e812672baa4fd7"
+}

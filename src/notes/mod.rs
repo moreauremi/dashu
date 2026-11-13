@@ -105,7 +105,7 @@ pub async fn list(
            FROM note_tags nt
            JOIN tags t ON t.id = nt.tag_id
            JOIN notes n ON n.id = nt.note_id
-           WHERE n.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
+           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
            ORDER BY t.name"#,
         user,
         space
@@ -125,7 +125,7 @@ pub async fn list(
            FROM tags t
            JOIN note_tags nt ON nt.tag_id = t.id
            JOIN notes n ON n.id = nt.note_id
-           WHERE t.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
+           WHERE t.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
            GROUP BY t.id
            ORDER BY t.name"#,
         user,
@@ -231,7 +231,7 @@ async fn recent_in_space(
                   n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
                   n.space_id AS "space_id!: i64"
            FROM notes n
-           WHERE n.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
+           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
              AND (?3 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?3))
@@ -276,7 +276,7 @@ async fn search_in_space(
                   n.space_id AS "space_id!: i64"
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
-           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL OR n.space_id = ?3)
+           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)
              AND (?4 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?4))

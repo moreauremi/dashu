@@ -16,6 +16,12 @@
     {%- else %}
     <span class="job-status">{{ job.status }}</span>
     {%- endif %}
+    {%- if job.can_replace %}
+    <form class="job-replace" method="post" action="/files/jobs/{{ job.job_id }}/replace" hx-confirm="Supprimer « {{ job.name }} » et ne garder que sa copie ?">
+      {% if jobs.all %}<input type="hidden" name="next" value="/tools">{% endif %}
+      <button class="btn btn-sm" type="submit">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
+    </form>
+    {%- endif %}
   </div>
   {%- endfor %}
 </section>

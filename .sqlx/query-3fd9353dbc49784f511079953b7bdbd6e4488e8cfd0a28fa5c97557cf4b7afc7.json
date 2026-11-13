@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", ical_url FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 OR space_id = ?2)",
+  "query": "SELECT id AS \"id!\", ical_url FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "7c9de762d0edeef54ff64b32d8d395d3e380af38e5a79d6798467d67e53fa50b"
+  "hash": "3fd9353dbc49784f511079953b7bdbd6e4488e8cfd0a28fa5c97557cf4b7afc7"
 }
