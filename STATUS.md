@@ -111,9 +111,15 @@ Lot 1 : fait, tests `tests/commandes.rs` (6), tests unitaires de la lecture d'un
 - [x] Sur un fichier : ses conversions et les espaces où le déplacer ; `/move` d'une note ; une commande de fichier tapée ailleurs est refusée avec un message. Tests `la_barre_connait_la_page`, `agir_sur_la_note_ou_le_fichier_ouvert`.
 - [x] Depuis l'éditeur, une commande n'y perd pas la dernière frappe (envoi de secours avant la commande). Vu dans le navigateur.
 - [ ] `/add file` ouvre le sélecteur de fichiers : vérifié jusqu'à l'ouverture (le sélecteur du système ne se pilote pas) ; l'envoi lui-même est celui du bouton.
-- Poids : `app.js` passe de 8,6 à 14,3 Ko compressé (gzip, mesuré en local) ; une page hors éditeur reste sous la cible de 60 Ko (environ 48 Ko). La police à chasse fixe de la barre ne se charge qu'à sa première ouverture.
+- Poids : `app.js` passe de 8,6 à 14,3 Ko compressé (gzip, mesuré en local ; 14,6 Ko avec le lot 2) ; une page hors éditeur reste sous la cible de 60 Ko (environ 48 Ko). La police à chasse fixe de la barre ne se charge qu'à sa première ouverture.
 
-Lot 2 : à faire (dates des tâches, `/done`, `/delete`, tags, réglages…).
+Lot 2 : fait, tests `les_taches_au_clavier`, `la_note_au_clavier`, `le_fichier_au_clavier`, `les_reglages_au_clavier` (`tests/commandes.rs`).
+
+- [x] `/add task Rendre le DM +demain` crée une tâche visible demain, pas aujourd'hui ; un jour se tape aussi par son début (`+dem`, `+mar`).
+- [x] `/done` puis `/undone` cochent et décochent une tâche choisie par son titre ; `/delete task` la supprime. La confirmation (second `Entrée`) vue dans le navigateur.
+- [x] `/tag`, `/untag`, `/pin`, `/delete` sur une note ; `/download` (vraie navigation, `HX-Redirect`), `/keep`, `/delete` sur un fichier.
+- [x] `/theme`, `/size`, `/sidebar`, `/refresh`, `/logout`, `/add space` (on entre dans le nouvel espace), `/add agenda` (mêmes vérifications d'adresse que Réglages) font ce que font leurs boutons.
+- La première synchro d'un agenda ajouté par `/add agenda` n'est testée que dans son refus (adresse non HTTPS) : les tests n'ont pas de réseau.
 
 ## Mesures de performance
 

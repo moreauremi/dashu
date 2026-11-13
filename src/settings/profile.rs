@@ -158,8 +158,8 @@ pub async fn avatar(ctx: Ctx, State(state): State<AppState>) -> AppResult<Respon
 #[derive(Deserialize)]
 pub struct SizeForm {
     /// `small`, `normal` ou `large`.
-    size: String,
-    next: Option<String>,
+    pub(crate) size: String,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /settings/size` : taille de l'interface, enregistrée sur le compte.
@@ -187,8 +187,8 @@ pub async fn set_size(
 #[derive(Deserialize)]
 pub struct SidebarForm {
     /// `1` : détachée (cachée à gauche) ; `0` : ancrée.
-    floating: String,
-    next: Option<String>,
+    pub(crate) floating: String,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /settings/sidebar` : barre latérale ancrée ou détachée.

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, mime, expires_at FROM files WHERE id = ? AND user_id = ?",
+  "query": "SELECT space_id, title, pinned AS \"pinned!: bool\" FROM notes WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
@@ -9,14 +9,14 @@
         "type_info": "Integer"
       },
       {
-        "name": "mime",
+        "name": "title",
         "ordinal": 1,
         "type_info": "Text"
       },
       {
-        "name": "expires_at",
+        "name": "pinned!: bool",
         "ordinal": 2,
-        "type_info": "Integer"
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -25,8 +25,8 @@
     "nullable": [
       false,
       false,
-      true
+      false
     ]
   },
-  "hash": "6f6b980111bfe25cf2ef382a9e1827bb385f1434adb51d57b03f9d5c9c569697"
+  "hash": "9531d5effcfda68f647597f8162a44f3f6530aee2962f3b3421c638f87715fa8"
 }
