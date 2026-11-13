@@ -322,7 +322,7 @@ Nov 11, 2026 · @Rémi Moreau
 
 ## Contexte et objectifs
 
-La v1 est terminée et sert au quotidien (voir `STATUS.md`). La v2 ajoute **les fichiers** et un **onglet Outils**. Option retenue le 11 novembre 2026 : des fichiers en « version courte », sans dossiers, et les conversions prévues en v3 avancées ici.
+La v1 est terminée et sert au quotidien (voir `STATUS.md`). La v2 ajoute **les fichiers** et un **onglet Outils**. Option retenue le 11 novembre 2026 : des fichiers en « version courte », sans dossiers, et les conversions prévues en v3 avancées ici. *Les dossiers sont ajoutés le 13 novembre 2026 : voir « Dossiers », en fin de document.*
 
 - **Un endroit pour ses fichiers**, rangés par espace comme les notes, retrouvés par tags et recherche.
 - **Des conversions « tout en un »** : on dépose un fichier, dashu propose les formats possibles.
@@ -335,7 +335,7 @@ Les règles de la v1 restent valables : stack, sécurité, cibles de performance
 
 | Module | Inclus en v2 | Hors v2 |
 | --- | --- | --- |
-| Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Dossiers, client de synchronisation, versions d'un fichier |
+| Fichiers | Envoi par glisser-déposer (plusieurs fichiers), tags, recherche, aperçu, téléchargement, renommage, déplacement entre espaces, suppression | Client de synchronisation, versions d'un fichier (les dossiers, d'abord exclus, arrivent le 13 novembre 2026 : voir « Dossiers ») |
 | Notes | Image collée dans l'éditeur, lien vers un fichier de l'espace | Galerie, redimensionnement dans la note |
 | Partage | Lien temporaire (1 h, 1 jour ou 7 jours), révocable | Lien protégé par mot de passe, dépôt par un tiers |
 | Outils : conversions | Images, Markdown et texte, PDF, audio et vidéo | DOCX et PPTX vers PDF (pas de LibreOffice), OCR (v3), retouche photo (v4) |
@@ -694,3 +694,87 @@ Lot 2 :
 - **`+` pour une date, `@` pour un espace** : sans ces signes, « Réviser pour demain » serait coupé en titre et date.
 - **« lundi » veut dire le prochain lundi**, jamais aujourd'hui ; `14/11` est dans l'année en cours.
 - **`#date` s'écrit `13/11/2026`**, et **`#cours` exige un cours en cours** (pas le prochain ni le précédent) : choix par défaut, faciles à changer (`Vars` dans `src/commands/mod.rs`).
+
+---
+
+# dashu — Dossiers
+
+Nov 13, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 13 novembre 2026. Il revient sur la décision du 11 novembre (« des fichiers sans dossiers ») : les tags ne suffisent pas pour ranger les cours par matière. Les dossiers rangent les fichiers **et les notes**.
+
+## Fonctionnement
+
+**L'onglet Fichiers devient une arborescence.**
+
+- À la racine : un dossier par espace (sauf les espaces archivés), plus un dossier **Temporaire**.
+- Le dossier d'un espace, c'est l'espace lui-même : il apparaît à la création de l'espace, prend son nom quand on le renomme et ne se supprime pas depuis Fichiers (il part avec l'espace, depuis Réglages).
+- Temporaire montre les fichiers déposés dans l'onglet Outils et pas encore gardés. Ils sont toujours effacés au bout de 24 heures.
+- Dans le dossier d'un espace, des dossiers ; dans un dossier, des sous-dossiers. **Trois niveaux au plus** : Espace / Dossier / Sous-dossier.
+- Un dossier se crée, se renomme et se supprime. Son nom fait 60 caractères au plus et ne se répète pas parmi ses voisins (majuscules comprises : « Math » et « math » sont le même nom).
+- Supprimer un dossier vide demande une simple confirmation. Si le dossier contient quelque chose, une fenêtre d'avertissement dit ce qu'il contient et propose deux choix :
+  - **Transférer dans le dossier parent** : ses notes et ses fichiers vont dans le dossier du dessus ; ses sous-dossiers montent d'un niveau (renommés « Exercices (2) » si le nom est déjà pris) ;
+  - **Tout supprimer** : ses notes, ses fichiers et ses sous-dossiers sont effacés.
+- Un fichier envoyé depuis un dossier y arrive. Une copie compressée ou convertie arrive dans le dossier de l'original ; « Remplacer l'original » lui donne aussi son dossier.
+- À l'ouverture, l'onglet montre le dossier de l'espace actif ; depuis Perso, la racine (tous les espaces). Un fil d'Ariane, le chemin cliquable en haut de la page (Fichiers › École › Math), permet de remonter. Le filtre « Seulement Perso » des fichiers disparaît : c'est le dossier Perso.
+- Adresses : `/files?dossier=racine`, `espace`, `temporaire` ou le numéro d'un dossier. Un dossier s'ouvre toujours dans son espace (`/e/ecole/files?dossier=12`).
+
+**Les notes se rangent dans les dossiers.**
+
+- Dans l'éditeur, à côté des tags, un sélecteur « Dossier » propose la racine de l'espace de la note et les dossiers du premier niveau de cet espace (pas les sous-dossiers). Sans choix, une note est à la racine de son espace.
+- En bas du sélecteur, **Voir plus…** ouvre une fenêtre avec l'arborescence complète : tous les espaces, tous les dossiers et sous-dossiers. Choisir un autre espace y déplace la note.
+- Une note apparaît dans son dossier de l'onglet Fichiers, à côté des fichiers.
+- L'onglet Notes regroupe les notes par dossier du premier niveau : d'abord celles sans dossier, puis une section par dossier. Une note d'un sous-dossier compte dans la section de son dossier, avec le nom du sous-dossier. Recherche, tags et « Seulement Perso » marchent comme avant.
+
+**Un seul sélecteur pour ranger.** La même fenêtre sert à déplacer un fichier (liste et aperçu), à garder un fichier de Temporaire ou de l'onglet Outils, et à déplacer une note (bouton de l'en-tête de l'éditeur). La barre de commandes garde `/move <espace>` et `/keep <espace>`, qui rangent à la racine de l'espace.
+
+**Ce qui ne change pas** : les tags, la recherche, la barre de commandes, l'API. Une note créée par Hermès va à la racine ; une note déplacée par l'API va à la racine de son nouvel espace.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `folders` | id, user\_id, space\_id, parent\_id, name, created\_at | `parent_id` vide : dossier du premier niveau |
+| `notes`, `files`, `uploads` | + `folder_id` | Vide : racine de l'espace |
+
+Les dossiers n'existent que dans la base. Sur le disque, un fichier garde son nom aléatoire, quel que soit son dossier.
+
+## Sécurité
+
+- Toute action vérifie que le dossier appartient au compte connecté et que le dossier de destination est dans l'espace de destination. Le dossier d'un autre compte répond 404.
+- Un élément et son dossier sont toujours dans le même espace : un déplacement vers un autre espace sans dossier choisi range à la racine.
+- Un niveau de trop (un dossier dans un sous-dossier) est refusé par le serveur, pas seulement caché.
+- Les noms de dossiers sont des données : échappés à l'affichage, jamais dans un chemin du disque.
+- « Tout supprimer » efface aussi les fichiers du disque, comme la suppression d'un fichier.
+
+## Critères d'acceptation
+
+- [ ] La racine de Fichiers montre un dossier par espace (pas les archivés) et Temporaire ; renommer un espace renomme son dossier
+- [ ] Un dossier se crée dans un espace et dans un dossier ; un troisième niveau est refusé ; deux voisins ne portent pas le même nom
+- [ ] Un fichier envoyé depuis un dossier y arrive ; sa copie convertie aussi
+- [ ] Temporaire montre un fichier déposé dans Outils ; le ranger le garde dans le dossier choisi
+- [ ] Le sélecteur de l'éditeur propose les dossiers du premier niveau de l'espace de la note, ni ceux d'un autre espace ni les sous-dossiers ; une note sans choix est à la racine
+- [ ] « Voir plus » propose tous les espaces et tous les dossiers ; choisir un dossier d'un autre espace y déplace la note
+- [ ] Une note rangée apparaît dans son dossier de Fichiers ; l'onglet Notes la montre dans la section de son dossier
+- [ ] Supprimer un dossier non vide : « Transférer » garde tout dans le parent, « Tout supprimer » efface notes, fichiers (disque compris) et sous-dossiers ; sans choix, le serveur refuse
+- [ ] Un second compte ne voit, ne remplit, ne renomme ni ne supprime les dossiers du premier ; ranger dans un dossier d'un autre espace que celui demandé est refusé
+- [ ] Supprimer un espace en gardant son contenu emmène ses dossiers
+- [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
+
+## Décisions
+
+Prises avec Rémi le 13 novembre 2026 :
+
+- **Trois niveaux** (Espace / Dossier / Sous-dossier). Le sélecteur de l'éditeur ne montre que le premier ; « Voir plus » montre tout.
+- **Dossier non vide** : après un avertissement, transférer son contenu dans le parent ou tout supprimer.
+- **Temporaire** reste effacé au bout de 24 heures.
+- **Ouverture** sur le dossier de l'espace actif ; sur la racine depuis Perso.
+- **Onglet Notes** regroupé par dossier du premier niveau.
+
+Par défaut, pour avancer :
+
+- **Dossiers dans la base seulement** : rien ne bouge sur le disque, et aucun nom choisi par l'utilisateur n'entre dans un chemin.
+- **Un espace supprimé en gardant son contenu** emmène ses dossiers dans l'espace qui le reçoit ; un nom déjà pris devient « Math (2) ».
+- **Hors de ce lot** : glisser-déposer sur un dossier, déplacer un dossier entier, créer une note depuis Fichiers.
