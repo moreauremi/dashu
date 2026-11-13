@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE jobs SET space_id = ?1 WHERE user_id = ?2\n                   AND file_id IN (SELECT id FROM files WHERE user_id = ?2 AND folder_id = ?3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "43c2fb26bf64f82bae8e0f5e3548b7fdc21edb34adcd0f2f9669e07230c3c888"
+}

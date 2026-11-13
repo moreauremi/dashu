@@ -86,11 +86,14 @@
     job.status.textContent = text;
   }
 
-  function addFiles(files) {
+  /** Met des fichiers dans la file d'envoi. `where` : un espace et un
+   *  dossier précis (fichiers lâchés sur un dossier de l'onglet Fichiers) ;
+   *  sans lui, ce que dit la page. */
+  function addFiles(files, where) {
     const zone = $("[data-dropzone]");
     const max = Number(zone?.dataset.max) || 0;
     for (const file of files) {
-      const job = { file, ...addRow(file) };
+      const job = { file, where, ...addRow(file) };
       if (max && file.size > max) fail(job, `Trop volumineux : ${zone.dataset.maxLabel} au plus`);
       else waiting.push(job);
     }
@@ -164,8 +167,12 @@
     // ou dossier ouvert dans l'onglet Fichiers (il donne son espace) ;
     // onglet Outils : un fichier pas encore rangé.
     const zone = document.querySelector("[data-dropzone]");
-    const folder = zone?.dataset.folder;
-    const space = folder ? "" : document.querySelector("[data-upload-space]:checked")?.value;
+    const folder = job.where ? job.where.folder : zone?.dataset.folder;
+    const space = job.where
+      ? job.where.space
+      : folder
+        ? ""
+        : document.querySelector("[data-upload-space]:checked")?.value;
     let where = space ? `&space=${encodeURIComponent(space)}` : "";
     if (folder) where += `&folder=${encodeURIComponent(folder)}`;
     if (zone?.hasAttribute("data-tools")) where += "&tools=1";
@@ -247,7 +254,12 @@
   // --- Glisser-déposer : sur les pages Fichiers et Outils, la zone de dépôt
   // s'allume ; ailleurs, un voile dit dans quel espace le fichier va partir.
   // L'éditeur de notes gère lui-même ce qu'on y lâche (image insérée).
-  const carriesFiles = (event) => event.dataTransfer && [...event.dataTransfer.types].includes("Files");
+  /** Ligne de l'onglet Fichiers en train d'être glissée (voir « Ranger en
+   *  glissant ») : ce n'est pas un envoi, même si Chrome joint sa vignette
+   *  comme un fichier. */
+  let dragged = null;
+  const carriesFiles = (event) =>
+    !dragged && event.dataTransfer && [...event.dataTransfer.types].includes("Files");
   const inEditor = (event) => event.target instanceof Element && !!event.target.closest(".ProseMirror");
 
   /** Voile du dépôt hors des pages Fichiers et Outils. */
@@ -274,7 +286,8 @@
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     const zone = $("[data-dropzone]");
-    if (zone) zone.classList.add("is-over");
+    // Au-dessus d'un dossier, c'est lui qui s'allume (voir « Ranger en glissant »).
+    if (zone) zone.classList.toggle("is-over", !dropTarget(event));
     else veil(true);
   });
 
@@ -283,6 +296,7 @@
     if (event.relatedTarget !== null) return;
     $("[data-dropzone]")?.classList.remove("is-over");
     veil(false);
+    mark(null);
   });
 
   document.addEventListener("drop", (event) => {
@@ -290,6 +304,99 @@
     event.preventDefault();
     $("[data-dropzone]")?.classList.remove("is-over");
     veil(false);
-    addFiles(event.dataTransfer.files);
+    // Lâchés sur un dossier de l'onglet Fichiers : ils y arrivent.
+    const target = dropTarget(event);
+    mark(null);
+    addFiles(
+      event.dataTransfer.files,
+      target ? { space: target.dataset.dropSpace, folder: target.dataset.dropFolder } : undefined,
+    );
   });
+
+  // --- Ranger en glissant (onglet Fichiers, SPEC « Dossiers ») : un fichier,
+  // une note ou un dossier lâché sur un dossier (une ligne, le dossier d'un
+  // espace, un pas du fil d'Ariane) y est rangé. La ligne porte l'adresse de
+  // son rangement (data-drag-move), le dossier son espace et son numéro
+  // (data-drop-space, data-drop-folder : vide pour la racine de l'espace).
+  // Le serveur vérifie tout (niveaux, homonymes) et dit ce qu'il a fait : la
+  // page est rechargée avec son message. La fenêtre « Ranger » reste le
+  // chemin au clavier et au doigt.
+
+  /** Dossier sous le pointeur, s'il en est un. */
+  function dropTarget(event) {
+    return event.target instanceof Element ? event.target.closest("[data-drop-space]") : null;
+  }
+
+  /** Allume un seul dossier : celui où l'on va lâcher. */
+  function mark(target) {
+    document.querySelectorAll(".is-drop-target").forEach((el) => {
+      if (el !== target) el.classList.remove("is-drop-target");
+    });
+    target?.classList.add("is-drop-target");
+  }
+
+  /** Un dossier ne se lâche pas sur lui-même. */
+  const accepts = (target) =>
+    !!target && !(dragged?.folder && target.dataset.dropFolder === dragged.folder);
+
+  document.addEventListener("dragstart", (event) => {
+    const row = event.target instanceof Element ? event.target.closest("[data-drag-move]") : null;
+    if (!row) return;
+    dragged = { url: row.dataset.dragMove, folder: row.dataset.dragFolder || "" };
+    event.dataTransfer.effectAllowed = "move";
+    // Firefox ne commence le glissement qu'avec une donnée.
+    event.dataTransfer.setData("text/plain", row.querySelector("a")?.textContent?.trim() || "");
+    row.classList.add("is-dragging");
+  });
+
+  document.addEventListener("dragend", () => {
+    document.querySelector(".is-dragging")?.classList.remove("is-dragging");
+    mark(null);
+    dragged = null;
+  });
+
+  document.addEventListener("dragover", (event) => {
+    const target = dropTarget(event);
+    const fromComputer = carriesFiles(event);
+    if (!dragged && !fromComputer) return;
+    mark(accepts(target) ? target : null);
+    if (dragged && accepts(target)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+  });
+
+  document.addEventListener("drop", (event) => {
+    if (!dragged) return;
+    event.preventDefault();
+    const target = dropTarget(event);
+    const move = dragged;
+    dragged = null;
+    mark(null);
+    if (accepts(target)) rangeTo(move.url, target.dataset.dropSpace, target.dataset.dropFolder);
+  });
+
+  /** Envoie le rangement (le formulaire de la fenêtre « Ranger »), puis
+   *  recharge la page : le serveur y met son message (rangé, ou refusé). */
+  async function rangeTo(url, space, folder) {
+    const here = location.pathname + location.search;
+    const body = new URLSearchParams({ space_id: space, folder_id: folder || "", next: here });
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-CSRF-Token": csrfToken(),
+          "X-Espace": tabSpace(),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body,
+        // La redirection n'est pas suivie : c'est la page rechargée qui lit
+        // le message laissé par le serveur.
+        redirect: "manual",
+      });
+    } catch {
+      // Connexion perdue : la page rechargée montre que rien n'a bougé.
+    }
+    window.htmx?.ajax("GET", here, { target: "body", swap: "innerHTML transition:true" });
+  }
 })();

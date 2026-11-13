@@ -728,7 +728,13 @@ Demandé par Rémi le 13 novembre 2026. Il revient sur la décision du 11 novemb
 - Une note apparaît dans son dossier de l'onglet Fichiers, à côté des fichiers.
 - L'onglet Notes regroupe les notes par dossier du premier niveau : d'abord celles sans dossier, puis une section par dossier. Une note d'un sous-dossier compte dans la section de son dossier, avec le nom du sous-dossier. Recherche, tags et « Seulement Perso » marchent comme avant.
 
-**Un seul sélecteur pour ranger.** La même fenêtre sert à déplacer un fichier (liste et aperçu), à garder un fichier de Temporaire ou de l'onglet Outils, et à déplacer une note (bouton de l'en-tête de l'éditeur). La barre de commandes garde `/move <espace>` et `/keep <espace>`, qui rangent à la racine de l'espace.
+**Un seul sélecteur pour ranger.** La même fenêtre sert à déplacer un fichier (liste et aperçu), à garder un fichier de Temporaire ou de l'onglet Outils, à déplacer une note (bouton de l'en-tête de l'éditeur) et à déplacer un dossier. La barre de commandes garde `/move <espace>` et `/keep <espace>`, qui rangent à la racine de l'espace.
+
+**Ajoutés le même jour, à la demande de Rémi :**
+
+- **Déplacer un dossier entier**, avec son contenu et ses sous-dossiers, dans un autre dossier ou un autre espace. Les trois niveaux restent la règle : un dossier qui a des sous-dossiers ne va que directement dans un espace ; un dossier sans sous-dossier peut aussi devenir le sous-dossier d'un dossier du premier niveau. Un dossier ne va pas dans lui-même, ni là où un voisin porte déjà son nom (message clair, rien ne bouge). Changer d'espace emmène tout son contenu, conversions en cours comprises.
+- **Glisser-déposer** dans l'onglet Fichiers : un fichier, une note ou un dossier lâché sur un dossier (une ligne de la liste, le dossier d'un espace à la racine, ou un pas du fil d'Ariane) y est rangé. Des fichiers venus de l'ordinateur lâchés sur un dossier y sont envoyés. C'est un raccourci de la souris : la fenêtre « Ranger » reste le chemin au clavier et au doigt.
+- **Créer une note depuis Fichiers** : un bouton « Nouvelle note » dans le dossier d'un espace et dans un dossier ; la note naît dans le dossier ouvert et l'éditeur s'ouvre.
 
 **Ce qui ne change pas** : les tags, la recherche, la barre de commandes, l'API. Une note créée par Hermès va à la racine ; une note déplacée par l'API va à la racine de son nouvel espace.
 
@@ -761,6 +767,9 @@ Les dossiers n'existent que dans la base. Sur le disque, un fichier garde son no
 - [ ] Supprimer un dossier non vide : « Transférer » garde tout dans le parent, « Tout supprimer » efface notes, fichiers (disque compris) et sous-dossiers ; sans choix, le serveur refuse
 - [ ] Un second compte ne voit, ne remplit, ne renomme ni ne supprime les dossiers du premier ; ranger dans un dossier d'un autre espace que celui demandé est refusé
 - [ ] Supprimer un espace en gardant son contenu emmène ses dossiers
+- [ ] Un dossier se déplace dans un autre espace avec ses notes, ses fichiers et ses sous-dossiers ; un dossier qui a des sous-dossiers ne va pas dans un dossier ; un dossier ne va ni dans lui-même ni à côté d'un homonyme
+- [ ] Un fichier, une note ou un dossier lâché sur un dossier y est rangé ; des fichiers de l'ordinateur lâchés sur un dossier y arrivent
+- [ ] « Nouvelle note » dans un dossier de Fichiers crée la note dans ce dossier ; un dossier d'un autre espace est refusé
 - [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
 
 ## Décisions
@@ -777,4 +786,4 @@ Par défaut, pour avancer :
 
 - **Dossiers dans la base seulement** : rien ne bouge sur le disque, et aucun nom choisi par l'utilisateur n'entre dans un chemin.
 - **Un espace supprimé en gardant son contenu** emmène ses dossiers dans l'espace qui le reçoit ; un nom déjà pris devient « Math (2) ».
-- **Hors de ce lot** : glisser-déposer sur un dossier, déplacer un dossier entier, créer une note depuis Fichiers.
+- **Glisser-déposer, déplacer un dossier, créer une note depuis Fichiers** : d'abord laissés hors du lot, faits le même jour à la demande de Rémi (voir « Fonctionnement »). Un déplacement refusé (niveau de trop, homonyme) ne renomme rien : il le dit, et l'utilisateur choisit.
