@@ -376,26 +376,43 @@ pub async fn add_task(
         Some(id) => ctx.space_by_id(id).ok_or(AppError::NotFound)?,
         None => &ctx.active,
     };
-    let title: String = form.title.trim().chars().take(TASK_MAX_CHARS).collect();
     let mut notice = None;
-    if !title.is_empty() {
-        let now = time::now();
-        let today = time::paris_date(now).format("%Y-%m-%d").to_string();
-        sqlx::query!(
-            "INSERT INTO tasks (user_id, space_id, title, due_date, created_at) VALUES (?, ?, ?, ?, ?)",
-            ctx.user.id,
-            space.id,
-            title,
-            today,
-            now
-        )
-        .execute(&state.db)
-        .await?;
-        if ctx.scope(false).is_some_and(|shown| shown != space.id) {
-            notice = Some(format!("Tâche ajoutée dans {}", space.name));
-        }
+    let today = time::paris_date(time::now());
+    if insert_task(&state.db, ctx.user.id, space.id, &form.title, today).await?
+        && ctx.scope(false).is_some_and(|shown| shown != space.id)
+    {
+        notice = Some(format!("Tâche ajoutée dans {}", space.name));
     }
     tasks_widget(&state.db, &ctx, notice).await
+}
+
+/// Ajoute une tâche pour ce jour dans un espace de l'utilisateur. Rend
+/// `false` (sans rien créer) si le titre est vide. Aussi appelée par la barre
+/// de commandes (`/add task`).
+pub(crate) async fn insert_task(
+    db: &SqlitePool,
+    user: i64,
+    space: i64,
+    title: &str,
+    due: NaiveDate,
+) -> AppResult<bool> {
+    let title: String = title.trim().chars().take(TASK_MAX_CHARS).collect();
+    if title.is_empty() {
+        return Ok(false);
+    }
+    let due = due.format("%Y-%m-%d").to_string();
+    let now = time::now();
+    sqlx::query!(
+        "INSERT INTO tasks (user_id, space_id, title, due_date, created_at) VALUES (?, ?, ?, ?, ?)",
+        user,
+        space,
+        title,
+        due,
+        now
+    )
+    .execute(db)
+    .await?;
+    Ok(true)
 }
 
 #[derive(Deserialize)]

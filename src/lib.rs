@@ -7,12 +7,12 @@ pub mod api;
 pub mod assets;
 pub mod auth;
 pub mod calendar;
+pub mod commands;
 pub mod config;
 pub mod dashboard;
 pub mod db;
 pub mod files;
 pub mod notes;
-pub mod search;
 pub mod settings;
 pub mod spaces;
 pub mod tabbar;
@@ -178,8 +178,10 @@ pub fn build_router(state: AppState) -> Router {
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))
-        // Recherche
-        .route("/search/palette", get(search::palette))
+        // Barre de commandes « / »
+        .route("/cmd", post(commands::run))
+        .route("/cmd/catalogue", get(commands::catalogue))
+        .route("/cmd/suggest", get(commands::suggest))
         // Réglages
         .route("/settings", get(settings::page))
         .route("/settings/theme", post(settings::set_theme))

@@ -222,8 +222,10 @@ function initEditor() {
     if (document.visibilityState === "hidden") beacon();
   };
   const onLeave = (e) => {
-    // Navigation htmx (hx-boost) vers une autre page pendant qu'on édite.
-    if (e.detail && e.detail.boosted) beacon();
+    // Navigation htmx (hx-boost) vers une autre page pendant qu'on édite, ou
+    // commande de la barre « / » (elle peut recharger la page ou en changer).
+    const d = e.detail;
+    if (d && (d.boosted || d.target === document.body || d.elt?.id === "cmd-form")) beacon();
   };
   document.addEventListener("visibilitychange", onHide);
   window.addEventListener("pagehide", beacon);

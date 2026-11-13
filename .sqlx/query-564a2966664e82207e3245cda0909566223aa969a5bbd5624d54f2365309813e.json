@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", title, space_id, substr(body_md, 1, 200) AS \"head!: String\"\n                   FROM notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT 5",
+  "query": "SELECT id AS \"id!\", name, space_id FROM files\n           WHERE user_id = ? AND expires_at IS NULL\n           ORDER BY updated_at DESC LIMIT 1000",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "title",
+        "name": "name",
         "ordinal": 1,
         "type_info": "Text"
       },
@@ -17,11 +17,6 @@
         "name": "space_id",
         "ordinal": 2,
         "type_info": "Integer"
-      },
-      {
-        "name": "head!: String",
-        "ordinal": 3,
-        "type_info": "Null"
       }
     ],
     "parameters": {
@@ -30,9 +25,8 @@
     "nullable": [
       true,
       false,
-      false,
-      null
+      false
     ]
   },
-  "hash": "ac92be53de3fc81c18ee51b1a444e86b7cfd58cc34c7b8c8ebc80f02efbb0184"
+  "hash": "564a2966664e82207e3245cda0909566223aa969a5bbd5624d54f2365309813e"
 }

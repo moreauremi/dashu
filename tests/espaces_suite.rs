@@ -69,10 +69,10 @@ async fn archiver_puis_restaurer_un_espace() {
     assert!(home.body.contains("<title>Dashboard · Perso"));
     // Ni dans la vue d'ensemble de Perso…
     assert!(!alice.get("/notes").await.body.contains("Compte rendu"));
-    // … mais cherchable par la palette, et ouvert par son adresse.
+    // … mais cherchable par la barre de commandes (/open), et ouvert par son adresse.
     assert!(
         alice
-            .get_fragment("/search/palette?q=compte")
+            .get_fragment("/cmd/suggest?q=compte")
             .await
             .body
             .contains("rendu de stage")
@@ -377,48 +377,46 @@ async fn deposer_partout_et_coller_une_image() {
 }
 
 #[tokio::test]
-async fn la_palette_connait_la_page() {
+async fn la_barre_connait_la_page() {
+    use common::{arg_values, command_node};
+
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     alice.upload("IMG_1.HEIC", b"heic").await;
     let photo = file_id(&app, "IMG_1.HEIC").await;
+    let page = format!("/files/{photo}");
 
-    let palette = alice
-        .get_fragment(&format!("/search/palette?q=&page=/files/{photo}"))
-        .await;
-    assert!(palette.body.contains("Sur cette page"));
-    assert!(palette.body.contains("Compresser ce fichier"));
-    assert!(palette.body.contains("Convertir en JPEG"));
-    assert!(palette.body.contains("Déplacer vers École"));
-    assert!(
-        palette
-            .body
-            .contains(&format!("action=\"/files/{photo}/convert\""))
+    // Sur un fichier : ses conversions (comme son menu), le déplacer.
+    let tree = alice.catalogue(&page).await;
+    assert!(command_node(&tree, &["compress"])["off"].is_null());
+    let convert = command_node(&tree, &["convert"]);
+    let outputs: Vec<&str> = convert["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(outputs, ["jpg", "png", "webp"]);
+    assert_eq!(
+        arg_values(command_node(&tree, &["move"])),
+        ["ecole", "taff"]
     );
-    // La saisie filtre aussi ces actions.
-    let filtered = alice
-        .get_fragment(&format!("/search/palette?q=deplacer&page=/files/{photo}"))
-        .await;
-    assert!(filtered.body.contains("Déplacer vers École"));
-    assert!(!filtered.body.contains("Compresser ce fichier"));
 
-    // Sur une note : la déplacer.
+    // Sur une note : la déplacer, pas la convertir.
     let created = alice.post("/notes", &[]).await;
     let note = created.location().to_string();
-    let palette = alice
-        .get_fragment(&format!("/search/palette?q=&page={note}"))
-        .await;
-    assert!(palette.body.contains("Déplacer vers Taff"));
-    assert!(palette.body.contains(&format!("action=\"{note}/move\"")));
+    let tree = alice.catalogue(&note).await;
+    assert_eq!(
+        arg_values(command_node(&tree, &["move"])),
+        ["ecole", "taff"]
+    );
+    assert!(command_node(&tree, &["convert"])["off"].is_string());
 
-    // Le fichier d'un autre compte, ou une autre page : rien.
+    // Le fichier d'un autre compte, ou une autre page : rien à son sujet.
     let mut bob = app.logged_in(BOB).await;
-    let palette = bob
-        .get_fragment(&format!("/search/palette?q=&page=/files/{photo}"))
-        .await;
-    assert!(!palette.body.contains("Sur cette page"));
-    let palette = alice
-        .get_fragment("/search/palette?q=&page=/settings")
-        .await;
-    assert!(!palette.body.contains("Sur cette page"));
+    let tree = bob.catalogue(&page).await;
+    assert!(command_node(&tree, &["move"])["off"].is_string());
+    assert!(command_node(&tree, &["compress"])["off"].is_string());
+    let tree = alice.catalogue("/settings").await;
+    assert!(command_node(&tree, &["convert"])["off"].is_string());
 }

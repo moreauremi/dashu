@@ -119,6 +119,8 @@ const icons = {
   loader: "loader-circle",
   archive: "archive",
   unarchive: "archive-restore",
+  // Barre de commandes « / ».
+  commands: "square-slash",
 };
 
 let sprite =

@@ -12,7 +12,8 @@ pub struct Tab {
     pub label: &'static str,
     /// Icône du sprite (`static/icons.svg`).
     pub icon: &'static str,
-    /// Adresse de la page ; vide pour une action (la recherche ouvre la palette).
+    /// Adresse de la page ; vide pour une action (« Commandes » ouvre la barre
+    /// de commandes).
     pub href: &'static str,
 }
 
@@ -51,10 +52,12 @@ pub const ALL: [Tab; 7] = [
         icon: "plus",
         href: "/notes/new",
     },
+    // La clé « search » date de la palette Ctrl+K : elle reste, les choix
+    // enregistrés sur les comptes s'en servent.
     Tab {
         key: "search",
-        label: "Rechercher",
-        icon: "search",
+        label: "Commandes",
+        icon: "commands",
         href: "",
     },
     Tab {

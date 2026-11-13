@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{#- Habillage commun aux pages connectées : barre latérale, palette, zone de contenu.
+{#- Habillage commun aux pages connectées : barre latérale, barre de commandes, zone de contenu.
     Variable attendue : `shell` (voir src/auth/session.rs). -#}
 
 {% block html_attrs %}{% if !shell.theme.is_empty() %} data-theme="{{ shell.theme }}"{% endif %}{% endblock %}
@@ -30,7 +30,7 @@
 
   <header class="topbar">
     <button class="icon-btn" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">{{ crate::assets::icon("menu")|safe }}</button>
-    <button class="icon-btn" type="button" data-palette-open aria-label="Rechercher">{{ crate::assets::icon("search")|safe }}</button>
+    <button class="icon-btn" type="button" data-cmd-open aria-label="Commandes">{{ crate::assets::icon("commands")|safe }}</button>
   </header>
 
   {#- L'« île » : sélecteur d'espace flottant en haut de l'écran. L'espace actif
@@ -66,10 +66,10 @@
     </div>
 
     <div class="sidebar-nav">
-      <button class="search-btn" type="button" data-palette-open>
-        {{ crate::assets::icon("search")|safe }}
-        <span>Rechercher</span>
-        <kbd data-mod-key>Ctrl K</kbd>
+      <button class="search-btn" type="button" data-cmd-open>
+        {{ crate::assets::icon("commands")|safe }}
+        <span>Commandes</span>
+        <kbd>/</kbd>
       </button>
 
       <ul class="nav" role="list">
@@ -142,27 +142,33 @@
   <nav class="tabbar" aria-label="Raccourcis">
     {% for tab in shell.tabs %}
     {% if tab.href.is_empty() %}
-    <button class="tab" type="button" data-palette-open>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></button>
+    <button class="tab" type="button" data-cmd-open>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></button>
     {% else %}
     <a class="tab" href="{% if crate::spaces::url::is_scoped(tab.href) %}{{ shell.base }}{% endif %}{{ tab.href }}"{% if tab.key == shell.nav %} aria-current="page"{% endif %}>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></a>
     {% endif %}
     {% endfor %}
   </nav>
 
-  <dialog id="palette" class="palette" aria-label="Palette de commandes">
-    <div class="palette-field">
-      {{ crate::assets::icon("search")|safe }}
-      {#- La page ouverte : la palette propose ses actions (fichier, note). -#}
-      <input id="palette-page" type="hidden" name="page" value="{{ shell.path }}">
-      <input id="palette-q" type="search" name="q" autocomplete="off" spellcheck="false"
-             placeholder="Note, page ou action"
-             aria-label="Chercher une note, une page ou une action" aria-controls="palette-results"
-             hx-get="/search/palette" hx-include="#palette-page" hx-trigger="input changed delay:120ms, palette-open"
-             hx-target="#palette-results" hx-swap="innerHTML">
+  {#- Barre de commandes « / » (app.js, « Barre de commandes ») : la saisie
+      est complétée dans le navigateur, puis envoyée à POST /cmd. Le serveur
+      répond par la page à ouvrir (en-tête HX-Location) ou par un message
+      d'erreur, inséré dans #cmd-msg. -#}
+  <dialog id="cmdbar" class="cmdbar" aria-label="Barre de commandes">
+    <form id="cmd-form" class="cmd-field" hx-post="/cmd" hx-target="#cmd-msg" hx-swap="innerHTML">
+      {#- La page ouverte : certaines commandes agissent sur elle (note, fichier). -#}
+      <input id="cmd-page" type="hidden" name="page" value="{{ shell.path }}">
+      <div class="cmd-line">
+        <span class="cmd-ghost" aria-hidden="true"><span class="cmd-typed"></span><span class="cmd-rest"></span></span>
+        <input id="cmd-input" type="text" name="line" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
+               role="combobox" aria-expanded="true" aria-autocomplete="both" aria-controls="cmd-list" aria-describedby="cmd-hint"
+               aria-label="Commande">
+      </div>
       <kbd>Échap</kbd>
-    </div>
-    <div id="palette-results" class="palette-results"></div>
-    <p class="palette-help" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> naviguer <kbd>↵</kbd> ouvrir</p>
+    </form>
+    <p id="cmd-hint" class="cmd-hint"></p>
+    <div id="cmd-msg" class="cmd-msg"></div>
+    <ul id="cmd-list" class="cmd-list" role="listbox" aria-label="Suggestions"></ul>
+    <p class="cmd-keys" aria-hidden="true"><kbd>Tab</kbd> compléter <kbd>↑</kbd><kbd>↓</kbd> choisir <kbd>↵</kbd> exécuter</p>
   </dialog>
 </div>
 {% endblock %}

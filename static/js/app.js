@@ -13,7 +13,6 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
   // ---------------------------------------------------------------- Heure
 
@@ -65,10 +64,6 @@
       else delete document.documentElement.dataset.theme;
     }
     syncThemeColor();
-
-    $$("[data-mod-key]").forEach((kbd) => {
-      kbd.textContent = isMac ? "⌘ K" : "Ctrl K";
-    });
 
     // Message flash : visible 4 secondes.
     $$("[data-toast]").forEach((toast) => {
@@ -312,7 +307,7 @@
 
   /** Le geste est-il permis à cet endroit ? */
   function swipeAllowed(target) {
-    if (!$("[data-island]") || $(".editor-page") || palette()?.open) return false;
+    if (!$("[data-island]") || $(".editor-page") || bar()?.open) return false;
     if ($("#app")?.hasAttribute("data-nav-open")) return false;
     // Dashboard en mode édition : le doigt déplace les widgets, pas l'espace.
     if ($(".dash.editing")) return false;
@@ -422,53 +417,587 @@
     }
   });
 
-  // ------------------------------------------------- Palette de commandes
+  // ------------------------------------------------- Barre de commandes
+  //
+  // « / » hors d'un champ ouvre la barre, avec « / » déjà tapé ; effacer le
+  // « / » la referme (SPEC, « Barre de commandes »). La liste des commandes
+  // arrive du serveur à l'ouverture (GET /cmd/catalogue) : la complétion se
+  // fait ici, sans l'attendre à chaque touche. Seules les suggestions de
+  // /open (notes, fichiers) se cherchent sur le serveur (GET /cmd/suggest).
+  //
+  // Une ligne validée part par le formulaire htmx de layout.html (POST /cmd).
+  // Le serveur la relit avec les mêmes règles (src/commands/mod.rs, à garder
+  // en accord avec `analyse` et `findNode`) et répond par la page à ouvrir
+  // (en-tête HX-Location, htmx s'en charge), ou par un message d'erreur
+  // inséré dans #cmd-msg.
 
-  const palette = () => $("#palette");
+  const bar = () => $("#cmdbar");
+  const field = () => $("#cmd-input");
 
-  function openPalette() {
-    const dialog = palette();
-    if (!dialog || dialog.open) return;
-    setNav(false);
-    dialog.showModal();
-    const input = $("#palette-q");
-    input.value = "";
-    input.focus();
-    // Charge les résultats par défaut (pages, actions, notes récentes).
-    window.htmx.trigger(input, "palette-open");
+  const cmd = {
+    tree: null, // commandes reçues du serveur
+    treeFor: "", // page pour laquelle elles ont été demandées
+    loading: false,
+    failed: false,
+    list: [], // suggestions affichées
+    index: -1, // suggestion en surbrillance
+    chosen: false, // choisie aux flèches : Entrée la prend
+    cycle: null, // Tab répétés : { base, start, list, index, value }
+    history: null, // position dans l'historique, ou null
+    help: false, // liste de /help affichée
+    pendingEnter: false, // Entrée pressée avant l'arrivée des commandes
+    remote: { q: null, items: [], timer: 0 },
+  };
+
+  /** Minuscules sans accents, comme `fold` côté serveur. */
+  const fold = (text) =>
+    text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+
+  const wordsOf = (node) => [node.name, ...(node.aliases || [])];
+  const matches = (choice, typed) =>
+    [choice.v, ...(choice.alias || [])].some((w) => fold(w).startsWith(typed));
+
+  /** Mots d'un texte, avec leur position. */
+  function tokens(text) {
+    const out = [];
+    for (const m of text.matchAll(/\S+/g)) out.push({ text: m[0], start: m.index });
+    return out;
   }
 
-  function paletteItems() {
-    return $$("#palette-results .pal-item");
+  /** La commande d'un niveau que désigne un mot (mêmes règles que le serveur). */
+  function findNode(level, word) {
+    const w = fold(word);
+    const exact = level.find((n) => wordsOf(n).some((x) => fold(x) === w));
+    if (exact) return { node: exact };
+    const matching = level.filter((n) => wordsOf(n).some((x) => fold(x).startsWith(w)));
+    const open = matching.filter((n) => !n.off);
+    if (open.length === 1) return { node: open[0] };
+    if (!open.length && matching.length === 1) return { node: matching[0] };
+    if (!matching.length) return { unknown: true };
+    return { many: (open.length ? open : matching).map((n) => n.name) };
   }
 
-  function selectPaletteItem(index) {
-    const items = paletteItems();
-    if (!items.length) return;
-    const wrapped = (index + items.length) % items.length;
-    items.forEach((item, i) => item.setAttribute("aria-selected", String(i === wrapped)));
-    items[wrapped].scrollIntoView({ block: "nearest" });
+  const namesOf = (level) =>
+    level
+      .filter((n) => !n.off)
+      .map((n) => n.name)
+      .join(", ");
+
+  /**
+   * Lit la ligne comme le serveur. Rend la commande atteinte (`node`, son
+   * chemin `path`), puis ce qui est en cours de frappe : un mot du niveau
+   * `level` (`token`, à partir de `start`), ou l'argument de la commande
+   * (`arg`, à partir de `argStart`). `error` si la ligne ne peut pas aboutir.
+   */
+  function analyse(value) {
+    const body = value.slice(1);
+    const list = tokens(body);
+    const done = body === "" || /\s$/.test(body);
+    let level = cmd.tree || [];
+    let node = null;
+    const path = [];
+    const withArg = (from) => {
+      const arg = body.slice(from);
+      const last = done ? null : list[list.length - 1];
+      return {
+        node,
+        path,
+        arg,
+        argStart: from + 1,
+        token: last && last.start >= from ? last.text : "",
+        start: last && last.start >= from ? last.start + 1 : value.length,
+      };
+    };
+    for (let i = 0; i < list.length; i++) {
+      const word = list[i];
+      if (node && !node.children) return withArg(word.start);
+      if (i === list.length - 1 && !done) return { node, path, level, token: word.text, start: word.start + 1 };
+      const found = findNode(level, word.text);
+      if (found.unknown) {
+        return {
+          node,
+          path,
+          error: path.length
+            ? `« ${word.text} » n'existe pas après /${path.join(" ")} : ${namesOf(level)}.`
+            : `Commande inconnue : /${word.text}. /help les liste toutes.`,
+        };
+      }
+      if (found.many) return { node, path, error: `« ${word.text} » peut être : ${found.many.join(", ")}.` };
+      if (found.node.off) return { node: found.node, path, error: found.node.off };
+      node = found.node;
+      path.push(node.name);
+      level = node.children || [];
+    }
+    if (node && !node.children) return withArg(body.length);
+    return { node, path, level, token: "", start: value.length };
   }
 
-  function paletteKey(event) {
-    const items = paletteItems();
-    const current = items.findIndex((item) => item.getAttribute("aria-selected") === "true");
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      selectPaletteItem(current + 1);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      selectPaletteItem(current - 1);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      (items[current] || items[0])?.click();
+  /** Ce qui manque pour lancer la ligne (mêmes messages que le serveur), ou "". */
+  function missing(value) {
+    const a = analyse(`${value.trimEnd()} `);
+    if (a.error) return a.error;
+    const node = a.node;
+    const path = a.path.join(" ");
+    if (!node) return "Tape une commande après « / », ou /help pour les voir toutes.";
+    if (node.children && !node.run) {
+      const next = node.children.filter((c) => !c.off).map((c) => `/${path} ${c.name}`);
+      return `Il manque la suite : ${next.join(", ")}.`;
+    }
+    const arg = (a.arg || "").trim();
+    if (node.arg?.required && !arg) return `Il manque la suite : /${path} ${node.arg.usage}.`;
+    if (!node.arg && arg) return `Rien n'est attendu après /${path}.`;
+    return "";
+  }
+
+  /** Suggestions pour la saisie en cours. */
+  function suggestions(a) {
+    if (a.error) return [];
+    const typed = fold(a.token);
+    if (a.arg === undefined) {
+      // Un nom de commande : d'abord ceux qui commencent par la saisie.
+      return a.level
+        .filter((n) => !n.off && wordsOf(n).some((w) => fold(w).startsWith(typed)))
+        .sort((x, y) => fold(y.name).startsWith(typed) - fold(x.name).startsWith(typed))
+        .map((n) => ({ v: n.name, help: n.help, node: n }));
+    }
+    const spec = a.node.arg;
+    if (!spec) return [];
+    if (spec.mode === "remote") return cmd.remote.q === a.arg.trim() ? cmd.remote.items : [];
+    // Texte libre : on ne propose qu'une fois un mot commencé (@ecole, demain).
+    if (spec.mode === "free" && !typed) return [];
+    return (spec.values || []).filter((c) => matches(c, typed)).map((c) => ({ ...c, mode: spec.mode }));
+  }
+
+  /** /help : toutes les commandes disponibles, avec leur usage. */
+  function helpList() {
+    const out = [];
+    const walk = (level, prefix) => {
+      for (const node of level) {
+        if (node.off) continue;
+        const name = `${prefix}${node.name}`;
+        if (node.run || !node.children) {
+          out.push({ v: `/${name}${node.arg ? ` ${node.arg.usage}` : ""}`, help: node.help, insert: `/${name}` });
+        }
+        if (node.children) walk(node.children, `${name} `);
+      }
+    };
+    walk(cmd.tree || [], "");
+    return out;
+  }
+
+  // --- Affichage
+
+  /** Recalcule les suggestions d'après la saisie, puis redessine. */
+  function update() {
+    const input = field();
+    if (!input) return;
+    const a = analyse(input.value);
+    if (cmd.cycle) {
+      cmd.list = cmd.cycle.list;
+      cmd.index = cmd.cycle.index;
+    } else {
+      cmd.list = cmd.help ? helpList() : suggestions(a);
+      // La première est en surbrillance : c'est elle que Tab complète.
+      cmd.index = cmd.list.length ? 0 : -1;
+      cmd.chosen = false;
+      if (a.node?.arg?.mode === "remote") fetchRemote(a.arg.trim());
+    }
+    draw(a);
+  }
+
+  /** Suite grisée dans la ligne : ce que Tab ajouterait au mot commencé. */
+  function ghost(a) {
+    const typed = a.node?.arg?.mode === "remote" ? a.arg.trimStart() : a.token;
+    const s = !cmd.cycle && !cmd.help && cmd.list[Math.max(cmd.index, 0)];
+    return s && typed && fold(s.v).startsWith(fold(typed)) ? s.v.slice(typed.length) : "";
+  }
+
+  /** Dessine la liste, la suite grisée et la ligne d'aide. */
+  function draw(a = analyse(field().value)) {
+    const input = field();
+    const value = input.value;
+
+    // Liste
+    const ul = $("#cmd-list");
+    ul.replaceChildren(
+      ...cmd.list.map((s, i) => {
+        const li = document.createElement("li");
+        li.id = `cmd-opt-${i}`;
+        li.className = s.href ? "cmd-item is-item" : "cmd-item";
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", String(i === cmd.index));
+        li.dataset.index = String(i);
+        const main = document.createElement("span");
+        main.className = "cmd-main";
+        const name = document.createElement("span");
+        name.className = "cmd-name";
+        name.textContent = s.v;
+        main.append(name);
+        if (s.sub) {
+          const sub = document.createElement("span");
+          sub.className = "cmd-sub";
+          sub.textContent = s.sub;
+          main.append(sub);
+        }
+        const help = document.createElement("span");
+        help.className = "cmd-desc";
+        help.textContent = s.help || "";
+        li.append(main, help);
+        return li;
+      }),
+    );
+    if (cmd.index >= 0) {
+      input.setAttribute("aria-activedescendant", `cmd-opt-${cmd.index}`);
+      $(`#cmd-opt-${cmd.index}`)?.scrollIntoView({ block: "nearest" });
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+
+    $(".cmd-typed").textContent = value;
+    $(".cmd-rest").textContent = input.scrollWidth > input.clientWidth ? "" : ghost(a);
+
+    // Aide : usage de la commande, ou erreur en rouge.
+    const hint = $("#cmd-hint");
+    hint.classList.toggle("is-error", cmd.failed || (!!cmd.tree && !!a.error));
+    if (cmd.failed) hint.textContent = "Commandes indisponibles : vérifie la connexion, puis rouvre la barre.";
+    else if (!cmd.tree) hint.textContent = "Chargement des commandes…";
+    else if (a.error) hint.textContent = a.error;
+    else if (cmd.help) hint.textContent = "Toutes les commandes. Tab, ou ↑ ↓ puis Entrée, en reprend une.";
+    else if (a.arg === undefined && a.token && !cmd.list.length) {
+      hint.textContent = a.path.length
+        ? `« ${a.token} » n'existe pas après /${a.path.join(" ")} : ${namesOf(a.level)}.`
+        : `Aucune commande ne commence par « ${a.token} ». /help les liste toutes.`;
+      hint.classList.add("is-error");
+    } else if (a.node) {
+      const usage = a.node.arg ? ` ${a.node.arg.usage}` : a.node.children ? ` <${namesOf(a.node.children).replaceAll(", ", "|")}>` : "";
+      hint.textContent = `/${a.path.join(" ")}${usage} · ${a.node.help}`;
+    } else if (matchMedia("(pointer: coarse)").matches) {
+      hint.textContent = "Touche une suggestion pour la reprendre. /help liste toutes les commandes.";
+    } else hint.textContent = "Tab complète. /help liste toutes les commandes.";
+  }
+
+  /** Suggestions de /open, cherchées pendant la frappe. */
+  function fetchRemote(q) {
+    const remote = cmd.remote;
+    if (remote.q === q || remote.pending === q) return;
+    remote.pending = q;
+    clearTimeout(remote.timer);
+    remote.timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/cmd/suggest?q=${encodeURIComponent(q)}`, { headers: tabHeaders() });
+        if (!response.ok) throw new Error(String(response.status));
+        const data = await response.json();
+        if (remote.pending !== q) return;
+        remote.q = q;
+        remote.items = data.items || [];
+        update();
+      } catch {
+        remote.pending = null;
+      }
+    }, 120);
+  }
+
+  /** En-têtes d'une requête de la barre, comme celles de htmx. */
+  function tabHeaders() {
+    let tab = "";
+    try {
+      tab = JSON.parse($("#app").getAttribute("hx-headers"))["X-Espace"] || "";
+    } catch {}
+    return { "HX-Request": "true", "X-Espace": tab };
+  }
+
+  async function loadTree() {
+    const page = $("#cmd-page")?.value || "/";
+    if ((cmd.tree && cmd.treeFor === page) || cmd.loading) return;
+    cmd.loading = true;
+    cmd.failed = false;
+    try {
+      const response = await fetch(`/cmd/catalogue?page=${encodeURIComponent(page)}`, { headers: tabHeaders() });
+      if (!response.ok) throw new Error(String(response.status));
+      cmd.tree = (await response.json()).commands;
+      cmd.treeFor = page;
+    } catch {
+      cmd.failed = true;
+    }
+    cmd.loading = false;
+    update();
+    // Entrée pressée pendant le chargement : on la rejoue.
+    if (cmd.pendingEnter && cmd.tree) {
+      cmd.pendingEnter = false;
+      enter();
     }
   }
 
-  // Nouveaux résultats : le premier est présélectionné.
-  document.addEventListener("htmx:afterSwap", (event) => {
-    // (Pas de cible quand htmx restaure une page depuis l'historique.)
-    if (event.detail.target?.id === "palette-results") selectPaletteItem(0);
+  // --- Ouvrir, fermer
+
+  function openBar() {
+    const dialog = bar();
+    if (!dialog || dialog.open) return;
+    setNav(false);
+    Object.assign(cmd, { cycle: null, history: null, help: false, chosen: false, index: -1, list: [] });
+    Object.assign(cmd.remote, { q: null, pending: null, items: [] });
+    dialog.showModal();
+    const input = field();
+    input.value = "/";
+    input.focus();
+    input.setSelectionRange(1, 1);
+    $("#cmd-msg").replaceChildren();
+    cmd.pendingEnter = false;
+    update();
+    loadTree();
+  }
+
+  const closeBar = () => bar()?.open && bar().close();
+
+  // Changement de page en cours (lien, ou page ouverte par une commande) :
+  // la nouvelle page remplacera la barre. « / » tapé entre-temps l'ouvre
+  // donc une fois la page en place.
+  let navigating = false;
+  let openAfter = false;
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    if (event.detail.target === document.body) navigating = true;
+  });
+  document.addEventListener("htmx:afterRequest", (event) => {
+    if (event.detail.target === document.body && !event.detail.successful) navigating = false;
+  });
+
+  /** « / » : ouvre la barre, ou dès que la page en cours d'arrivée est là. */
+  function askBar() {
+    if (navigating) openAfter = true;
+    else openBar();
+  }
+
+  // Nouvelle page : ses commandes seront redemandées (note, fichier ouverts…).
+  document.addEventListener("htmx:afterSettle", (event) => {
+    if (event.detail.target !== document.body) return;
+    cmd.tree = null;
+    navigating = false;
+    if (openAfter) {
+      openAfter = false;
+      openBar();
+    }
+  });
+
+  // --- Saisie
+
+  /** Remplace ce qui est en cours de frappe par une suggestion. */
+  function completion(base, start, s) {
+    if (s.insert) return `${s.insert} `;
+    // Une commande qui attend une suite, ou un mot de texte libre : un espace
+    // pour enchaîner.
+    const more = s.node ? s.node.children || s.node.arg : s.mode === "free";
+    return `${base.slice(0, start)}${s.v}${more ? " " : ""}`;
+  }
+
+  /** Début de ce que remplace une suggestion, dans la ligne. */
+  function replaceFrom(value) {
+    const a = analyse(value);
+    if (cmd.help) return 0;
+    return a.node?.arg?.mode === "remote" ? a.argStart : a.start;
+  }
+
+  function setValue(value) {
+    const input = field();
+    input.value = value;
+    input.setSelectionRange(value.length, value.length);
+    $("#cmd-msg").replaceChildren();
+  }
+
+  /** Tab : complète, puis passe à la suggestion suivante (Maj : précédente). */
+  function tab(back) {
+    const input = field();
+    if (cmd.cycle && input.value === cmd.cycle.value) {
+      const c = cmd.cycle;
+      c.index = (c.index + (back ? -1 : 1) + c.list.length) % c.list.length;
+      c.value = completion(c.base, c.start, c.list[c.index]);
+      setValue(c.value);
+      return update();
+    }
+    if (!cmd.list.length) return;
+    const index = Math.max(cmd.index, 0);
+    const base = input.value;
+    const start = replaceFrom(base);
+    const value = completion(base, start, cmd.list[index]);
+    const list = cmd.list;
+    cmd.help = false;
+    // Une seule possibilité : on passe directement au niveau suivant.
+    cmd.cycle = list.length > 1 ? { base, start, list, index, value } : null;
+    setValue(value);
+    update();
+  }
+
+  function move(step) {
+    if (!cmd.list.length) return;
+    cmd.index = (cmd.index + step + cmd.list.length) % cmd.list.length;
+    cmd.chosen = true;
+    if (cmd.cycle) {
+      // Pendant les Tab, les flèches choisissent dans la même liste.
+      const c = cmd.cycle;
+      c.index = cmd.index;
+      c.value = completion(c.base, c.start, c.list[c.index]);
+      setValue(c.value);
+    }
+    draw();
+  }
+
+  // --- Historique (dans ce navigateur seulement)
+
+  const HISTORY = "dashu.commandes";
+
+  function history() {
+    try {
+      const list = JSON.parse(localStorage.getItem(HISTORY));
+      return Array.isArray(list) ? list.filter((l) => typeof l === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function remember(line) {
+    try {
+      const list = history().filter((l) => l !== line);
+      list.push(line);
+      localStorage.setItem(HISTORY, JSON.stringify(list.slice(-50)));
+    } catch {}
+  }
+
+  /** ↑ / ↓ sur un « / » seul, ou pendant qu'on parcourt l'historique. */
+  function browseHistory(step) {
+    const list = history();
+    const at = (cmd.history ?? list.length) + step;
+    if (at < 0 || !list.length) return;
+    cmd.cycle = null;
+    if (at >= list.length) {
+      cmd.history = null;
+      setValue("/");
+    } else {
+      cmd.history = at;
+      setValue(list[at]);
+    }
+    update();
+  }
+
+  // --- Exécution
+
+  /** Ouvre une page comme un lien de l'application (suggestion de /open). */
+  function navigate(href) {
+    closeBar();
+    window.htmx.ajax("GET", href, {
+      source: "#app",
+      target: "body",
+      swap: "innerHTML transition:true",
+      headers: { "HX-Boosted": "true" },
+      push: "true",
+    });
+  }
+
+  function refuse(message) {
+    const hint = $("#cmd-hint");
+    hint.textContent = message;
+    hint.classList.add("is-error");
+  }
+
+  function enter() {
+    const input = field();
+    if (!cmd.tree) {
+      // Commandes pas encore arrivées : Entrée attend le chargement.
+      cmd.pendingEnter = !cmd.failed;
+      return;
+    }
+    // Une suggestion choisie aux flèches (ou celle de /open), ou la suite
+    // grisée d'un mot commencé (« dem » -> « demain ») : on la prend.
+    const s = cmd.list[cmd.index];
+    if (s && (cmd.chosen || s.href || ghost(analyse(input.value)))) {
+      if (s.href) {
+        remember(input.value.trim());
+        return navigate(s.href);
+      }
+      const value = completion(input.value, replaceFrom(input.value), s);
+      cmd.help = false;
+      cmd.cycle = null;
+      setValue(value);
+      update();
+      // La commande attend encore quelque chose : on s'arrête là.
+      if (missing(value)) return;
+    }
+    const line = input.value.trim();
+    const problem = missing(line);
+    if (problem) return refuse(problem);
+    const node = analyse(`${line} `).node;
+    if (node.client === "help") {
+      cmd.help = true;
+      cmd.cycle = null;
+      setValue("/help");
+      return update();
+    }
+    remember(line);
+    if (node.client === "file") {
+      // Un sélecteur de fichiers, que files.js envoie dans l'espace de la
+      // page. Ouvert dans le geste de la touche : le navigateur l'exige.
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.multiple = true;
+      picker.className = "sr-only";
+      picker.tabIndex = -1;
+      picker.dataset.uploadInput = "";
+      document.body.append(picker);
+      picker.click();
+      return closeBar();
+    }
+    $("#cmd-form").requestSubmit();
+  }
+
+  function cmdKey(event) {
+    const input = field();
+    if (event.target !== input) return;
+    if (event.key === "Tab") {
+      event.preventDefault();
+      cmd.history = null;
+      tab(event.shiftKey);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const step = event.key === "ArrowUp" ? -1 : 1;
+      if (cmd.history !== null || (input.value === "/" && step < 0)) browseHistory(step);
+      else move(step);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (!event.isComposing) enter();
+    }
+  }
+
+  document.addEventListener("input", (event) => {
+    if (event.target !== field()) return;
+    const input = field();
+    // Plus de « / » : on revient à la page.
+    if (!input.value.startsWith("/")) return closeBar();
+    cmd.cycle = null;
+    cmd.history = null;
+    cmd.help = false;
+    $("#cmd-msg").replaceChildren();
+    update();
+  });
+
+  // Toucher ou cliquer une suggestion : comme Tab (ou ouvrir une note).
+  document.addEventListener("mousedown", (event) => {
+    if (event.target instanceof Element && event.target.closest("#cmd-list")) event.preventDefault();
+  });
+  document.addEventListener("click", (event) => {
+    const item = event.target instanceof Element && event.target.closest("#cmd-list .cmd-item");
+    if (!item) return;
+    cmd.index = Number(item.dataset.index);
+    cmd.chosen = true;
+    enter();
+    field()?.focus();
+  });
+
+  // Requête de la barre partie : le message précédent s'efface ; la barre se
+  // ferme si le serveur ouvre une page (htmx s'en charge ensuite).
+  document.addEventListener("htmx:afterRequest", (event) => {
+    if (event.detail.elt?.id !== "cmd-form") return;
+    if (event.detail.successful && event.detail.xhr.getResponseHeader("HX-Location")) closeBar();
   });
 
   // ------------------------------------------------------------- Clics
@@ -477,12 +1006,12 @@
     const target = event.target;
     if (!(target instanceof Element)) return;
 
-    if (target.closest("[data-palette-open]")) return openPalette();
+    if (target.closest("[data-cmd-open]")) return openBar();
     if (target.closest("[data-nav-toggle]")) return setNav(!$("#app")?.hasAttribute("data-nav-open"));
     if (target.closest("[data-nav-close]")) return setNav(false);
 
-    // Clic sur le fond assombri : ferme la palette.
-    if (target === palette()) palette().close();
+    // Clic sur le fond assombri : ferme la barre de commandes.
+    if (target === bar()) closeBar();
 
     // Clic en dehors d'un menu ouvert : on le referme.
     $$("details.menu[open]").forEach((menu) => {
@@ -507,24 +1036,28 @@
   }
 
   document.addEventListener("keydown", (event) => {
-    // Ctrl+K / Cmd+K : partout, même en pleine saisie.
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      if (palette()?.open) palette().close();
-      else openPalette();
-      return;
-    }
-
-    if (palette()?.open) return paletteKey(event);
+    if (bar()?.open) return cmdKey(event);
 
     if (event.key === "Escape") {
       setNav(false);
       $$("details.menu[open]").forEach((menu) => (menu.open = false));
+      // Échap sort du champ en cours (l'éditeur de notes compris), pour que
+      // « / » ouvre ensuite la barre de commandes. Sauf si le champ s'en est
+      // déjà servi (fermer une liste, réduire une sélection…) ou s'il est
+      // dans une fenêtre ou un menu, que la touche referme.
+      const el = event.composedPath()[0];
+      if (isTyping(event) && !event.defaultPrevented && !el.closest("dialog, [popover]")) el.blur();
       return;
     }
 
-    // Raccourcis à une lettre : jamais pendant une saisie ni avec un modificateur.
+    // Raccourcis : jamais pendant une saisie ni avec Ctrl, Cmd ou Alt.
     if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event)) return;
+
+    // « / » ouvre la barre de commandes (sauf par-dessus une autre fenêtre).
+    if (event.key === "/" && !$("dialog[open]")) {
+      event.preventDefault();
+      return askBar();
+    }
 
     const key = event.key.toLowerCase();
     if (pendingG && Date.now() - pendingG < 1000 && ["d", "n", "f", "c"].includes(key)) {

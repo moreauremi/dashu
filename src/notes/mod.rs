@@ -329,7 +329,19 @@ pub async fn new_page(ctx: Ctx) -> AppResult<Response> {
 
 /// `POST /notes` : crée une note vide dans l'espace actif et ouvre l'éditeur.
 pub async fn create(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
-    let (user, space) = (ctx.user.id, ctx.active.id);
+    let id = create_note(&state.db, ctx.user.id, ctx.active.id, "").await?;
+    Ok(see_other(&format!("/notes/{id}")))
+}
+
+/// Crée une note (titre éventuel) dans un espace de l'utilisateur et rend
+/// son identifiant. Aussi appelée par la barre de commandes (`/add note`).
+pub(crate) async fn create_note(
+    db: &SqlitePool,
+    user: i64,
+    space: i64,
+    title: &str,
+) -> AppResult<i64> {
+    let title: String = title.trim().chars().take(TITLE_MAX_CHARS).collect();
 
     // Une note encore vierge dans cet espace ? On la réutilise plutôt que
     // d'empiler des « Sans titre ».
@@ -338,26 +350,37 @@ pub async fn create(ctx: Ctx, State(state): State<AppState>) -> AppResult<Respon
         user,
         space
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await?;
 
+    let now = time::now();
     let id = match blank {
-        Some(id) => id,
-        None => {
-            let now = time::now();
+        Some(id) if title.is_empty() => id,
+        Some(id) => {
             sqlx::query!(
-                "INSERT INTO notes (user_id, space_id, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                user,
-                space,
+                "UPDATE notes SET title = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+                title,
                 now,
-                now
+                id,
+                user
             )
-            .execute(&state.db)
-            .await?
-            .last_insert_rowid()
+            .execute(db)
+            .await?;
+            id
         }
+        None => sqlx::query!(
+            "INSERT INTO notes (user_id, space_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            user,
+            space,
+            title,
+            now,
+            now
+        )
+        .execute(db)
+        .await?
+        .last_insert_rowid(),
     };
-    Ok(see_other(&format!("/notes/{id}")))
+    Ok(id)
 }
 
 // ---------------------------------------------------------------------
@@ -520,7 +543,7 @@ pub async fn toggle_pin(
 
 #[derive(Deserialize)]
 pub struct MoveForm {
-    space_id: i64,
+    pub(crate) space_id: i64,
 }
 
 /// `POST /notes/{id}/move` : déplace la note vers un autre espace.
