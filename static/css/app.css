@@ -2493,6 +2493,13 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   padding: 0;
 }
 
+/* Le rappel de l'espace au-dessus du titre deviendrait ici une colonne à
+   gauche : l'éditeur s'en passe (l'espace reste dans le titre de l'onglet
+   et le liseré de sa couleur). */
+.main:has(.editor-page) > .space-kicker {
+  display: none;
+}
+
 .editor-page {
   display: flex;
   flex: 1;
