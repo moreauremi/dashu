@@ -29,11 +29,11 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, on les archive (cachés du sélecteur, contenu toujours cherchable, restaurables) et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on le choisit à la création (tâche, envoi de fichier) et on le corrige après (« Déplacer vers… » pour les notes, tâches et fichiers). Perso est la vue d'ensemble : son dashboard, ses notes, ses fichiers et son agenda réunissent tous les espaces (filtre « Seulement Perso »). Les pages d'un espace ont une adresse qui le nomme (`/e/ecole/notes`), et chaque onglet garde le sien. L'espace se voit dans le titre de l'onglet, au-dessus du titre des pages et dans un liseré de sa couleur. Réglage optionnel : ouvrir l'app sur l'espace du cours en cours. |
 | Dashboard | Grille bento modulaire, propre à chaque espace : widgets Agenda (calendrier en grille comme la page Agenda : aujourd'hui, trois jours ou la semaine selon la largeur ; prochains cours), Tâches du jour, Notes, Fichiers récents et Réglages rapides. Bouton « Modifier » : on déplace un widget en le glissant (ou aux flèches du clavier), on change sa taille (S, M, L d'un clic, ou n'importe quelle taille par le coin, jusqu'à 4 × 4 cases), on en ajoute, on en retire. Chaque widget se charge indépendamment et ne défile jamais : ce qui ne tient pas à sa taille est retiré, avec un « + N de plus ». Sur téléphone, la grille passe à 2 colonnes. |
 | Profil et affichage | Prénom, nom et photo de profil (recadrée et réduite dans le navigateur, réenregistrée par le serveur en JPEG de 256 px) ; sans photo, les initiales sur un fond tiré au hasard. Thème dans Réglages ; taille de l'interface (petite, normale, grande) en bas de la barre latérale. La barre latérale reste ancrée ou se détache : cachée à gauche, elle glisse par-dessus la page au survol du bord de l'écran. |
-| Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
+| Notes | Éditeur en une seule vue, comme une page Notion : le texte se met en forme pendant qu'on écrit. `/` ouvre le menu des blocs (texte, titres 1 à 3, listes à puces, numérotées ou à cocher, tableau, citation, séparateur, bloc de code, lien vers une adresse, une note ou un fichier, image, fichier, date du jour) ; les raccourcis Markdown marchent aussi pendant la frappe (`#`, `-`, `1.`, `[]`, `>`, ```` ``` ````, `---`, `**gras**`, `*italique*`, `~~barré~~`). Une sélection montre une barre de mise en forme (gras, italique, barré, code, lien). Le Markdown reste le format enregistré : recherche, API et extraits n'en voient pas d'autre. Sauvegarde automatique, tags, recherche plein texte, épinglage, déplacement entre espaces. |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
 | Fichiers (v2, en cours) | Envoi par glisser-déposer (sur n'importe quelle page) ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, déplacement, suppression. Une image collée dans une note y est rangée et insérée. Menu « Convertir » par fichier : compression, photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF ; puis « Remplacer l'original » si on veut. Règles par espace (vidéos en MP4, HEIC doublées d'un JPEG à l'arrivée). Onglet Outils : un fichier déposé y reste 24 heures hors des espaces, le temps de le convertir et de le garder ou le télécharger. Les conversions en cours se voient dans la barre latérale de toutes les pages. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
 
-**Barre de commandes.** Hors d'un champ, `/` ouvre une barre où l'on tape des commandes, comme dans le chat de Minecraft ou un terminal : tout se fait au clavier. `Tab` complète (encore `Tab` : la suggestion suivante), `↑` `↓` choisissent, `Entrée` exécute, effacer le `/` referme la barre. Un début de mot suffit (`/g ag` vaut `/go agenda`), accents et majuscules ne comptent pas. Un espace se tape par son nom actuel : renommé « Général », Perso devient `/space general`, même si son adresse reste `/e/perso/`. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/`. Sur téléphone, le bouton « Commandes » ouvre la barre et on touche les suggestions. `/help` liste tout ; les principales :
+**Barre de commandes.** Hors d'un champ, `/` ouvre une barre où l'on tape des commandes, comme dans le chat de Minecraft ou un terminal : tout se fait au clavier. `Tab` complète (encore `Tab` : la suggestion suivante), `↑` `↓` choisissent, `Entrée` exécute, effacer le `/` referme la barre. Un début de mot suffit (`/g ag` vaut `/go agenda`), accents et majuscules ne comptent pas. Un espace se tape par son nom actuel : renommé « Général », Perso devient `/space general`, même si son adresse reste `/e/perso/`. Dans un champ (l'éditeur de notes compris, où `/` ouvre le menu des blocs), `Échap` en sort, puis `/`. Sur téléphone, le bouton « Commandes » ouvre la barre et on touche les suggestions. `/help` liste tout ; les principales :
 
 | Commande | Effet |
 | --- | --- |
@@ -54,7 +54,7 @@ Une suppression demande un second `Entrée`.
 
 Dans un texte que l'on écrit (titre d'une tâche ou d'une note, tag, recherche, nom d'un espace ou d'un agenda), `#date` devient la date du jour (`13/11/2026`) et `#cours` la matière du cours qui a lieu maintenant : `/add note #cours du #date` crée « MATHS du 13/11/2026 ». Hors d'un cours, `#cours` est refusé. Tout autre `#mot` reste tel quel.
 
-L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
+L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite, `Ctrl+K` ajoute un lien (une adresse, ou le nom d'une note ou d'un fichier), `Ctrl+B`, `Ctrl+I`, `Ctrl+E` et `Ctrl+Maj+S` mettent en gras, en italique, en code ou barré, `Ctrl+Alt+1` à `3` font un titre, `Ctrl+Entrée` coche une case, et `Tab` passe à la cellule suivante d'un tableau (une ligne s'ajoute au bout). Sur Mac, `Cmd` à la place de `Ctrl`.
 
 ## Installation locale
 
@@ -490,7 +490,7 @@ dashu/
 │   └── web/                erreurs, CSRF, en-têtes de sécurité, /styleguide
 ├── templates/              gabarits askama : pages et fragments htmx (préfixe _)
 ├── static/                 CSS, JS, icônes, polices (embarqués dans le binaire)
-├── frontend/               source de l'éditeur CodeMirror
+├── frontend/               source de l'éditeur de notes (ProseMirror), bundle static/js/editor.js
 ├── tests/                  tests d'intégration + fixtures/pronote.ics
 ├── deploy/lxc/             installation sans Docker : install.sh, services systemd, dashu-update, -backup, -restore, -admin
 ├── deploy/hermes/          commande `dashu` et skill de l'assistant Hermès, et leur install.sh
@@ -517,7 +517,7 @@ sqlx database create && sqlx migrate run && cargo sqlx prepare
 
 **Retoucher le CSS sans recompiler.** Les fichiers statiques sont embarqués dans le binaire. En développement, la variable `DASHU_STATIC_DIR=static` les fait relire sur le disque à chaque requête (c'est ce que fait `scripts/dev.cmd` sous Windows).
 
-**Mettre à jour htmx, CodeMirror, les icônes ou les polices.** Ces fichiers sont produits par un script et versionnés dans `static/` ; Node ne sert qu'à ça :
+**Mettre à jour htmx, l'éditeur (ProseMirror), les icônes ou les polices, ou modifier `frontend/`.** Ces fichiers sont produits par un script et versionnés dans `static/` ; Node ne sert qu'à ça :
 
 ```bash
 npm install && npm run build
@@ -531,12 +531,13 @@ npm install && npm run build
 
 | Sujet | Choix | Raison |
 | --- | --- | --- |
-| Dépendances front | htmx et CodeMirror, rien d'autre | Règle de la spec. `static/js/app.js` (barre de commandes, raccourcis, horloge) est écrit à la main. esbuild, lucide-static et fontsource ne servent qu'à fabriquer les fichiers de `static/` et ne sont pas servis. |
+| Dépendances front | htmx, et pour l'éditeur ProseMirror et markdown-it ; rien d'autre | Règle de la spec. `static/js/app.js` (barre de commandes, raccourcis, horloge) est écrit à la main. esbuild, lucide-static et fontsource ne servent qu'à fabriquer les fichiers de `static/` et ne sont pas servis. |
+| Éditeur de notes : ProseMirror (et non plus CodeMirror) | Une seule vue mise en forme, menu `/` (depuis le 13 novembre 2026) | Justification exigée par la spec. CodeMirror édite du texte brut : il fallait l'aperçu à côté. ProseMirror édite un document mis en forme (c'est la base de la plupart des éditeurs façon Notion) ; markdown-it lit le Markdown à l'ouverture, `prosemirror-markdown` le réécrit à chaque modification. Le serveur ne change pas : il reçoit toujours du Markdown. Le bundle pèse autant que l'ancien (environ 116 Ko en gzip) : les 2 000 entités HTML de markdown-it et la détection des adresses nues sont remplacées par deux petits fichiers (`frontend/stub-*.js`). Le code n'est pas coloré pendant l'édition (il l'est dans le rendu du serveur). |
 | sqlx 0.8 (et non 0.9) | Version imposée par `tower-sessions-sqlx-store` | Deux versions de sqlx ne peuvent pas lier SQLite dans le même binaire. |
 | reqwest 0.12 (et non 0.13) | Version qu'utilise `openidconnect` 4 | Un seul client HTTP, en rustls + ring, sans dépendance système. |
 | syntect | Coloration du code des notes, côté serveur | « Code avec coloration » sans ajouter de JavaScript. Les classes produites sont filtrées par ammonia. |
 | Fichiers statiques | Embarqués dans le binaire, empreinte dans le nom | Un seul fichier à déployer ; cache navigateur d'un an sans risque de version périmée. |
-| Styles en ligne | Aucun | La CSP les interdit. L'agenda se place avec des classes générées par `build.rs` ; CodeMirror vit dans un shadow root. |
+| Styles en ligne | Aucun | La CSP les interdit. L'agenda se place avec des classes générées par `build.rs` ; les menus de l'éditeur (`/`, mise en forme, liens, tableaux) avec une feuille construite en JavaScript (`adoptedStyleSheets`). |
 | Thèmes | Fonction CSS `light-dark()` | Chaque couleur est écrite une fois. Demande un navigateur de 2024 ou plus récent (Chrome 123, Firefox 120, Safari 17.5). |
 | Dates | Entiers Unix (UTC) en base | Affichage en Europe/Paris par `src/time.rs`, heure d'été comprise. |
 | Déploiement | Binaire natif + systemd dans un LXC, pas Docker | La spec prévoyait Docker Compose. Sur un vieux serveur, un binaire de 15 Mo sous systemd évite une couche de plus ; l'image Docker reste construite par la CI. |

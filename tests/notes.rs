@@ -3,7 +3,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{ALICE, TestApp, note_id};
+use common::{ALICE, TestApp, between, note_id};
 
 #[tokio::test]
 async fn cycle_de_vie_d_une_note() {
@@ -37,7 +37,8 @@ async fn cycle_de_vie_d_une_note() {
     let page = alice.get(&url).await;
     assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("value=\"Révisions réseau\""));
-    // L'aperçu est rendu côté serveur.
+    // Le texte arrive déjà mis en forme par le serveur, le temps que
+    // l'éditeur se charge.
     assert!(page.body.contains("<h1>VLAN</h1>"));
     assert!(page.body.contains("<strong>trunk</strong>"));
     // Les retours à la ligne du formulaire (CRLF) sont stockés en LF.
@@ -189,10 +190,9 @@ async fn une_note_ne_peut_pas_injecter_de_script() {
         )
         .await;
 
-    // Partout où la note apparaît : éditeur, aperçu, liste, recherche, widget.
+    // Partout où la note apparaît : éditeur, liste, recherche, widget.
     let pages = [
         alice.get(&url).await,
-        alice.post("/notes/preview", &[("body_md", payload)]).await,
         alice.get("/notes").await,
         alice.get("/notes?q=alert").await,
         alice.get("/widgets/notes").await,
@@ -230,6 +230,125 @@ async fn une_note_ne_peut_pas_injecter_de_script() {
     assert_eq!(open.header("x-content-type-options"), "nosniff");
     let json: serde_json::Value = serde_json::from_str(&open.body).unwrap();
     assert!(json["items"][0]["v"].as_str().unwrap().contains("<script>"));
+}
+
+/// L'éditeur (frontend/editor.js, ProseMirror) est une seule vue, comme une
+/// page Notion : plus d'aperçu à côté. Il s'appuie sur la page que sert le
+/// serveur : le formulaire et sa source Markdown, l'hôte `#editor` avec le
+/// texte déjà mis en forme, et le sprite d'icônes du menu « / ».
+#[tokio::test]
+async fn l_editeur_est_une_seule_vue() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let id = note_id(&alice.post("/notes", &[]).await);
+    let url = format!("/notes/{id}");
+
+    // Markdown tel que l'écrit l'éditeur : titre, cases à cocher, tableau
+    // (colonne centrée, « | » échappé), barré, lien et image.
+    let body = concat!(
+        "## Objectifs\n\n",
+        "- [x] Créer les VLAN\n- [ ] Tester le ping\n\n",
+        "| VLAN | Nom |\n| --- | :---: |\n| 10 | Admin \\| IT |\n\n",
+        "Un ~~ancien~~ [lien](https://example.com) et ![schéma](/files/3/raw)",
+    );
+    alice
+        .post(&url, &[("title", "Réseau"), ("body_md", body)])
+        .await;
+    let page = alice.get(&url).await;
+    assert_eq!(page.status, StatusCode::OK);
+
+    // Une seule vue : ni panneaux, ni onglets Écrire / Aperçu, ni aperçu
+    // rafraîchi à chaque frappe.
+    for gone in [
+        "note-panes",
+        "data-pane-tab",
+        "/notes/preview",
+        "id=\"preview\"",
+    ] {
+        assert!(!page.body.contains(gone), "{gone} ne devrait plus exister");
+    }
+    assert_ne!(
+        alice
+            .post("/notes/preview", &[("body_md", "# x")])
+            .await
+            .status,
+        StatusCode::OK
+    );
+
+    // Ce que lit l'éditeur : le formulaire, la source Markdown, l'hôte.
+    assert!(page.body.contains(r#"<form id="note-form""#));
+    assert!(
+        page.body
+            .contains("<textarea name=\"body_md\" hidden>## Objectifs")
+    );
+    assert!(page.body.contains("data-note-scroll"));
+    assert!(
+        page.body
+            .contains(r#"<div id="editor" class="editor" data-icons="/static/icons."#)
+    );
+
+    // En attendant le script, le texte est déjà mis en forme (et nettoyé).
+    let html = between(&page.body, r#"<div id="editor""#, "</article>").unwrap();
+    assert!(html.contains("<h2>Objectifs</h2>"));
+    assert_eq!(html.matches(r#"type="checkbox""#).count(), 2);
+    assert!(html.contains("<td>Admin | IT</td>"));
+    assert!(html.contains("<del>ancien</del>"));
+    assert!(html.contains(r#"href="https://example.com""#));
+    assert!(html.contains(r#"src="/files/3/raw""#));
+
+    // Le script de l'éditeur est servi, et n'a besoin ni d'eval ni de
+    // Function : la CSP (script-src 'self') les refuserait.
+    let script = page
+        .body
+        .split("<script src=\"")
+        .filter_map(|s| s.split('"').next())
+        .find(|src| src.starts_with("/static/js/editor."))
+        .expect("script de l'éditeur");
+    let js = alice.get(script).await;
+    assert_eq!(js.status, StatusCode::OK);
+    assert!(js.body.contains("ProseMirror"));
+    assert!(!js.body.contains("eval(") && !js.body.contains("new Function"));
+
+    // Les icônes du menu « / », de la barre de mise en forme et de celle des
+    // tableaux (frontend/editor.js, frontend/editor/ui.js) sont dans le sprite.
+    let sprite_url = between(&page.body, r#"data-icons=""#, "\"").unwrap();
+    let sprite = alice.get(sprite_url).await;
+    assert_eq!(sprite.status, StatusCode::OK);
+    for name in [
+        "b-text",
+        "b-h1",
+        "b-h2",
+        "b-h3",
+        "b-list",
+        "b-olist",
+        "tasks",
+        "b-table",
+        "b-quote",
+        "b-hr",
+        "code",
+        "link",
+        "image",
+        "paperclip",
+        "calendar",
+        "bold",
+        "italic",
+        "strike",
+        "code-inline",
+        "pencil",
+        "unlink",
+        "row-add",
+        "col-add",
+        "row-del",
+        "col-del",
+        "trash",
+        "notes",
+        "file-blank",
+    ] {
+        assert!(
+            sprite.body.contains(&format!(r#"<symbol id="{name}""#)),
+            "icône {name} absente du sprite"
+        );
+    }
 }
 
 #[tokio::test]

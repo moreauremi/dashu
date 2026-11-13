@@ -123,6 +123,23 @@ Lot 2 : fait, tests `les_taches_au_clavier`, `la_note_au_clavier`, `le_fichier_a
 - [x] Variables `#date` et `#cours` (demandées le 13 novembre 2026) dans les titres, tags, noms et recherches ; `#cours` refusé hors d'un cours ; « Exercice #3 » intact. Test `date_et_cours_dans_les_textes`, test unitaire `variables`. Pas encore essayé pendant un vrai cours Pronote.
 - [x] Un espace se tape par son nom actuel, plus par son identifiant d'adresse (signalé par Rémi le 13 novembre 2026 : Perso renommé « Général », puis un nouvel espace « Perso » ; `/space perso` menait à Général). Tests `les_espaces_suivent_leur_nom`, `les_espaces_par_leur_nom`.
 
+## Éditeur de notes en une seule vue : avancement
+
+Demandé par Rémi le 13 novembre 2026 : plus d'éditeur et d'aperçu côte à côte, mais une seule vue mise en forme, comme dans Notion, avec le menu `/`. Fait sur ProseMirror (à la place de CodeMirror) ; le Markdown reste le format enregistré. Rien n'est encore vérifié sur le serveur (il faut `dashu-update`, puis essayer sur l'ordinateur et sur l'iPhone).
+
+- [x] Une seule vue : titre, tags et texte défilent ensemble ; l'ancien aperçu (`POST /notes/preview`) n'existe plus. Le serveur met le texte en forme en attendant le script. Test `l_editeur_est_une_seule_vue` (page, script sans `eval`, icônes du menu dans le sprite).
+- [x] Menu `/` : texte, titres 1 à 3, listes à puces, numérotées et à cocher, tableau, citation, séparateur, bloc de code, lien, image, fichier, date du jour ; filtre à la frappe, `↑` `↓` `Entrée`, `Échap` le ferme. Vu dans le navigateur (instance locale), au clavier, en largeur ordinateur et téléphone, thèmes clair et sombre.
+- [x] Raccourcis Markdown pendant la frappe (`##`, `-`, `[]`, `**gras**`…), `Entrée` qui continue une liste et en sort sur une ligne vide, retour arrière qui rend un titre en texte, annuler. Vu dans le navigateur.
+- [x] Tableau : `Tab` d'une cellule à l'autre, ligne ajoutée au bout, barre pour ajouter ou retirer ligne et colonne ; un « | » tapé dans une cellule est échappé dans le Markdown. Vu dans le navigateur.
+- [x] Lien : barre de mise en forme sur une sélection, `Ctrl+K`, recherche des notes et fichiers (`/cmd/suggest`), fiche Ouvrir / Modifier / Retirer. Case à cocher cliquée : `- [x]` dans le Markdown. Vu dans le navigateur.
+- [x] Collage : du Markdown collé devient des blocs ; une image collée part dans les fichiers de l'espace et s'affiche dans la note. Vu dans le navigateur.
+- [x] `Échap` sort de l'éditeur, puis `/` ouvre la barre de commandes (ProseMirror retenait `Échap` : corrigé). Vu dans le navigateur.
+- [x] Aucune erreur dans la console, donc rien de bloqué par la CSP (menus placés par une feuille construite, pas de style en ligne).
+- [x] Aller-retour Markdown -> éditeur -> Markdown identique sur titres, listes, cases, tableaux alignés, code, liens, images (script de vérification lancé en local, pas versionné). Différences connues, sans effet sur le rendu : des échappements en plus (`\[`), un retour à la ligne simple devient une espace (l'aperçu l'affichait déjà ainsi), `_italique_` devient `*italique*`. Elles n'apparaissent qu'à la première modification d'une ancienne note.
+- [ ] Essayé sur l'iPhone (clavier, menu `/` au toucher, sélection et barre de mise en forme sous le menu d'iOS).
+- [ ] Lighthouse de la page éditeur sur le serveur réel. En local : `editor.js` pèse 100,7 Ko en brotli (CodeMirror : 96,9 Ko), page éditeur environ 155 Ko de HTML + CSS + JS, sous la cible de 250 Ko.
+- Limites : le code n'est pas coloré pendant l'édition (il l'est dans le rendu du serveur) ; pas de bloc dépliable ni d'encadré (Notion en a, le Markdown non) ; une entité HTML rare (`&hearts;`) reste écrite telle quelle dans l'éditeur.
+
 ## Mesures de performance
 
 ### Sur le serveur réel

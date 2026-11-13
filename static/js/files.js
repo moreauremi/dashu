@@ -243,7 +243,7 @@
   // s'allume ; ailleurs, un voile dit dans quel espace le fichier va partir.
   // L'éditeur de notes gère lui-même ce qu'on y lâche (image insérée).
   const carriesFiles = (event) => event.dataTransfer && [...event.dataTransfer.types].includes("Files");
-  const inEditor = (event) => event.target instanceof Element && !!event.target.closest(".cm-editor");
+  const inEditor = (event) => event.target instanceof Element && !!event.target.closest(".ProseMirror");
 
   /** Voile du dépôt hors des pages Fichiers et Outils. */
   function veil(show) {
