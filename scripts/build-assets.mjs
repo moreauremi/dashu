@@ -114,7 +114,7 @@ const icons = {
   camera: "camera",
   // Outils : onglet, conversions, suivi ; espaces archivés.
   tools: "wrench",
-  convert: "repeat",
+  convert: "file-output",
   replace: "replace",
   loader: "loader-circle",
   archive: "archive",

@@ -83,13 +83,6 @@
       <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
     </div>
 
-    {#- Conversions en cours (voir _jobs_indicator.html, même balisage). -#}
-    {% if shell.jobs_active > 0 %}
-    <div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ shell.jobs_active }}" hx-trigger="every 3s" hx-swap="outerHTML">
-      <a href="{% if shell.jobs_tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ shell.jobs_active }} conversion{% if shell.jobs_active > 1 %}s{% endif %} en cours</span></a>
-    </div>
-    {% endif %}
-
     {#- En bas : les réglages, la taille de l'interface, le compte. Le thème
         se choisit dans Réglages. -#}
     <div class="sidebar-foot">
@@ -135,6 +128,15 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+
+  {#- Conversions en cours : une pastille fixe en bas à droite, visible sur
+      toutes les pages, barre latérale détachée ou repliée comprise (même
+      balisage que _jobs_indicator.html). -#}
+  {% if shell.jobs_active > 0 %}
+  <div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ shell.jobs_active }}" hx-trigger="every 3s" hx-swap="outerHTML">
+    <a href="{% if shell.jobs_tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ shell.jobs_active }} conversion{% if shell.jobs_active > 1 %}s{% endif %} en cours</span></a>
+  </div>
+  {% endif %}
 
   {#- Téléphone : barre de raccourcis en bas de l'écran (choisis dans Réglages). -#}
   <nav class="tabbar" aria-label="Raccourcis">

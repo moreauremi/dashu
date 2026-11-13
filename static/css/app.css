@@ -1950,19 +1950,45 @@ ul.note-links {
   outline-offset: 2px;
 }
 
-/* Conversions en cours : une ligne discrète au-dessus du bas de la barre. */
+/* Conversions en cours : une pastille fixe en bas à droite, sur toutes les
+   pages (la barre latérale peut être détachée ou repliée). */
+.jobs-indicator {
+  position: fixed;
+  z-index: 50;
+  right: 16px;
+  bottom: 16px;
+}
+
 .jobs-indicator a {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
-  margin: 0 8px 8px;
-  padding: 0 12px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35);
   color: var(--text-2);
   font-size: 13px;
   text-decoration: none;
+}
+
+.jobs-indicator a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 860px) {
+  /* Au-dessus de la barre de raccourcis du téléphone. */
+  .jobs-indicator {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
+/* La file d'envoi flottante se pose au-dessus de la pastille. */
+.jobs-indicator ~ .upload-queue.is-floating,
+body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
+  margin-bottom: 52px;
 }
 
 .jobs-indicator .i {
@@ -2102,7 +2128,7 @@ ul.note-links {
 }
 
 .scope-filter {
-  margin-bottom: 12px;
+  margin: 20px 0 12px;
 }
 
 /* Espace archivé ouvert par son adresse. */
