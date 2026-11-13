@@ -1145,6 +1145,34 @@
     true,
   );
 
+  // Fenêtre « Ranger » (#picker, layout.html) : un bouton data-picker l'ouvre
+  // (popovertarget) et y charge les choix de son élément (hx-get). Ouverte
+  // depuis un menu, elle le ferme ; ses choix arrivés, le premier possible
+  // prend le focus ; fermée, elle se vide, pour ne jamais montrer les choix
+  // d'un autre élément pendant le chargement suivant.
+  document.addEventListener("click", (event) => {
+    const opener = event.target instanceof Element && event.target.closest("[data-picker]");
+    opener?.closest(".pop-menu")?.hidePopover();
+  });
+  document.addEventListener("htmx:afterSwap", (event) => {
+    if (event.detail.target?.id !== "picker-body") return;
+    const choice = $("#picker-body button:not([disabled])");
+    choice?.focus({ preventScroll: true });
+    choice?.scrollIntoView({ block: "nearest" });
+  });
+  document.addEventListener(
+    "toggle",
+    (event) => {
+      if (event.target?.id !== "picker" || event.newState !== "closed") return;
+      const waiting = document.createElement("p");
+      waiting.className = "muted";
+      waiting.setAttribute("role", "status");
+      waiting.textContent = "Chargement…";
+      $("#picker-body")?.replaceChildren(waiting);
+    },
+    true,
+  );
+
   // Choix d'un espace dans un formulaire (ajout d'une tâche) : la valeur et
   // le nom passent sur le bouton qui a ouvert le menu.
   document.addEventListener("click", (event) => {

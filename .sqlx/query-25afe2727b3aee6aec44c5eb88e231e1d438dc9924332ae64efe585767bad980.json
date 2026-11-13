@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT folder_id AS \"folder_id!\", count(*) AS \"n!: i64\"\n           FROM files WHERE user_id = ? AND folder_id IS NOT NULL AND expires_at IS NULL GROUP BY folder_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "folder_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "25afe2727b3aee6aec44c5eb88e231e1d438dc9924332ae64efe585767bad980"
+}

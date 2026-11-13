@@ -127,12 +127,18 @@ pub async fn run(
             let space_id = find_space(&ctx.spaces, &arg).map_err(refuse)?.id;
             let response = match opened {
                 Opened::Note { id, .. } => {
-                    let form = notes::MoveForm { space_id };
+                    // À la racine de l'espace : la barre ne choisit pas de dossier.
+                    let form = notes::MoveForm {
+                        space_id,
+                        folder_id: None,
+                        next: None,
+                    };
                     notes::move_to_space(ctx, State(state), Path(id), axum::Form(form)).await?
                 }
                 Opened::File { id, .. } => {
                     let form = files::MoveForm {
                         space_id,
+                        folder_id: None,
                         next: Some(page),
                     };
                     files::move_to_space(ctx, State(state), Path(id), axum::Form(form)).await?
@@ -175,7 +181,11 @@ pub async fn run(
                 return Err(AppError::NotFound);
             };
             let space_id = find_space(&ctx.spaces, &arg).map_err(refuse)?.id;
-            let form = files::KeepForm { space_id };
+            let form = files::KeepForm {
+                space_id,
+                folder_id: None,
+                next: None,
+            };
             follow(
                 files::keep(ctx, State(state), Path(id), axum::Form(form)).await?,
                 &here,

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, title, body_md, pinned AS \"pinned!: bool\", updated_at\n           FROM notes WHERE id = ? AND user_id = ?",
+  "query": "SELECT space_id, folder_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
@@ -9,23 +9,28 @@
         "type_info": "Integer"
       },
       {
-        "name": "title",
+        "name": "folder_id",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Integer"
       },
       {
-        "name": "body_md",
+        "name": "name",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "pinned!: bool",
+        "name": "size",
         "ordinal": 3,
-        "type_info": "Bool"
+        "type_info": "Integer"
       },
       {
-        "name": "updated_at",
+        "name": "received",
         "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "for_tools",
+        "ordinal": 5,
         "type_info": "Integer"
       }
     ],
@@ -34,11 +39,12 @@
     },
     "nullable": [
       false,
+      true,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "5e0d339b3e92176ce0de4ce28083c1b688dc8a024e69ff4f7a0f2e774c4b5cd0"
+  "hash": "a203796bbb8f5c3ca82eab3f9f561880f3fcaf2959a431dcbf43c964a42a3d09"
 }

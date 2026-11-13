@@ -1,15 +1,45 @@
 {% extends "layout.html" %}
-{% block title %}Fichiers · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}{% if view == "dossier" || view == "temporaire" %}{% if let Some(last) = crumbs.last() %}{{ last.label }} · {% endif %}{% endif %}Fichiers · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <header class="page-head">
-  <h1>Fichiers</h1>
+  {#- Fil d'Ariane : le chemin de l'endroit montré, chaque pas cliquable
+      sauf le dernier (SPEC, « Dossiers »). -#}
+  <div class="files-head">
+    {% if crumbs.len() > 1 %}
+    <nav class="crumbs" aria-label="Emplacement">
+      {%- for crumb in crumbs %}{% if let Some(href) = crumb.href %}
+      <a class="crumb" href="{{ href }}">{{ crumb.label }}</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+      {%- endif %}{% endfor %}
+    </nav>
+    {% endif %}
+    <h1>{% if let Some(last) = crumbs.last() %}{{ last.label }}{% endif %}</h1>
+  </div>
   {% if enabled %}
-  {#- Le champ est caché visuellement mais reste dans le label : un clic ou
-      Entrée sur le bouton ouvre le sélecteur de fichiers. -#}
-  <label class="btn btn-primary file-pick">
-    {{ crate::assets::icon("upload")|safe }}<span>Envoyer des fichiers</span>
-    <input class="sr-only" type="file" multiple data-upload-input>
-  </label>
+  <div class="files-actions">
+    {% if let Some((space_id, parent)) = new_folder %}
+    <button class="btn" type="button" popovertarget="pm-new-folder">{{ crate::assets::icon("plus")|safe }}<span>Nouveau dossier</span></button>
+    <div id="pm-new-folder" class="pop-menu" popover>
+      <p class="pop-title">Nouveau dossier dans {{ place }}</p>
+      <form class="pop-pages" method="post" action="/folders">
+        {%- if let Some(parent) = parent %}
+        <input type="hidden" name="parent_id" value="{{ parent }}">
+        {%- else %}
+        <input type="hidden" name="space_id" value="{{ space_id }}">
+        {%- endif %}
+        <input type="text" name="name" maxlength="60" required autocomplete="off" placeholder="Nom du dossier" aria-label="Nom du nouveau dossier">
+        <button class="btn btn-primary" type="submit">Créer</button>
+      </form>
+    </div>
+    {% endif %}
+    {% if view != "temporaire" %}
+    {#- Le champ est caché visuellement mais reste dans le label : un clic ou
+        Entrée sur le bouton ouvre le sélecteur de fichiers. -#}
+    <label class="btn btn-primary file-pick">
+      {{ crate::assets::icon("upload")|safe }}<span>Envoyer des fichiers</span>
+      <input class="sr-only" type="file" multiple data-upload-input>
+    </label>
+    {% endif %}
+  </div>
   {% endif %}
 </header>
 
@@ -19,42 +49,113 @@
   <p class="muted">Il faut renseigner <code>FILES_DIR</code> dans la configuration (voir le README).</p>
 </div>
 {% else %}
-<div class="dropzone" data-dropzone data-max="{{ max_bytes }}" data-max-label="{{ max_size }}">
+{% if view != "temporaire" %}
+{#- Un envoi arrive dans le dossier montré. À la racine et dans le dossier
+    d'un espace, on peut choisir un autre espace (sa racine). -#}
+<div class="dropzone" data-dropzone data-max="{{ max_bytes }}" data-max-label="{{ max_size }}" data-space="{{ upload_space }}"{% if let Some(folder) = upload_folder %} data-folder="{{ folder }}"{% endif %}>
   {{ crate::assets::icon("upload")|safe }}
   <p>Glisse des fichiers ici, ou utilise « Envoyer des fichiers »</p>
   <p class="muted">{{ max_size }} au plus par fichier</p>
+  {% if upload_folder.is_some() %}
+  <p class="space-choices"><span class="space-choices-label">Envoyer dans</span><span class="space-choice is-fixed">{{ crate::assets::icon("folder")|safe }}{{ place }}</span></p>
+  {% else %}
   {#- L'espace d'arrivée : tous les choix sur une ligne. -#}
   <div class="space-choices" role="radiogroup" aria-label="Espace où envoyer">
     <span class="space-choices-label">Envoyer dans</span>
     {%- for space in spaces %}
     <label class="space-choice" data-accent="{{ space.color }}">
-      <input class="sr-only" type="radio" name="upload-space" value="{{ space.id }}" data-upload-space{% if space.id == active_id %} checked{% endif %}>
+      <input class="sr-only" type="radio" name="upload-space" value="{{ space.id }}" data-upload-space{% if space.id == upload_space %} checked{% endif %}>
       <span class="dot" aria-hidden="true"></span>{{ space.name }}
     </label>
     {%- endfor %}
   </div>
+  {% endif %}
 </div>
 <ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
+{% else %}
+<p class="muted files-hint">Les fichiers déposés dans l'onglet <a href="/tools">Outils</a> arrivent ici tant qu'ils ne sont pas rangés. Ils sont effacés 24 heures après leur dépôt.</p>
+{% endif %}
 
 {% include "files/_jobs.html" %}
 
 {#- Recharge la liste quand une compression se termine (événement envoyé par
     /files/jobs). Élément à part et vide : posés sur #file-results, ces
     attributs seraient hérités par les formulaires de la liste. -#}
-<div hidden hx-get="/files" hx-select="#file-results" hx-target="#file-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
+<div hidden hx-get="{{ here }}" hx-select="#file-results" hx-target="#file-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
 
 <div id="file-results">
-  {#- Perso montre les fichiers de tous les espaces ; ce filtre ne garde que les siens. -#}
-  {% if overview %}
-  <nav class="chips scope-filter" aria-label="Espaces montrés">
-    <a class="chip" href="/files"{% if !only %} aria-current="true"{% endif %}>Tous les espaces</a>
-    <a class="chip" href="/files?seul=1"{% if only %} aria-current="true"{% endif %}>Seulement {{ shell.active.name }}</a>
-  </nav>
-  {% endif %}
-  {% if items.is_empty() %}
-  <div class="empty-state"><p>Aucun fichier dans l'espace {{ shell.active.name }}</p></div>
+  {% if folders.is_empty() && notes.is_empty() && items.is_empty() %}
+  <div class="empty-state">
+    {% if view == "temporaire" %}
+    <p>Rien en attente dans Temporaire</p>
+    {% else %}
+    <p>Rien dans {{ place }} pour l'instant</p>
+    {% if new_folder.is_some() %}<p class="muted">Crée un dossier, envoie un fichier ou range une note ici.</p>{% endif %}
+    {% endif %}
+  </div>
   {% else %}
   <ul class="file-list" role="list">
+    {#- Dossiers d'abord : à la racine, ceux des espaces et Temporaire. -#}
+    {% for folder in folders %}
+    <li class="file-row folder-row">
+      <a class="folder-name" href="{{ folder.href }}"{% if let Some(color) = folder.color %} data-accent="{{ color }}"{% endif %}>
+        <span class="file-thumb file-thumb-icon folder-icon">{{ crate::assets::icon(folder.icon)|safe }}</span>
+        <span>{{ folder.name }}</span>
+      </a>
+      <span class="file-meta">{{ folder.summary }}</span>
+      {% if let Some(id) = folder.id %}
+      <div class="file-actions">
+        <button class="icon-btn" type="button" popovertarget="pm-rename-{{ id }}" title="Renommer" aria-label="Renommer le dossier « {{ folder.name }} »">{{ crate::assets::icon("pencil")|safe }}</button>
+        <div id="pm-rename-{{ id }}" class="pop-menu" popover>
+          <p class="pop-title">Renommer le dossier</p>
+          <form class="pop-pages" method="post" action="/folders/{{ id }}/rename">
+            <input type="text" name="name" value="{{ folder.name }}" maxlength="60" required autocomplete="off" aria-label="Nouveau nom de « {{ folder.name }} »">
+            <button class="btn btn-primary" type="submit">Renommer</button>
+          </form>
+        </div>
+        {% if folder.empty %}
+        <form method="post" action="/folders/{{ id }}/delete" hx-confirm="Supprimer le dossier « {{ folder.name }} » ?">
+          <button class="icon-btn" type="submit" aria-label="Supprimer le dossier « {{ folder.name }} »" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
+        </form>
+        {% else %}
+        {#- Dossier non vide : avertissement, et le choix de ce que devient
+            son contenu (le serveur refuse une suppression sans ce choix). -#}
+        <button class="icon-btn" type="button" popovertarget="pd-delete-{{ id }}" aria-label="Supprimer le dossier « {{ folder.name }} »" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
+        <div id="pd-delete-{{ id }}" class="pop-dialog pop-warning" popover role="alertdialog" aria-labelledby="pd-delete-{{ id }}-title">
+          <p class="pop-dialog-title" id="pd-delete-{{ id }}-title">{{ crate::assets::icon("alert")|safe }}Supprimer le dossier « {{ folder.name }} » ?</p>
+          <p>Il contient {{ folder.summary }}.</p>
+          <div class="pop-dialog-actions">
+            <form method="post" action="/folders/{{ id }}/delete">
+              <input type="hidden" name="contenu" value="remonter">
+              <button class="btn btn-primary" type="submit">Transférer dans « {{ folder.parent_label }} »</button>
+            </form>
+            <form method="post" action="/folders/{{ id }}/delete">
+              <input type="hidden" name="contenu" value="supprimer">
+              <button class="btn btn-danger" type="submit">Tout supprimer</button>
+            </form>
+            <button class="btn" type="button" popovertarget="pd-delete-{{ id }}" popovertargetaction="hide">Annuler</button>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+
+    {% for note in notes %}
+    <li class="file-row note-file-row">
+      <a class="note-file-name" href="/notes/{{ note.id }}">
+        <span class="file-thumb file-thumb-icon">{{ crate::assets::icon("notes")|safe }}</span>
+        <span>{{ note.title }}</span>
+        {%- if note.pinned %}{{ crate::assets::icon("pin")|safe }}<span class="sr-only"> (épinglée)</span>{% endif %}
+      </a>
+      <span class="file-meta">Note · {{ note.updated }}</span>
+      <div class="file-actions">
+        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ note.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="Ranger ailleurs" aria-label="Ranger la note « {{ note.title }} » ailleurs">{{ crate::assets::icon("move")|safe }}</button>
+      </div>
+    </li>
+    {% endfor %}
+
     {% for item in items %}
     <li class="file-row">
       <a class="file-name" href="/files/{{ item.id }}">
@@ -65,22 +166,15 @@
         {%- endif %}
         <span>{{ item.name }}</span>
       </a>
-      <span class="file-meta">{% if let Some(space) = item.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span> · {% endif %}{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
+      <span class="file-meta">{{ item.kind }} · {{ item.size }} · {% if let Some(expires) = item.expires %}{{ expires }}{% else %}{{ item.updated }}{% endif %}</span>
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
+        {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs
+            dossiers ; dans Temporaire, garder le fichier. -#}
+        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ item.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="{% if item.expires.is_some() %}Garder dans un dossier{% else %}Ranger ailleurs{% endif %}" aria-label="Ranger « {{ item.name }} »">{{ crate::assets::icon("move")|safe }}</button>
         {#- Menus de l'app (popover) : par-dessus la page, aux couleurs du
             thème (voir app.js, « Menus »). -#}
-        <button class="icon-btn" type="button" popovertarget="pm-move-{{ item.id }}" title="Déplacer vers un autre espace" aria-label="Déplacer « {{ item.name }} » vers un autre espace">{{ crate::assets::icon("move")|safe }}</button>
-        <div id="pm-move-{{ item.id }}" class="pop-menu" popover>
-          <p class="pop-title">Déplacer vers</p>
-          {%- for space in spaces %}{% if space.id != item.space_id %}
-          <form method="post" action="/files/{{ item.id }}/move">
-            <input type="hidden" name="space_id" value="{{ space.id }}">
-            <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</button>
-          </form>
-          {%- endif %}{% endfor %}
-        </div>
         {% if !item.conversions.is_empty() %}
         <button class="icon-btn" type="button" popovertarget="pm-convert-{{ item.id }}" title="Convertir : crée une copie, l'original est gardé" aria-label="Convertir « {{ item.name }} »">{{ crate::assets::icon("convert")|safe }}</button>
         <div id="pm-convert-{{ item.id }}" class="pop-menu" popover>
@@ -88,12 +182,14 @@
           {%- for (key, label) in item.conversions %}
           <form method="post" action="/files/{{ item.id }}/convert">
             <input type="hidden" name="to" value="{{ key }}">
+            <input type="hidden" name="next" value="{{ here }}">
             <button type="submit">{{ label }}</button>
           </form>
           {%- endfor %}
         </div>
         {% endif %}
         <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
+          <input type="hidden" name="next" value="{{ here }}">
           <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
         </form>
       </div>

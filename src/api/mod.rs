@@ -852,8 +852,11 @@ async fn update_note(
         .await?;
     }
     if let Some(space) = target_space {
+        // Un dossier appartient à un espace : une note qui change d'espace va
+        // à la racine du nouveau (SPEC, « Dossiers »).
         sqlx::query!(
-            "UPDATE notes SET space_id = ? WHERE id = ? AND user_id = ?",
+            "UPDATE notes SET folder_id = CASE WHEN space_id = ?1 THEN folder_id END, space_id = ?1
+             WHERE id = ?2 AND user_id = ?3",
             space.id,
             id,
             user.id

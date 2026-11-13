@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
+  "query": "SELECT id AS \"id!\", name, mime, size, updated_at, thumb, expires_at\n               FROM files\n               WHERE user_id = ?1\n                 AND CASE WHEN ?2 THEN expires_at IS NOT NULL\n                          ELSE expires_at IS NULL AND space_id = ?3 AND folder_id IS ?4 END\n               ORDER BY updated_at DESC, id DESC",
   "describe": {
     "columns": [
       {
-        "name": "space_id",
+        "name": "id!",
         "ordinal": 0,
         "type_info": "Integer"
       },
@@ -24,38 +24,26 @@
         "type_info": "Integer"
       },
       {
-        "name": "storage_key",
-        "ordinal": 4,
-        "type_info": "Text"
-      },
-      {
         "name": "updated_at",
-        "ordinal": 5,
+        "ordinal": 4,
         "type_info": "Integer"
       },
       {
         "name": "thumb",
-        "ordinal": 6,
-        "type_info": "Integer"
-      },
-      {
-        "name": "preview",
-        "ordinal": 7,
+        "ordinal": 5,
         "type_info": "Integer"
       },
       {
         "name": "expires_at",
-        "ordinal": 8,
+        "ordinal": 6,
         "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 4
     },
     "nullable": [
-      false,
-      false,
-      false,
+      true,
       false,
       false,
       false,
@@ -64,5 +52,5 @@
       true
     ]
   },
-  "hash": "c955b0feef0991c576287c3aba3d2e61ad6e1c993f21855b4016910f1817a3f8"
+  "hash": "844b9dd6241fb00f902e12e566b457500061f26d7d6cac5412acec7a4a669d15"
 }

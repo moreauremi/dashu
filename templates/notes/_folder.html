@@ -1,0 +1,24 @@
+{#- Sélecteur « Dossier » de l'éditeur, à côté des tags (SPEC, « Dossiers ») :
+    la racine de l'espace de la note et ses dossiers du premier niveau. Un
+    choix range la note sans recharger l'éditeur (htmx remplace ce bloc) ;
+    « Voir plus… » ouvre la fenêtre « Ranger » (tous les espaces, tous les
+    dossiers, sous-dossiers compris). -#}
+<div id="note-folder" class="note-folder">
+  <button class="folder-chip" type="button" popovertarget="pm-note-folder" aria-label="Dossier de la note : {{ folder.label }}" title="Ranger la note dans un dossier">
+    {{- crate::assets::icon("folder")|safe }}<span>{{ folder.label }}</span>
+  </button>
+  <div id="pm-note-folder" class="pop-menu" popover>
+    <p class="pop-title">Ranger dans</p>
+    <form hx-post="/notes/{{ id }}/folder" hx-target="#note-folder" hx-swap="outerHTML">
+      <input type="hidden" name="folder_id" value="">
+      <button type="submit"{% if folder.current.is_none() %} aria-current="true"{% endif %}>{{ crate::assets::icon("home")|safe }}<span>{{ folder.space_name }} (racine)</span></button>
+    </form>
+    {%- for top in folder.top %}
+    <form hx-post="/notes/{{ id }}/folder" hx-target="#note-folder" hx-swap="outerHTML">
+      <input type="hidden" name="folder_id" value="{{ top.id }}">
+      <button type="submit"{% if top.current %} aria-current="true"{% endif %}>{{ crate::assets::icon("folder")|safe }}<span>{{ top.name }}</span></button>
+    </form>
+    {%- endfor %}
+    <button class="pop-more" type="button" popovertarget="picker" hx-get="/destinations?note={{ id }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("chevron-right")|safe }}<span>Voir plus…</span></button>
+  </div>
+</div>

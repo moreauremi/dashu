@@ -12,6 +12,7 @@ pub mod config;
 pub mod dashboard;
 pub mod db;
 pub mod files;
+pub mod folders;
 pub mod notes;
 pub mod settings;
 pub mod spaces;
@@ -151,6 +152,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/notes/{id}", get(notes::edit_page).post(notes::save))
         .route("/notes/{id}/pin", post(notes::toggle_pin))
         .route("/notes/{id}/move", post(notes::move_to_space))
+        .route("/notes/{id}/folder", post(notes::set_folder))
         .route("/notes/{id}/delete", post(notes::delete))
         .route("/notes/{id}/tags", post(notes::add_tag))
         .route("/notes/{id}/tags/{tag_id}", delete(notes::remove_tag))
@@ -166,6 +168,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/delete", post(files::delete))
         .route("/files/{id}/move", post(files::move_to_space))
         .route("/files/{id}/keep", post(files::keep))
+        .route("/folders", post(folders::create))
+        .route("/folders/{id}/rename", post(folders::rename))
+        .route("/folders/{id}/delete", post(folders::delete))
+        .route("/destinations", get(folders::picker))
         // Outils : compression et conversions (le travail est fait par
         // dashu-worker), onglet Outils, suivi dans la barre latérale
         .route("/files/{id}/compress", post(tools::compress))

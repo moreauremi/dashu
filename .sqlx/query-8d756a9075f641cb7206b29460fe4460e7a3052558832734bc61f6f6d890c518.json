@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\",\n                  highlight(notes_fts, 0, char(1), char(2)) AS \"title_marked!: String\",\n                  snippet(notes_fts, 1, char(1), char(2), '…', 24) AS \"snippet!: String\",\n                  n.pinned AS \"pinned!: bool\", n.updated_at AS \"updated_at!: i64\",\n                  n.space_id AS \"space_id!: i64\", n.folder_id\n           FROM notes_fts\n           JOIN notes n ON n.id = notes_fts.rowid\n           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)\n             AND (?4 IS NULL OR EXISTS (\n                   SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id\n                   WHERE nt.note_id = n.id AND t.name = ?4))\n           ORDER BY bm25(notes_fts, 5.0, 1.0)\n           LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "title_marked!: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "snippet!: String",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "pinned!: bool",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "updated_at!: i64",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id!: i64",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8d756a9075f641cb7206b29460fe4460e7a3052558832734bc61f6f6d890c518"
+}

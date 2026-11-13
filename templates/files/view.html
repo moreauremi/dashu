@@ -3,7 +3,7 @@
 {% block content %}
 <header class="page-head file-view-head">
   <div class="file-view-title">
-    <a class="back-link" href="/files">{{ crate::assets::icon("arrow-left")|safe }}<span>Fichiers</span></a>
+    <a class="back-link" href="{{ back }}">{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
     <h1>{{ name }}</h1>
     <p class="muted">{{ meta }}</p>
     {% if let Some(expires) = expires %}<p class="file-expires">{{ expires }} · <a href="/tools">Le garder</a></p>{% endif %}
@@ -16,20 +16,9 @@
       <button class="btn" type="submit" title="L'original est supprimé, cette copie prend son nom">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
     </form>
     {% endif %}
-    {% if !other_spaces.is_empty() %}
-    <details class="menu">
-      <summary class="btn" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}<span>Déplacer</span></summary>
-      <div class="menu-list">
-        {% for space in other_spaces %}
-        <form method="post" action="/files/{{ id }}/move">
-          <input type="hidden" name="space_id" value="{{ space.id }}">
-          <input type="hidden" name="next" value="/files/{{ id }}">
-          <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>Déplacer vers {{ space.name }}</button>
-        </form>
-        {% endfor %}
-      </div>
-    </details>
-    {% endif %}
+    {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs dossiers ;
+        pour un fichier de l'onglet Outils, le garder. -#}
+    <button class="btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}<span>{% if expires.is_some() %}Garder{% else %}Ranger{% endif %}</span></button>
     {% if !conversions.is_empty() %}
     <details class="menu">
       <summary class="btn" title="Crée une copie convertie, l'original est gardé">{{ crate::assets::icon("convert")|safe }}<span>Convertir</span></summary>

@@ -170,5 +170,14 @@
     <ul id="cmd-list" class="cmd-list" role="listbox" aria-label="Suggestions"></ul>
     <p class="cmd-keys" aria-hidden="true"><kbd>Tab</kbd> compléter <kbd>↑</kbd><kbd>↓</kbd> choisir <kbd>↵</kbd> exécuter</p>
   </dialog>
+
+  {#- Fenêtre « Ranger » : l'arborescence de Fichiers (espaces, dossiers,
+      sous-dossiers), pour déplacer une note ou un fichier. Un bouton
+      `popovertarget="picker"` l'ouvre et y charge (hx-get /destinations…) les
+      choix de son élément ; app.js (« Menus ») la vide à la fermeture. -#}
+  <div id="picker" class="pop-dialog" popover aria-labelledby="picker-title">
+    <div id="picker-body"><p class="muted" role="status">Chargement…</p></div>
+    <button class="btn" type="button" popovertarget="picker" popovertargetaction="hide">Annuler</button>
+  </div>
 </div>
 {% endblock %}

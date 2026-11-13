@@ -45,12 +45,13 @@ const FILE_CSP: &str = "default-src 'none'; sandbox";
 // ---------------------------------------------------------------------
 // Liste
 // ---------------------------------------------------------------------
+//
+// L'onglet Fichiers est une arborescence (SPEC, « Dossiers ») : à la racine,
+// un dossier par espace et Temporaire ; dans un espace, ses dossiers, ses
+// notes et ses fichiers ; dans un dossier, ses sous-dossiers et son contenu.
 
 pub struct FileItem {
     pub id: i64,
-    pub space_id: i64,
-    /// Vue d'ensemble de Perso : l'espace d'un fichier venu d'ailleurs.
-    pub space: Option<crate::spaces::SpaceTag>,
     pub name: String,
     pub size: String,
     /// Libellé court du type : « PDF », « Image »…
@@ -62,6 +63,43 @@ pub struct FileItem {
     /// Vignette prête : affichée à gauche du nom, sinon `icon`.
     pub thumb: bool,
     pub icon: &'static str,
+    /// Adresse de la fenêtre « Ranger » de la ligne.
+    pub picker: String,
+    /// Temporaire : « effacé dans 5 h ».
+    pub expires: Option<String>,
+}
+
+/// Une ligne « dossier » : le dossier d'un espace ou Temporaire (à la
+/// racine), ou un dossier.
+pub struct FolderRow {
+    /// Dossier ; `None` pour le dossier d'un espace et pour Temporaire, qui ne
+    /// se renomment ni ne se suppriment ici.
+    pub id: Option<i64>,
+    pub name: String,
+    pub href: String,
+    /// « 2 dossiers, 3 notes et 1 fichier »
+    pub summary: String,
+    pub empty: bool,
+    pub icon: &'static str,
+    /// Couleur de l'espace, pour le dossier d'un espace.
+    pub color: Option<String>,
+    /// Où va son contenu si on le supprime en le transférant : « École ».
+    pub parent_label: String,
+}
+
+/// Une note rangée dans le dossier montré.
+pub struct NoteRow {
+    pub id: i64,
+    pub title: String,
+    pub pinned: bool,
+    pub updated: String,
+    pub picker: String,
+}
+
+/// Un pas du fil d'Ariane ; le dernier (l'endroit montré) n'a pas de lien.
+pub struct Crumb {
+    pub label: String,
+    pub href: Option<String>,
 }
 
 #[derive(Template)]
@@ -74,60 +112,233 @@ struct ListPage {
     /// refuser tout de suite, dans le navigateur, un fichier trop gros).
     max_size: String,
     max_bytes: u64,
+    /// Ce que montre la page : `racine`, `espace`, `dossier` ou `temporaire`.
+    view: &'static str,
+    crumbs: Vec<Crumb>,
+    /// Adresse de la vue : retour après une action, rechargement de la liste.
+    here: String,
+    /// L'endroit montré, en entier : « École / Math ».
+    place: String,
+    folders: Vec<FolderRow>,
+    notes: Vec<NoteRow>,
     items: Vec<FileItem>,
     /// Compressions en cours ou récentes (vide si les outils sont désactivés).
     jobs: crate::tools::JobsPanel,
-    /// Espaces proposés pour un envoi et un déplacement.
+    /// Espaces proposés pour un envoi (à la racine et dans un espace).
     spaces: Vec<Space>,
-    active_id: i64,
-    /// Perso : filtre « Tous les espaces » / « Seulement Perso ».
-    overview: bool,
-    only: bool,
+    /// Espace d'arrivée d'un envoi (coché par défaut) et, dans un dossier,
+    /// son dossier : l'envoi y arrive, sans choix d'espace.
+    upload_space: i64,
+    upload_folder: Option<i64>,
+    /// Création d'un dossier ici : (espace, dossier parent). Rien à la racine,
+    /// dans Temporaire et dans un sous-dossier (trois niveaux au plus).
+    new_folder: Option<(i64, Option<i64>)>,
 }
 
 #[derive(Deserialize)]
 pub struct ListQuery {
-    /// `1` : dans Perso, seulement ses propres fichiers.
+    /// `racine`, `espace`, `temporaire` ou le numéro d'un dossier.
+    dossier: Option<String>,
+    /// Ancien filtre « Seulement Perso » : le dossier de l'espace.
     #[serde(default)]
     seul: u8,
 }
 
-/// `GET /files` : les fichiers de l'espace actif (de tous les espaces dans
-/// Perso), les plus récents d'abord.
+/// Endroit montré par l'onglet Fichiers.
+enum View {
+    Root,
+    Space,
+    Folder(crate::folders::Folder),
+    Temp,
+}
+
+/// `GET /files?dossier=…` : un endroit de l'arborescence. Sans précision, le
+/// dossier de l'espace actif ; depuis Perso, la racine (tous les espaces).
 pub async fn list(
     ctx: Ctx,
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Response> {
-    let only = query.seul == 1;
-    let scope = ctx.scope(only);
+    use crate::folders::{self, view_url};
+
+    let user = ctx.user.id;
+    let all = folders::all(&state.db, user).await?;
+    let view = match query.dossier.as_deref() {
+        Some("racine") => View::Root,
+        Some("espace") => View::Space,
+        Some("temporaire") => View::Temp,
+        Some(raw) => {
+            let folder = raw
+                .parse::<i64>()
+                .ok()
+                .and_then(|id| all.iter().find(|f| f.id == id))
+                .ok_or(AppError::NotFound)?;
+            // Dossier d'un autre espace : il s'ouvre dans le sien.
+            if folder.space_id != ctx.active.id {
+                let space = ctx.space_by_id(folder.space_id).ok_or(AppError::NotFound)?;
+                return Ok(see_other(&view_url(&space.slug, Some(folder.id))));
+            }
+            View::Folder(folder.clone())
+        }
+        None if query.seul == 1 || !ctx.active.is_overview() => View::Space,
+        None => View::Root,
+    };
+
+    let space = &ctx.active;
     let now = time::now();
     let tools = state.config.work_dir.is_some();
-    let items = sqlx::query!(
-        r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
-           FROM files
-           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
-           ORDER BY updated_at DESC, id DESC"#,
-        ctx.user.id,
-        scope
-    )
-    .fetch_all(&state.db)
-    .await?
-    .into_iter()
-    .map(|row| FileItem {
-        id: row.id,
-        space_id: row.space_id,
-        space: ctx.tag_of(row.space_id),
-        size: human_size(row.size),
-        kind: kind_label(&row.mime),
-        conversions: menu(tools, &row.mime, false),
-        thumb: row.thumb == 1,
-        icon: icon_for(&row.mime),
-        name: row.name,
-        updated: time::ago(row.updated_at, now),
-    })
-    .collect();
+    let root_crumb = Crumb {
+        label: "Fichiers".into(),
+        href: Some("/files?dossier=racine".into()),
+    };
+    // Dossier montré (`None` : la racine de l'espace), pour les vues d'un espace.
+    let (name, here, crumbs, inside) = match &view {
+        View::Root => (
+            "racine",
+            "/files?dossier=racine".to_string(),
+            vec![Crumb {
+                href: None,
+                ..root_crumb
+            }],
+            None,
+        ),
+        View::Temp => (
+            "temporaire",
+            "/files?dossier=temporaire".to_string(),
+            vec![
+                root_crumb,
+                Crumb {
+                    label: "Temporaire".into(),
+                    href: None,
+                },
+            ],
+            None,
+        ),
+        View::Space | View::Folder(_) => {
+            let folder = match &view {
+                View::Folder(f) => Some(f.id),
+                _ => None,
+            };
+            let mut crumbs = vec![
+                root_crumb,
+                Crumb {
+                    label: space.name.clone(),
+                    href: Some(view_url(&space.slug, None)),
+                },
+            ];
+            crumbs.extend(folders::chain(&all, folder).into_iter().map(|f| Crumb {
+                label: f.name.clone(),
+                href: Some(view_url(&space.slug, Some(f.id))),
+            }));
+            if let Some(last) = crumbs.last_mut() {
+                last.href = None;
+            }
+            let name = if folder.is_some() {
+                "dossier"
+            } else {
+                "espace"
+            };
+            (name, view_url(&space.slug, folder), crumbs, Some(folder))
+        }
+    };
 
+    let contents = folders::contents(&state.db, user, &all).await?;
+    let folder_rows = match (&view, inside) {
+        (View::Root, _) => root_rows(&ctx, &state.db, &all).await?,
+        (_, Some(parent)) => all
+            .iter()
+            .filter(|f| f.space_id == space.id && f.parent_id == parent)
+            .map(|f| {
+                let content = contents.get(&f.id).copied().unwrap_or_default();
+                FolderRow {
+                    id: Some(f.id),
+                    name: f.name.clone(),
+                    href: view_url(&space.slug, Some(f.id)),
+                    summary: content.describe(),
+                    empty: content.is_empty(),
+                    icon: "folder",
+                    color: None,
+                    parent_label: folders::label(&space.name, &all, f.parent_id),
+                }
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    let notes = match inside {
+        Some(folder) => sqlx::query!(
+            r#"SELECT id AS "id!", title, pinned AS "pinned!: bool", updated_at
+               FROM notes WHERE user_id = ?1 AND space_id = ?2 AND folder_id IS ?3
+               ORDER BY pinned DESC, updated_at DESC, id DESC"#,
+            user,
+            space.id,
+            folder
+        )
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|row| NoteRow {
+            id: row.id,
+            title: if row.title.trim().is_empty() {
+                "Sans titre".into()
+            } else {
+                row.title
+            },
+            pinned: row.pinned,
+            updated: time::ago(row.updated_at, now),
+            picker: folders::picker_url("note", row.id, Some(&here)),
+        })
+        .collect(),
+        None => Vec::new(),
+    };
+
+    let temp = matches!(view, View::Temp);
+    let items = if matches!(view, View::Root) {
+        Vec::new()
+    } else {
+        let folder = inside.flatten();
+        sqlx::query!(
+            r#"SELECT id AS "id!", name, mime, size, updated_at, thumb, expires_at
+               FROM files
+               WHERE user_id = ?1
+                 AND CASE WHEN ?2 THEN expires_at IS NOT NULL
+                          ELSE expires_at IS NULL AND space_id = ?3 AND folder_id IS ?4 END
+               ORDER BY updated_at DESC, id DESC"#,
+            user,
+            temp,
+            space.id,
+            folder
+        )
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|row| FileItem {
+            id: row.id,
+            size: human_size(row.size),
+            kind: kind_label(&row.mime),
+            conversions: menu(tools, &row.mime, false),
+            thumb: row.thumb == 1,
+            icon: icon_for(&row.mime),
+            picker: folders::picker_url("fichier", row.id, Some(&here)),
+            expires: row
+                .expires_at
+                .map(|at| format!("effacé dans {}", crate::tools::time_left(at, now))),
+            name: row.name,
+            updated: time::ago(row.updated_at, now),
+        })
+        .collect()
+    };
+
+    let place = match &view {
+        View::Root => "Fichiers".to_string(),
+        View::Temp => "Temporaire".to_string(),
+        View::Space | View::Folder(_) => folders::label(&space.name, &all, inside.flatten()),
+    };
+    let new_folder = match &view {
+        View::Space => Some((space.id, None)),
+        View::Folder(f) if f.is_top() => Some((space.id, Some(f.id))),
+        _ => None,
+    };
     let files = state.config.files.as_ref();
     let page = ListPage {
         shell: ctx.shell("files").await?,
@@ -136,14 +347,105 @@ pub async fn list(
             .map(|f| human_size(i64::try_from(f.max_upload_bytes).unwrap_or(i64::MAX)))
             .unwrap_or_default(),
         max_bytes: files.map(|f| f.max_upload_bytes).unwrap_or_default(),
+        view: name,
+        crumbs,
+        here,
+        place,
+        folders: folder_rows,
+        notes,
         items,
-        jobs: crate::tools::panel(&state, ctx.user.id, scope).await?,
+        // Le suivi des conversions : celles de l'espace montré (de tous les
+        // espaces dans Perso, à la racine et dans Temporaire).
+        jobs: crate::tools::panel(&state, user, inside.and(ctx.scope(false))).await?,
         spaces: ctx.spaces.clone(),
-        active_id: ctx.active.id,
-        overview: ctx.active.is_overview(),
-        only,
+        upload_space: space.id,
+        upload_folder: match &view {
+            View::Folder(f) => Some(f.id),
+            _ => None,
+        },
+        new_folder,
     };
     Ok(web::html(page))
+}
+
+/// La racine de l'onglet Fichiers : le dossier de chaque espace (pas les
+/// archivés), puis Temporaire.
+async fn root_rows(
+    ctx: &Ctx,
+    db: &SqlitePool,
+    all: &[crate::folders::Folder],
+) -> AppResult<Vec<FolderRow>> {
+    use crate::folders::{Contents, view_url};
+    let user = ctx.user.id;
+    let mut counts: std::collections::HashMap<i64, Contents> = std::collections::HashMap::new();
+    for row in sqlx::query!(
+        r#"SELECT space_id, count(*) AS "n!: i64" FROM notes WHERE user_id = ? GROUP BY space_id"#,
+        user
+    )
+    .fetch_all(db)
+    .await?
+    {
+        counts.entry(row.space_id).or_default().notes = row.n;
+    }
+    for row in sqlx::query!(
+        r#"SELECT space_id, count(*) AS "n!: i64" FROM files
+           WHERE user_id = ? AND expires_at IS NULL GROUP BY space_id"#,
+        user
+    )
+    .fetch_all(db)
+    .await?
+    {
+        counts.entry(row.space_id).or_default().files = row.n;
+    }
+    for folder in all.iter().filter(|f| f.is_top()) {
+        counts.entry(folder.space_id).or_default().folders += 1;
+    }
+
+    let mut rows: Vec<FolderRow> = ctx
+        .spaces
+        .iter()
+        .map(|space| {
+            let content = counts.get(&space.id).copied().unwrap_or_default();
+            FolderRow {
+                id: None,
+                name: space.name.clone(),
+                href: view_url(&space.slug, None),
+                summary: content.describe(),
+                empty: content.is_empty(),
+                icon: "folder",
+                color: Some(space.color.clone()),
+                parent_label: String::new(),
+            }
+        })
+        .collect();
+    let waiting = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!: i64" FROM files WHERE user_id = ? AND expires_at IS NOT NULL"#,
+        user
+    )
+    .fetch_one(db)
+    .await?;
+    rows.push(FolderRow {
+        id: None,
+        name: "Temporaire".into(),
+        href: "/files?dossier=temporaire".into(),
+        summary: if waiting == 0 {
+            "Vide · les fichiers de l'onglet Outils pas encore rangés".into()
+        } else {
+            format!(
+                "{} · effacés 24 heures après leur dépôt",
+                Contents {
+                    files: waiting,
+                    ..Contents::default()
+                }
+                .describe()
+            )
+        },
+        empty: waiting == 0,
+        icon: "clock",
+        color: None,
+        parent_label: String::new(),
+    });
+    Ok(rows)
 }
 
 /// Menu « Convertir » d'un fichier : vide sans outils ; avec ou sans
@@ -162,10 +464,14 @@ fn menu(tools: bool, mime: &str, with_pages: bool) -> Vec<(&'static str, &'stati
 #[derive(Deserialize)]
 pub struct KeepForm {
     pub(crate) space_id: i64,
+    /// Dossier de cet espace où le ranger ; vide : sa racine.
+    pub(crate) folder_id: Option<String>,
+    /// Page où revenir ; l'onglet Outils sans précision.
+    pub(crate) next: Option<String>,
 }
 
-/// `POST /files/{id}/keep` : garde dans un espace un fichier de l'onglet
-/// Outils. Il rejoint la liste de cet espace et n'expire plus.
+/// `POST /files/{id}/keep` : garde dans un espace (et un dossier) un fichier
+/// de l'onglet Outils. Il rejoint la liste de cet espace et n'expire plus.
 pub async fn keep(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -173,10 +479,13 @@ pub async fn keep(
     axum::Form(form): axum::Form<KeepForm>,
 ) -> AppResult<Response> {
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
+    let folder = crate::folders::target(&state.db, ctx.user.id, target.id, folder).await?;
     let kept = sqlx::query!(
-        "UPDATE files SET space_id = ?, expires_at = NULL
+        "UPDATE files SET space_id = ?, folder_id = ?, expires_at = NULL
          WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
         target.id,
+        folder,
         id,
         ctx.user.id
     )
@@ -186,32 +495,57 @@ pub async fn keep(
     if kept == 0 {
         return Err(AppError::NotFound);
     }
-    ctx.flash_ok(format!("Fichier gardé dans {}", target.name))
-        .await?;
-    Ok(see_other("/tools"))
+    let place = place_label(&ctx, &state.db, target, folder).await?;
+    ctx.flash_ok(format!("Fichier gardé dans {place}")).await?;
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/tools",
+    }))
+}
+
+/// « École » ou « École / Math » : l'endroit où un élément vient d'être rangé.
+pub(crate) async fn place_label(
+    ctx: &Ctx,
+    db: &SqlitePool,
+    space: &Space,
+    folder: Option<i64>,
+) -> AppResult<String> {
+    Ok(match folder {
+        Some(_) => {
+            let all = crate::folders::all(db, ctx.user.id).await?;
+            crate::folders::label(&space.name, &all, folder)
+        }
+        None => space.name.clone(),
+    })
 }
 
 #[derive(Deserialize)]
 pub struct MoveForm {
     pub(crate) space_id: i64,
+    /// Dossier de cet espace où le ranger ; vide : sa racine.
+    pub(crate) folder_id: Option<String>,
     /// Page où revenir : la liste, ou l'aperçu du fichier.
     pub(crate) next: Option<String>,
 }
 
-/// `POST /files/{id}/move` : déplace un fichier vers un autre espace. Sa
-/// vignette et son grand aperçu le suivent (rangés à côté de lui, sous sa
-/// clé, ils ne dépendent pas de l'espace).
+/// `POST /files/{id}/move` : range un fichier dans un espace et un dossier
+/// (la racine de l'espace sans dossier). Sa vignette et son grand aperçu le
+/// suivent (rangés à côté de lui, sous sa clé, ils ne dépendent ni de
+/// l'espace ni du dossier).
 pub async fn move_to_space(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<MoveForm>,
 ) -> AppResult<Response> {
-    // L'espace cible doit appartenir à l'utilisateur.
+    // L'espace cible doit appartenir à l'utilisateur, le dossier à cet espace.
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
+    let folder = crate::folders::target(&state.db, ctx.user.id, target.id, folder).await?;
     let moved = sqlx::query!(
-        "UPDATE files SET space_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE files SET space_id = ?, folder_id = ? WHERE id = ? AND user_id = ?",
         target.id,
+        folder,
         id,
         ctx.user.id
     )
@@ -221,8 +555,14 @@ pub async fn move_to_space(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
-    ctx.flash_ok(format!("Fichier déplacé vers {}", target.name))
-        .await?;
+    let message = match folder {
+        Some(_) => format!(
+            "Fichier rangé dans {}",
+            place_label(&ctx, &state.db, target, folder).await?
+        ),
+        None => format!("Fichier déplacé vers {}", target.name),
+    };
+    ctx.flash_ok(message).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/files",
@@ -294,23 +634,38 @@ pub struct StartQuery {
     size: u64,
     /// Espace du fichier ; l'espace actif sans précision.
     space: Option<i64>,
+    /// Dossier du fichier (qui donne son espace) ; la racine sans précision.
+    folder: Option<i64>,
     /// `1` : fichier de l'onglet Outils, pas encore rangé.
     #[serde(default)]
     tools: u8,
 }
 
-/// `POST /files/uploads?name=…&size=…&space=…` : ouvre un envoi dans
-/// l'espace choisi (l'espace actif par défaut) et renvoie son identifiant.
+/// `POST /files/uploads?name=…&size=…&space=…&folder=…` : ouvre un envoi
+/// dans l'espace et le dossier choisis (la racine de l'espace actif par
+/// défaut) et renvoie son identifiant.
 pub async fn start_upload(
     ctx: Ctx,
     State(state): State<AppState>,
     Query(query): Query<StartQuery>,
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
-    // L'espace choisi doit appartenir à l'utilisateur.
-    let space_id = match query.space {
-        Some(id) => ctx.space_by_id(id).ok_or(AppError::NotFound)?.id,
-        None => ctx.active.id,
+    // L'espace et le dossier choisis doivent appartenir à l'utilisateur, et
+    // le dossier à cet espace. Un fichier de l'onglet Outils n'a pas de dossier.
+    let (space_id, folder_id) = match query.folder.filter(|_| query.tools != 1) {
+        Some(id) => {
+            let folder = crate::folders::find(&state.db, ctx.user.id, id)
+                .await?
+                .ok_or(AppError::NotFound)?;
+            if query.space.is_some_and(|space| space != folder.space_id) {
+                return Err(AppError::NotFound);
+            }
+            (folder.space_id, Some(folder.id))
+        }
+        None => match query.space {
+            Some(id) => (ctx.space_by_id(id).ok_or(AppError::NotFound)?.id, None),
+            None => (ctx.active.id, None),
+        },
     };
     if query.size > files.max_upload_bytes {
         return Err(too_large(files.max_upload_bytes));
@@ -331,11 +686,12 @@ pub async fn start_upload(
     let now = time::now();
     let for_tools = i64::from(query.tools == 1);
     sqlx::query!(
-        "INSERT INTO uploads (id, user_id, space_id, name, size, received, for_tools, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
+        "INSERT INTO uploads (id, user_id, space_id, folder_id, name, size, received, for_tools, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
         id,
         ctx.user.id,
         space_id,
+        folder_id,
         name,
         size,
         for_tools,
@@ -372,7 +728,7 @@ pub async fn upload_chunk(
         ));
     };
     let upload = sqlx::query!(
-        "SELECT space_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
+        "SELECT space_id, folder_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
         id,
         ctx.user.id
     )
@@ -441,7 +797,7 @@ pub async fn upload_chunk(
         &state,
         files,
         &id,
-        upload.space_id,
+        (upload.space_id, upload.folder_id),
         &upload.name,
         ctx.user.id,
         upload.for_tools == 1,
@@ -463,7 +819,7 @@ async fn finish(
     state: &AppState,
     files: &FilesConfig,
     id: &str,
-    space_id: i64,
+    (space_id, folder_id): (i64, Option<i64>),
     name: &str,
     user_id: i64,
     for_tools: bool,
@@ -490,10 +846,11 @@ async fn finish(
     let saved = async {
         let mut tx = state.db.begin().await?;
         let file_id = sqlx::query!(
-            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             user_id,
             space_id,
+            folder_id,
             name,
             mime,
             size,
@@ -779,8 +1136,11 @@ const TEXT_PREVIEW_BYTES: u64 = 200 * 1024;
 struct ViewPage {
     shell: Shell,
     id: i64,
-    /// Espaces où le fichier peut aller (tous sauf le sien).
-    other_spaces: Vec<Space>,
+    /// Le dossier du fichier (ou Temporaire) : adresse et nom, pour revenir.
+    back: String,
+    back_label: String,
+    /// Adresse de la fenêtre « Ranger ».
+    picker: String,
     name: String,
     /// « Vidéo · 98 Mo · il y a 2 min »
     meta: String,
@@ -829,7 +1189,7 @@ pub async fn view(
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT space_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
+        "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
         id,
         ctx.user.id
     )
@@ -882,15 +1242,26 @@ pub async fn view(
         _ => "none",
     };
 
+    // Retour au dossier du fichier ; Temporaire pour un fichier de l'onglet
+    // Outils, qui n'est encore dans aucun dossier.
+    let (back, back_label) = if row.expires_at.is_some() {
+        (
+            "/files?dossier=temporaire".to_string(),
+            "Temporaire".to_string(),
+        )
+    } else {
+        let all = crate::folders::all(&state.db, ctx.user.id).await?;
+        (
+            crate::folders::view_url(&ctx.active.slug, row.folder_id),
+            crate::folders::label(&ctx.active.name, &all, row.folder_id),
+        )
+    };
     let page = ViewPage {
         shell: ctx.shell("files").await?,
         id,
-        other_spaces: ctx
-            .spaces
-            .iter()
-            .filter(|s| s.id != row.space_id)
-            .cloned()
-            .collect(),
+        back,
+        back_label,
+        picker: crate::folders::picker_url("fichier", id, Some(&format!("/files/{id}"))),
         meta: format!(
             "{} · {} · {}",
             kind_label(&row.mime),

@@ -817,21 +817,32 @@ async fn import(
     let mime = files::mime_for(&name);
     let now = time::now();
     // Le résultat d'un fichier de l'onglet Outils reste dans l'onglet Outils,
-    // avec la même échéance.
-    let expires_at = match job.file_id {
-        Some(source) => sqlx::query_scalar!("SELECT expires_at FROM files WHERE id = ?", source)
+    // avec la même échéance ; celui d'un fichier rangé va dans son dossier
+    // (s'il est toujours dans l'espace de la conversion).
+    let source = match job.file_id {
+        Some(source) => {
+            sqlx::query!(
+                "SELECT expires_at, space_id, folder_id FROM files WHERE id = ?",
+                source
+            )
             .fetch_optional(&state.db)
             .await?
-            .flatten(),
+        }
         None => None,
     };
+    let expires_at = source.as_ref().and_then(|s| s.expires_at);
+    let folder_id = source
+        .as_ref()
+        .filter(|s| s.space_id == job.space_id)
+        .and_then(|s| s.folder_id);
     let saved: anyhow::Result<i64> = async {
         let mut tx = state.db.begin().await?;
         let file_id = sqlx::query!(
-            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             job.user_id,
             job.space_id,
+            folder_id,
             name,
             mime,
             size,
@@ -1105,7 +1116,8 @@ pub async fn replace_original(
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
         r#"SELECT src.id AS "source!: i64", src.name AS source_name, src.storage_key AS source_key,
-                  src.space_id AS source_space, src.expires_at AS source_expires,
+                  src.space_id AS source_space, src.folder_id AS source_folder,
+                  src.expires_at AS source_expires,
                   res.id AS "result!: i64", res.name AS result_name
            FROM jobs j
            JOIN files src ON src.id = j.file_id AND src.user_id = j.user_id
@@ -1136,11 +1148,12 @@ pub async fn replace_original(
     .execute(&mut *tx)
     .await?;
     sqlx::query!(
-        "UPDATE files SET name = ?, mime = ?, space_id = ?, expires_at = ?, updated_at = ?
+        "UPDATE files SET name = ?, mime = ?, space_id = ?, folder_id = ?, expires_at = ?, updated_at = ?
          WHERE id = ? AND user_id = ?",
         name,
         mime,
         row.source_space,
+        row.source_folder,
         row.source_expires,
         now,
         row.result,

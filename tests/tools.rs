@@ -35,10 +35,10 @@ async fn start_compression(
     name: &str,
     content: &[u8],
 ) -> PathBuf {
-    client.get("/files").await;
+    client.get("/files?dossier=espace").await;
     let sent = client.upload(name, content).await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
-    let id = id_of(&client.get("/files").await.body, name);
+    let id = id_of(&client.get("/files?dossier=espace").await.body, name);
     let launched = client.post(&format!("/files/{id}/compress"), &[]).await;
     assert_eq!(launched.status, StatusCode::SEE_OTHER, "{}", launched.body);
     let job: i64 = sqlx::query_scalar("SELECT MAX(id) FROM jobs WHERE kind = 'compress'")
@@ -91,7 +91,7 @@ async fn compresser_prepare_une_tache_pour_le_service() {
     assert_eq!(job_status(&app).await.0, "queued");
 
     // La page le montre, et se redemandera tant que la tâche tourne.
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(page.body.contains("En attente"));
     // Perso montre les tâches de tous les espaces : le suivi aussi.
     assert!(
@@ -115,7 +115,7 @@ async fn la_copie_compressee_rejoint_la_liste() {
     assert_eq!(job_status(&app).await.0, "done");
     assert!(!dir.exists(), "le dossier de travail est effacé");
 
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(page.body.contains("<span>Vacances (compressé).mp4</span>"));
     assert!(
         page.body.contains("<span>Vacances.MOV</span>"),
@@ -145,7 +145,7 @@ async fn pas_de_gain_pas_de_copie() {
     let (status, error) = job_status(&app).await;
     assert_eq!(status, "failed");
     assert!(error.unwrap().contains("Pas de gain"));
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(!page.body.contains("(compressé)"));
     assert_eq!(app.stored_files().len(), 1, "seul l'original reste");
 }
@@ -188,10 +188,10 @@ async fn la_progression_remonte_jusqu_a_la_page() {
 async fn seuls_videos_photos_et_pdf_se_compressent() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     alice.upload("archive.zip", b"PK").await;
     alice.upload("cours.pdf", b"%PDF").await;
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     // Le menu « Convertir » de la ligne, avec la compression.
     assert!(page.body.contains("aria-label=\"Convertir « cours.pdf »\""));
     assert!(
@@ -213,12 +213,12 @@ async fn seuls_videos_photos_et_pdf_se_compressent() {
 async fn on_ne_compresse_pas_le_fichier_d_un_autre() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     alice.upload("perso.mp4", b"video").await;
-    let id = id_of(&alice.get("/files").await.body, "perso.mp4");
+    let id = id_of(&alice.get("/files?dossier=espace").await.body, "perso.mp4");
 
     let mut bob = app.logged_in(BOB).await;
-    bob.get("/files").await;
+    bob.get("/files?dossier=espace").await;
     let refused = bob.post(&format!("/files/{id}/compress"), &[]).await;
     assert_eq!(refused.status, StatusCode::NOT_FOUND);
     let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE kind = 'compress'")
@@ -229,7 +229,7 @@ async fn on_ne_compresse_pas_le_fichier_d_un_autre() {
     // Et le suivi de Bob ne montre rien d'Alice.
     assert!(
         between(
-            &bob.get("/files").await.body,
+            &bob.get("/files?dossier=espace").await.body,
             "id=\"file-jobs\"",
             "</section>"
         )
@@ -241,7 +241,7 @@ async fn on_ne_compresse_pas_le_fichier_d_un_autre() {
 async fn sans_dossier_de_travail_pas_de_compression() {
     let app = TestApp::without_files().await;
     let mut alice = app.logged_in(ALICE).await;
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(!page.body.contains("Compresser"));
     assert_eq!(
         alice.post("/files/1/compress", &[]).await.status,

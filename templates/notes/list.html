@@ -37,7 +37,7 @@
   </nav>
   {% endif %}
 
-  {% if items.is_empty() %}
+  {% if groups.is_empty() %}
     {% if q.is_empty() && tag.is_none() %}
     <div class="empty-state">
       <p>Aucune note dans l'espace {{ shell.active.name }}</p>
@@ -47,24 +47,38 @@
     <div class="empty-state"><p>Aucune note ne correspond</p></div>
     {% endif %}
   {% else %}
-  <ul class="note-list" role="list">
-    {% for item in items %}
-    <li>
-      <a class="note-row" href="/notes/{{ item.id }}">
-        <span class="note-row-title">
-          {% if item.pinned %}{{ crate::assets::icon("pin")|safe }}<span class="sr-only">Épinglée : </span>{% endif %}
-          <span>{{ item.title_html|safe }}</span>
-        </span>
-        <span class="note-row-excerpt">{{ item.excerpt_html|safe }}</span>
-        <span class="note-row-meta">
-          {% if let Some(space) = item.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
-          {% for name in item.tags %}<span class="tag">#{{ name }}</span>{% endfor %}
-          <span class="muted">{{ item.updated }}</span>
-        </span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
+  {#- Une section par dossier du premier niveau (SPEC, « Dossiers ») ; sans
+      aucun dossier, la liste reste d'un seul tenant, sans titre. -#}
+  {% for group in groups %}
+  <section class="note-group"{% if let Some(title) = group.title %} aria-label="Dossier {{ title }}"{% else if groups.len() > 1 %} aria-label="Sans dossier"{% endif %}>
+    {% if let Some(title) = group.title %}
+    <h2 class="note-group-title">{{ crate::assets::icon("folder")|safe }}<span>{{ title }}</span>
+      {%- if let Some(space) = group.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif -%}
+      <span class="chip-count">{{ group.items.len() }}</span></h2>
+    {% else if groups.len() > 1 %}
+    <h2 class="note-group-title">{{ crate::assets::icon("notes")|safe }}<span>Sans dossier</span><span class="chip-count">{{ group.items.len() }}</span></h2>
+    {% endif %}
+    <ul class="note-list" role="list">
+      {% for item in group.items %}
+      <li>
+        <a class="note-row" href="/notes/{{ item.id }}">
+          <span class="note-row-title">
+            {% if item.pinned %}{{ crate::assets::icon("pin")|safe }}<span class="sr-only">Épinglée : </span>{% endif %}
+            <span>{{ item.title_html|safe }}</span>
+          </span>
+          <span class="note-row-excerpt">{{ item.excerpt_html|safe }}</span>
+          <span class="note-row-meta">
+            {% if let Some(space) = item.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
+            {% if let Some(sub) = item.sub %}<span class="note-sub">{{ crate::assets::icon("folder")|safe }}{{ sub }}</span>{% endif %}
+            {% for name in item.tags %}<span class="tag">#{{ name }}</span>{% endfor %}
+            <span class="muted">{{ item.updated }}</span>
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
   {% endif %}
 </div>
 {% endblock %}

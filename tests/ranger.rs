@@ -173,12 +173,30 @@ async fn un_fichier_se_deplace_avec_sa_vignette() {
         .await
         .unwrap();
 
-    // La liste et l'aperçu proposent le déplacement.
-    let list = alice.get("/files").await;
-    assert!(list.body.contains(&format!("action=\"/files/{id}/move\"")));
+    // La liste et l'aperçu ouvrent la fenêtre « Ranger » : tous les espaces,
+    // celui du fichier grisé (SPEC, « Dossiers »).
+    let list = alice.get("/files?dossier=espace").await;
+    assert!(
+        list.body
+            .contains(&format!("hx-get=\"/destinations?fichier={id}&#38;next="))
+    );
     let view = alice.get(&format!("/files/{id}")).await;
-    assert!(view.body.contains("Déplacer vers École"));
-    assert!(!view.body.contains("Déplacer vers Perso"));
+    assert!(
+        view.body
+            .contains(&format!("hx-get=\"/destinations?fichier={id}&#38;next="))
+    );
+    let picker = alice
+        .get_fragment(&format!("/destinations?fichier={id}&next=/files/{id}"))
+        .await;
+    assert!(
+        picker
+            .body
+            .contains(&format!("action=\"/files/{id}/move\""))
+    );
+    let row = common::between(&picker.body, &format!("value=\"{ecole}\""), "</li>").unwrap();
+    assert!(row.contains("École") && !row.contains("disabled"));
+    let row = common::between(&picker.body, &format!("value=\"{perso}\""), "</li>").unwrap();
+    assert!(row.contains("Perso") && row.contains("disabled"));
 
     let moved = alice
         .post(
@@ -334,7 +352,8 @@ async fn perso_montre_tous_les_espaces() {
     note(&mut alice, "Liste de courses").await;
     alice.post("/tasks", &[("title", "Courses")]).await;
 
-    // Dans Perso : tout, et ce qui vient d'École porte son nom.
+    // Dans Perso : tout, et ce qui vient d'École porte son nom. (Les fichiers :
+    // à la racine de l'onglet, le dossier de chaque espace.)
     let tag = "<span class=\"space-of\" data-accent=\"blue\"><span class=\"dot\" aria-hidden=\"true\"></span>École</span>";
     let tasks = alice.get_fragment("/widgets/tasks").await;
     assert!(tasks.body.contains("Rendre le TP") && tasks.body.contains("Courses"));
@@ -356,8 +375,16 @@ async fn perso_montre_tous_les_espaces() {
     let only = alice.get("/notes?seul=1").await;
     assert!(only.body.contains("Liste de courses"));
     assert!(!only.body.contains("Cours de réseau"));
-    assert!(alice.get("/files").await.body.contains("td.pdf"));
+    let root = alice.get("/files").await;
+    let row = common::between(
+        &root.body,
+        "href=\"/e/ecole/files?dossier=espace\"",
+        "</li>",
+    )
+    .unwrap();
+    assert!(row.contains("École") && row.contains("1 note et 1 fichier"));
     assert!(!alice.get("/files?seul=1").await.body.contains("td.pdf"));
+    assert!(alice.get("/e/ecole/files").await.body.contains("td.pdf"));
 
     // Dans École : seulement École, sans pastille ni filtre.
     alice.post("/space", &[("slug", "ecole")]).await;
