@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\", substr(n.body_md, 1, 600) AS \"head!: String\",\n                  n.pinned AS \"pinned!: bool\", n.updated_at AS \"updated_at!: i64\",\n                  n.space_id AS \"space_id!: i64\", n.folder_id\n           FROM notes n\n           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)\n             AND (?3 IS NULL OR EXISTS (\n                   SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id\n                   WHERE nt.note_id = n.id AND t.name = ?3))\n           ORDER BY n.pinned DESC, n.updated_at DESC\n           LIMIT 300",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "head!: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "pinned!: bool",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "updated_at!: i64",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id!: i64",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      null,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b60a468779af02e2d18610a7e67851a2deb8c41ccbdc5b72e052f8e3e55a1833"
+}

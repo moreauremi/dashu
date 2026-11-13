@@ -29,13 +29,13 @@ fn digits_after(text: &str, marker: &str) -> i64 {
 async fn envoi_liste_telechargement_puis_suppression() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
 
     let content = b"%PDF-1.4 contenu de test".to_vec();
     let sent = alice.upload("Cours réseau.pdf", &content).await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
 
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("Cours réseau.pdf"));
     assert!(page.body.contains(&format!("PDF · {} o", content.len())));
@@ -54,7 +54,7 @@ async fn envoi_liste_telechargement_puis_suppression() {
     let deleted = alice.post(&format!("/files/{id}/delete"), &[]).await;
     assert_eq!(deleted.status, StatusCode::SEE_OTHER);
     assert!(app.stored_files().is_empty(), "le contenu quitte le disque");
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(!page.body.contains("Cours réseau.pdf"));
     assert_eq!(
         alice.get(&format!("/files/{id}/download")).await.status,
@@ -66,14 +66,14 @@ async fn envoi_liste_telechargement_puis_suppression() {
 async fn un_fichier_html_n_est_jamais_affiche_comme_une_page() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let trap = b"<html><script>alert(document.cookie)</script></html>";
     alice.upload("piege.html", trap).await;
     alice
         .upload("dessin.svg", b"<svg onload=\"alert(1)\"/>")
         .await;
 
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     for name in ["piege.html", "dessin.svg"] {
         let id = id_of(&page.body, name);
         let file = alice.get(&format!("/files/{id}/download")).await;
@@ -107,7 +107,7 @@ fn id_of(page: &str, name: &str) -> i64 {
 async fn fichier_trop_gros_refuse_sans_rien_laisser() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let too_big = vec![0u8; MAX_UPLOAD as usize + 1];
 
     // Taille totale au-delà de la limite : refus dès l'ouverture de l'envoi.
@@ -131,7 +131,7 @@ async fn fichier_trop_gros_refuse_sans_rien_laisser() {
             .iter()
             .all(|path| path.metadata().unwrap().len() == 0)
     );
-    let page = alice.get("/files").await.body;
+    let page = alice.get("/files?dossier=espace").await.body;
     assert!(!page.contains("gros.bin") && !page.contains("menteur.bin"));
 
     // Pile à la limite, en trois morceaux : accepté.
@@ -146,13 +146,13 @@ async fn un_gros_fichier_arrive_en_plusieurs_morceaux() {
 
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let content: Vec<u8> = (0..50_000u32).map(|i| (i % 251) as u8).collect();
 
     let sent = alice.upload_in_chunks("video.mp4", &content, 16_384).await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
 
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(page.body.contains("Vidéo · 49 Ko"), "{}", page.body);
     let id = first_file_id(&page.body);
     let file = alice.get(&format!("/files/{id}/download")).await;
@@ -181,7 +181,7 @@ async fn un_gros_fichier_arrive_en_plusieurs_morceaux() {
 async fn un_morceau_hors_ordre_donne_le_point_de_reprise() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let id = alice.start_upload("cours.pdf", 10).await.body;
 
     let early = alice.put_chunk(&id, 5, b"fghij", true).await;
@@ -199,7 +199,7 @@ async fn un_morceau_hors_ordre_donne_le_point_de_reprise() {
 
     let last = alice.put_chunk(&id, 5, b"fghij", true).await;
     assert_eq!(last.status, StatusCode::CREATED);
-    let id = first_file_id(&alice.get("/files").await.body);
+    let id = first_file_id(&alice.get("/files?dossier=espace").await.body);
     assert_eq!(
         alice.get(&format!("/files/{id}/download")).await.bytes,
         b"abcdefghij"
@@ -210,17 +210,23 @@ async fn un_morceau_hors_ordre_donne_le_point_de_reprise() {
 async fn un_fichier_vide_est_accepte() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let sent = alice.upload("vide.txt", b"").await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
-    assert!(alice.get("/files").await.body.contains("Texte · 0 o"));
+    assert!(
+        alice
+            .get("/files?dossier=espace")
+            .await
+            .body
+            .contains("Texte · 0 o")
+    );
 }
 
 #[tokio::test]
 async fn les_envois_abandonnes_sont_effaces() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let id = alice.start_upload("abandon.bin", 100).await.body;
     alice.put_chunk(&id, 0, &[1u8; 40], true).await;
     let part = app.files_dir.join(".envois").join(format!("{id}.part"));
@@ -252,12 +258,12 @@ async fn les_envois_abandonnes_sont_effaces() {
 async fn un_compte_n_a_aucun_acces_aux_fichiers_d_un_autre() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     alice.upload("secret.txt", b"journal intime").await;
-    let id = first_file_id(&alice.get("/files").await.body);
+    let id = first_file_id(&alice.get("/files?dossier=espace").await.body);
 
     let mut bob = app.logged_in(BOB).await;
-    let page = bob.get("/files").await;
+    let page = bob.get("/files?dossier=espace").await;
     assert!(!page.body.contains("secret.txt"));
     assert_eq!(
         bob.get(&format!("/files/{id}/download")).await.status,
@@ -271,7 +277,7 @@ async fn un_compte_n_a_aucun_acces_aux_fichiers_d_un_autre() {
 
     // Un envoi en cours d'Alice est tout aussi inaccessible à Bob.
     let upload = alice.start_upload("brouillon.txt", 5).await.body;
-    bob.get("/files").await;
+    bob.get("/files?dossier=espace").await;
     let refused = bob.put_chunk(&upload, 0, b"pirat", true).await;
     assert_eq!(refused.status, StatusCode::NOT_FOUND);
 }
@@ -280,7 +286,7 @@ async fn un_compte_n_a_aucun_acces_aux_fichiers_d_un_autre() {
 async fn envoi_sans_jeton_csrf_refuse() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let refused = alice.start_upload_without_csrf("note.txt", 7).await;
     assert_eq!(refused.status, StatusCode::FORBIDDEN);
     assert!(app.stored_files().is_empty());
@@ -290,11 +296,11 @@ async fn envoi_sans_jeton_csrf_refuse() {
 async fn un_nom_piege_reste_un_simple_nom() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     let sent = alice.upload("../../etc/passwd", b"root:x:0:0").await;
     assert_eq!(sent.status, StatusCode::CREATED);
 
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(page.body.contains("<span>passwd</span>"));
     assert!(!page.body.contains("etc/passwd"));
 
@@ -313,19 +319,31 @@ async fn un_fichier_appartient_a_l_espace_actif() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     alice.post("/space", &[("slug", "ecole")]).await;
-    alice.get("/files").await;
+    alice.get("/files?dossier=espace").await;
     alice.upload("td-vlan.pdf", b"%PDF td").await;
-    assert!(alice.get("/files").await.body.contains("td-vlan.pdf"));
+    assert!(
+        alice
+            .get("/files?dossier=espace")
+            .await
+            .body
+            .contains("td-vlan.pdf")
+    );
 
     alice.post("/space", &[("slug", "taff")]).await;
-    assert!(!alice.get("/files").await.body.contains("td-vlan.pdf"));
+    assert!(
+        !alice
+            .get("/files?dossier=espace")
+            .await
+            .body
+            .contains("td-vlan.pdf")
+    );
 }
 
 #[tokio::test]
 async fn sans_files_dir_les_fichiers_sont_desactives() {
     let app = TestApp::without_files().await;
     let mut alice = app.logged_in(ALICE).await;
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("pas activés"));
     assert!(!page.body.contains("data-upload-input"));
@@ -348,7 +366,7 @@ async fn la_page_fichiers_est_dans_la_navigation() {
         page.body
             .contains("href=\"/e/perso/files\" data-key=\"g f\"")
     );
-    let page = alice.get("/files").await;
+    let page = alice.get("/files?dossier=espace").await;
     assert!(
         page.body
             .contains("href=\"/e/perso/files\" data-key=\"g f\" aria-current=\"page\"")

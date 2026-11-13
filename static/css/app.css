@@ -2631,6 +2631,92 @@ input.note-title::placeholder {
   background: var(--field);
 }
 
+/* Dossier et tags de la note, sur une ligne, sous le titre. */
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 4px 0 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.note-meta .note-tags {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.folder-chip:hover,
+.folder-chip:focus-visible {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.folder-chip .i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.folder-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Liste des notes : une section par dossier du premier niveau. */
+.note-group + .note-group {
+  margin-top: 24px;
+}
+
+.note-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.note-group-title > .i {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.note-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.note-sub .i {
+  width: 12px;
+  height: 12px;
+}
+
 /* Une seule page qui défile : titre, tags et texte ensemble. */
 .note-scroll {
   flex: 1;
@@ -3332,6 +3418,228 @@ input.note-title::placeholder {
 .file-actions {
   display: flex;
   gap: 2px;
+}
+
+/* Dossiers (onglet Fichiers) : le fil d'Ariane au-dessus du titre, puis les
+   dossiers, les notes et les fichiers de l'endroit montré, dans une liste. */
+.files-head {
+  min-width: 0;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+}
+
+.crumb {
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.crumb:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.crumb-sep {
+  display: inline-grid;
+  color: var(--text-3);
+}
+
+.crumb-sep .i {
+  width: 14px;
+  height: 14px;
+}
+
+.files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.files-hint {
+  margin-bottom: 16px;
+}
+
+.folder-name,
+.note-file-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.folder-name > span:last-child,
+.note-file-name > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-name:hover,
+.note-file-name:hover {
+  text-decoration: underline;
+}
+
+/* Le dossier d'un espace prend sa couleur ; un dossier, l'accent de l'espace actif. */
+.folder-icon {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.note-file-name > .i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+}
+
+/* Envoi dans un dossier : l'endroit d'arrivée, sans choix. */
+.space-choice.is-fixed {
+  cursor: default;
+}
+
+.space-choice.is-fixed .i {
+  width: 14px;
+  height: 14px;
+}
+
+/* Fenêtres (popover) au centre de l'écran : « Ranger » et l'avertissement
+   avant de supprimer un dossier non vide. Le navigateur les centre (position
+   fixe, marges automatiques) ; Échap ou un clic dehors les ferme. */
+.pop-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(560px, calc(100dvh - 32px));
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 24px 60px -16px rgb(0 0 0 / 0.5);
+  color: var(--text);
+}
+
+.pop-dialog:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pop-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.pop-dialog > .btn {
+  align-self: flex-end;
+}
+
+.pop-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.pop-warning .pop-dialog-title .i {
+  flex: none;
+  color: var(--danger);
+}
+
+.pop-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Les choix de « Ranger » : les espaces, puis leurs dossiers en retrait. */
+.dest-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dest:hover:not([disabled]),
+.dest:focus-visible {
+  background: var(--surface-2);
+}
+
+.dest[disabled] {
+  color: var(--text-2);
+  cursor: default;
+}
+
+.dest-d0 {
+  font-weight: 600;
+}
+
+.dest-d1 {
+  padding-left: 28px;
+}
+
+.dest-d2 {
+  padding-left: 52px;
+}
+
+.dest .i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.dest-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dest-here {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.pop-menu button.pop-more:not(.btn) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  color: var(--text-2);
+}
+
+.pop-menu button[aria-current="true"] {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.pop-menu button .i {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 /* Page d'aperçu d'un fichier. */
@@ -4804,7 +5112,7 @@ input.note-title::placeholder {
     line-height: 32px;
   }
 
-  .note-tags {
+  .note-meta {
     margin-bottom: 12px;
     padding-bottom: 12px;
   }

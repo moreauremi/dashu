@@ -15,7 +15,7 @@ use sqlx::SqlitePool;
 
 use crate::AppState;
 use crate::auth::session::{Ctx, Shell};
-use crate::spaces::Space;
+use crate::folders;
 use crate::time;
 use crate::web::{self, AppError, AppResult, escape, see_other};
 
@@ -41,7 +41,20 @@ pub struct NoteItem {
     pub tags: Vec<String>,
     /// Vue d'ensemble de Perso : l'espace d'une note venue d'ailleurs.
     pub space: Option<crate::spaces::SpaceTag>,
+    /// Le sous-dossier de la note, dans la section de son dossier.
+    pub sub: Option<String>,
     space_id: i64,
+    folder_id: Option<i64>,
+}
+
+/// Une section de la liste : les notes d'un dossier du premier niveau (sous-
+/// dossiers compris), ou celles qui ne sont dans aucun dossier.
+pub struct NoteGroup {
+    /// Nom du dossier ; `None` pour les notes sans dossier.
+    pub title: Option<String>,
+    /// Vue d'ensemble de Perso : l'espace d'un dossier venu d'ailleurs.
+    pub space: Option<crate::spaces::SpaceTag>,
+    pub items: Vec<NoteItem>,
 }
 
 pub struct TagChip {
@@ -57,7 +70,9 @@ struct ListPage {
     shell: Shell,
     q: String,
     tag: Option<String>,
-    items: Vec<NoteItem>,
+    /// Les notes, par dossier du premier niveau (SPEC, « Dossiers ») : d'abord
+    /// celles sans dossier, puis une section par dossier.
+    groups: Vec<NoteGroup>,
     chips: Vec<TagChip>,
     /// Lien qui retire le filtre par tag en gardant la recherche.
     clear_tag_href: String,
@@ -119,6 +134,7 @@ pub async fn list(
         item.tags = tags_by_note.remove(&item.id).unwrap_or_default();
         item.space = ctx.tag_of(item.space_id);
     }
+    let groups = by_folder(&ctx, items, &folders::all(&state.db, user).await?);
 
     let chips = sqlx::query!(
         r#"SELECT t.name AS "name!", COUNT(*) AS "count!: i64"
@@ -157,10 +173,59 @@ pub async fn list(
         only_href: list_url(&q, tag.as_deref(), true),
         q,
         tag,
-        items,
+        groups,
         chips,
     };
     Ok(web::html(page))
+}
+
+/// Range les notes par dossier du premier niveau, dans l'ordre reçu : d'abord
+/// celles sans dossier, puis un dossier après l'autre (par espace, puis par
+/// nom). Une note d'un sous-dossier va dans la section de son dossier, avec
+/// le nom du sous-dossier.
+fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<NoteGroup> {
+    let mut loose = Vec::new();
+    let mut by_top: HashMap<i64, Vec<NoteItem>> = HashMap::new();
+    for mut item in items {
+        let chain = folders::chain(all, item.folder_id);
+        match chain.as_slice() {
+            [] => loose.push(item),
+            [top, rest @ ..] => {
+                item.sub = rest.last().map(|f| f.name.clone());
+                by_top.entry(top.id).or_default().push(item);
+            }
+        }
+    }
+    let mut groups = Vec::new();
+    if !loose.is_empty() {
+        groups.push(NoteGroup {
+            title: None,
+            space: None,
+            items: loose,
+        });
+    }
+    // `all` est trié par nom ; les espaces gardent l'ordre du sélecteur.
+    let position = |space: i64| {
+        ctx.spaces
+            .iter()
+            .chain(&ctx.archived)
+            .position(|s| s.id == space)
+    };
+    let mut tops: Vec<&folders::Folder> = all
+        .iter()
+        .filter(|f| f.is_top() && by_top.contains_key(&f.id))
+        .collect();
+    tops.sort_by_key(|f| position(f.space_id));
+    for top in tops {
+        if let Some(items) = by_top.remove(&top.id) {
+            groups.push(NoteGroup {
+                title: Some(top.name.clone()),
+                space: ctx.tag_of(top.space_id),
+                items,
+            });
+        }
+    }
+    groups
 }
 
 /// `/notes?q=…&tag=…&seul=1` avec les paramètres encodés.
@@ -229,7 +294,7 @@ async fn recent_in_space(
     let rows = sqlx::query!(
         r#"SELECT n.id AS "id!", n.title AS "title!", substr(n.body_md, 1, 600) AS "head!: String",
                   n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
-                  n.space_id AS "space_id!: i64"
+                  n.space_id AS "space_id!: i64", n.folder_id
            FROM notes n
            WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
              AND (?3 IS NULL OR EXISTS (
@@ -254,7 +319,9 @@ async fn recent_in_space(
             updated: time::ago(row.updated_at, now),
             tags: Vec::new(),
             space: None,
+            sub: None,
             space_id: row.space_id,
+            folder_id: row.folder_id,
         })
         .collect())
 }
@@ -273,7 +340,7 @@ async fn search_in_space(
                   highlight(notes_fts, 0, char(1), char(2)) AS "title_marked!: String",
                   snippet(notes_fts, 1, char(1), char(2), '…', 24) AS "snippet!: String",
                   n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
-                  n.space_id AS "space_id!: i64"
+                  n.space_id AS "space_id!: i64", n.folder_id
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
            WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)
@@ -304,7 +371,9 @@ async fn search_in_space(
             updated: time::ago(row.updated_at, now),
             tags: Vec::new(),
             space: None,
+            sub: None,
             space_id: row.space_id,
+            folder_id: row.folder_id,
         })
         .collect())
 }
@@ -407,8 +476,8 @@ struct EditPage {
     tags: Vec<NoteTag>,
     /// Tags existants, proposés à la saisie.
     suggestions: Vec<String>,
-    /// Espaces vers lesquels on peut déplacer la note.
-    other_spaces: Vec<Space>,
+    /// Le sélecteur « Dossier », à côté des tags.
+    folder: NoteFolder,
 }
 
 /// `GET /notes/{id}`
@@ -418,7 +487,7 @@ pub async fn edit_page(
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let note = sqlx::query!(
-        r#"SELECT space_id, title, body_md, pinned AS "pinned!: bool", updated_at
+        r#"SELECT space_id, folder_id, title, body_md, pinned AS "pinned!: bool", updated_at
            FROM notes WHERE id = ? AND user_id = ?"#,
         id,
         ctx.user.id
@@ -449,12 +518,7 @@ pub async fn edit_page(
         pinned: note.pinned,
         tags: tags_of(&state.db, ctx.user.id, id).await?,
         suggestions: all_tag_names(&state.db, ctx.user.id).await?,
-        other_spaces: ctx
-            .spaces
-            .iter()
-            .filter(|s| s.id != ctx.active.id)
-            .cloned()
-            .collect(),
+        folder: note_folder(&ctx, &state.db, note.space_id, note.folder_id).await?,
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))
@@ -541,20 +605,28 @@ pub(crate) async fn toggle_pinned(db: &SqlitePool, user: i64, id: i64) -> AppRes
 #[derive(Deserialize)]
 pub struct MoveForm {
     pub(crate) space_id: i64,
+    /// Dossier de cet espace où la ranger ; vide : sa racine.
+    pub(crate) folder_id: Option<String>,
+    /// Page où revenir ; la liste des notes sans précision.
+    pub(crate) next: Option<String>,
 }
 
-/// `POST /notes/{id}/move` : déplace la note vers un autre espace.
+/// `POST /notes/{id}/move` : range la note dans un espace et un dossier (la
+/// racine de l'espace sans dossier).
 pub async fn move_to_space(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<MoveForm>,
 ) -> AppResult<Response> {
-    // L'espace cible doit appartenir à l'utilisateur.
+    // L'espace cible doit appartenir à l'utilisateur, le dossier à cet espace.
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let folder = folders::parse_id(form.folder_id.as_deref())?;
+    let folder = folders::target(&state.db, ctx.user.id, target.id, folder).await?;
     let moved = sqlx::query!(
-        "UPDATE notes SET space_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE notes SET space_id = ?, folder_id = ? WHERE id = ? AND user_id = ?",
         target.id,
+        folder,
         id,
         ctx.user.id
     )
@@ -564,9 +636,109 @@ pub async fn move_to_space(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
-    ctx.flash_ok(format!("Note déplacée vers {}", target.name))
-        .await?;
-    Ok(see_other("/notes"))
+    let message = match folder {
+        Some(_) => format!(
+            "Note rangée dans {}",
+            crate::files::place_label(&ctx, &state.db, target, folder).await?
+        ),
+        None => format!("Note déplacée vers {}", target.name),
+    };
+    ctx.flash_ok(message).await?;
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/notes",
+    }))
+}
+
+/// Le sélecteur « Dossier » de l'éditeur, à côté des tags.
+pub struct NoteFolder {
+    /// Où est la note : « École / Math ».
+    pub label: String,
+    /// Son dossier ; `None` à la racine de l'espace.
+    pub current: Option<i64>,
+    pub space_name: String,
+    /// Les dossiers du premier niveau de l'espace de la note. Les
+    /// sous-dossiers ne se choisissent que par « Voir plus ».
+    pub top: Vec<TopFolder>,
+}
+
+pub struct TopFolder {
+    pub id: i64,
+    pub name: String,
+    /// La note est dans ce dossier (pas dans un de ses sous-dossiers).
+    pub current: bool,
+}
+
+async fn note_folder(
+    ctx: &Ctx,
+    db: &SqlitePool,
+    space: i64,
+    folder: Option<i64>,
+) -> AppResult<NoteFolder> {
+    let all = folders::all(db, ctx.user.id).await?;
+    let space_name = ctx
+        .space_by_id(space)
+        .map(|s| s.name.clone())
+        .unwrap_or_default();
+    Ok(NoteFolder {
+        label: folders::label(&space_name, &all, folder),
+        current: folder,
+        top: all
+            .iter()
+            .filter(|f| f.space_id == space && f.is_top())
+            .map(|f| TopFolder {
+                id: f.id,
+                name: f.name.clone(),
+                current: folder == Some(f.id),
+            })
+            .collect(),
+        space_name,
+    })
+}
+
+#[derive(Template)]
+#[template(path = "notes/_folder.html")]
+struct FolderFragment {
+    id: i64,
+    folder: NoteFolder,
+}
+
+#[derive(Deserialize)]
+pub struct FolderForm {
+    /// Vide : la racine de l'espace de la note.
+    folder_id: Option<String>,
+}
+
+/// `POST /notes/{id}/folder` : range la note dans un dossier de son espace
+/// (le sélecteur de l'éditeur). Répond par le sélecteur, à jour.
+pub async fn set_folder(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<FolderForm>,
+) -> AppResult<Response> {
+    let space = sqlx::query_scalar!(
+        "SELECT space_id FROM notes WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let folder = folders::parse_id(form.folder_id.as_deref())?;
+    let folder = folders::target(&state.db, ctx.user.id, space, folder).await?;
+    sqlx::query!(
+        "UPDATE notes SET folder_id = ? WHERE id = ? AND user_id = ?",
+        folder,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
+    Ok(web::html(FolderFragment {
+        id,
+        folder: note_folder(&ctx, &state.db, space, folder).await?,
+    }))
 }
 
 /// `POST /notes/{id}/delete`

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT folder_id AS \"folder_id!\", count(*) AS \"n!: i64\"\n           FROM notes WHERE user_id = ? AND folder_id IS NOT NULL GROUP BY folder_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "folder_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "eb1ec0baba5d30242b7869c748c254eccf2d6a526abd822568b0f77ac6d5c45e"
+}

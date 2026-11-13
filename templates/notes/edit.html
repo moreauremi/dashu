@@ -9,19 +9,8 @@
     <div class="editor-actions">
       {% include "notes/_pin.html" %}
 
-      {% if !other_spaces.is_empty() %}
-      <details class="menu">
-        <summary class="icon-btn" aria-label="Déplacer vers un autre espace" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}</summary>
-        <div class="menu-list">
-          {% for space in other_spaces %}
-          <form method="post" action="/notes/{{ id }}/move">
-            <input type="hidden" name="space_id" value="{{ space.id }}">
-            <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>Déplacer vers {{ space.name }}</button>
-          </form>
-          {% endfor %}
-        </div>
-      </details>
-      {% endif %}
+      {#- Fenêtre « Ranger » (layout.html) : un autre espace, un dossier. -#}
+      <button class="icon-btn" type="button" popovertarget="picker" hx-get="/destinations?note={{ id }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker aria-label="Ranger la note dans un autre dossier ou espace" title="Ranger dans un autre dossier ou espace">{{ crate::assets::icon("move")|safe }}</button>
 
       <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Supprimer définitivement cette note ?">
         <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer la note" title="Supprimer la note">{{ crate::assets::icon("trash")|safe }}</button>
@@ -46,7 +35,11 @@
         <textarea name="body_md" hidden>{{ body_md }}</textarea>
       </form>
 
-      {% include "notes/_tags.html" %}
+      {#- Dossier et tags de la note, sur une ligne. -#}
+      <div class="note-meta">
+        {% include "notes/_folder.html" %}
+        {% include "notes/_tags.html" %}
+      </div>
 
       {#- Rendu du serveur (nettoyé par ammonia), affiché le temps que
           l'éditeur se charge, puis remplacé par lui. -#}

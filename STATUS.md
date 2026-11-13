@@ -90,7 +90,7 @@ Cahier des charges dans `SPEC.md` (« Espaces et outils »), accepté en entier 
 - [x] **G. Menu « Convertir » et onglet Outils** : sorties possibles selon le type, refus de toute autre ; fichiers de l'onglet Outils hors des listes, gardés ou effacés au bout de 24 heures. Tests `tests/conversions.rs`, tests unitaires des formats d'image et des arguments ffmpeg et Ghostscript.
   - Les vraies conversions (ffmpeg, Ghostscript, libheif) ne sont vérifiées que par les tests unitaires de leurs arguments : à essayer sur le serveur avec une photo HEIC, une vidéo `.mov` et un PDF.
 - [x] **H. Suivi partout** : « 1 conversion en cours » dans la barre latérale de toutes les pages, puis « Prêt : … ». Test `une_conversion_va_jusqu_au_resultat`.
-- [x] **A. Perso montre tout** : dashboard, notes, fichiers et agenda de tous les espaces, filtre « Seulement Perso ». Test `perso_montre_tous_les_espaces`.
+- [x] **A. Perso montre tout** : dashboard, notes, fichiers et agenda de tous les espaces, filtre « Seulement Perso ». Test `perso_montre_tous_les_espaces`. Depuis les dossiers (13 novembre 2026), l'onglet Fichiers de Perso s'ouvre sur la racine, un dossier par espace ; le filtre « Seulement Perso » des fichiers est devenu le dossier Perso.
 - [x] **C. L'espace dans l'adresse** : `/e/<slug>/…`, en-tête `X-Espace` par onglet, redirections et historique qui gardent l'espace. Tests `tests/adresse.rs`.
 - [x] **E. Archiver un espace** ; **I. règles par espace** ; **J. remplacer l'original** ; **F. espace du moment**. Tests `tests/espaces_suite.rs`.
 - [x] **K. Déposer partout, coller une image dans une note** ; **L. la palette connaît la page** (aujourd'hui la barre de commandes). Tests `deposer_partout_et_coller_une_image`, `la_barre_connait_la_page`. Le glisser-déposer et le collage eux-mêmes (JavaScript) se vérifient dans le navigateur.
@@ -173,6 +173,25 @@ Mesures du 10 novembre 2026, avant les ajouts qui ont fait passer `app.js` de 3 
 Hors cible mais téléchargés : la police de l'interface (36 Ko) et le sprite d'icônes (2 Ko). La police de l'éditeur (40 Ko) n'est chargée que par les pages qui affichent du code.
 
 Moyens imposés par la spec : compilation `release` avec LTO (fait), empreinte dans le nom des fichiers statiques et cache d'un an (fait, testé), compression brotli/gzip (fait), CodeMirror uniquement sur la page éditeur (fait), SQLite en mode WAL (fait).
+
+## Dossiers : avancement
+
+Demandé par Rémi le 13 novembre 2026, cahier des charges dans `SPEC.md` (« Dossiers »). Il revient sur la décision du 11 novembre (fichiers sans dossiers). Tout est écrit et vérifié par les tests d'intégration (`tests/dossiers.rs`, 11 tests) et dans le navigateur sur une instance locale ; **rien n'est encore vérifié sur le serveur** (il faut `dashu-update`, puis essayer sur l'ordinateur et sur l'iPhone).
+
+- [x] La racine de Fichiers montre un dossier par espace (pas les archivés) et Temporaire ; renommer un espace renomme son dossier. Test `la_racine_montre_les_espaces_et_temporaire`.
+- [x] Un dossier se crée dans un espace et dans un dossier ; un troisième niveau est refusé par le serveur ; deux voisins ne portent pas le même nom (« Math » et « math », « Économie » et « économie »). Test `des_dossiers_sur_trois_niveaux_au_plus`.
+- [x] Un fichier envoyé depuis un dossier y arrive ; sa copie convertie aussi, et « Remplacer l'original » lui donne le dossier de l'original. Test `un_fichier_envoye_dans_un_dossier_y_arrive_avec_sa_copie`.
+- [x] Temporaire montre un fichier déposé dans Outils ; la fenêtre « Ranger » le garde dans le dossier choisi. Test `temporaire_puis_range_dans_un_dossier`.
+- [x] Le sélecteur de l'éditeur, à côté des tags, propose la racine et les dossiers du premier niveau de l'espace de la note ; une note sans choix est à la racine. Test `le_selecteur_de_l_editeur_range_la_note`. Vu dans le navigateur : le choix met à jour le sélecteur sans recharger l'éditeur.
+- [x] « Voir plus… » ouvre la fenêtre « Ranger » (tous les espaces, dossiers et sous-dossiers) ; un dossier d'un autre espace y déplace la note, qui s'ouvre dans cet espace. Test `voir_plus_range_dans_un_autre_espace`. Vu dans le navigateur.
+- [x] Une note rangée apparaît dans son dossier de Fichiers ; l'onglet Notes la montre dans la section de son dossier du premier niveau. Test `une_note_rangee_se_voit_dans_fichiers_et_dans_notes`.
+- [x] Supprimer un dossier non vide : avertissement, puis « Transférer » (tout monte d'un niveau, un nom pris devient « Exercices (2) ») ou « Tout supprimer » (notes, fichiers, disque compris, sous-dossiers) ; sans choix, refus. Test `supprimer_un_dossier_vide_ou_non`. Vu dans le navigateur.
+- [x] Un second compte ne voit, ne remplit, ne renomme ni ne supprime les dossiers du premier ; ranger dans un dossier d'un autre espace que celui demandé est refusé. Test `un_autre_compte_ne_touche_pas_aux_dossiers`.
+- [x] Supprimer un espace en gardant son contenu emmène ses dossiers (« MATH (2) » si le nom est pris). Test `supprimer_un_espace_emmene_ses_dossiers`. L'API range une note qui change d'espace à la racine du nouveau. Test `l_api_range_a_la_racine_du_nouvel_espace`.
+- [x] Aucune erreur dans la console (rien de bloqué par la CSP) ; largeur téléphone sans défilement horizontal.
+- [ ] Essayé sur le serveur et sur l'iPhone.
+- Migration 0013 (`folders`, `folder_id` sur `notes`, `files` et `uploads`). Les tests existants ont été adaptés là où Perso montrait la liste des fichiers (`/files?dossier=espace`).
+- Hors de ce lot : glisser-déposer sur un dossier, déplacer un dossier entier, créer une note depuis Fichiers.
 
 ## Écarts par rapport au cahier des charges
 

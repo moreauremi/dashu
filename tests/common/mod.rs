@@ -406,6 +406,29 @@ impl Client {
             .await
     }
 
+    /// Envoi dans un dossier (`&folder=…`, qui donne l'espace), en un seul
+    /// morceau, comme depuis un dossier de l'onglet Fichiers.
+    pub async fn upload_in_folder(
+        &mut self,
+        name: &str,
+        content: &[u8],
+        folder: i64,
+    ) -> TestResponse {
+        let path = format!(
+            "/files/uploads?name={}&size={}&folder={folder}",
+            encode_component(name),
+            content.len()
+        );
+        let start = self
+            .send(Method::POST, &path, None, CsrfMode::Header, true)
+            .await;
+        if start.status != StatusCode::CREATED {
+            return start;
+        }
+        let id = start.body.clone();
+        self.put_chunk(&id, 0, content, true).await
+    }
+
     /// Envoi vers l'onglet Outils (`&tools=1`), en un seul morceau.
     pub async fn upload_to_tools(&mut self, name: &str, content: &[u8]) -> TestResponse {
         let path = format!(

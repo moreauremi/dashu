@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, parent_id, name FROM folders WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "parent_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "d1973b23fa63cacb759ab36142849c690a62d8ce84211ab9b17f228fc42b970c"
+}

@@ -10,10 +10,10 @@ use dashu::tools::{self, worker};
 
 /// Envoie un fichier et renvoie son identifiant.
 async fn upload(client: &mut Client, name: &str, content: &[u8]) -> i64 {
-    client.get("/files").await;
+    client.get("/files?dossier=espace").await;
     let sent = client.upload(name, content).await;
     assert_eq!(sent.status, StatusCode::CREATED, "{}", sent.body);
-    let page = client.get("/files").await.body;
+    let page = client.get("/files?dossier=espace").await.body;
     let at = page
         .find(&format!("<span>{name}</span>"))
         .unwrap_or_else(|| panic!("{name} absent de la liste"));
@@ -47,7 +47,7 @@ async fn la_vignette_est_faite_a_l_arrivee_puis_affichee() {
     let id = upload(&mut alice, "plage.png", &gradient_png(600, 400)).await;
 
     // Pas encore de vignette : l'icône du type.
-    let page = alice.get("/files").await.body;
+    let page = alice.get("/files?dossier=espace").await.body;
     assert!(!page.contains(&format!("src=\"/files/{id}/thumb\"")));
     assert!(page.contains("file-thumb-icon"));
     assert_eq!(
@@ -75,7 +75,7 @@ async fn la_vignette_est_faite_a_l_arrivee_puis_affichee() {
     );
     tools::collect(&app.state).await.unwrap();
 
-    let page = alice.get("/files").await.body;
+    let page = alice.get("/files?dossier=espace").await.body;
     assert!(page.contains(&format!("src=\"/files/{id}/thumb\"")));
     let thumb = alice.get(&format!("/files/{id}/thumb")).await;
     assert_eq!(thumb.status, StatusCode::OK);

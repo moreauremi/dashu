@@ -51,7 +51,7 @@ async fn le_menu_ne_propose_que_le_possible() {
     let (photo, _) = file_of(&app, "IMG_1.HEIC").await;
     let (pdf, _) = file_of(&app, "cours.pdf").await;
 
-    let list = alice.get("/files").await;
+    let list = alice.get("/files?dossier=espace").await;
     let row = common::between(&list.body, "IMG_1.HEIC</span>", "</li>").unwrap();
     for label in ["Compresser", "En JPEG", "En PNG", "En WebP"] {
         assert!(row.contains(&format!(">{label}</button>")), "{label}");
@@ -145,7 +145,7 @@ async fn une_conversion_va_jusqu_au_resultat() {
     assert_eq!(result_space, space);
     assert!(
         alice
-            .get("/files")
+            .get("/files?dossier=espace")
             .await
             .body
             .contains("<span>IMG_1.HEIC</span>")
@@ -210,7 +210,13 @@ async fn l_onglet_outils() {
     assert_eq!(sent.header("x-file-id"), scan.to_string());
 
     // Hors des listes et du dashboard tant qu'il n'est pas gardé.
-    assert!(!alice.get("/files").await.body.contains("scan.pdf"));
+    assert!(
+        !alice
+            .get("/files?dossier=espace")
+            .await
+            .body
+            .contains("scan.pdf")
+    );
     assert!(
         !alice
             .get_fragment("/widgets/files")
@@ -263,7 +269,7 @@ async fn l_onglet_outils() {
     alice.post("/space", &[("slug", "ecole")]).await;
     assert!(
         alice
-            .get("/files")
+            .get("/files?dossier=espace")
             .await
             .body
             .contains("<span>scan.pdf</span>")

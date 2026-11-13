@@ -160,11 +160,15 @@
   async function upload(job) {
     const { file } = job;
     const name = encodeURIComponent(job.name || file.name);
-    // Espace choisi au-dessus de la zone de dépôt (l'espace actif par défaut) ;
+    // Espace choisi au-dessus de la zone de dépôt (l'espace actif par défaut),
+    // ou dossier ouvert dans l'onglet Fichiers (il donne son espace) ;
     // onglet Outils : un fichier pas encore rangé.
-    const space = document.querySelector("[data-upload-space]:checked")?.value;
+    const zone = document.querySelector("[data-dropzone]");
+    const folder = zone?.dataset.folder;
+    const space = folder ? "" : document.querySelector("[data-upload-space]:checked")?.value;
     let where = space ? `&space=${encodeURIComponent(space)}` : "";
-    if (document.querySelector("[data-dropzone][data-tools]")) where += "&tools=1";
+    if (folder) where += `&folder=${encodeURIComponent(folder)}`;
+    if (zone?.hasAttribute("data-tools")) where += "&tools=1";
     const opened = await request("POST", `/files/uploads?name=${name}&size=${file.size}${where}`);
     if (!opened) throw new Error("Connexion perdue pendant l'envoi");
     if (opened.status !== 201) throw new Error(errorText(opened));
@@ -228,7 +232,8 @@
     const results = $("#file-results, #tool-results");
     if (!window.htmx || !results) return;
     const target = `#${results.id}`;
-    window.htmx.ajax("GET", location.pathname, { target, select: target, swap: "outerHTML" });
+    // L'adresse entière : dans l'onglet Fichiers, ?dossier=… dit quel dossier.
+    window.htmx.ajax("GET", location.pathname + location.search, { target, select: target, swap: "outerHTML" });
   }
 
   // --- Bouton : sélecteur de fichiers

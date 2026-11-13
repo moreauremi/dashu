@@ -1,0 +1,22 @@
+{#- Contenu de la fenêtre « Ranger » (#picker, layout.html), chargé par htmx :
+    un bouton par espace, par dossier et par sous-dossier. Chaque choix envoie
+    le formulaire de déplacement de l'élément ; l'endroit actuel est grisé. -#}
+<p class="pop-title" id="picker-title">{{ title }}</p>
+<ul class="dest-list" role="list">
+  {%- for dest in items %}
+  <li>
+    <form method="post" action="{{ action }}">
+      <input type="hidden" name="space_id" value="{{ dest.space_id }}">
+      <input type="hidden" name="folder_id" value="{% if let Some(folder) = dest.folder_id %}{{ folder }}{% endif %}">
+      {%- if !next.is_empty() %}
+      <input type="hidden" name="next" value="{{ next }}">
+      {%- endif %}
+      <button class="dest dest-d{{ dest.depth }}" type="submit" data-accent="{{ dest.color }}"{% if dest.current %} aria-current="true" disabled{% endif %}>
+        {%- if dest.depth == 0 %}<span class="dot" aria-hidden="true"></span>{% else %}{{ crate::assets::icon("folder")|safe }}{% endif -%}
+        <span class="dest-name">{{ dest.name }}</span>
+        {%- if dest.current %}<span class="dest-here">Ici</span>{% endif %}
+      </button>
+    </form>
+  </li>
+  {%- endfor %}
+</ul>

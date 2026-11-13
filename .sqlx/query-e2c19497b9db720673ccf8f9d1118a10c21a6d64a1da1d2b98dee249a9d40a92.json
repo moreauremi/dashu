@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "e2c19497b9db720673ccf8f9d1118a10c21a6d64a1da1d2b98dee249a9d40a92"
+}

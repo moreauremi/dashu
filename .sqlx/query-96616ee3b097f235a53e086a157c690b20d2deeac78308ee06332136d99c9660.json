@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT expires_at, space_id, folder_id FROM files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "expires_at",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "96616ee3b097f235a53e086a157c690b20d2deeac78308ee06332136d99c9660"
+}

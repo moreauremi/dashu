@@ -614,7 +614,33 @@ pub async fn delete(
                 .ok_or_else(|| AppError::BadRequest("Espace de destination inconnu.".into()))?;
             // Tout passe dans l'espace choisi, y compris les envois en cours
             // et les conversions, puis l'espace (vide) est supprimé.
+            let folders = crate::folders::all(&state.db, user_id).await?;
             let mut tx = state.db.begin().await?;
+            // Ses dossiers suivent leur contenu. Un nom déjà pris dans l'espace
+            // qui les reçoit devient « Math (2) » ; les sous-dossiers gardent
+            // leur dossier parent, donc leur nom.
+            let mut taken = crate::folders::neighbours(&folders, target.id, None, None);
+            for folder in folders.iter().filter(|f| f.space_id == id && f.is_top()) {
+                let name = crate::folders::free_name(&taken, &folder.name);
+                sqlx::query!(
+                    "UPDATE folders SET space_id = ?, name = ? WHERE id = ? AND user_id = ?",
+                    target.id,
+                    name,
+                    folder.id,
+                    user_id
+                )
+                .execute(&mut *tx)
+                .await?;
+                taken.push(name);
+            }
+            sqlx::query!(
+                "UPDATE folders SET space_id = ? WHERE space_id = ? AND user_id = ?",
+                target.id,
+                id,
+                user_id
+            )
+            .execute(&mut *tx)
+            .await?;
             sqlx::query!(
                 "UPDATE notes SET space_id = ? WHERE space_id = ? AND user_id = ?",
                 target.id,
