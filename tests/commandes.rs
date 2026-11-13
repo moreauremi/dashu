@@ -82,7 +82,7 @@ async fn le_catalogue_suit_le_compte() {
     assert!(command_node(&tree, &["add", "file"])["off"].is_null());
     assert_eq!(command_node(&tree, &["help"])["client"], "help");
 
-    // Un espace renommé se tape aussi par son nouveau nom.
+    // Un espace renommé se tape par son nouveau nom, plus par l'ancien.
     let ecole = app.space_id(ALICE, "ecole").await;
     alice
         .post(
@@ -96,11 +96,12 @@ async fn le_catalogue_suit_le_compte() {
         .await;
     let tree = alice.catalogue("/").await;
     let space = &command_node(&tree, &["space"])["arg"]["values"][0];
-    assert_eq!(space["v"], "ecole");
+    assert_eq!(space["v"], "lycee-hoche");
     assert_eq!(space["help"], "Lycée Hoche");
-    assert_eq!(space["alias"][0], "lycee-hoche");
     let switched = alice.command("/space lycee", "/settings").await;
     assert_eq!(hx_location(&switched)["headers"]["X-Espace"], "ecole");
+    let refused = alice.command("/space ecole", "/settings").await;
+    assert!(refused.body.contains("Espace inconnu : ecole"));
 
     // Bob ne voit que ses espaces.
     let mut bob = app.logged_in(BOB).await;
@@ -755,4 +756,46 @@ async fn date_et_cours_dans_les_textes() {
     alice.with_header("x-espace", "taff");
     let refused = alice.command("/add note #cours", "/").await;
     assert!(refused.body.contains("Aucun cours en ce moment"));
+}
+
+#[tokio::test]
+async fn les_espaces_suivent_leur_nom() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+
+    // Perso renommé « Général », puis un nouvel espace « Perso » : son slug
+    // devient perso-2 (perso reste celui de Général, dans les adresses).
+    let general = app.space_id(ALICE, "perso").await;
+    alice
+        .post(
+            &format!("/settings/spaces/{general}"),
+            &[("name", "Général"), ("color", "orange"), ("icon", "home")],
+        )
+        .await;
+    hx_location(&alice.command("/add space Perso", "/").await);
+    let perso = app.space_id(ALICE, "perso-2").await;
+
+    // La barre suit les vrais noms.
+    alice.with_header("x-espace", "ecole");
+    let tree = alice.catalogue("/").await;
+    let choices = &command_node(&tree, &["space"])["arg"]["values"];
+    let shown: Vec<(&str, &str)> = choices
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| (c["v"].as_str().unwrap(), c["help"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        shown,
+        [("general", "Général"), ("taff", "Taff"), ("perso", "Perso")]
+    );
+    let to_perso = hx_location(&alice.command("/space perso", "/").await);
+    assert_eq!(to_perso["headers"]["X-Espace"], "perso-2");
+    let to_general = hx_location(&alice.command("/space general", "/").await);
+    assert_eq!(to_general["headers"]["X-Espace"], "perso");
+
+    // Pareil pour une option @espace.
+    hx_location(&alice.command("/add task Courses @perso", "/").await);
+    let space: i64 = scalar(&app, "SELECT space_id FROM tasks").await;
+    assert_eq!(space, perso);
 }

@@ -121,6 +121,7 @@ Lot 2 : fait, tests `les_taches_au_clavier`, `la_note_au_clavier`, `le_fichier_a
 - [x] `/theme`, `/size`, `/sidebar`, `/refresh`, `/logout`, `/add space` (on entre dans le nouvel espace), `/add agenda` (mêmes vérifications d'adresse que Réglages) font ce que font leurs boutons.
 - La première synchro d'un agenda ajouté par `/add agenda` n'est testée que dans son refus (adresse non HTTPS) : les tests n'ont pas de réseau.
 - [x] Variables `#date` et `#cours` (demandées le 13 novembre 2026) dans les titres, tags, noms et recherches ; `#cours` refusé hors d'un cours ; « Exercice #3 » intact. Test `date_et_cours_dans_les_textes`, test unitaire `variables`. Pas encore essayé pendant un vrai cours Pronote.
+- [x] Un espace se tape par son nom actuel, plus par son identifiant d'adresse (signalé par Rémi le 13 novembre 2026 : Perso renommé « Général », puis un nouvel espace « Perso » ; `/space perso` menait à Général). Tests `les_espaces_suivent_leur_nom`, `les_espaces_par_leur_nom`.
 
 ## Mesures de performance
 

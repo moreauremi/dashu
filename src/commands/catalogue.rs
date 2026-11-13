@@ -91,7 +91,7 @@ const CONFIRM: &str = "Entrée encore pour confirmer.";
 
 /// Toutes les commandes, dans l'ordre où la barre les propose.
 pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec<Node>> {
-    let spaces = |prefix: &str| space_choices(ctx.spaces.iter(), prefix);
+    let spaces = |prefix: &str| space_choices(&ctx.spaces, |_| true, prefix);
     // #date et #cours, proposés dans les textes libres (titres, tags…).
     let vars = Vars::now(ctx, state).await?.choices();
     let with_vars = |mut values: Vec<Choice>| {
@@ -152,7 +152,8 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
         .arg(Arg::new(Mode::Free, "<texte>", true).values(with_vars(Vec::new()))),
         Node::new("space", "Changer d'espace", Action::Space).arg(
             Arg::new(Mode::Choice, "<espace>", true).values(space_choices(
-                ctx.spaces.iter().filter(|s| s.id != ctx.active.id),
+                &ctx.spaces,
+                |s| s.id != ctx.active.id,
                 "",
             )),
         ),
@@ -267,9 +268,13 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
     let move_to =
         Node::new("move", "Déplacer vers un autre espace", Action::Move).aliases(&["deplacer"]);
     tree.push(match (item_space, opened) {
-        (Some(space_id), _) => move_to.arg(Arg::new(Mode::Choice, "<espace>", true).values(
-            space_choices(ctx.spaces.iter().filter(|s| s.id != space_id), ""),
-        )),
+        (Some(space_id), _) => move_to.arg(
+            Arg::new(Mode::Choice, "<espace>", true).values(space_choices(
+                &ctx.spaces,
+                |s| s.id != space_id,
+                "",
+            )),
+        ),
         (None, Opened::File { .. }) => move_to.off(NOT_KEPT),
         (None, _) => move_to.off(ON_ITEM),
     });
