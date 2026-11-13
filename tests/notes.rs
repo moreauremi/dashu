@@ -90,13 +90,13 @@ async fn cycle_de_vie_d_une_note() {
             .body
             .contains("Révisions réseau")
     );
-    // La palette Ctrl+K trouve la même note.
+    // /open, dans la barre de commandes, trouve la même note.
     assert!(
         alice
-            .get_fragment("/search/palette?q=trunk")
+            .get_fragment("/cmd/suggest?q=trunk")
             .await
             .body
-            .contains(&format!("href=\"/notes/{id}\""))
+            .contains(&format!(r#""href":"/notes/{id}""#))
     );
 
     // --- Épinglage ---
@@ -189,13 +189,12 @@ async fn une_note_ne_peut_pas_injecter_de_script() {
         )
         .await;
 
-    // Partout où la note apparaît : éditeur, aperçu, liste, recherche, palette, widget.
+    // Partout où la note apparaît : éditeur, aperçu, liste, recherche, widget.
     let pages = [
         alice.get(&url).await,
         alice.post("/notes/preview", &[("body_md", payload)]).await,
         alice.get("/notes").await,
         alice.get("/notes?q=alert").await,
-        alice.get_fragment("/search/palette?q=alert").await,
         alice.get("/widgets/notes").await,
     ];
     for (index, page) in pages.iter().enumerate() {
@@ -222,6 +221,15 @@ async fn une_note_ne_peut_pas_injecter_de_script() {
     // Le contenu n'est pas perdu : l'éditeur le montre comme du texte, échappé.
     assert!(pages[0].body.contains("alert("));
     assert!(!pages[0].body.contains("<script>alert"));
+
+    // /open (barre de commandes) répond en JSON, jamais lu comme du HTML : le
+    // navigateur pose le titre comme du texte (textContent, app.js).
+    let open = alice.get_fragment("/cmd/suggest?q=alert").await;
+    assert_eq!(open.status, StatusCode::OK);
+    assert_eq!(open.header("content-type"), "application/json");
+    assert_eq!(open.header("x-content-type-options"), "nosniff");
+    let json: serde_json::Value = serde_json::from_str(&open.body).unwrap();
+    assert!(json["items"][0]["v"].as_str().unwrap().contains("<script>"));
 }
 
 #[tokio::test]
@@ -253,10 +261,10 @@ async fn la_recherche_resiste_aux_saisies_tordues() {
         let encoded: String = form_urlencoded::byte_serialize(q.as_bytes()).collect();
         let list = alice.get(&format!("/notes?q={encoded}")).await;
         assert_eq!(list.status, StatusCode::OK, "recherche {q:?}");
-        let palette = alice
-            .get_fragment(&format!("/search/palette?q={encoded}"))
+        let open = alice
+            .get_fragment(&format!("/cmd/suggest?q={encoded}"))
             .await;
-        assert_eq!(palette.status, StatusCode::OK, "palette {q:?}");
+        assert_eq!(open.status, StatusCode::OK, "/open {q:?}");
     }
     let notes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM notes")
         .fetch_one(&app.state.db)

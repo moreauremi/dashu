@@ -44,7 +44,8 @@ async fn les_notes_d_alice_sont_invisibles_et_intouchables_pour_bob() {
     for path in [
         "/notes",
         "/notes?tag=prive",
-        "/search/palette?q=",
+        "/cmd/suggest?q=",
+        "/cmd/catalogue",
         "/widgets/notes",
         "/",
     ] {
@@ -63,16 +64,15 @@ async fn les_notes_d_alice_sont_invisibles_et_intouchables_pour_bob() {
             "{path} laisse fuiter le tag"
         );
     }
-    // Recherche du mot exact, dans la liste et dans la palette : aucun résultat.
+    // Recherche du mot exact, dans la liste et dans /open : aucun résultat.
     // (Le mot lui-même réapparaît dans le champ de recherche de Bob, c'est normal.)
     let list = bob.get(&format!("/notes?q={SECRET}")).await;
     assert!(list.body.contains("Aucune note ne correspond<"));
     assert!(!list.body.contains("note-row") && !list.body.contains("Journal"));
-    let palette = bob
-        .get_fragment(&format!("/search/palette?q={SECRET}"))
-        .await;
-    assert!(palette.body.contains("Aucun résultat<"));
-    assert!(!palette.body.contains("/notes/"));
+    let open = bob.get_fragment(&format!("/cmd/suggest?q={SECRET}")).await;
+    assert_eq!(open.body, r#"{"items":[]}"#);
+    let refused = bob.command(&format!("/open {SECRET}"), "/").await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
     // Alice, elle, retrouve bien sa note avec la même recherche.
     assert!(
         alice

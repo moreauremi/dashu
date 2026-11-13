@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", title, space_id, substr(body_md, 1, 200) AS \"head!: String\"\n               FROM notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT 5",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "head!: String",
+        "ordinal": 3,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "b077e85d91430cf79a2c944196d64bee5653915591e1bf236b2864c5a48a7d4d"
+}

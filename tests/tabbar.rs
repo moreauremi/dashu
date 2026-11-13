@@ -22,16 +22,16 @@ async fn quatre_raccourcis_par_defaut() {
     let page = alice.get("/notes").await;
     assert_eq!(
         tabbar(&page.body),
-        ["Dashboard", "Notes", "Agenda", "Rechercher"]
+        ["Dashboard", "Notes", "Agenda", "Commandes"]
     );
-    // La page courante est signalée, la recherche ouvre la palette.
+    // La page courante est signalée, « Commandes » ouvre la barre de commandes.
     assert!(
         page.body
             .contains(r#"<a class="tab" href="/e/perso/notes" aria-current="page">"#)
     );
     assert!(
         page.body
-            .contains(r#"<button class="tab" type="button" data-palette-open>"#)
+            .contains(r#"<button class="tab" type="button" data-cmd-open>"#)
     );
 }
 
@@ -63,7 +63,7 @@ async fn choix_enregistre_sur_le_compte() {
     let mut bob = app.logged_in(BOB).await;
     assert_eq!(
         tabbar(&bob.get("/").await.body),
-        ["Dashboard", "Notes", "Agenda", "Rechercher"]
+        ["Dashboard", "Notes", "Agenda", "Commandes"]
     );
 }
 
@@ -90,7 +90,7 @@ async fn ni_vide_ni_plus_de_quatre() {
     assert!(page.body.contains("Choisis au moins un raccourci."));
     assert_eq!(
         tabbar(&page.body),
-        ["Dashboard", "Notes", "Agenda", "Rechercher"]
+        ["Dashboard", "Notes", "Agenda", "Commandes"]
     );
 }
 

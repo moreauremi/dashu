@@ -33,7 +33,18 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
 | Fichiers (v2, en cours) | Envoi par glisser-déposer (sur n'importe quelle page) ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, déplacement, suppression. Une image collée dans une note y est rangée et insérée. Menu « Convertir » par fichier : compression, photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF ; puis « Remplacer l'original » si on veut. Règles par espace (vidéos en MP4, HEIC doublées d'un JPEG à l'arrivée). Onglet Outils : un fichier déposé y reste 24 heures hors des espaces, le temps de le convertir et de le garder ou le télécharger. Les conversions en cours se voient dans la barre latérale de toutes les pages. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
 
-Raccourcis clavier : `Ctrl+K` (ou `Cmd+K`) ouvre la palette de commandes (sur un fichier ou une note, elle propose aussi ses conversions et ses déplacements), `N` crée une note, `G` puis `D`, `N`, `F`, `C` ou `O` mène au Dashboard, aux Notes, aux Fichiers, à l'Agenda ou aux Outils. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
+**Barre de commandes.** Hors d'un champ, `/` ouvre une barre où l'on tape des commandes, comme dans le chat de Minecraft ou un terminal : tout se fait au clavier. `Tab` complète (encore `Tab` : la suggestion suivante), `↑` `↓` choisissent, `Entrée` exécute, effacer le `/` referme la barre. Un début de mot suffit (`/g ag` vaut `/go agenda`), accents et majuscules ne comptent pas. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/`. Sur téléphone, le bouton « Commandes » ouvre la barre et on touche les suggestions. `/help` liste tout ; les principales :
+
+| Commande | Effet |
+| --- | --- |
+| `/go dashboard`, `notes`, `fichiers`, `agenda`, `outils`, `reglages` | Ouvre la page ; `/go agenda demain`, `lundi`, `14/11` (vue jour), `/go agenda semaine 25/12` |
+| `/open <titre ou mot du texte>` | Ouvre une note ou un fichier, suggestions pendant la frappe |
+| `/search <texte>` | Notes de l'espace filtrées par ce texte |
+| `/space <espace>` | Change d'espace |
+| `/add task <titre> [@espace]`, `/add note [titre] [@espace]`, `/add file` | Crée une tâche du jour, une note, envoie un fichier |
+| `/move <espace>`, `/convert <format>`, `/compress` | Sur une note ou un fichier ouvert : le déplace, le convertit (ce que son menu « Convertir » propose) |
+
+L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 
 ## Installation locale
 
@@ -322,7 +333,7 @@ install -m 644 /opt/dashu/src/deploy/lxc/hardening.conf /etc/systemd/system/dash
 
 ### 8. Compression et conversions (v2)
 
-Le menu « Convertir » d'un fichier (sur sa ligne, sur son aperçu, ou dans la palette) ne propose que ce que son type permet. Chaque sortie est une copie, dans le même espace ; l'original est gardé, sauf si on choisit ensuite « Remplacer l'original » (la copie prend alors son nom).
+Le menu « Convertir » d'un fichier (sur sa ligne, sur son aperçu, ou `/convert` dans la barre de commandes) ne propose que ce que son type permet. Chaque sortie est une copie, dans le même espace ; l'original est gardé, sauf si on choisit ensuite « Remplacer l'original » (la copie prend alors son nom).
 
 | Fichier | Conversions |
 | --- | --- |
@@ -464,7 +475,7 @@ dashu/
 │   ├── tools/              compression : tâches (mod.rs) et service de conversion (worker.rs)
 │   ├── notes/              liste, éditeur, tags, rendu Markdown
 │   ├── calendar/           lecture iCal, synchro, grille jour/semaine
-│   ├── search/             palette Ctrl+K
+│   ├── commands/           barre de commandes « / » : liste, lecture d'une ligne, exécution
 │   ├── settings/           thème, mot de passe, Google, sources iCal
 │   └── web/                erreurs, CSRF, en-têtes de sécurité, /styleguide
 ├── templates/              gabarits askama : pages et fragments htmx (préfixe _)
@@ -510,7 +521,7 @@ npm install && npm run build
 
 | Sujet | Choix | Raison |
 | --- | --- | --- |
-| Dépendances front | htmx et CodeMirror, rien d'autre | Règle de la spec. `static/js/app.js` (palette, raccourcis, horloge) est écrit à la main. esbuild, lucide-static et fontsource ne servent qu'à fabriquer les fichiers de `static/` et ne sont pas servis. |
+| Dépendances front | htmx et CodeMirror, rien d'autre | Règle de la spec. `static/js/app.js` (barre de commandes, raccourcis, horloge) est écrit à la main. esbuild, lucide-static et fontsource ne servent qu'à fabriquer les fichiers de `static/` et ne sont pas servis. |
 | sqlx 0.8 (et non 0.9) | Version imposée par `tower-sessions-sqlx-store` | Deux versions de sqlx ne peuvent pas lier SQLite dans le même binaire. |
 | reqwest 0.12 (et non 0.13) | Version qu'utilise `openidconnect` 4 | Un seul client HTTP, en rustls + ring, sans dépendance système. |
 | syntect | Coloration du code des notes, côté serveur | « Code avec coloration » sans ajouter de JavaScript. Les classes produites sont filtrées par ammonia. |

@@ -154,9 +154,9 @@ pub async fn list(db: &SqlitePool, user_id: i64) -> AppResult<Vec<Space>> {
 
 #[derive(Deserialize)]
 pub struct SwitchForm {
-    slug: String,
+    pub(crate) slug: String,
     /// Page d'où vient la demande, pour y revenir.
-    next: Option<String>,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /space` : change l'espace actif puis revient sur la page courante.

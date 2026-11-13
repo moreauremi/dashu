@@ -139,7 +139,7 @@ async fn une_note_s_ouvre_dans_son_espace() {
     let path = note(&mut alice, "Cours de réseau").await;
     alice.post("/space", &[("slug", "perso")]).await;
 
-    // Depuis Perso (ou la palette), la note s'ouvre à l'adresse de son espace.
+    // Depuis Perso (ou /open), la note s'ouvre à l'adresse de son espace.
     let opened = alice.get(&path).await;
     assert_eq!(opened.location(), format!("/e/ecole{path}"));
     let page = alice.follow(opened).await;

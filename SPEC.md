@@ -78,7 +78,7 @@ dashu/
 │   ├── dashboard/          page d'accueil et widgets
 │   ├── notes/              CRUD, tags, rendu Markdown
 │   ├── calendar/           routes + synchro iCal en tâche de fond
-│   ├── search/             palette Ctrl+K, FTS5
+│   ├── commands/           barre de commandes « / », FTS5
 │   └── web/                erreurs, CSRF, en-têtes de sécurité
 ├── templates/              askama : layout, pages, fragments htmx
 ├── static/                 css, js (htmx, CodeMirror), icônes, polices
@@ -159,7 +159,7 @@ Règles :
 
 - Barre latérale : logo dashu, sélecteur d'espace (Perso / École / Taff, chacun avec sa couleur), liens Dashboard, Notes, Agenda, Réglages.
 - Changement d'espace en un clic, sans rechargement complet (HTMX).
-- **Palette de commandes** `Ctrl+K` / `Cmd+K` : recherche dans les notes et accès rapide aux pages et actions (« nouvelle note », « changer d'espace »).
+- **Palette de commandes** `Ctrl+K` / `Cmd+K` : recherche dans les notes et accès rapide aux pages et actions (« nouvelle note », « changer d'espace »). *Remplacée le 13 novembre 2026 par la barre de commandes `/` (voir « Barre de commandes », en fin de document).*
 - Raccourcis clavier : `N` nouvelle note, `G` puis `D` / `N` / `C` pour aller au Dashboard / Notes / Calendrier.
 
 ### Dashboard
@@ -593,3 +593,99 @@ Prises le 13 novembre 2026, par défaut, pour avancer sans attendre :
 - **C par un préfixe `/e/<slug>`** retiré avant le routage : les routes existantes ne changent pas, et les adresses sans préfixe restent valides.
 - **G avec les outils déjà installés** (ffmpeg, Ghostscript, libheif, crate `image`). Markdown et texte vers PDF, HTML ou DOCX demandent pandoc et Typst : ils restent à l'étape 8 de la v2.
 - **Le WebP produit est sans perte** : l'encodeur de la crate `image` ne fait que ça.
+
+---
+
+# dashu — Barre de commandes
+
+## Contexte
+
+Demandé par Rémi le 13 novembre 2026 : remplacer la palette `Ctrl+K` par des commandes tapées après `/`, comme dans le chat de Minecraft ou un terminal, avec la complétion par `Tab`. Le but : **tout faire au clavier**, sans souris ni trackpad. Proposition acceptée le jour même, avec trois choix :
+
+- l'ancienne recherche disparaît : effacer le `/` ferme la barre et rend la page ;
+- plus de `Ctrl+K` du tout ;
+- architecture mixte (voir « Décisions »).
+
+## Fonctionnement
+
+- **`/` ouvre la barre**, avec `/` déjà tapé, quand le curseur n'est pas dans un champ. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/` ouvre la barre. Sur téléphone, le bouton « Commandes » (barre du haut ou barre de raccourcis) l'ouvre aussi.
+- **Effacer le `/`** ferme la barre. `Échap` aussi.
+- **Grammaire** : `/commande [sous-commande] [arguments]`. Les mots sont en anglais (`/add`, `/go`), les valeurs en français comme dans l'interface (`agenda`, `ecole`), avec quelques alias (`fichiers` ou `files`). Majuscules et accents ne comptent pas. Un début de mot suffit s'il n'y a pas d'ambiguïté : `/g ag` vaut `/go agenda`.
+- **Complétion** : les suggestions s'affichent sous la saisie, la première en gris dans la ligne. `Tab` la complète ; `Tab` encore passe à la suivante, `Maj+Tab` revient. `↑` et `↓` parcourent la liste, `Entrée` exécute. Une ligne d'aide montre l'usage de la commande en cours (`/add task <titre> [@espace]`).
+- **Erreurs en rouge**, dans la barre, sans la fermer : commande inconnue, ambiguë, argument manquant, commande qui ne s'emploie pas sur cette page.
+- **Historique** : sur un `/` seul, `↑` rappelle les commandes précédentes (gardées dans le navigateur, 50 au plus).
+- **Une suppression se confirme** par un second `Entrée`.
+- Le résultat d'une commande s'annonce comme une action de l'interface : la page visée s'ouvre, avec le message habituel (« Tâche ajoutée »).
+
+## Commandes
+
+Celles qui agissent sur la page ouverte n'apparaissent que là où elles ont un sens.
+
+Lot 1 :
+
+| Commande | Effet |
+| --- | --- |
+| `/help` | Liste toutes les commandes et leur usage |
+| `/go dashboard` · `notes` · `fichiers` · `agenda` · `outils` · `reglages` · `guide` | Ouvre la page |
+| `/go agenda [jour\|semaine] [quand]` | Agenda d'un jour : `aujourdhui`, `demain`, `hier`, `lundi`… (le prochain), `14/11`, `14/11/2026` |
+| `/open <titre>` | Ouvre une note ou un fichier ; les suggestions se cherchent pendant la frappe (notes : texte intégral, comme l'ancienne palette ; fichiers : nom). Sans texte : les notes récentes |
+| `/search <texte>` | La liste des notes de l'espace, filtrée par ce texte |
+| `/space <espace>` | Change d'espace |
+| `/add task <titre> [@espace]` | Ajoute une tâche du jour |
+| `/add note [titre] [@espace]` | Crée une note et ouvre l'éditeur |
+| `/add file` | Ouvre le sélecteur de fichiers ; l'envoi part dans l'espace de la page |
+| Sur une note ou un fichier : `/move <espace>` | Le déplace |
+| Sur un fichier : `/convert <format>`, `/convert pages 2-4`, `/compress` | Les conversions que son type permet, comme son menu « Convertir » |
+
+Lot 2 :
+
+| Commande | Effet |
+| --- | --- |
+| `/add task <titre> [@espace] [+quand]` | Tâche pour un autre jour : `+demain`, `+lundi`, `+25/11` (elle apparaît ce jour-là) |
+| `/done <tâche>`, `/undone <tâche>` | Coche ou décoche une tâche du jour, choisie parmi elles |
+| `/delete task <tâche>` | Supprime une tâche (confirmée) |
+| Sur une note ou un fichier : `/delete` | Le supprime (confirmé) |
+| Sur une note : `/tag <tag>`, `/untag <tag>`, `/pin` | Tags et épinglage |
+| Sur un fichier : `/download` ; sur un fichier de l'onglet Outils : `/keep <espace>` | Télécharger, garder |
+| `/add space <nom>` | Crée un espace (couleur et icône proposées, modifiables dans Réglages) |
+| `/add agenda <url iCal> [@espace] [nom]` | Ajoute une source d'agenda |
+| `/theme sombre\|clair\|systeme`, `/size petit\|normal\|grand`, `/sidebar` | Thème, taille de l'interface, barre latérale ancrée ou détachée |
+| `/refresh` | Resynchronise l'agenda |
+| `/logout` | Se déconnecter |
+
+Plus tard : `/add event`, avec des événements propres à dashu (aujourd'hui l'agenda ne fait que lire des flux iCal).
+
+Les raccourcis à une lettre (`N`, `G` puis `D`…) restent.
+
+## Sécurité
+
+- Une commande n'est qu'une autre façon d'appeler les actions existantes : mêmes vérifications (l'élément **et** l'espace de destination appartiennent à l'utilisateur), même jeton CSRF (`POST /cmd`).
+- Ce qui revient du serveur (titres de notes, noms de fichiers) s'affiche comme du texte, jamais comme du HTML.
+- L'historique gardé dans le navigateur ne contient que des commandes tapées, jamais une réponse du serveur.
+
+## Critères d'acceptation
+
+Lot 1 :
+
+- [ ] `/` ouvre la barre hors d'un champ ; effacer le `/` la ferme ; `Ctrl+K` n'ouvre plus rien et l'ancienne recherche (`/search/palette`) n'existe plus
+- [ ] `Tab` complète une commande, un espace, une page ; `Tab` encore passe à la suggestion suivante
+- [ ] `/go agenda demain` ouvre l'agenda du lendemain ; `/g ag` est compris ; `/d` est refusé comme ambigu quand plusieurs commandes commencent par `d`
+- [ ] `/add task Réviser @ecole` crée la tâche dans École depuis Perso ; `/add note Idée` ouvre l'éditeur sur une note titrée « Idée »
+- [ ] `/open` trouve une note par un mot de son texte, et un fichier par son nom ; jamais ceux d'un autre compte ; les notes d'un espace archivé restent trouvables
+- [ ] Sur un fichier, la barre propose ses conversions et les espaces où le déplacer ; `/move` d'une note fonctionne ; une commande de fichier tapée ailleurs est refusée avec un message clair
+- [ ] Depuis l'éditeur, une commande qui change de page n'y perd pas la dernière frappe
+
+Lot 2 :
+
+- [ ] `/add task Rendre le DM +demain` crée une tâche visible demain, pas aujourd'hui
+- [ ] `/done` puis `/undone` cochent et décochent une tâche ; `/delete task` la supprime après confirmation
+- [ ] `/tag`, `/untag`, `/pin`, `/delete` sur une note ; `/download`, `/keep`, `/delete` sur un fichier
+- [ ] `/theme`, `/size`, `/sidebar`, `/refresh`, `/logout`, `/add space`, `/add agenda` font ce que font leurs boutons
+- [ ] Chaque commande a son test d'intégration ; STATUS et README à jour
+
+## Décisions
+
+- **Architecture mixte** : la liste des commandes est définie une seule fois, en Rust, et envoyée à l'ouverture de la barre (`GET /cmd/catalogue`, avec ce qui dépend de la page : espaces, conversions, tags, tâches). La complétion se fait dans le navigateur, sans attendre le serveur : `Tab` répond tout de suite. L'exécution passe par `POST /cmd`, qui relit la ligne avec les mêmes règles et appelle le code existant : c'est testable dans `tests/`. Seules les suggestions de `/open` se cherchent sur le serveur (`GET /cmd/suggest`).
+- **La navigation qui suit une commande** passe par l'en-tête `HX-Location` de htmx : même transition qu'un lien, adresse mise à jour dans l'historique, espace de l'onglet gardé.
+- **`+` pour une date, `@` pour un espace** : sans ces signes, « Réviser pour demain » serait coupé en titre et date.
+- **« lundi » veut dire le prochain lundi**, jamais aujourd'hui ; `14/11` est dans l'année en cours.

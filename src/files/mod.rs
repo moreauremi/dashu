@@ -193,9 +193,9 @@ pub async fn keep(
 
 #[derive(Deserialize)]
 pub struct MoveForm {
-    space_id: i64,
+    pub(crate) space_id: i64,
     /// Page où revenir : la liste, ou l'aperçu du fichier.
-    next: Option<String>,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /files/{id}/move` : déplace un fichier vers un autre espace. Sa

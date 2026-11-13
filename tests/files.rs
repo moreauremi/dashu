@@ -329,6 +329,12 @@ async fn sans_files_dir_les_fichiers_sont_desactives() {
     assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("pas activés"));
     assert!(!page.body.contains("data-upload-input"));
+    // La barre de commandes le dit aussi.
+    let tree = alice.catalogue("/files").await;
+    assert_eq!(
+        common::command_node(&tree, &["add", "file"])["off"],
+        "Les fichiers ne sont pas activés sur ce serveur."
+    );
     let refused = alice.upload("note.txt", b"bonjour").await;
     assert_eq!(refused.status, StatusCode::NOT_FOUND);
 }

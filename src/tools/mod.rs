@@ -305,11 +305,11 @@ pub async fn compress(
 
 #[derive(Deserialize)]
 pub struct ConvertForm {
-    to: String,
+    pub(crate) to: String,
     /// PDF : « 2-4 », ou « 3 ».
-    pages: Option<String>,
+    pub(crate) pages: Option<String>,
     /// Page où revenir : la liste, l'aperçu du fichier, l'onglet Outils.
-    next: Option<String>,
+    pub(crate) next: Option<String>,
 }
 
 const IMPOSSIBLE: &str = "Cette conversion n'est pas possible pour ce fichier.";

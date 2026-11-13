@@ -626,6 +626,66 @@ pub fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
     Some(&text[from..from + len])
 }
 
+// ---------------------------------------------------------------------
+// Barre de commandes « / »
+// ---------------------------------------------------------------------
+
+impl Client {
+    /// Ligne validée dans la barre de commandes, depuis cette page (adresse
+    /// sans l'espace), comme l'envoie le formulaire htmx de `layout.html`.
+    pub async fn command(&mut self, line: &str, page: &str) -> TestResponse {
+        self.extra.push(("hx-request".into(), "true".into()));
+        self.post("/cmd", &[("line", line), ("page", page)]).await
+    }
+
+    /// Les commandes proposées sur cette page (`GET /cmd/catalogue`).
+    pub async fn catalogue(&mut self, page: &str) -> serde_json::Value {
+        let query = encode(&[("page", page)]);
+        let response = self.get_fragment(&format!("/cmd/catalogue?{query}")).await;
+        assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+        let mut json: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+        json["commands"].take()
+    }
+}
+
+/// La page qu'ouvre une commande réussie : en-tête `HX-Location` (204).
+pub fn hx_location(response: &TestResponse) -> serde_json::Value {
+    assert_eq!(
+        response.status,
+        StatusCode::NO_CONTENT,
+        "commande refusée : {}",
+        response.body
+    );
+    serde_json::from_str(response.header("hx-location")).expect("en-tête HX-Location")
+}
+
+/// Une commande du catalogue, par son chemin (`["add", "task"]`), ou `Null`.
+pub fn command_node<'a>(tree: &'a serde_json::Value, path: &[&str]) -> &'a serde_json::Value {
+    let mut level = tree;
+    let mut node = &serde_json::Value::Null;
+    for name in path {
+        node = level
+            .as_array()
+            .and_then(|nodes| nodes.iter().find(|n| n["name"] == *name))
+            .unwrap_or(&serde_json::Value::Null);
+        level = &node["children"];
+    }
+    node
+}
+
+/// Valeurs proposées pour l'argument d'une commande (`v` de chaque choix).
+pub fn arg_values(node: &serde_json::Value) -> Vec<String> {
+    node["arg"]["values"]
+        .as_array()
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|v| v["v"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Identifiant de note à la fin d'une redirection `/notes/{id}`.
 pub fn note_id(response: &TestResponse) -> i64 {
     response

@@ -987,14 +987,12 @@ html {
    #app entier qui reçoit .htmx-added, et une règle générale le rendait
    invisible le temps d'une image, d'où un flash du fond de page. */
 .widget-body,
-#note-results,
-.palette-results > * {
+#note-results {
   transition: opacity var(--fast) var(--ease);
 }
 
 .widget-body.htmx-added,
-#note-results.htmx-added,
-.palette-results > .htmx-added {
+#note-results.htmx-added {
   opacity: 0;
 }
 
@@ -3164,10 +3162,10 @@ input.note-title:focus-visible {
   }
 }
 
-/* ---------- 8. Palette de commandes ---------- */
+/* ---------- 8. Barre de commandes ---------- */
 
-.palette {
-  width: min(600px, calc((100vw - 24px) / var(--zoom, 1)));
+.cmdbar {
+  width: min(640px, calc((100vw - 24px) / var(--zoom, 1)));
   max-height: min(560px, calc((100dvh - 24px) / var(--zoom, 1)));
   margin-top: 12vh;
   padding: 0;
@@ -3180,25 +3178,25 @@ input.note-title:focus-visible {
   transition: opacity var(--fast) var(--ease), translate var(--fast) var(--ease);
 }
 
-.palette[open] {
+.cmdbar[open] {
   display: flex;
   flex-direction: column;
 }
 
 @starting-style {
-  .palette[open] {
+  .cmdbar[open] {
     opacity: 0;
     translate: 0 -6px;
   }
 }
 
-.palette::backdrop {
+.cmdbar::backdrop {
   background: rgb(0 0 0 / 0.45);
 }
 
-/* Icône du champ et icônes des résultats dans la même colonne, à 16 px du bord. */
-.palette-field {
+.cmd-field {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
   padding: 0 16px;
@@ -3206,112 +3204,172 @@ input.note-title:focus-visible {
   color: var(--text-3);
 }
 
-.palette-field input {
+/* La saisie et sa suite grisée (ce que Tab ajouterait) sont superposées :
+   même police à chasse fixe, même taille, même départ. */
+.cmd-line {
+  position: relative;
   flex: 1;
+  min-width: 0;
   height: 48px;
+}
+
+.cmd-line input,
+.cmd-ghost {
+  font: 400 15px/24px var(--font-mono);
+  letter-spacing: 0;
+}
+
+.cmd-line input {
+  position: relative;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
-  font-size: 15px;
+  color: var(--text);
 }
 
-.palette-field input:focus-visible {
+.cmd-line input:focus-visible {
   outline: none;
 }
 
-.palette-field input::-webkit-search-cancel-button {
+.cmd-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--text-3);
+  white-space: pre;
+  pointer-events: none;
+}
+
+.cmd-typed {
+  color: transparent;
+}
+
+/* Usage de la commande en cours, ou erreur. */
+.cmd-hint {
+  flex: none;
+  padding: 8px 16px 0;
+  color: var(--text-3);
+  font: 400 12px/16px var(--font-mono);
+}
+
+.cmd-hint.is-error {
+  color: var(--danger);
+}
+
+/* Refus du serveur (fragment .frag-error). */
+.cmd-msg:empty {
   display: none;
 }
 
-.palette-results {
+.cmd-msg .frag-error {
+  padding: 4px 16px 0;
+  font-size: 13px;
+}
+
+.cmd-list {
   flex: 1;
-  min-height: 120px;
-  overflow-y: auto;
+  min-height: 0;
+  margin: 0;
   padding: 8px;
+  overflow-y: auto;
+  list-style: none;
 }
 
-.palette-heading {
-  padding: 8px 8px 4px;
-  color: var(--text-3);
-  font-size: 12px;
-  font-weight: 500;
+.cmd-list:empty {
+  display: none;
 }
 
-.palette-empty {
-  padding: 32px 8px;
-  color: var(--text-2);
-  text-align: center;
-}
-
-.pal-item {
+.cmd-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
+  gap: 12px;
+  min-height: 36px;
   padding: 4px 8px;
-  border: 0;
   border-radius: var(--radius);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  text-decoration: none;
+  cursor: pointer;
 }
 
-/* La couleur d'un espace est portée par son point, pas par l'icône. */
-.pal-item > .i {
-  color: var(--text-3);
-}
-
-.pal-item:hover,
-.pal-item[aria-selected="true"] {
+.cmd-item:hover,
+.cmd-item[aria-selected="true"] {
   background: var(--surface-2);
 }
 
-.pal-item[aria-selected="true"] {
+.cmd-item[aria-selected="true"] {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.pal-main {
+.cmd-main {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
 }
 
-.pal-title,
-.pal-sub {
+.cmd-name,
+.cmd-sub,
+.cmd-desc {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pal-sub {
+.cmd-name {
+  font: 400 13px/20px var(--font-mono);
+}
+
+/* Une note ou un fichier (/open) : son titre, pas un mot de commande. */
+.cmd-item.is-item .cmd-name {
+  font: 400 14px/20px var(--font-ui);
+}
+
+.cmd-sub,
+.cmd-desc {
   color: var(--text-2);
   font-size: 12px;
 }
 
-.pal-space {
-  display: inline-flex;
+.cmd-desc {
+  flex: none;
+  max-width: 50%;
+  text-align: right;
+}
+
+.cmd-keys {
+  display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.palette-help {
-  display: flex;
-  align-items: center;
   gap: 4px;
+  margin-top: 8px;
   padding: 8px 16px;
   border-top: 1px solid var(--border);
   color: var(--text-3);
   font-size: 12px;
 }
 
-.palette-help kbd:nth-of-type(3) {
+.cmd-keys kbd:nth-of-type(2),
+.cmd-keys kbd:nth-of-type(4) {
   margin-left: 12px;
+}
+
+/* Écran tactile : 16 px au moins, sinon iOS zoome sur le champ. Pas de
+   touche Tab : on touche une suggestion, l'aide des touches ne sert pas. */
+@media (pointer: coarse) {
+  .cmd-line input,
+  .cmd-ghost {
+    font-size: 16px;
+  }
+
+  .cmd-item {
+    min-height: 44px;
+  }
+
+  .cmd-keys {
+    display: none;
+  }
 }
 
 /* ---------- 9. Agenda ---------- */
@@ -4143,7 +4201,7 @@ input.note-title:focus-visible {
   gap: 12px;
 }
 
-.sg-accents .pal-space {
+.sg-accents .space-of {
   width: 64px;
   color: var(--text);
 }

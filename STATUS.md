@@ -20,7 +20,7 @@ Une case cochée veut dire « vérifié », et la ligne dit où : sur le serveur
 - [x] **Les 3 espaces existent à la première connexion et le changement d'espace filtre dashboard, notes et agenda** : en usage sur le serveur, et tests `trois_espaces_des_la_premiere_connexion`, `le_changement_d_espace_filtre_le_contenu`, `vue_semaine`.
 - [x] **Une note créée, modifiée, taguée, retrouvée par la recherche, déplacée, puis supprimée** : test `cycle_de_vie_d_une_note`, et en usage.
 - [x] **Le flux iCal Pronote Campus s'affiche correctement en vue semaine, heure d'été comprise** : le vrai flux Pronote Campus est branché sur l'espace École et s'affiche ; l'agenda de Perso réunit ceux de tous les espaces. L'heure d'été est vérifiée par les tests (`heure_d_ete_et_heure_d_hiver`, `vue_semaine_en_heure_d_ete`, avec `tests/fixtures/pronote.ics`) ; le prochain passage réel est le 28 mars 2027.
-- [x] **La palette `Ctrl+K` trouve une note et ouvre une page** : vu dans le navigateur.
+- [x] **La palette `Ctrl+K` trouve une note et ouvre une page** : vu dans le navigateur. Remplacée le 13 novembre 2026 par la barre de commandes `/`, qui fait de même avec `/open` et `/go` (voir plus bas).
 - [x] **Tout fonctionne sur téléphone** : utilisé sur iPhone, dans Safari et en app sur l'écran d'accueil (sans zoom, icône, barre de raccourcis en bas, changement d'espace par balayage).
 
 ### Technique
@@ -93,9 +93,27 @@ Cahier des charges dans `SPEC.md` (« Espaces et outils »), accepté en entier 
 - [x] **A. Perso montre tout** : dashboard, notes, fichiers et agenda de tous les espaces, filtre « Seulement Perso ». Test `perso_montre_tous_les_espaces`.
 - [x] **C. L'espace dans l'adresse** : `/e/<slug>/…`, en-tête `X-Espace` par onglet, redirections et historique qui gardent l'espace. Tests `tests/adresse.rs`.
 - [x] **E. Archiver un espace** ; **I. règles par espace** ; **J. remplacer l'original** ; **F. espace du moment**. Tests `tests/espaces_suite.rs`.
-- [x] **K. Déposer partout, coller une image dans une note** ; **L. la palette connaît la page**. Tests `deposer_partout_et_coller_une_image`, `la_palette_connait_la_page`. Le glisser-déposer et le collage eux-mêmes (JavaScript) se vérifient dans le navigateur.
+- [x] **K. Déposer partout, coller une image dans une note** ; **L. la palette connaît la page** (aujourd'hui la barre de commandes). Tests `deposer_partout_et_coller_une_image`, `la_barre_connait_la_page`. Le glisser-déposer et le collage eux-mêmes (JavaScript) se vérifient dans le navigateur.
 - Migrations 0011 (`files.expires_at`, `uploads.for_tools`, `jobs.target`) et 0012 (`spaces.archived_at`, `auto_mp4`, `auto_heic_jpeg`, `users.moment_space`).
 - **Barre latérale détachée** (13 novembre 2026) : le glissement était saccadé ; elle a maintenant sa propre couche (`will-change`) et une courbe par sens. Mesuré dans le navigateur de la démo : une image toutes les 16 ms à l'arrivée comme au départ.
+
+## Barre de commandes : avancement
+
+Cahier des charges dans `SPEC.md` (« Barre de commandes »), accepté le 13 novembre 2026. Rien n'est encore vérifié sur le serveur (il faut `dashu-update`).
+
+Lot 1 : fait, tests `tests/commandes.rs` (6), tests unitaires de la lecture d'une ligne et des jours (`src/commands/`).
+
+- [x] `/` ouvre la barre hors d'un champ, effacer le `/` la ferme ; `Ctrl+K` et `/search/palette` n'existent plus. Test `la_barre_remplace_la_palette`.
+- [x] `Tab` complète une commande, un espace, une page ; `Tab` encore passe à la suivante. Vu dans le navigateur (instance locale), au clavier et au toucher (largeur téléphone).
+- [x] `/go agenda demain` ouvre l'agenda du lendemain ; `/g ag` est compris ; un début de mot ambigu est refusé. Test `aller_a_une_page`.
+- [x] `/add task Réviser @ecole` depuis Perso ; `/add note Idée` ouvre l'éditeur sur une note titrée. Test `ajouter_une_tache_ou_une_note`.
+- [x] `/open` trouve une note par un mot de son texte et un fichier par son nom, jamais ceux d'un autre compte ; espace archivé compris. Tests `ouvrir_une_note_ou_un_fichier`, `archiver_puis_restaurer_un_espace`, `les_notes_d_alice_sont_invisibles_et_intouchables_pour_bob`.
+- [x] Sur un fichier : ses conversions et les espaces où le déplacer ; `/move` d'une note ; une commande de fichier tapée ailleurs est refusée avec un message. Tests `la_barre_connait_la_page`, `agir_sur_la_note_ou_le_fichier_ouvert`.
+- [x] Depuis l'éditeur, une commande n'y perd pas la dernière frappe (envoi de secours avant la commande). Vu dans le navigateur.
+- [ ] `/add file` ouvre le sélecteur de fichiers : vérifié jusqu'à l'ouverture (le sélecteur du système ne se pilote pas) ; l'envoi lui-même est celui du bouton.
+- Poids : `app.js` passe de 8,6 à 14,3 Ko compressé (gzip, mesuré en local) ; une page hors éditeur reste sous la cible de 60 Ko (environ 48 Ko). La police à chasse fixe de la barre ne se charge qu'à sa première ouverture.
+
+Lot 2 : à faire (dates des tâches, `/done`, `/delete`, tags, réglages…).
 
 ## Mesures de performance
 
