@@ -10,7 +10,7 @@
       <button class="check" type="button" role="checkbox" aria-checked="{{ task.done }}" aria-label="{{ task.title }}"
               hx-post="/tasks/{{ task.id }}/toggle" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("check")|safe }}</button>
       <span class="task-title">{{ task.title }}</span>
-      {% if let Some(since) = task.late_since %}<span class="tag tag-late">depuis {{ since }}</span>{% endif %}
+      {% if let Some(since) = task.late_since %}<span class="live late"><span class="dot" aria-hidden="true"></span>depuis {{ since }}</span>{% endif %}
       <button class="icon-btn icon-btn-sm task-delete" type="button" aria-label="Supprimer la tâche « {{ task.title }} »"
               hx-delete="/tasks/{{ task.id }}" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button>
     </li>

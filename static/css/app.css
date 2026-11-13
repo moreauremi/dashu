@@ -1170,12 +1170,8 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.tag-late {
-  background: color-mix(in oklab, var(--warn) 16%, var(--surface));
-  color: var(--warn);
-}
-
-/* État en direct (cours en cours) : un point et un mot, sans pastille. */
+/* État d'une ligne (cours en cours, tâche en retard) : un point et quelques
+   mots, sans pastille. Seul le point porte la couleur. */
 .live {
   display: inline-flex;
   align-items: center;
@@ -1183,6 +1179,16 @@ select:focus-visible {
   color: var(--text-2);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.live.late {
+  color: var(--text-3);
+}
+
+.live.late .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--warn);
 }
 
 .chips {
@@ -1379,10 +1385,11 @@ select:focus-visible {
 }
 
 .clock {
-  font-size: 32px;
-  font-weight: 500;
+  color: var(--text-2);
+  font-size: 24px;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 32px;
 }
 
 .dash-head-end {
@@ -3838,7 +3845,8 @@ input.note-title:focus-visible {
   }
 
   .clock {
-    font-size: 24px;
+    font-size: 20px;
+    line-height: 28px;
   }
 
   /* Bento sur 2 colonnes : un widget large de 3 ou 4 en prend 2. */
