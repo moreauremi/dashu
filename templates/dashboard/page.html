@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Dashboard · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}Dashboard · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 {#- [data-dash] porte le mode édition (classe .editing, posée par
     static/js/dashboard.js) : la grille, rechargée après un ajout, le garde. -#}

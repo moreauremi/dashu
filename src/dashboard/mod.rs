@@ -23,6 +23,7 @@ use crate::AppState;
 use crate::auth::session::{Ctx, Shell};
 use crate::calendar::{self, ical};
 use crate::files;
+use crate::spaces::Space;
 use crate::time;
 use crate::web::{self, AppError, AppResult};
 use layout::{Kind, SizeQuery, Widget};
@@ -238,6 +239,7 @@ pub async fn courses(
 
 struct TaskItem {
     id: i64,
+    space_id: i64,
     title: String,
     done: bool,
     /// Pour une tâche en retard : sa date d'origine, « lun. 9 nov. ».
@@ -249,23 +251,29 @@ struct TaskItem {
 struct TasksWidget {
     tasks: Vec<TaskItem>,
     done_count: usize,
+    /// Espaces proposés à l'ajout et au déplacement d'une tâche.
+    spaces: Vec<Space>,
+    active_id: i64,
+    /// « Tâche ajoutée dans École » : ce qui est parti dans un autre espace
+    /// ne se voit plus ici, la phrase le dit.
+    notice: Option<String>,
 }
 
 /// `GET /widgets/tasks`
 pub async fn tasks(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
-    tasks_widget(&state.db, &ctx).await
+    tasks_widget(&state.db, &ctx, None).await
 }
 
 /// Tâches du jour : celles d'aujourd'hui, celles en retard pas encore
 /// faites, et celles cochées aujourd'hui (elles restent visibles, barrées,
 /// jusqu'à minuit).
-async fn tasks_widget(db: &SqlitePool, ctx: &Ctx) -> AppResult<Response> {
+async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> AppResult<Response> {
     let today = time::paris_date(time::now());
     let today_iso = today.format("%Y-%m-%d").to_string();
     let midnight = time::day_start(today);
 
     let tasks: Vec<TaskItem> = sqlx::query!(
-        r#"SELECT id AS "id!", title, done AS "done!: bool", due_date
+        r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
            WHERE user_id = ?1 AND space_id = ?2
              AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))
@@ -288,6 +296,7 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx) -> AppResult<Response> {
             .map(time::date_short);
         TaskItem {
             id: t.id,
+            space_id: t.space_id,
             title: t.title,
             done: t.done,
             late_since,
@@ -296,36 +305,83 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx) -> AppResult<Response> {
     .collect();
 
     let done_count = tasks.iter().filter(|t| t.done).count();
-    Ok(web::html(TasksWidget { tasks, done_count }))
+    Ok(web::html(TasksWidget {
+        tasks,
+        done_count,
+        spaces: ctx.spaces.clone(),
+        active_id: ctx.active.id,
+        notice,
+    }))
 }
 
 #[derive(Deserialize)]
 pub struct TaskForm {
     title: String,
+    /// Espace de la tâche ; l'espace actif sans précision.
+    space_id: Option<i64>,
 }
 
-/// `POST /tasks` : ajoute une tâche pour aujourd'hui dans l'espace actif.
+/// `POST /tasks` : ajoute une tâche pour aujourd'hui, dans l'espace choisi
+/// (l'espace actif par défaut).
 pub async fn add_task(
     ctx: Ctx,
     State(state): State<AppState>,
     axum::Form(form): axum::Form<TaskForm>,
 ) -> AppResult<Response> {
+    // L'espace choisi doit appartenir à l'utilisateur.
+    let space = match form.space_id {
+        Some(id) => ctx.space_by_id(id).ok_or(AppError::NotFound)?,
+        None => &ctx.active,
+    };
     let title: String = form.title.trim().chars().take(TASK_MAX_CHARS).collect();
+    let mut notice = None;
     if !title.is_empty() {
         let now = time::now();
         let today = time::paris_date(now).format("%Y-%m-%d").to_string();
         sqlx::query!(
             "INSERT INTO tasks (user_id, space_id, title, due_date, created_at) VALUES (?, ?, ?, ?, ?)",
             ctx.user.id,
-            ctx.active.id,
+            space.id,
             title,
             today,
             now
         )
         .execute(&state.db)
         .await?;
+        if space.id != ctx.active.id {
+            notice = Some(format!("Tâche ajoutée dans {}", space.name));
+        }
     }
-    tasks_widget(&state.db, &ctx).await
+    tasks_widget(&state.db, &ctx, notice).await
+}
+
+#[derive(Deserialize)]
+pub struct MoveForm {
+    space_id: i64,
+}
+
+/// `POST /tasks/{id}/move` : déplace une tâche vers un autre espace.
+pub async fn move_task(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<MoveForm>,
+) -> AppResult<Response> {
+    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let moved = sqlx::query!(
+        "UPDATE tasks SET space_id = ? WHERE id = ? AND user_id = ?",
+        target.id,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if moved == 0 {
+        return Err(AppError::NotFound);
+    }
+    let notice = format!("Tâche déplacée vers {}", target.name);
+    tasks_widget(&state.db, &ctx, Some(notice)).await
 }
 
 /// `POST /tasks/{id}/toggle` : coche ou décoche.
@@ -350,7 +406,7 @@ pub async fn toggle_task(
     if changed == 0 {
         return Err(AppError::NotFound);
     }
-    tasks_widget(&state.db, &ctx).await
+    tasks_widget(&state.db, &ctx, None).await
 }
 
 /// `DELETE /tasks/{id}`
@@ -370,7 +426,7 @@ pub async fn delete_task(
     if deleted == 0 {
         return Err(AppError::NotFound);
     }
-    tasks_widget(&state.db, &ctx).await
+    tasks_widget(&state.db, &ctx, None).await
 }
 
 // ---------------------------------------------------------------------
@@ -471,7 +527,7 @@ pub async fn recent_files(
     let limit = size.items([2, 5, 9, 13], 5);
     let items = sqlx::query!(
         r#"SELECT id AS "id!", name, mime, size, updated_at, thumb
-           FROM files WHERE user_id = ? AND space_id = ?
+           FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC
            LIMIT ?"#,
         ctx.user.id,
@@ -495,7 +551,7 @@ pub async fn recent_files(
     })
     .collect();
     let total = sqlx::query_scalar!(
-        "SELECT count(*) FROM files WHERE user_id = ? AND space_id = ?",
+        "SELECT count(*) FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL",
         ctx.user.id,
         ctx.active.id
     )

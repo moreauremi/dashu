@@ -1,5 +1,7 @@
-//! Outils (v2) : pour l'instant, la compression d'un fichier (vidéo, photo,
-//! PDF) en une copie plus légère, l'original étant gardé.
+//! Outils (v2) : compression d'un fichier en une copie plus légère, et
+//! conversions du menu « Convertir » (photo en JPEG, PNG ou WebP, vidéo en
+//! MP4, son en MP3, pages d'un PDF). L'original est toujours gardé. L'onglet
+//! Outils reçoit en plus des fichiers pas encore rangés (voir [`page`]).
 //!
 //! dashu ne lance aucune conversion lui-même : il est limité à 256 Mo et n'a
 //! aucun droit. Le travail passe par un dossier partagé `WORK_DIR/jobs/<id>/` :
@@ -23,7 +25,7 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::auth::session::Ctx;
+use crate::auth::session::{Ctx, Shell};
 use crate::config::FilesConfig;
 use crate::files::{self, human_size};
 use crate::time;
@@ -48,6 +50,12 @@ pub struct JobSpec {
     /// Vignette : grand aperçu à produire en plus (photo HEIC, PDF, vidéo).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
+    /// Conversion : la sortie choisie dans le menu « Convertir ».
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<Conversion>,
+    /// PDF : première et dernière page à garder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pages: Option<(u32, u32)>,
 }
 
 /// Sorte de tâche.
@@ -59,6 +67,8 @@ pub enum Task {
     Compress,
     /// Vignette de la liste et grand aperçu, faits à l'arrivée du fichier.
     Thumbnail,
+    /// Conversion choisie dans le menu « Convertir » (voir [`Conversion`]).
+    Convert,
 }
 
 /// Famille de fichier, qui décide de la façon de compresser.
@@ -73,6 +83,8 @@ pub enum Media {
     Heic,
     /// Ghostscript, réglage « ebook » (images à 150 dpi).
     Pdf,
+    /// Son : lu par ffmpeg (conversion en MP3 seulement).
+    Audio,
 }
 
 impl Media {
@@ -85,6 +97,15 @@ impl Media {
             "image/jpeg" | "image/png" | "image/webp" => Some(Self::Image),
             m if m.starts_with("video/") => Some(Self::Video),
             _ => None,
+        }
+    }
+
+    /// Façon de lire un fichier à convertir, ou `None`.
+    pub fn for_input(mime: &str) -> Option<Self> {
+        match mime {
+            "image/gif" => Some(Self::Image),
+            m if m.starts_with("audio/") => Some(Self::Audio),
+            _ => Self::for_mime(mime),
         }
     }
 
@@ -108,16 +129,155 @@ impl Media {
             Self::Video => "mp4",
             Self::Image | Self::Heic => "jpg",
             Self::Pdf => "pdf",
+            Self::Audio => "mp3",
         }
+    }
+}
+
+/// Ce que propose le menu « Convertir » d'un fichier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Conversion {
+    /// Copie plus légère (réglages par famille, voir [`Media`]).
+    Compress,
+    Jpg,
+    Png,
+    /// WebP sans perte : l'encodeur de la crate `image` ne fait que ça.
+    Webp,
+    /// Vidéo en MP4 (H.264 et AAC), dans sa définition d'origine.
+    Mp4,
+    /// Le son d'une vidéo ou d'un fichier audio, en MP3.
+    Mp3,
+    /// Une plage de pages d'un PDF, dans un nouveau PDF.
+    Pages,
+}
+
+impl Conversion {
+    pub const ALL: [Self; 7] = [
+        Self::Compress,
+        Self::Jpg,
+        Self::Png,
+        Self::Webp,
+        Self::Mp4,
+        Self::Mp3,
+        Self::Pages,
+    ];
+
+    /// Valeur envoyée par le formulaire (et rangée dans `jobs.target`).
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Compress => "compress",
+            Self::Jpg => "jpg",
+            Self::Png => "png",
+            Self::Webp => "webp",
+            Self::Mp4 => "mp4",
+            Self::Mp3 => "mp3",
+            Self::Pages => "pages",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.key() == key)
+    }
+
+    /// Libellé du menu.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Compress => "Compresser",
+            Self::Jpg => "En JPEG",
+            Self::Png => "En PNG",
+            Self::Webp => "En WebP",
+            Self::Mp4 => "En MP4",
+            Self::Mp3 => "Le son en MP3",
+            Self::Pages => "Extraire des pages",
+        }
+    }
+
+    /// Extension du fichier produit (la compression garde celle de sa famille).
+    fn ext(self, media: Media) -> &'static str {
+        match self {
+            Self::Compress => media.output_ext(),
+            Self::Jpg => "jpg",
+            Self::Png => "png",
+            Self::Webp => "webp",
+            Self::Mp4 => "mp4",
+            Self::Mp3 => "mp3",
+            Self::Pages => "pdf",
+        }
+    }
+}
+
+/// Conversions possibles pour un type MIME, dans l'ordre du menu. Seules
+/// celles des outils installés : pandoc et Typst (Markdown vers PDF…)
+/// viendront plus tard.
+pub fn conversions_for(mime: &str) -> Vec<Conversion> {
+    use Conversion::*;
+    let mut out = Vec::new();
+    if Media::for_mime(mime).is_some() {
+        out.push(Compress);
+    }
+    match mime {
+        "image/jpeg" => out.extend([Png, Webp]),
+        "image/png" => out.extend([Jpg, Webp]),
+        "image/webp" => out.extend([Jpg, Png]),
+        "image/gif" | "image/heic" | "image/heif" => out.extend([Jpg, Png, Webp]),
+        "video/mp4" => out.push(Mp3),
+        m if m.starts_with("video/") => out.extend([Mp4, Mp3]),
+        "audio/mpeg" => {}
+        m if m.starts_with("audio/") => out.push(Mp3),
+        "application/pdf" => out.push(Pages),
+        _ => {}
+    }
+    out
+}
+
+/// Plage de pages tapée dans le menu : « 2-4 », « 2 – 4 » ou « 3 ». Deux
+/// nombres de 1 à 9999 dans l'ordre, rien d'autre : la valeur ne part jamais
+/// telle quelle vers Ghostscript.
+pub fn parse_pages(text: &str) -> Option<(u32, u32)> {
+    let page = |s: &str| {
+        s.trim()
+            .parse::<u32>()
+            .ok()
+            .filter(|n| (1..=9999).contains(n))
+    };
+    let text = text.trim();
+    let (first, last) = match text.split_once(['-', '–']) {
+        Some((a, b)) => (page(a)?, page(b)?),
+        None => (page(text)?, page(text)?),
+    };
+    (first <= last).then_some((first, last))
+}
+
+/// Partie du nom avant l'extension.
+fn stem(source: &str) -> &str {
+    match source.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem,
+        _ => source,
+    }
+}
+
+/// Nom du fichier produit : « photo.heic » -> « photo.jpg », « cours.pdf »
+/// -> « cours (pages 2-4).pdf », compression -> « … (compressé).… ».
+pub fn result_name(source: &str, spec: &JobSpec) -> String {
+    let stem = stem(source);
+    match (spec.to, spec.pages) {
+        (Some(Conversion::Pages), Some((a, b))) if a == b => {
+            files::clean_name(&format!("{stem} (page {a}).pdf"))
+        }
+        (Some(Conversion::Pages), Some((a, b))) => {
+            files::clean_name(&format!("{stem} (pages {a}-{b}).pdf"))
+        }
+        (Some(to), _) if to != Conversion::Compress => {
+            files::clean_name(&format!("{stem}.{}", to.ext(spec.media)))
+        }
+        _ => compressed_name(source, spec.media),
     }
 }
 
 /// Nom de la copie compressée : « IMG_1234.MOV » -> « IMG_1234 (compressé).mp4 ».
 pub fn compressed_name(source: &str, media: Media) -> String {
-    let stem = match source.rsplit_once('.') {
-        Some((stem, _)) if !stem.is_empty() => stem,
-        _ => source,
-    };
+    let stem = stem(source);
     files::clean_name(&format!("{stem} (compressé).{}", media.output_ext()))
 }
 
@@ -137,6 +297,62 @@ pub async fn compress(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
+    start(&ctx, &state, id, Conversion::Compress, None).await?;
+    ctx.flash_ok("Compression lancée : la copie apparaîtra dans la liste")
+        .await?;
+    Ok(see_other("/files"))
+}
+
+#[derive(Deserialize)]
+pub struct ConvertForm {
+    to: String,
+    /// PDF : « 2-4 », ou « 3 ».
+    pages: Option<String>,
+    /// Page où revenir : la liste, l'aperçu du fichier, l'onglet Outils.
+    next: Option<String>,
+}
+
+const IMPOSSIBLE: &str = "Cette conversion n'est pas possible pour ce fichier.";
+
+/// `POST /files/{id}/convert` : lance une conversion du menu « Convertir ».
+/// Le résultat ira dans le même espace que l'original.
+pub async fn convert(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<ConvertForm>,
+) -> AppResult<Response> {
+    let to =
+        Conversion::from_key(&form.to).ok_or_else(|| AppError::BadRequest(IMPOSSIBLE.into()))?;
+    let pages = match to {
+        Conversion::Pages => Some(
+            parse_pages(form.pages.as_deref().unwrap_or_default()).ok_or_else(|| {
+                AppError::BadRequest("Pages à extraire : par exemple 2-4.".into())
+            })?,
+        ),
+        _ => None,
+    };
+    start(&ctx, &state, id, to, pages).await?;
+    ctx.flash_ok(match to {
+        Conversion::Compress => "Compression lancée : la copie apparaîtra dans la liste",
+        _ => "Conversion lancée : le résultat apparaîtra dans la liste",
+    })
+    .await?;
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/files",
+    }))
+}
+
+/// Prépare la tâche d'une compression ou d'une conversion, pour un fichier de
+/// l'utilisateur et une sortie que son type permet.
+async fn start(
+    ctx: &Ctx,
+    state: &AppState,
+    id: i64,
+    to: Conversion,
+    pages: Option<(u32, u32)>,
+) -> AppResult<()> {
     let (Some(files), Some(work_dir)) = (&state.config.files, &state.config.work_dir) else {
         return Err(AppError::NotFound);
     };
@@ -148,20 +364,37 @@ pub async fn compress(
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
-    let Some(media) = Media::for_mime(&file.mime) else {
-        return Err(AppError::BadRequest(
-            "Ce type de fichier ne se compresse pas.".into(),
-        ));
+    let refused = || {
+        AppError::BadRequest(match to {
+            Conversion::Compress => "Ce type de fichier ne se compresse pas.".into(),
+            _ => IMPOSSIBLE.into(),
+        })
     };
+    if !conversions_for(&file.mime).contains(&to) {
+        return Err(refused());
+    }
+    let media = match to {
+        Conversion::Compress => Media::for_mime(&file.mime),
+        _ => Media::for_input(&file.mime),
+    }
+    .ok_or_else(refused)?;
+    let (kind, task) = match to {
+        Conversion::Compress => ("compress", Task::Compress),
+        _ => ("convert", Task::Convert),
+    };
+    let target = to.key();
 
     let now = time::now();
     let job_id = sqlx::query!(
-        "INSERT INTO jobs (user_id, space_id, kind, source_name, source_size, created_at, updated_at)
-         VALUES (?, ?, 'compress', ?, ?, ?, ?)",
+        "INSERT INTO jobs (user_id, space_id, kind, target, source_name, source_size, file_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         ctx.user.id,
         file.space_id,
+        kind,
+        target,
         file.name,
         file.size,
+        id,
         now,
         now
     )
@@ -171,11 +404,13 @@ pub async fn compress(
 
     let source = files::stored_path(&files.dir, &file.storage_key);
     let spec = JobSpec {
-        task: Task::Compress,
+        task,
         media,
         input: format!("input.{}", safe_ext(&file.name)),
-        output: format!("output.{}", media.output_ext()),
+        output: format!("output.{}", to.ext(media)),
         preview: None,
+        to: (to != Conversion::Compress).then_some(to),
+        pages,
     };
     if let Err(error) = prepare_job(work_dir, job_id, &source, &spec).await {
         let _ = tokio::fs::remove_dir_all(job_dir(work_dir, job_id)).await;
@@ -184,9 +419,7 @@ pub async fn compress(
             .await?;
         return Err(error.into());
     }
-    ctx.flash_ok("Compression lancée : la copie apparaîtra dans la liste")
-        .await?;
-    Ok(see_other("/files"))
+    Ok(())
 }
 
 /// Prépare le dossier d'une tâche : copie du fichier, puis `job.json`.
@@ -260,6 +493,8 @@ pub async fn enqueue_thumbnail(state: &AppState, file_id: i64) -> anyhow::Result
         input: format!("input.{}", safe_ext(&file.name)),
         output: "thumb.jpg".into(),
         preview: media.wants_preview().then(|| "preview.jpg".into()),
+        to: None,
+        pages: None,
     };
     let source = files::stored_path(&files.dir, &file.storage_key);
     if let Err(error) = prepare_job(work_dir, job_id, &source, &spec).await {
@@ -436,6 +671,7 @@ pub async fn collect(state: &AppState) -> anyhow::Result<()> {
             space_id: job.space_id,
             source_name: job.source_name,
             source_size: job.source_size,
+            file_id: job.file_id,
         };
         let thumbnail = job.kind == "thumbnail";
         if let Some(message) = read_small(&dir.join("error")).await {
@@ -501,6 +737,8 @@ struct Pending {
     space_id: i64,
     source_name: String,
     source_size: i64,
+    /// Fichier de départ (compression, conversion), s'il existe encore.
+    file_id: Option<i64>,
 }
 
 /// Range le résultat d'une tâche réussie parmi les fichiers de l'espace.
@@ -513,7 +751,7 @@ async fn import(
     let spec: JobSpec = serde_json::from_slice(&tokio::fs::read(dir.join("job.json")).await?)?;
     let output = dir.join(&spec.output);
     let size = tokio::fs::metadata(&output).await?.len() as i64;
-    if size >= job.source_size {
+    if spec.task == Task::Compress && size >= job.source_size {
         fail(
             state,
             job.id,
@@ -533,14 +771,23 @@ async fn import(
         .await
         .context("rangement de la copie compressée")?;
 
-    let name = compressed_name(&job.source_name, spec.media);
+    let name = result_name(&job.source_name, &spec);
     let mime = files::mime_for(&name);
     let now = time::now();
+    // Le résultat d'un fichier de l'onglet Outils reste dans l'onglet Outils,
+    // avec la même échéance.
+    let expires_at = match job.file_id {
+        Some(source) => sqlx::query_scalar!("SELECT expires_at FROM files WHERE id = ?", source)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten(),
+        None => None,
+    };
     let saved: anyhow::Result<i64> = async {
         let mut tx = state.db.begin().await?;
         let file_id = sqlx::query!(
-            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             job.user_id,
             job.space_id,
             name,
@@ -548,6 +795,7 @@ async fn import(
             size,
             sha256,
             key,
+            expires_at,
             now,
             now
         )
@@ -648,6 +896,8 @@ async fn read_small(path: &FsPath) -> Option<String> {
 
 pub struct JobItem {
     pub name: String,
+    /// « Compression », « En JPEG »…
+    pub what: &'static str,
     /// `queued`, `running`, `done` ou `failed`.
     pub state: String,
     /// Texte affiché à droite : « 47 % », « 120 Mo → 18 Mo »…
@@ -656,6 +906,8 @@ pub struct JobItem {
     pub progress: Option<i64>,
     /// Barre sans valeur (en attente, ou photo et PDF en cours).
     pub busy: bool,
+    /// Résultat rangé : lien vers son aperçu.
+    pub result_id: Option<i64>,
 }
 
 /// Tâches affichées au-dessus de la liste : celles en cours, et celles
@@ -665,30 +917,45 @@ pub struct JobsPanel {
     pub items: Vec<JobItem>,
     /// Nombre de tâches en cours : tant qu'il y en a, la page se rafraîchit.
     pub active: usize,
+    /// Tous les espaces (onglet Outils) plutôt que l'espace actif.
+    pub all: bool,
 }
 
-pub async fn panel(state: &AppState, user_id: i64, space_id: i64) -> AppResult<JobsPanel> {
+/// Libellé d'une tâche d'après sa sorte et sa cible.
+fn job_label(kind: &str, target: Option<&str>) -> &'static str {
+    match (kind, target.and_then(Conversion::from_key)) {
+        ("convert", Some(to)) => to.label(),
+        _ => "Compression",
+    }
+}
+
+/// Tâches de l'espace `space`, ou de tous les espaces si `None`.
+pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppResult<JobsPanel> {
     if state.config.work_dir.is_none() {
         return Ok(JobsPanel::default());
     }
     let since = time::now() - RECENT_JOB_SECONDS;
     let rows = sqlx::query!(
-        r#"SELECT j.source_name, j.source_size, j.status, j.progress, j.error,
-                  f.size AS "result_size?: i64"
+        r#"SELECT j.kind, j.target, j.source_name, j.source_size, j.status, j.progress, j.error,
+                  j.result_file_id, f.size AS "result_size?: i64"
            FROM jobs j
            LEFT JOIN files f ON f.id = j.result_file_id
-           WHERE j.user_id = ? AND j.space_id = ? AND j.kind = 'compress'
-             AND (j.status IN ('queued', 'running') OR j.updated_at > ?)
+           WHERE j.user_id = ?1 AND (?2 IS NULL OR j.space_id = ?2)
+             AND j.kind IN ('compress', 'convert')
+             AND (j.status IN ('queued', 'running') OR j.updated_at > ?3)
            ORDER BY j.id DESC
            LIMIT 20"#,
         user_id,
-        space_id,
+        space,
         since
     )
     .fetch_all(&state.db)
     .await?;
 
-    let mut panel = JobsPanel::default();
+    let mut panel = JobsPanel {
+        all: space.is_none(),
+        ..JobsPanel::default()
+    };
     for row in rows {
         let (status, progress, busy) = match row.status.as_str() {
             "queued" => ("En attente".to_string(), None, true),
@@ -696,6 +963,11 @@ pub async fn panel(state: &AppState, user_id: i64, space_id: i64) -> AppResult<J
                 (format!("{} %", row.progress), Some(row.progress), false)
             }
             "running" => ("En cours".to_string(), None, true),
+            "done" if row.kind == "convert" => (
+                format!("Prêt · {}", human_size(row.result_size.unwrap_or(0))),
+                None,
+                false,
+            ),
             "done" => (
                 format!(
                     "{} → {}",
@@ -707,7 +979,7 @@ pub async fn panel(state: &AppState, user_id: i64, space_id: i64) -> AppResult<J
             ),
             _ => (
                 row.error
-                    .unwrap_or_else(|| "Échec de la compression.".into()),
+                    .unwrap_or_else(|| "Échec de la conversion.".into()),
                 None,
                 false,
             ),
@@ -717,10 +989,12 @@ pub async fn panel(state: &AppState, user_id: i64, space_id: i64) -> AppResult<J
         }
         panel.items.push(JobItem {
             name: row.source_name,
+            what: job_label(&row.kind, row.target.as_deref()),
             state: row.status,
             status,
             progress,
             busy,
+            result_id: row.result_file_id,
         });
     }
     Ok(panel)
@@ -737,6 +1011,9 @@ pub struct JobsQuery {
     /// Tâches en cours au passage précédent.
     #[serde(default)]
     active: usize,
+    /// `1` : tous les espaces (onglet Outils).
+    #[serde(default)]
+    all: u8,
 }
 
 /// `GET /files/jobs?active=…` : le suivi, redemandé toutes les 2 secondes
@@ -747,7 +1024,8 @@ pub async fn jobs_fragment(
     State(state): State<AppState>,
     Query(query): Query<JobsQuery>,
 ) -> AppResult<Response> {
-    let jobs = panel(&state, ctx.user.id, ctx.active.id).await?;
+    let space = (query.all == 0).then_some(ctx.active.id);
+    let jobs = panel(&state, ctx.user.id, space).await?;
     let finished = jobs.active < query.active;
     let mut response = web::html(JobsFragment { jobs });
     if finished {
@@ -756,6 +1034,187 @@ pub async fn jobs_fragment(
             .insert("hx-trigger", HeaderValue::from_static("files-changed"));
     }
     Ok(response.into_response())
+}
+
+/// Conversions en cours d'un utilisateur, tous espaces : leur nombre, et si
+/// l'une d'elles part d'un fichier de l'onglet Outils (le lien y mène alors).
+pub async fn active_jobs(db: &sqlx::SqlitePool, user_id: i64) -> AppResult<(i64, bool)> {
+    let row = sqlx::query!(
+        r#"SELECT count(*) AS "n!: i64",
+                  coalesce(max(f.expires_at IS NOT NULL), 0) AS "tools!: bool"
+           FROM jobs j
+           LEFT JOIN files f ON f.id = j.file_id
+           WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')
+             AND j.status IN ('queued', 'running')"#,
+        user_id
+    )
+    .fetch_one(db)
+    .await?;
+    Ok((row.n, row.tools))
+}
+
+/// Fin d'une conversion, annoncée dans la barre latérale.
+pub struct Finished {
+    pub ok: bool,
+    pub text: String,
+    pub href: String,
+}
+
+#[derive(Template)]
+#[template(path = "_jobs_indicator.html")]
+struct Indicator {
+    active: i64,
+    tools: bool,
+    done: Option<Finished>,
+}
+
+/// `GET /jobs/indicator?active=…` : l'indicateur de la barre latérale,
+/// redemandé toutes les 3 secondes tant qu'une conversion tourne. Quand la
+/// dernière se termine, il dit ce qui est prêt, avec un lien, et se tait.
+pub async fn indicator(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Query(query): Query<JobsQuery>,
+) -> AppResult<Response> {
+    if state.config.work_dir.is_none() {
+        return Err(AppError::NotFound);
+    }
+    let (active, tools) = active_jobs(&state.db, ctx.user.id).await?;
+    let mut done = None;
+    if active == 0 && query.active > 0 {
+        let last = sqlx::query!(
+            r#"SELECT j.status, j.source_name, j.result_file_id, f.name AS "result_name?: String",
+                      src.expires_at AS "source_expires?: i64"
+               FROM jobs j
+               LEFT JOIN files f ON f.id = j.result_file_id
+               LEFT JOIN files src ON src.id = j.file_id
+               WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')
+                 AND j.status IN ('done', 'failed')
+               ORDER BY j.updated_at DESC, j.id DESC
+               LIMIT 1"#,
+            ctx.user.id
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        done = last.map(|last| match (last.result_file_id, last.result_name) {
+            (Some(id), Some(name)) if last.status == "done" => Finished {
+                ok: true,
+                text: format!("Prêt : {name}"),
+                href: format!("/files/{id}"),
+            },
+            _ => Finished {
+                ok: false,
+                text: format!("Échec : {}", last.source_name),
+                href: if last.source_expires.is_some() {
+                    "/tools".into()
+                } else {
+                    "/files".into()
+                },
+            },
+        });
+    }
+    Ok(web::html(Indicator {
+        active,
+        tools,
+        done,
+    }))
+}
+
+// ---------------------------------------------------------------------
+// Onglet Outils
+// ---------------------------------------------------------------------
+
+/// Un fichier déposé dans l'onglet Outils est gardé ce temps-là.
+pub const TOOLS_KEEP_SECONDS: i64 = 24 * 3600;
+
+pub struct ToolItem {
+    pub id: i64,
+    pub name: String,
+    /// « Photo · 2,4 Mo · encore 23 h »
+    pub meta: String,
+    pub conversions: Vec<(&'static str, &'static str)>,
+    /// PDF : champ « pages » pour l'extraction.
+    pub pdf: bool,
+    pub thumb: bool,
+    pub icon: &'static str,
+}
+
+#[derive(Template)]
+#[template(path = "tools/page.html")]
+struct ToolsPage {
+    shell: Shell,
+    /// Faux si les fichiers ou le service de conversion ne sont pas activés.
+    enabled: bool,
+    max_size: String,
+    max_bytes: u64,
+    items: Vec<ToolItem>,
+    jobs: JobsPanel,
+    spaces: Vec<crate::spaces::Space>,
+    active_id: i64,
+}
+
+/// Temps restant avant une échéance : « 23 h », « 40 min » (arrondi au-dessus).
+pub fn time_left(expires_at: i64, now: i64) -> String {
+    let left = (expires_at - now).max(0);
+    if left >= 3600 {
+        format!("{} h", (left + 3599) / 3600)
+    } else {
+        format!("{} min", ((left + 59) / 60).max(1))
+    }
+}
+
+/// `GET /tools` : déposer un fichier pas encore rangé, le convertir, puis le
+/// garder dans un espace ou le télécharger. Ce qui n'est pas gardé disparaît
+/// au bout de 24 heures.
+pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+    let files = state.config.files.as_ref();
+    let enabled = files.is_some() && state.config.work_dir.is_some();
+    let now = time::now();
+    let items = if enabled {
+        sqlx::query!(
+            r#"SELECT id AS "id!", name, mime, size, thumb, expires_at AS "expires_at!: i64"
+               FROM files
+               WHERE user_id = ? AND expires_at IS NOT NULL
+               ORDER BY created_at DESC, id DESC"#,
+            ctx.user.id
+        )
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let conversions = conversions_for(&row.mime);
+            ToolItem {
+                id: row.id,
+                meta: format!(
+                    "{} · {} · encore {}",
+                    files::kind_label(&row.mime),
+                    human_size(row.size),
+                    time_left(row.expires_at, now)
+                ),
+                pdf: conversions.contains(&Conversion::Pages),
+                conversions: conversions.iter().map(|c| (c.key(), c.label())).collect(),
+                thumb: row.thumb == 1,
+                icon: files::icon_for(&row.mime),
+                name: row.name,
+            }
+        })
+        .collect()
+    } else {
+        Vec::new()
+    };
+    let page = ToolsPage {
+        shell: ctx.shell("tools").await?,
+        enabled,
+        max_size: files
+            .map(|f| human_size(i64::try_from(f.max_upload_bytes).unwrap_or(i64::MAX)))
+            .unwrap_or_default(),
+        max_bytes: files.map(|f| f.max_upload_bytes).unwrap_or_default(),
+        items,
+        jobs: panel(&state, ctx.user.id, None).await?,
+        spaces: ctx.spaces.clone(),
+        active_id: ctx.active.id,
+    };
+    Ok(web::html(page))
 }
 
 #[cfg(test)]
@@ -793,6 +1252,63 @@ mod tests {
     }
 
     #[test]
+    fn menu_convertir_selon_le_type() {
+        use Conversion::*;
+        assert_eq!(
+            conversions_for("image/heic"),
+            vec![Compress, Jpg, Png, Webp]
+        );
+        assert_eq!(conversions_for("image/png"), vec![Compress, Jpg, Webp]);
+        assert_eq!(conversions_for("image/gif"), vec![Jpg, Png, Webp]);
+        assert_eq!(conversions_for("video/quicktime"), vec![Compress, Mp4, Mp3]);
+        assert_eq!(conversions_for("video/mp4"), vec![Compress, Mp3]);
+        assert_eq!(conversions_for("audio/x-m4a"), vec![Mp3]);
+        assert_eq!(conversions_for("audio/mpeg"), Vec::<Conversion>::new());
+        assert_eq!(conversions_for("application/pdf"), vec![Compress, Pages]);
+        assert!(conversions_for("application/zip").is_empty());
+        for c in Conversion::ALL {
+            assert_eq!(Conversion::from_key(c.key()), Some(c));
+        }
+        assert_eq!(Conversion::from_key("exe"), None);
+    }
+
+    #[test]
+    fn plages_de_pages() {
+        assert_eq!(parse_pages("2-4"), Some((2, 4)));
+        assert_eq!(parse_pages(" 2 – 4 "), Some((2, 4)));
+        assert_eq!(parse_pages("3"), Some((3, 3)));
+        assert_eq!(parse_pages("4-2"), None);
+        assert_eq!(parse_pages("0-2"), None);
+        assert_eq!(parse_pages("1-99999"), None);
+        assert_eq!(parse_pages("2-4 -sOutputFile=/etc/passwd"), None);
+        assert_eq!(parse_pages(""), None);
+    }
+
+    #[test]
+    fn noms_des_resultats() {
+        let spec = |media, to, pages| JobSpec {
+            task: Task::Convert,
+            media,
+            input: String::new(),
+            output: String::new(),
+            preview: None,
+            to,
+            pages,
+        };
+        let heic = spec(Media::Heic, Some(Conversion::Jpg), None);
+        assert_eq!(result_name("IMG_1.HEIC", &heic), "IMG_1.jpg");
+        let pages = spec(Media::Pdf, Some(Conversion::Pages), Some((2, 4)));
+        assert_eq!(result_name("cours.pdf", &pages), "cours (pages 2-4).pdf");
+        let page = spec(Media::Pdf, Some(Conversion::Pages), Some((3, 3)));
+        assert_eq!(result_name("cours.pdf", &page), "cours (page 3).pdf");
+        let mp3 = spec(Media::Video, Some(Conversion::Mp3), None);
+        assert_eq!(result_name("clip.mov", &mp3), "clip.mp3");
+        let mut compress = spec(Media::Video, None, None);
+        compress.task = Task::Compress;
+        assert_eq!(result_name("clip.mov", &compress), "clip (compressé).mp4");
+    }
+
+    #[test]
     fn extensions_sures() {
         assert_eq!(safe_ext("Vacances.MOV"), "mov");
         assert_eq!(safe_ext("a.b/../../x"), "x");
@@ -827,6 +1343,8 @@ mod tests {
             input: "input.mov".into(),
             output: "output.mp4".into(),
             preview: None,
+            to: None,
+            pages: None,
         };
 
         prepare_job(&work, 3, &source, &spec).await.unwrap();
@@ -911,6 +1429,8 @@ mod tests {
             input: "input.mov".into(),
             output: "output.mp4".into(),
             preview: None,
+            to: None,
+            pages: None,
         };
         prepare_job(work, 1, &source, &spec).await.unwrap();
         let dir = job_dir(work, 1);

@@ -389,6 +389,33 @@ impl Client {
             .await
     }
 
+    /// Ouverture d'un envoi dans un espace choisi (`&space=…`).
+    pub async fn start_upload_in(&mut self, name: &str, size: usize, space: i64) -> TestResponse {
+        let path = format!(
+            "/files/uploads?name={}&size={size}&space={space}",
+            encode_component(name)
+        );
+        self.send(Method::POST, &path, None, CsrfMode::Header, true)
+            .await
+    }
+
+    /// Envoi vers l'onglet Outils (`&tools=1`), en un seul morceau.
+    pub async fn upload_to_tools(&mut self, name: &str, content: &[u8]) -> TestResponse {
+        let path = format!(
+            "/files/uploads?name={}&size={}&tools=1",
+            encode_component(name),
+            content.len()
+        );
+        let start = self
+            .send(Method::POST, &path, None, CsrfMode::Header, true)
+            .await;
+        if start.status != StatusCode::CREATED {
+            return start;
+        }
+        let id = start.body.clone();
+        self.put_chunk(&id, 0, content, true).await
+    }
+
     /// Même ouverture, sans jeton CSRF.
     pub async fn start_upload_without_csrf(&mut self, name: &str, size: usize) -> TestResponse {
         let path = format!("/files/uploads?name={}&size={size}", encode_component(name));

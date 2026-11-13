@@ -11,6 +11,18 @@
               hx-post="/tasks/{{ task.id }}/toggle" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("check")|safe }}</button>
       <span class="task-title">{{ task.title }}</span>
       {% if let Some(since) = task.late_since %}<span class="live late"><span class="dot" aria-hidden="true"></span>depuis {{ since }}</span>{% endif %}
+      {#- Le menu natif d'un <select> transparent, posé sur l'icône : il
+          s'ouvre au clic comme au clavier, et n'est jamais coupé par le bord
+          du widget. -#}
+      <label class="icon-btn icon-btn-sm task-move" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}
+        <select class="overlay-select" name="space_id" aria-label="Déplacer « {{ task.title }} » vers un autre espace"
+                hx-post="/tasks/{{ task.id }}/move" hx-trigger="change" hx-target="#w-tasks" hx-swap="outerHTML">
+          <option value="" selected disabled>Déplacer vers…</option>
+          {%- for space in spaces %}{% if space.id != task.space_id %}
+          <option value="{{ space.id }}">{{ space.name }}</option>
+          {%- endif %}{% endfor %}
+        </select>
+      </label>
       <button class="icon-btn icon-btn-sm task-delete" type="button" aria-label="Supprimer la tâche « {{ task.title }} »"
               hx-delete="/tasks/{{ task.id }}" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button>
     </li>
@@ -18,8 +30,14 @@
   </ul>
   <p class="widget-count">{{ done_count }} sur {{ tasks.len() }} terminée{% if done_count > 1 %}s{% endif %}</p>
   {% endif %}
+  {% if let Some(notice) = notice %}<p class="widget-notice" role="status">{{ notice }}</p>{% endif %}
 
   <form class="task-add" hx-post="/tasks" hx-target="#w-tasks" hx-swap="outerHTML">
+    <select class="task-space" name="space_id" aria-label="Espace de la tâche">
+      {%- for space in spaces %}
+      <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
+      {%- endfor %}
+    </select>
     {#- L'id permet à htmx de rendre le focus au champ après l'ajout. -#}
     <input id="task-new" type="text" name="title" maxlength="200" required autocomplete="off"
            placeholder="Ajouter une tâche" aria-label="Nouvelle tâche">

@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{% if title.is_empty() %}Sans titre{% else %}{{ title }}{% endif %} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}{% if title.is_empty() %}Sans titre{% else %}{{ title }}{% endif %} · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <div class="editor-page">
   <header class="editor-head">

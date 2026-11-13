@@ -30,6 +30,7 @@ use tokio::io::AsyncWriteExt;
 use crate::AppState;
 use crate::auth::session::{Ctx, Shell};
 use crate::config::FilesConfig;
+use crate::spaces::Space;
 use crate::time;
 use crate::web::{self, AppError, AppResult, see_other};
 
@@ -47,13 +48,15 @@ const FILE_CSP: &str = "default-src 'none'; sandbox";
 
 pub struct FileItem {
     pub id: i64,
+    pub space_id: i64,
     pub name: String,
     pub size: String,
     /// Libellé court du type : « PDF », « Image »…
     pub kind: &'static str,
     pub updated: String,
-    /// Vidéo, photo ou PDF, et outils activés : bouton « Compresser ».
-    pub compressible: bool,
+    /// Menu « Convertir » de la ligne : (valeur, libellé), vide sans outils.
+    /// Sans l'extraction de pages, qui demande une saisie (page d'aperçu).
+    pub conversions: Vec<(&'static str, &'static str)>,
     /// Vignette prête : affichée à gauche du nom, sinon `icon`.
     pub thumb: bool,
     pub icon: &'static str,
@@ -72,6 +75,9 @@ struct ListPage {
     items: Vec<FileItem>,
     /// Compressions en cours ou récentes (vide si les outils sont désactivés).
     jobs: crate::tools::JobsPanel,
+    /// Espaces proposés pour un envoi et un déplacement.
+    spaces: Vec<Space>,
+    active_id: i64,
 }
 
 /// `GET /files` : les fichiers de l'espace actif, les plus récents d'abord.
@@ -79,9 +85,9 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     let now = time::now();
     let tools = state.config.work_dir.is_some();
     let items = sqlx::query!(
-        r#"SELECT id AS "id!", name, mime, size, updated_at, thumb
+        r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
            FROM files
-           WHERE user_id = ? AND space_id = ?
+           WHERE user_id = ? AND space_id = ? AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC"#,
         ctx.user.id,
         ctx.active.id
@@ -91,9 +97,10 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     .into_iter()
     .map(|row| FileItem {
         id: row.id,
+        space_id: row.space_id,
         size: human_size(row.size),
         kind: kind_label(&row.mime),
-        compressible: tools && crate::tools::Media::for_mime(&row.mime).is_some(),
+        conversions: menu(tools, &row.mime, false),
         thumb: row.thumb == 1,
         icon: icon_for(&row.mime),
         name: row.name,
@@ -110,9 +117,94 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
             .unwrap_or_default(),
         max_bytes: files.map(|f| f.max_upload_bytes).unwrap_or_default(),
         items,
-        jobs: crate::tools::panel(&state, ctx.user.id, ctx.active.id).await?,
+        jobs: crate::tools::panel(&state, ctx.user.id, Some(ctx.active.id)).await?,
+        spaces: ctx.spaces.clone(),
+        active_id: ctx.active.id,
     };
     Ok(web::html(page))
+}
+
+/// Menu « Convertir » d'un fichier : vide sans outils ; avec ou sans
+/// l'extraction de pages d'un PDF (qui demande une saisie).
+fn menu(tools: bool, mime: &str, with_pages: bool) -> Vec<(&'static str, &'static str)> {
+    if !tools {
+        return Vec::new();
+    }
+    crate::tools::conversions_for(mime)
+        .into_iter()
+        .filter(|c| with_pages || *c != crate::tools::Conversion::Pages)
+        .map(|c| (c.key(), c.label()))
+        .collect()
+}
+
+#[derive(Deserialize)]
+pub struct KeepForm {
+    space_id: i64,
+}
+
+/// `POST /files/{id}/keep` : garde dans un espace un fichier de l'onglet
+/// Outils. Il rejoint la liste de cet espace et n'expire plus.
+pub async fn keep(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<KeepForm>,
+) -> AppResult<Response> {
+    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let kept = sqlx::query!(
+        "UPDATE files SET space_id = ?, expires_at = NULL
+         WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
+        target.id,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if kept == 0 {
+        return Err(AppError::NotFound);
+    }
+    ctx.flash_ok(format!("Fichier gardé dans {}", target.name))
+        .await?;
+    Ok(see_other("/tools"))
+}
+
+#[derive(Deserialize)]
+pub struct MoveForm {
+    space_id: i64,
+    /// Page où revenir : la liste, ou l'aperçu du fichier.
+    next: Option<String>,
+}
+
+/// `POST /files/{id}/move` : déplace un fichier vers un autre espace. Sa
+/// vignette et son grand aperçu le suivent (rangés à côté de lui, sous sa
+/// clé, ils ne dépendent pas de l'espace).
+pub async fn move_to_space(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<MoveForm>,
+) -> AppResult<Response> {
+    // L'espace cible doit appartenir à l'utilisateur.
+    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let moved = sqlx::query!(
+        "UPDATE files SET space_id = ? WHERE id = ? AND user_id = ?",
+        target.id,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if moved == 0 {
+        return Err(AppError::NotFound);
+    }
+    ctx.flash_ok(format!("Fichier déplacé vers {}", target.name))
+        .await?;
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/files",
+    }))
 }
 
 // ---------------------------------------------------------------------
@@ -136,6 +228,8 @@ pub const CHUNK_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const STALE_UPLOAD_SECONDS: i64 = 24 * 3600;
 /// En-tête qui donne au navigateur le nombre d'octets déjà reçus.
 pub const RECEIVED_HEADER: &str = "x-upload-received";
+/// En-tête de la réponse au dernier morceau : l'identifiant du fichier.
+pub const FILE_ID_HEADER: &str = "x-file-id";
 
 /// Envois dont un morceau est en train d'arriver : un seul à la fois par
 /// envoi, sinon deux morceaux pourraient s'écrire au même endroit.
@@ -176,16 +270,26 @@ fn too_large(max: u64) -> AppError {
 pub struct StartQuery {
     name: String,
     size: u64,
+    /// Espace du fichier ; l'espace actif sans précision.
+    space: Option<i64>,
+    /// `1` : fichier de l'onglet Outils, pas encore rangé.
+    #[serde(default)]
+    tools: u8,
 }
 
-/// `POST /files/uploads?name=…&size=…` : ouvre un envoi dans l'espace actif
-/// et renvoie son identifiant.
+/// `POST /files/uploads?name=…&size=…&space=…` : ouvre un envoi dans
+/// l'espace choisi (l'espace actif par défaut) et renvoie son identifiant.
 pub async fn start_upload(
     ctx: Ctx,
     State(state): State<AppState>,
     Query(query): Query<StartQuery>,
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    // L'espace choisi doit appartenir à l'utilisateur.
+    let space_id = match query.space {
+        Some(id) => ctx.space_by_id(id).ok_or(AppError::NotFound)?.id,
+        None => ctx.active.id,
+    };
     if query.size > files.max_upload_bytes {
         return Err(too_large(files.max_upload_bytes));
     }
@@ -203,14 +307,16 @@ pub async fn start_upload(
         .await
         .with_context(|| format!("création de {}", part.display()))?;
     let now = time::now();
+    let for_tools = i64::from(query.tools == 1);
     sqlx::query!(
-        "INSERT INTO uploads (id, user_id, space_id, name, size, received, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+        "INSERT INTO uploads (id, user_id, space_id, name, size, received, for_tools, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
         id,
         ctx.user.id,
-        ctx.active.id,
+        space_id,
         name,
         size,
+        for_tools,
         now,
         now
     )
@@ -244,7 +350,7 @@ pub async fn upload_chunk(
         ));
     };
     let upload = sqlx::query!(
-        "SELECT space_id, name, size, received FROM uploads WHERE id = ? AND user_id = ?",
+        "SELECT space_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
         id,
         ctx.user.id
     )
@@ -309,16 +415,24 @@ pub async fn upload_chunk(
             .into_response());
     }
 
-    finish(
+    let file_id = finish(
         &state,
         files,
         &id,
         upload.space_id,
         &upload.name,
         ctx.user.id,
+        upload.for_tools == 1,
     )
     .await?;
-    Ok((StatusCode::CREATED, "Fichier reçu").into_response())
+    // L'identifiant du fichier : l'éditeur de notes s'en sert pour insérer
+    // une image collée.
+    Ok((
+        StatusCode::CREATED,
+        [(FILE_ID_HEADER, file_id.to_string())],
+        "Fichier reçu",
+    )
+        .into_response())
 }
 
 /// Dernier morceau reçu : le fichier partiel prend sa place définitive et
@@ -330,7 +444,8 @@ async fn finish(
     space_id: i64,
     name: &str,
     user_id: i64,
-) -> AppResult<()> {
+    for_tools: bool,
+) -> AppResult<i64> {
     let part = part_path(&files.dir, id);
     let sha256 = hash_file(part.clone())
         .await
@@ -348,11 +463,13 @@ async fn finish(
 
     let mime = mime_for(name);
     let now = time::now();
+    // Onglet Outils : pas encore rangé, effacé au bout de 24 heures.
+    let expires_at = for_tools.then_some(now + crate::tools::TOOLS_KEEP_SECONDS);
     let saved = async {
         let mut tx = state.db.begin().await?;
         let file_id = sqlx::query!(
-            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files (user_id, space_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             user_id,
             space_id,
             name,
@@ -360,6 +477,7 @@ async fn finish(
             size,
             sha256,
             key,
+            expires_at,
             now,
             now
         )
@@ -378,7 +496,7 @@ async fn finish(
             if let Err(error) = crate::tools::enqueue_thumbnail(state, file_id).await {
                 tracing::warn!(error = format!("{error:#}"), "demande de vignette");
             }
-            Ok(())
+            Ok(file_id)
         }
         Err(error) => {
             let _ = tokio::fs::remove_file(&dest).await;
@@ -460,7 +578,20 @@ pub(crate) async fn hash_file(path: PathBuf) -> std::io::Result<String> {
 /// partiels qu'aucun envoi ne référence plus. Ceux de moins d'une heure sont
 /// laissés : un envoi peut être en train de s'ouvrir.
 pub async fn cleanup_stale(db: &SqlitePool, config: &FilesConfig) -> anyhow::Result<()> {
-    let limit = time::now() - STALE_UPLOAD_SECONDS;
+    // Fichiers de l'onglet Outils jamais gardés : effacés à leur échéance.
+    let now = time::now();
+    let expired = sqlx::query_scalar!(
+        r#"DELETE FROM files WHERE expires_at IS NOT NULL AND expires_at < ?
+           RETURNING storage_key AS "storage_key!""#,
+        now
+    )
+    .fetch_all(db)
+    .await?;
+    for key in expired {
+        remove_stored(config, &key).await;
+    }
+
+    let limit = now - STALE_UPLOAD_SECONDS;
     sqlx::query!("DELETE FROM uploads WHERE updated_at < ?", limit)
         .execute(db)
         .await?;
@@ -562,11 +693,18 @@ pub async fn download(
     Ok(response)
 }
 
+#[derive(Deserialize)]
+pub struct DeleteForm {
+    /// Page où revenir (l'onglet Outils) ; la liste sans précision.
+    next: Option<String>,
+}
+
 /// `POST /files/{id}/delete`
 pub async fn delete(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
     let key = sqlx::query_scalar!(
         r#"DELETE FROM files WHERE id = ? AND user_id = ? RETURNING storage_key AS "storage_key!""#,
@@ -581,7 +719,10 @@ pub async fn delete(
         remove_stored(files, &key).await;
     }
     ctx.flash_ok("Fichier supprimé").await?;
-    Ok(see_other("/files"))
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/files",
+    }))
 }
 
 /// Efface du disque le contenu d'un fichier, sa vignette et son grand aperçu.
@@ -609,10 +750,15 @@ const TEXT_PREVIEW_BYTES: u64 = 200 * 1024;
 struct ViewPage {
     shell: Shell,
     id: i64,
+    /// Espaces où le fichier peut aller (tous sauf le sien).
+    other_spaces: Vec<Space>,
     name: String,
     /// « Vidéo · 98 Mo · il y a 2 min »
     meta: String,
-    compressible: bool,
+    /// Menu « Convertir » : (valeur, libellé), extraction de pages comprise.
+    conversions: Vec<(&'static str, &'static str)>,
+    /// Fichier de l'onglet Outils pas encore gardé : « encore 23 h ».
+    expires: Option<String>,
     /// Ce que la page montre : `image` (le fichier), `picture` (le grand
     /// aperçu), `video`, `audio`, `text`, `markdown`, `pending` (aperçu en
     /// préparation) ou `none`.
@@ -651,7 +797,7 @@ pub async fn view(
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT name, mime, size, storage_key, updated_at, thumb, preview FROM files WHERE id = ? AND user_id = ?",
+        "SELECT space_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
         id,
         ctx.user.id
     )
@@ -689,13 +835,25 @@ pub async fn view(
     let page = ViewPage {
         shell: ctx.shell("files").await?,
         id,
+        other_spaces: ctx
+            .spaces
+            .iter()
+            .filter(|s| s.id != row.space_id)
+            .cloned()
+            .collect(),
         meta: format!(
             "{} · {} · {}",
             kind_label(&row.mime),
             human_size(row.size),
             time::ago(row.updated_at, time::now())
         ),
-        compressible: tools && crate::tools::Media::for_mime(&row.mime).is_some(),
+        conversions: menu(tools, &row.mime, true),
+        expires: row.expires_at.map(|at| {
+            format!(
+                "Onglet Outils : pas encore rangé, effacé dans {}",
+                crate::tools::time_left(at, time::now())
+            )
+        }),
         show,
         poster: row.preview == 1,
         quicktime: row.mime == "video/quicktime",

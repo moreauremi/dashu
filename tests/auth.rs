@@ -335,7 +335,7 @@ async fn nom_et_logo_hermes_dashboard() {
     let page = alice.get("/").await;
     assert!(
         page.body
-            .contains("<title>Dashboard · Hermes Dashboard</title>")
+            .contains("<title>Dashboard · Perso · Hermes Dashboard</title>")
     );
     assert!(
         page.body

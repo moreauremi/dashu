@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT j.status, j.source_name, j.result_file_id, f.name AS \"result_name?: String\",\n                      src.expires_at AS \"source_expires?: i64\"\n               FROM jobs j\n               LEFT JOIN files f ON f.id = j.result_file_id\n               LEFT JOIN files src ON src.id = j.file_id\n               WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')\n                 AND j.status IN ('done', 'failed')\n               ORDER BY j.updated_at DESC, j.id DESC\n               LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "result_file_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result_name?: String",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_expires?: i64",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "3066edf66b49c37347c21cd243d7089182c1e0c9f5c9844a7f82142058195d66"
+}

@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT j.kind, j.target, j.source_name, j.source_size, j.status, j.progress, j.error,\n                  j.result_file_id, f.size AS \"result_size?: i64\"\n           FROM jobs j\n           LEFT JOIN files f ON f.id = j.result_file_id\n           WHERE j.user_id = ?1 AND (?2 IS NULL OR j.space_id = ?2)\n             AND j.kind IN ('compress', 'convert')\n             AND (j.status IN ('queued', 'running') OR j.updated_at > ?3)\n           ORDER BY j.id DESC\n           LIMIT 20",
+  "describe": {
+    "columns": [
+      {
+        "name": "kind",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "target",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_size",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "status",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "progress",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "error",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "result_file_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result_size?: i64",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5cbbaf3bb692e2e62e0ad4cba983d3bcea6444e91b7cdc5051f6f7eac5b64344"
+}

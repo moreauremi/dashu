@@ -77,10 +77,18 @@
         <li><a href="/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
         <li><a href="/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
         <li><a href="/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
+        <li><a href="/tools" data-key="g o"{% if shell.nav == "tools" %} aria-current="page"{% endif %}>{{ crate::assets::icon("tools")|safe }}<span>Outils</span></a></li>
       </ul>
 
       <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
     </div>
+
+    {#- Conversions en cours (voir _jobs_indicator.html, même balisage). -#}
+    {% if shell.jobs_active > 0 %}
+    <div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ shell.jobs_active }}" hx-trigger="every 3s" hx-swap="outerHTML">
+      <a href="{% if shell.jobs_tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ shell.jobs_active }} conversion{% if shell.jobs_active > 1 %}s{% endif %} en cours</span></a>
+    </div>
+    {% endif %}
 
     {#- En bas : les réglages, la taille de l'interface, le compte. Le thème
         se choisit dans Réglages. -#}
@@ -112,6 +120,11 @@
   <main id="main" class="main" tabindex="-1">
     {% if let Some(flash) = shell.flash %}
     <p class="toast toast-{{ flash.kind }}" role="status" data-toast>{{ flash.text }}</p>
+    {% endif %}
+    {#- Rappel de l'espace au-dessus du titre (le dashboard le dit déjà sous
+        la date). -#}
+    {% if shell.nav == "notes" || shell.nav == "files" || shell.nav == "calendar" %}
+    <p class="space-kicker"><span class="dot" aria-hidden="true"></span><span class="sr-only">Espace </span>{{ shell.active.name }}</p>
     {% endif %}
     {% block content %}{% endblock %}
   </main>

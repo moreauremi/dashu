@@ -112,6 +112,13 @@ const icons = {
   "panel-pin": "panel-left",
   "panel-float": "panel-left-close",
   camera: "camera",
+  // Outils : onglet, conversions, suivi ; espaces archivés.
+  tools: "wrench",
+  convert: "repeat",
+  replace: "replace",
+  loader: "loader-circle",
+  archive: "archive",
+  unarchive: "archive-restore",
 };
 
 let sprite =

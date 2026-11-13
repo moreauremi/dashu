@@ -523,3 +523,73 @@ Reste à trancher, dans la PR concernée :
 
 - **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go au plus.
 - *(tranché le 11 novembre)* **Aperçu des PDF** : la première page, rendue en image par le service de conversion, et le bouton Télécharger. Le PDF n'est jamais servi pour être affiché par le navigateur.
+
+# dashu — Espaces et outils (v2, suite)
+
+Nov 13, 2026 · @Rémi Moreau
+
+## Contexte
+
+Proposé après un audit du fonctionnement des espaces et des outils, accepté en entier par Rémi le 13 novembre 2026 (« fait tout »). Quatre problèmes :
+
+1. **Perso a deux rôles** : vue d'ensemble pour l'agenda, espace ordinaire pour le reste. Un devoir d'École n'apparaît pas dans Perso.
+2. **L'espace actif est caché** dans la session : deux onglets sur deux espaces se contredisent, une adresse ne dit pas dans quel espace elle ouvre.
+3. **On range avant, jamais après** : seules les notes se déplacent.
+4. **Les outils sont introuvables** : un bouton par ligne de fichier, un suivi visible sur la seule page Fichiers.
+
+## Périmètre
+
+Lot 1 (rapide) :
+
+- **B. Choisir l'espace, corriger après.** Le formulaire d'ajout de tâche et la zone d'envoi de fichiers proposent l'espace (l'espace actif par défaut ; dans Perso, tous les espaces). « Déplacer vers… » existe pour les notes (déjà), les tâches et les fichiers. Une vignette et un grand aperçu suivent leur fichier.
+- **D. Toujours savoir où on est.** Le titre de l'onglet porte l'espace (« Notes · École · Hermes Dashboard ») ; l'en-tête de chaque page rappelle « École / Notes » ; un liseré de la couleur de l'espace borde le haut du contenu ; chaque bouton du sélecteur d'espaces porte le nom de son espace (infobulle et lecteur d'écran).
+- **G. Les outils viennent au fichier.** Un menu « Convertir » par fichier ne propose que ce qui est possible pour son type, avec les outils déjà installés sur le serveur : photo (HEIC comprise) vers JPEG, PNG ou WebP ; vidéo vers MP4 ; vidéo ou audio vers MP3 ; PDF : compresser, extraire des pages (« 2-4 »). La compression reste dans ce menu. Un onglet **Outils** reçoit un fichier pas encore rangé : déposé, il est gardé 24 heures hors des listes ; on le convertit, puis on garde le fichier (ou son résultat) dans un espace, ou on le télécharge.
+- **H. Le suivi partout.** Tant qu'une conversion tourne, la barre latérale l'indique sur toutes les pages (« 1 conversion en cours ») ; à la fin, un message dit ce qui est prêt, avec un lien.
+
+Lot 2 (structure) :
+
+- **A. Perso montre tout.** Dans Perso, le dashboard, les notes et les fichiers montrent le contenu de tous les espaces, chaque élément d'un autre espace marqué de son point de couleur et de son nom. Un filtre « Seulement Perso » montre le contenu propre de Perso. Ce qu'on crée depuis Perso va dans Perso, sauf choix contraire (B). L'API garde son comportement actuel (Hermès en dépend).
+- **C. L'espace dans l'adresse.** Les pages d'un espace ont une adresse `/e/<slug>/…` (`/e/ecole/notes`, `/e/ecole/` pour le dashboard). Les liens et les redirections de l'application la gardent ; chaque requête htmx porte l'espace de son onglet (en-tête `X-Espace`) : deux onglets sur deux espaces ne se gênent plus. Une note ou un fichier s'ouvre toujours dans son espace. Les adresses sans `/e/` continuent de marcher (dernier espace utilisé).
+
+Ensuite :
+
+- **E. Archiver un espace** (sauf Perso) : il disparaît du sélecteur et des listes, son contenu reste cherchable dans la palette ; on le rouvre ou on le restaure depuis Réglages.
+- **I. Règles automatiques par espace**, désactivées par défaut : « vidéos converties en MP4 à l'arrivée », « photos HEIC : un JPEG en plus ».
+- **J. Remplacer l'original** après une compression ou une conversion : « Garder les deux » (par défaut) ou « Remplacer l'original », après confirmation.
+- **K. Déposer partout, coller dans une note.** Un fichier lâché sur n'importe quelle page est envoyé dans l'espace de la page. Une image collée dans l'éditeur de notes est rangée dans l'espace de la note et insérée en Markdown (`![nom](/files/<id>/raw)`).
+- **L. La palette connaît la page** : sur un fichier, « Compresser ce fichier », « Convertir en … », « Déplacer vers … » ; sur une note, « Déplacer vers … ».
+- **F. Ouvrir sur l'espace du moment**, réglage désactivé par défaut : à l'ouverture de l'app sur le dashboard, l'espace du cours en cours ou du prochain cours du jour ; un jour sans cours, l'espace choisi dans le réglage.
+
+## Sécurité
+
+- Toute action vérifie que l'élément **et** l'espace de destination appartiennent à l'utilisateur connecté (déplacement, conversion, archivage, règles). Un slug d'espace inconnu dans une adresse ou un en-tête répond 404 ou est ignoré, jamais un autre compte.
+- Les conversions passent toutes par le service isolé existant (sans réseau, sans accès à la base ni aux fichiers rangés). Le menu ne propose que des sorties connues ; le serveur refuse toute autre valeur. La plage de pages d'un PDF est lue comme deux nombres, jamais passée telle quelle à un outil.
+- Une image collée dans une note est un fichier comme un autre : servie seulement à son propriétaire, et en ligne seulement pour JPEG, PNG, GIF et WebP (le reste se télécharge).
+- Les fichiers de l'onglet Outils non gardés sont effacés au bout de 24 heures.
+
+## Critères d'acceptation
+
+- [ ] Une tâche et un fichier se déplacent vers un autre espace ; un fichier y garde sa vignette ; déplacer vers l'espace d'un autre compte est refusé
+- [ ] Une tâche ajoutée depuis Perso peut aller dans École sans changer d'espace
+- [ ] Le titre de l'onglet et l'en-tête nomment l'espace ; le sélecteur nomme chaque espace
+- [ ] Le menu Convertir d'une photo HEIC propose JPEG, PNG et WebP, et pas MP3 ; une conversion demandée hors menu est refusée
+- [ ] Un fichier déposé dans Outils n'apparaît dans aucune liste tant qu'il n'est pas gardé, et disparaît après 24 heures
+- [ ] Une conversion en cours se voit depuis le dashboard, les notes et l'agenda ; sa fin est annoncée
+- [ ] Dans Perso, une tâche, une note et un fichier d'École apparaissent, marqués « École » ; « Seulement Perso » les retire
+- [ ] `/e/ecole/notes` ouvre les notes d'École même si la session était sur Entreprise ; un fragment htmx d'un onglet sur École reste sur École pendant qu'un autre onglet est sur Entreprise
+- [ ] Un espace archivé n'est plus dans le sélecteur ; ses notes se trouvent encore par la palette ; il se restaure
+- [ ] Une règle « vidéos en MP4 » crée la conversion à l'arrivée d'une vidéo dans cet espace, et seulement là
+- [ ] « Remplacer l'original » supprime l'original et donne son nom à la copie
+- [ ] Une image collée dans une note s'affiche dans l'aperçu et existe dans les fichiers de l'espace
+- [ ] La palette, sur un fichier, propose ses conversions et les espaces où le déplacer
+- [ ] Le réglage « espace du moment » ouvre École pendant un cours, l'espace choisi un jour sans cours
+- [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
+
+## Décisions
+
+Prises le 13 novembre 2026, par défaut, pour avancer sans attendre :
+
+- **A plutôt qu'une vue « Tout » à part** : c'est déjà le modèle de Perso pour l'agenda.
+- **C par un préfixe `/e/<slug>`** retiré avant le routage : les routes existantes ne changent pas, et les adresses sans préfixe restent valides.
+- **G avec les outils déjà installés** (ffmpeg, Ghostscript, libheif, crate `image`). Markdown et texte vers PDF, HTML ou DOCX demandent pandoc et Typst : ils restent à l'étape 8 de la v2.
+- **Le WebP produit est sans perte** : l'encodeur de la crate `image` ne fait que ça.

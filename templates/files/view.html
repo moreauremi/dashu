@@ -1,20 +1,54 @@
 {% extends "layout.html" %}
-{% block title %}{{ name }} · Fichiers · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}{{ name }} · Fichiers · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <header class="page-head file-view-head">
   <div class="file-view-title">
     <a class="back-link" href="/files">{{ crate::assets::icon("arrow-left")|safe }}<span>Fichiers</span></a>
     <h1>{{ name }}</h1>
     <p class="muted">{{ meta }}</p>
+    {% if let Some(expires) = expires %}<p class="file-expires">{{ expires }} · <a href="/tools">Le garder</a></p>{% endif %}
   </div>
   <div class="file-view-actions">
     <a class="btn btn-primary" href="/files/{{ id }}/download" download hx-boost="false">{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></a>
-    {% if compressible %}
-    <form method="post" action="/files/{{ id }}/compress">
-      <button class="btn" type="submit" title="Crée une copie plus légère, l'original est gardé">{{ crate::assets::icon("shrink")|safe }}<span>Compresser</span></button>
-    </form>
+    {% if !other_spaces.is_empty() %}
+    <details class="menu">
+      <summary class="btn" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}<span>Déplacer</span></summary>
+      <div class="menu-list">
+        {% for space in other_spaces %}
+        <form method="post" action="/files/{{ id }}/move">
+          <input type="hidden" name="space_id" value="{{ space.id }}">
+          <input type="hidden" name="next" value="/files/{{ id }}">
+          <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>Déplacer vers {{ space.name }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {% if !conversions.is_empty() %}
+    <details class="menu">
+      <summary class="btn" title="Crée une copie convertie, l'original est gardé">{{ crate::assets::icon("convert")|safe }}<span>Convertir</span></summary>
+      <div class="menu-list">
+        {% for (key, label) in conversions %}
+        {% if key == &"pages" %}
+        <form class="menu-pages" method="post" action="/files/{{ id }}/convert">
+          <input type="hidden" name="to" value="pages">
+          <input type="hidden" name="next" value="/files/{{ id }}">
+          <input type="text" name="pages" inputmode="numeric" required placeholder="2-4" aria-label="Pages à extraire, par exemple 2-4">
+          <button type="submit">Extraire</button>
+        </form>
+        {% else %}
+        <form method="post" action="/files/{{ id }}/convert">
+          <input type="hidden" name="to" value="{{ key }}">
+          <input type="hidden" name="next" value="/files/{{ id }}">
+          <button type="submit">{{ label }}</button>
+        </form>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </details>
     {% endif %}
     <form method="post" action="/files/{{ id }}/delete" hx-confirm="Supprimer définitivement « {{ name }} » ?">
+      {% if expires.is_some() %}<input type="hidden" name="next" value="/tools">{% endif %}
       <button class="btn" type="submit">{{ crate::assets::icon("trash")|safe }}<span>Supprimer</span></button>
     </form>
   </div>

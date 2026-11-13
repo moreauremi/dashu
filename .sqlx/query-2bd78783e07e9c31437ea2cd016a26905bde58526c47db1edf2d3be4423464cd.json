@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT count(*) FROM files WHERE user_id = ? AND space_id = ?",
+  "query": "SELECT count(*) FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "e24244c6431a296e2825f6600cc9f34136ab9b01fad28cafe5e4683791c32e14"
+  "hash": "2bd78783e07e9c31437ea2cd016a26905bde58526c47db1edf2d3be4423464cd"
 }

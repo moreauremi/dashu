@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", name, mime, size, updated_at, thumb\n           FROM files\n           WHERE user_id = ? AND space_id = ?\n           ORDER BY updated_at DESC, id DESC",
+  "query": "SELECT id AS \"id!\", name, mime, size, updated_at, thumb\n           FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL\n           ORDER BY updated_at DESC, id DESC\n           LIMIT ?",
   "describe": {
     "columns": [
       {
@@ -35,7 +35,7 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 3
     },
     "nullable": [
       true,
@@ -46,5 +46,5 @@
       false
     ]
   },
-  "hash": "34a8cecb2270378dfe6ffbf766a40a52c316ecbbcb8f2e63d6e4652a37f798a9"
+  "hash": "a10dfb16f9d2fc3defcb1d8c3328a022270e8c4876ead999a98e7f90a44674bf"
 }

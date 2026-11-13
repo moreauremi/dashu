@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Fichiers · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}Fichiers · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>Fichiers</h1>
@@ -22,7 +22,15 @@
 <div class="dropzone" data-dropzone data-max="{{ max_bytes }}" data-max-label="{{ max_size }}">
   {{ crate::assets::icon("upload")|safe }}
   <p>Glisse des fichiers ici, ou utilise « Envoyer des fichiers »</p>
-  <p class="muted">Dans l'espace {{ shell.active.name }}, {{ max_size }} au plus par fichier</p>
+  <p class="muted">{{ max_size }} au plus par fichier</p>
+</div>
+<div class="upload-space">
+  <label for="upload-space">Envoyer dans</label>
+  <select id="upload-space" data-upload-space>
+    {%- for space in spaces %}
+    <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
+    {%- endfor %}
+  </select>
 </div>
 <ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
 
@@ -52,9 +60,24 @@
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
-        {% if item.compressible %}
-        <form method="post" action="/files/{{ item.id }}/compress">
-          <button class="icon-btn" type="submit" aria-label="Compresser {{ item.name }}" title="Compresser : crée une copie plus légère, l'original est gardé">{{ crate::assets::icon("shrink")|safe }}</button>
+        <form class="icon-btn row-move" method="post" action="/files/{{ item.id }}/move" hx-trigger="change" title="Déplacer vers un autre espace">
+          {{ crate::assets::icon("move")|safe }}
+          <select class="overlay-select" name="space_id" aria-label="Déplacer « {{ item.name }} » vers un autre espace">
+            <option value="" selected disabled>Déplacer vers…</option>
+            {%- for space in spaces %}{% if space.id != item.space_id %}
+            <option value="{{ space.id }}">{{ space.name }}</option>
+            {%- endif %}{% endfor %}
+          </select>
+        </form>
+        {% if !item.conversions.is_empty() %}
+        <form class="icon-btn row-move" method="post" action="/files/{{ item.id }}/convert" hx-trigger="change" title="Convertir : crée une copie, l'original est gardé">
+          {{ crate::assets::icon("convert")|safe }}
+          <select class="overlay-select" name="to" aria-label="Convertir « {{ item.name }} »">
+            <option value="" selected disabled>Convertir…</option>
+            {%- for (key, label) in item.conversions %}
+            <option value="{{ key }}">{{ label }}</option>
+            {%- endfor %}
+          </select>
         </form>
         {% endif %}
         <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">

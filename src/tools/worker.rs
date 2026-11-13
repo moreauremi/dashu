@@ -28,9 +28,9 @@ use std::time::{Duration, Instant};
 
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageDecoder, ImageReader, Limits, Rgb, RgbImage};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, Rgb, RgbImage};
 
-use super::{JobSpec, Media, Task};
+use super::{Conversion, JobSpec, Media, Task};
 
 /// Conversions simultanées au plus : le serveur est un vieux portable.
 const PARALLEL: usize = 2;
@@ -217,6 +217,74 @@ impl Tools {
         match spec.task {
             Task::Compress => self.compress(spec, dir, progress),
             Task::Thumbnail => self.thumbnail(spec, dir),
+            Task::Convert => self.transform(spec, dir, progress),
+        }
+    }
+
+    /// Conversion du menu « Convertir » : la sortie `spec.to`, dans sa
+    /// définition d'origine (seule la compression réduit).
+    fn transform(&self, spec: &JobSpec, dir: &Path, progress: &dyn Fn(u8)) -> Result<(), String> {
+        let input = dir.join(&spec.input);
+        let output = dir.join(&spec.output);
+        let impossible = || "Conversion impossible pour ce fichier.".to_string();
+        match (spec.to.ok_or_else(impossible)?, spec.media) {
+            (to @ (Conversion::Jpg | Conversion::Png | Conversion::Webp), media) => {
+                let image = match media {
+                    Media::Image => load_image(&input)?,
+                    Media::Heic => {
+                        let decoded = dir.join("decoded.png");
+                        let mut cmd = Command::new("heif-dec");
+                        cmd.arg(&input).arg(&decoded);
+                        run_tool(cmd, Duration::from_secs(120), |_| {})
+                            .map_err(|e| e.replace("La conversion", "La lecture de la photo"))?;
+                        let image = load_image(&decoded);
+                        let _ = fs::remove_file(&decoded);
+                        image?
+                    }
+                    _ => return Err(impossible()),
+                };
+                save_as(&image, &output, to)
+            }
+            (Conversion::Mp4, Media::Video) => {
+                let probe = probe(&input)?;
+                let filters = full_size_filters(probe.hdr && self.zscale);
+                let mut cmd = Command::new("ffmpeg");
+                cmd.args(["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i"])
+                    .arg(&input)
+                    .args(video_args(&filters))
+                    .arg(&output);
+                run_tool(cmd, Duration::from_secs(3600), |line| {
+                    if let Some(percent) = ffmpeg_progress(line, probe.duration) {
+                        progress(percent);
+                    }
+                })
+            }
+            (Conversion::Mp3, Media::Video | Media::Audio) => {
+                let probe = probe(&input)?;
+                let mut cmd = Command::new("ffmpeg");
+                cmd.args(["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i"])
+                    .arg(&input)
+                    .args(mp3_args())
+                    .arg(&output);
+                run_tool(cmd, Duration::from_secs(1800), |line| {
+                    if let Some(percent) = ffmpeg_progress(line, probe.duration) {
+                        progress(percent);
+                    }
+                })
+                .map_err(|e| {
+                    e.replace(
+                        "fichier illisible ou abîmé",
+                        "fichier sans son, illisible ou abîmé",
+                    )
+                })
+            }
+            (Conversion::Pages, Media::Pdf) => {
+                let (first, last) = spec.pages.ok_or_else(impossible)?;
+                let mut cmd = Command::new("gs");
+                cmd.args(pages_args(&output, first, last)).arg(&input);
+                run_tool(cmd, Duration::from_secs(600), |_| {})
+            }
+            _ => Err(impossible()),
         }
     }
 
@@ -226,6 +294,7 @@ impl Tools {
         match spec.media {
             Media::Video => self.video(&input, &output, progress),
             Media::Image => compress_image(&input, &output),
+            Media::Audio => Err("Conversion impossible pour ce fichier.".into()),
             Media::Heic => {
                 // libheif applique la rotation enregistrée par l'iPhone.
                 let decoded = dir.join("decoded.png");
@@ -252,6 +321,7 @@ impl Tools {
         let input = dir.join(&spec.input);
         let image = match spec.media {
             Media::Image => load_image(&input)?,
+            Media::Audio => return Err("Pas de vignette pour un son.".into()),
             Media::Heic => {
                 let decoded = dir.join("decoded.png");
                 let mut cmd = Command::new("heif-dec");
@@ -368,6 +438,53 @@ pub fn video_filters(tonemap: bool) -> String {
     } else {
         format!("{scale},format=yuv420p")
     }
+}
+
+/// Filtres d'une vidéo convertie en MP4 sans être réduite : dimensions
+/// paires (exigées par H.264), et pour une vidéo HDR, retour au SDR.
+pub fn full_size_filters(tonemap: bool) -> String {
+    let even = "scale=w=trunc(iw/2)*2:h=trunc(ih/2)*2";
+    if tonemap {
+        format!(
+            "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,{even},format=yuv420p"
+        )
+    } else {
+        format!("{even},format=yuv420p")
+    }
+}
+
+/// Arguments ffmpeg du son en MP3 (qualité variable, autour de 190 kb/s).
+pub fn mp3_args() -> Vec<String> {
+    [
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-c:a",
+        "libmp3lame",
+        "-q:a",
+        "2",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
+/// Arguments Ghostscript : les pages `first` à `last` dans un nouveau PDF.
+/// Deux nombres déjà vérifiés (voir `parse_pages`), jamais du texte tapé.
+pub fn pages_args(output: &Path, first: u32, last: u32) -> Vec<String> {
+    vec![
+        "-sDEVICE=pdfwrite".into(),
+        format!("-dFirstPage={first}"),
+        format!("-dLastPage={last}"),
+        "-dSAFER".into(),
+        "-dNOPAUSE".into(),
+        "-dBATCH".into(),
+        "-dQUIET".into(),
+        format!("-sOutputFile={}", output.display()),
+    ]
 }
 
 /// Arguments ffmpeg pour extraire une image d'une vidéo (1280 px au plus).
@@ -574,6 +691,27 @@ fn fit(image: DynamicImage, side: u32) -> DynamicImage {
     }
 }
 
+/// Image convertie, dans sa définition d'origine. Le JPEG perd la
+/// transparence (posée sur du blanc) ; PNG et WebP (sans perte) la gardent.
+pub fn save_as(image: &DynamicImage, output: &Path, to: Conversion) -> Result<(), String> {
+    let format = match to {
+        Conversion::Jpg => return save_jpeg(image, output, 90),
+        Conversion::Png => ImageFormat::Png,
+        Conversion::Webp => ImageFormat::WebP,
+        _ => return Err("Conversion impossible pour ce fichier.".into()),
+    };
+    // Le WebP sans perte ne connaît que le RGB et le RGBA en 8 bits.
+    let image = match image.color().has_alpha() {
+        true => DynamicImage::ImageRgba8(image.to_rgba8()),
+        false => DynamicImage::ImageRgb8(image.to_rgb8()),
+    };
+    let file =
+        fs::File::create(output).map_err(|_| "Écriture du résultat impossible.".to_string())?;
+    image
+        .write_to(&mut BufWriter::new(file), format)
+        .map_err(|_| "Écriture du résultat impossible.".to_string())
+}
+
 fn save_jpeg(image: &DynamicImage, output: &Path, quality: u8) -> Result<(), String> {
     let rgb = flatten_on_white(image);
     let file =
@@ -647,6 +785,46 @@ mod tests {
         let pixel = result.to_rgb8().get_pixel(10, 10).0;
         assert!(pixel.iter().all(|&c| c > 250), "{pixel:?}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn photo_convertie_en_png_jpeg_et_webp() {
+        let dir = std::env::temp_dir().join(format!("dashu-formats-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let input = dir.join("photo.png");
+        image::RgbaImage::from_pixel(300, 200, image::Rgba([200, 80, 40, 255]))
+            .save(&input)
+            .unwrap();
+        let image = load_image(&input).unwrap();
+        for (to, format) in [
+            (Conversion::Jpg, ImageFormat::Jpeg),
+            (Conversion::Png, ImageFormat::Png),
+            (Conversion::Webp, ImageFormat::WebP),
+        ] {
+            let output = dir.join(format!("sortie.{}", to.key()));
+            save_as(&image, &output, to).unwrap();
+            let reader = ImageReader::open(&output)
+                .unwrap()
+                .with_guessed_format()
+                .unwrap();
+            assert_eq!(reader.format(), Some(format), "{to:?}");
+            // Aucune réduction : la définition d'origine.
+            let back = reader.decode().unwrap();
+            assert_eq!((back.width(), back.height()), (300, 200), "{to:?}");
+        }
+        assert!(save_as(&image, &dir.join("x.mp3"), Conversion::Mp3).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn arguments_des_conversions() {
+        let pages = pages_args(Path::new("/tmp/out.pdf"), 2, 4);
+        assert!(pages.contains(&"-dFirstPage=2".to_string()));
+        assert!(pages.contains(&"-dLastPage=4".to_string()));
+        assert!(pages.contains(&"-dSAFER".to_string()));
+        assert!(mp3_args().contains(&"libmp3lame".to_string()));
+        assert!(full_size_filters(false).starts_with("scale=w=trunc(iw/2)*2"));
+        assert!(full_size_filters(true).contains("tonemap=tonemap=hable"));
     }
 
     #[test]

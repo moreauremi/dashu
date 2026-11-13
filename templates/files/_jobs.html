@@ -2,16 +2,20 @@
     toutes les 2 secondes ; `active` dit au serveur combien il en restait. -#}
 <section id="file-jobs" class="job-list" aria-label="Compressions" aria-live="polite"
   {%- if jobs.items.is_empty() %} hidden{% endif %}
-  {%- if jobs.active > 0 %} hx-get="/files/jobs?active={{ jobs.active }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {%- if jobs.active > 0 %} hx-get="/files/jobs?active={{ jobs.active }}{% if jobs.all %}&amp;all=1{% endif %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   {%- for job in jobs.items %}
   <div class="job-row is-{{ job.state }}">
-    <span class="job-name">{{ crate::assets::icon("shrink")|safe }}<span>{{ job.name }}</span></span>
+    <span class="job-name">{{ crate::assets::icon("convert")|safe }}<span>{{ job.name }}</span><span class="muted">{{ job.what }}</span></span>
     {%- if let Some(value) = job.progress %}
     <progress max="100" value="{{ value }}"></progress>
     {%- else if job.busy %}
     <progress max="100"></progress>
     {%- endif %}
+    {%- if let Some(result) = job.result_id %}
+    <a class="job-status" href="/files/{{ result }}">{{ job.status }}</a>
+    {%- else %}
     <span class="job-status">{{ job.status }}</span>
+    {%- endif %}
   </div>
   {%- endfor %}
 </section>

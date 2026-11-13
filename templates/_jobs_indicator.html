@@ -1,0 +1,14 @@
+{#- Conversions en cours, dans la barre latérale de toutes les pages : se
+    redemande toutes les 3 secondes tant qu'il en reste ; à la fin, dit ce
+    qui est prêt, avec un lien, et se tait. -#}
+{%- if active > 0 %}
+<div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ active }}" hx-trigger="every 3s" hx-swap="outerHTML">
+  <a href="{% if tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ active }} conversion{% if active > 1 %}s{% endif %} en cours</span></a>
+</div>
+{%- else if let Some(done) = done %}
+<div id="jobs-indicator" class="jobs-indicator {% if done.ok %}is-done{% else %}is-failed{% endif %}" role="status">
+  <a href="{{ done.href }}">{% if done.ok %}{{ crate::assets::icon("check")|safe }}{% else %}{{ crate::assets::icon("alert")|safe }}{% endif %}<span>{{ done.text }}</span></a>
+</div>
+{%- else %}
+<div id="jobs-indicator" hidden></div>
+{%- endif %}

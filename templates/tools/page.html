@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+{% block title %}Outils · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Outils</h1>
+  {% if enabled %}
+  <label class="btn btn-primary file-pick">
+    {{ crate::assets::icon("upload")|safe }}<span>Choisir des fichiers</span>
+    <input class="sr-only" type="file" multiple data-upload-input>
+  </label>
+  {% endif %}
+</header>
+
+{% if !enabled %}
+<div class="empty-state">
+  <p>Les outils ne sont pas activés sur ce serveur</p>
+  <p class="muted">Il faut renseigner <code>FILES_DIR</code> et <code>WORK_DIR</code>, et lancer le service de conversion (voir le README).</p>
+</div>
+{% else %}
+<p class="tools-intro muted">Un fichier déposé ici reste 24 heures hors de tes espaces : convertis-le, puis garde-le dans un espace ou télécharge-le. Pour un fichier déjà rangé, le menu « Convertir » est sur sa ligne.</p>
+<div class="dropzone" data-dropzone data-tools data-max="{{ max_bytes }}" data-max-label="{{ max_size }}">
+  {{ crate::assets::icon("upload")|safe }}
+  <p>Glisse des fichiers ici</p>
+  <p class="muted">{{ max_size }} au plus par fichier</p>
+</div>
+<ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
+
+{% include "files/_jobs.html" %}
+
+<div hidden hx-get="/tools" hx-select="#tool-results" hx-target="#tool-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
+
+<div id="tool-results">
+  {% if items.is_empty() %}
+  <div class="empty-state"><p>Aucun fichier en attente</p></div>
+  {% else %}
+  <ul class="tool-list" role="list">
+    {% for item in items %}
+    <li class="tool-row">
+      <a class="file-name" href="/files/{{ item.id }}">
+        {%- if item.thumb %}
+        <img class="file-thumb" src="/files/{{ item.id }}/thumb" alt="" width="40" height="40" loading="lazy" decoding="async">
+        {%- else %}
+        <span class="file-thumb file-thumb-icon">{{ crate::assets::icon(item.icon)|safe }}</span>
+        {%- endif %}
+        <span>{{ item.name }}</span>
+      </a>
+      <span class="file-meta">{{ item.meta }}</span>
+      <div class="tool-actions">
+        {% if !item.conversions.is_empty() %}
+        <form class="tool-form" method="post" action="/files/{{ item.id }}/convert">
+          <input type="hidden" name="next" value="/tools">
+          <select name="to" aria-label="Conversion de « {{ item.name }} »">
+            {%- for (key, label) in item.conversions %}
+            <option value="{{ key }}">{{ label }}</option>
+            {%- endfor %}
+          </select>
+          {% if item.pdf %}<input class="tool-pages" type="text" name="pages" inputmode="numeric" placeholder="Pages : 2-4" aria-label="Pages à extraire de « {{ item.name }} »">{% endif %}
+          <button class="btn" type="submit">{{ crate::assets::icon("convert")|safe }}<span>Convertir</span></button>
+        </form>
+        {% endif %}
+        <form class="tool-form" method="post" action="/files/{{ item.id }}/keep">
+          <select name="space_id" aria-label="Espace où garder « {{ item.name }} »">
+            {%- for space in spaces %}
+            <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
+            {%- endfor %}
+          </select>
+          <button class="btn" type="submit">Garder</button>
+        </form>
+        <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
+        <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer « {{ item.name }} » ?">
+          <input type="hidden" name="next" value="/tools">
+          <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+<script src="{{ crate::assets::url("js/files.js") }}"></script>
+{% endif %}
+{% endblock %}

@@ -1,41 +1,51 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT name, mime, size, storage_key, updated_at, thumb, preview FROM files WHERE id = ? AND user_id = ?",
+  "query": "SELECT space_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "name",
+        "name": "space_id",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Integer"
       },
       {
-        "name": "mime",
+        "name": "name",
         "ordinal": 1,
         "type_info": "Text"
       },
       {
-        "name": "size",
+        "name": "mime",
         "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 3,
         "type_info": "Integer"
       },
       {
         "name": "storage_key",
-        "ordinal": 3,
+        "ordinal": 4,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 4,
-        "type_info": "Integer"
-      },
-      {
-        "name": "thumb",
         "ordinal": 5,
         "type_info": "Integer"
       },
       {
-        "name": "preview",
+        "name": "thumb",
         "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "preview",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 8,
         "type_info": "Integer"
       }
     ],
@@ -49,8 +59,10 @@
       false,
       false,
       false,
-      false
+      false,
+      false,
+      true
     ]
   },
-  "hash": "338624726ab5cac18f4020998a7b20dd36ad737b1ea2a53df85a7f7245cc0dce"
+  "hash": "c955b0feef0991c576287c3aba3d2e61ad6e1c993f21855b4016910f1817a3f8"
 }

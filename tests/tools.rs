@@ -84,6 +84,8 @@ async fn compresser_prepare_une_tache_pour_le_service() {
             input: "input.mov".into(),
             output: "output.mp4".into(),
             preview: None,
+            to: None,
+            pages: None,
         }
     );
     assert_eq!(job_status(&app).await.0, "queued");
@@ -186,8 +188,17 @@ async fn seuls_videos_photos_et_pdf_se_compressent() {
     alice.upload("archive.zip", b"PK").await;
     alice.upload("cours.pdf", b"%PDF").await;
     let page = alice.get("/files").await;
-    assert!(page.body.contains("aria-label=\"Compresser cours.pdf\""));
-    assert!(!page.body.contains("aria-label=\"Compresser archive.zip\""));
+    // Le menu « Convertir » de la ligne, avec la compression.
+    assert!(page.body.contains("aria-label=\"Convertir « cours.pdf »\""));
+    assert!(
+        page.body
+            .contains("<option value=\"compress\">Compresser</option>")
+    );
+    assert!(
+        !page
+            .body
+            .contains("aria-label=\"Convertir « archive.zip »\"")
+    );
 
     let id = id_of(&page.body, "archive.zip");
     let refused = alice.post(&format!("/files/{id}/compress"), &[]).await;
@@ -273,6 +284,8 @@ async fn une_vraie_video_est_compressee_par_ffmpeg() {
         input: "input.mov".into(),
         output: "output.mp4".into(),
         preview: None,
+        to: None,
+        pages: None,
     };
     std::fs::write(dir.join("job.json"), serde_json::to_vec(&spec).unwrap()).unwrap();
 

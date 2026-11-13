@@ -103,6 +103,9 @@ pub struct Ctx {
     /// Chargement complet de la page (adresse tapée, rechargement, ouverture
     /// de l'app), par opposition à une requête htmx : navigation, fragment.
     pub launch: bool,
+    /// Conversions en cours (pages seulement, pas les fragments), et si l'une
+    /// part d'un fichier de l'onglet Outils.
+    pub jobs: (i64, bool),
 }
 
 /// Ce que le gabarit `layout.html` affiche autour de chaque page.
@@ -132,6 +135,10 @@ pub struct Shell {
     /// Écran de lancement (logo sur fond noir) : seulement au chargement
     /// complet, jamais pendant une navigation htmx.
     pub launch: bool,
+    /// Conversions en cours : l'indicateur de la barre latérale.
+    pub jobs_active: i64,
+    /// L'une d'elles part de l'onglet Outils : le lien y mène.
+    pub jobs_tools: bool,
 }
 
 impl Ctx {
@@ -156,6 +163,8 @@ impl Ctx {
             flash,
             tabs: tabbar::selected(self.user.mobile_tabs.as_deref()),
             launch: self.launch,
+            jobs_active: self.jobs.0,
+            jobs_tools: self.jobs.1,
         })
     }
 
@@ -292,6 +301,14 @@ impl FromRequestParts<AppState> for Ctx {
         // htmx joint HX-Request à tout ce qu'il demande (navigation hx-boost,
         // retour arrière, fragment) : sans cet en-tête, la page se lance.
         let launch = !parts.headers.contains_key("hx-request");
+        // Les conversions en cours ne servent qu'à l'habillage d'une page.
+        let jobs = if state.config.work_dir.is_some() && !web::is_fragment_request(&parts.headers) {
+            crate::tools::active_jobs(&state.db, user.id)
+                .await
+                .map_err(internal)?
+        } else {
+            (0, false)
+        };
 
         Ok(Self {
             user,
@@ -301,6 +318,7 @@ impl FromRequestParts<AppState> for Ctx {
             session,
             path,
             launch,
+            jobs,
         })
     }
 }

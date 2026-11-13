@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Nouvelle note · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block title %}Nouvelle note · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 {#- Créer une note modifie la base : ça doit être un POST protégé par le jeton
     CSRF, pas un simple GET. La page envoie donc ce POST dès son affichage,

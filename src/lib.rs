@@ -142,6 +142,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/dashboard/layout", post(dashboard::save_layout))
         .route("/tasks", post(dashboard::add_task))
         .route("/tasks/{id}/toggle", post(dashboard::toggle_task))
+        .route("/tasks/{id}/move", post(dashboard::move_task))
         .route("/tasks/{id}", delete(dashboard::delete_task))
         // Notes
         .route("/notes", get(notes::list).post(notes::create))
@@ -163,9 +164,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/thumb", get(files::thumb))
         .route("/files/{id}/preview", get(files::preview))
         .route("/files/{id}/delete", post(files::delete))
-        // Outils : compression (le travail est fait par dashu-worker)
+        .route("/files/{id}/move", post(files::move_to_space))
+        .route("/files/{id}/keep", post(files::keep))
+        // Outils : compression et conversions (le travail est fait par
+        // dashu-worker), onglet Outils, suivi dans la barre latérale
         .route("/files/{id}/compress", post(tools::compress))
+        .route("/files/{id}/convert", post(tools::convert))
         .route("/files/jobs", get(tools::jobs_fragment))
+        .route("/jobs/indicator", get(tools::indicator))
+        .route("/tools", get(tools::page))
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))

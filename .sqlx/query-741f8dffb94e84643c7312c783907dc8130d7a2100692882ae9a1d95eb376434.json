@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, name, size, received FROM uploads WHERE id = ? AND user_id = ?",
+  "query": "SELECT space_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "name": "received",
         "ordinal": 3,
         "type_info": "Integer"
+      },
+      {
+        "name": "for_tools",
+        "ordinal": 4,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -31,8 +36,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "fe5c736a1c2c57d039d0093a388f75a8b0d7513bea8af9dacf036fb4cd85d51c"
+  "hash": "741f8dffb94e84643c7312c783907dc8130d7a2100692882ae9a1d95eb376434"
 }

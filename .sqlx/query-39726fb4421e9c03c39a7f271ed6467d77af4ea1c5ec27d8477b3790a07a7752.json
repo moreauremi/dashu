@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT count(*) AS \"n!: i64\",\n                  coalesce(max(f.expires_at IS NOT NULL), 0) AS \"tools!: bool\"\n           FROM jobs j\n           LEFT JOIN files f ON f.id = j.file_id\n           WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')\n             AND j.status IN ('queued', 'running')",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "tools!: bool",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "39726fb4421e9c03c39a7f271ed6467d77af4ea1c5ec27d8477b3790a07a7752"
+}
