@@ -530,15 +530,21 @@ pub async fn toggle_pin(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
-    let pinned = sqlx::query_scalar!(
+    let pinned = toggle_pinned(&state.db, ctx.user.id, id).await?;
+    Ok(web::html(PinButton { id, pinned }))
+}
+
+/// Épingle ou désépingle une note de l'utilisateur ; rend le nouvel état.
+/// Aussi appelée par la barre de commandes (`/pin`).
+pub(crate) async fn toggle_pinned(db: &SqlitePool, user: i64, id: i64) -> AppResult<bool> {
+    sqlx::query_scalar!(
         r#"UPDATE notes SET pinned = NOT pinned WHERE id = ? AND user_id = ? RETURNING pinned AS "pinned!: bool""#,
         id,
-        ctx.user.id
+        user
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await?
-    .ok_or(AppError::NotFound)?;
-    Ok(web::html(PinButton { id, pinned }))
+    .ok_or(AppError::NotFound)
 }
 
 #[derive(Deserialize)]
@@ -674,16 +680,27 @@ pub async fn remove_tag(
     Path((id, tag_id)): Path<(i64, i64)>,
 ) -> AppResult<Response> {
     let user = ctx.user.id;
-    ensure_owned(&state.db, user, id).await?;
+    detach_tag(&state.db, user, id, tag_id).await?;
+    tags_fragment(&state.db, user, id).await
+}
+
+/// Retire un tag d'une note de l'utilisateur (404 si la note n'est pas à
+/// lui). Aussi appelée par la barre de commandes (`/untag`).
+pub(crate) async fn detach_tag(
+    db: &SqlitePool,
+    user: i64,
+    note_id: i64,
+    tag_id: i64,
+) -> AppResult<()> {
+    ensure_owned(db, user, note_id).await?;
     sqlx::query!(
         "DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?",
-        id,
+        note_id,
         tag_id
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
-    prune_orphan_tags(&state.db, user).await?;
-    tags_fragment(&state.db, user, id).await
+    prune_orphan_tags(db, user).await
 }
 
 async fn tags_fragment(db: &SqlitePool, user: i64, id: i64) -> AppResult<Response> {
@@ -722,7 +739,7 @@ pub(crate) async fn tags_of(db: &SqlitePool, user: i64, note_id: i64) -> AppResu
     Ok(tags)
 }
 
-async fn all_tag_names(db: &SqlitePool, user: i64) -> AppResult<Vec<String>> {
+pub(crate) async fn all_tag_names(db: &SqlitePool, user: i64) -> AppResult<Vec<String>> {
     Ok(sqlx::query_scalar!(
         "SELECT name FROM tags WHERE user_id = ? ORDER BY name",
         user

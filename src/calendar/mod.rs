@@ -247,7 +247,7 @@ pub async fn widget_grid(
 
 #[derive(Deserialize)]
 pub struct RefreshForm {
-    next: Option<String>,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /calendar/refresh` : resynchronise tout de suite les sources de l'espace actif

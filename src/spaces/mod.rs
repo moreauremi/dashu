@@ -220,13 +220,13 @@ pub fn suggestion(spaces: &[Space]) -> (&'static str, &'static str) {
 
 #[derive(Deserialize)]
 pub struct SpaceForm {
-    name: String,
-    color: String,
-    icon: String,
+    pub(crate) name: String,
+    pub(crate) color: String,
+    pub(crate) icon: String,
     /// Présent quand le formulaire montre les règles (modification d'un espace).
-    rules: Option<String>,
-    auto_mp4: Option<String>,
-    auto_heic_jpeg: Option<String>,
+    pub(crate) rules: Option<String>,
+    pub(crate) auto_mp4: Option<String>,
+    pub(crate) auto_heic_jpeg: Option<String>,
 }
 
 /// Nom, couleur et icône vérifiés.

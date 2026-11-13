@@ -304,17 +304,26 @@ pub async fn tasks(ctx: Ctx, State(state): State<AppState>) -> AppResult<Respons
     tasks_widget(&state.db, &ctx, None).await
 }
 
+/// Une tâche du jour, telle que la montre le widget.
+pub(crate) struct DayTask {
+    pub id: i64,
+    pub space_id: i64,
+    pub title: String,
+    pub done: bool,
+    pub due_date: Option<String>,
+}
+
 /// Tâches du jour : celles d'aujourd'hui, celles en retard pas encore
 /// faites, et celles cochées aujourd'hui (elles restent visibles, barrées,
-/// jusqu'à minuit).
-async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> AppResult<Response> {
-    // Perso : les tâches de tous les espaces.
+/// jusqu'à minuit). Perso : celles de tous les espaces. Aussi lues par la
+/// barre de commandes (`/done`, `/undone`, `/delete task`).
+pub(crate) async fn day_tasks(db: &SqlitePool, ctx: &Ctx) -> AppResult<Vec<DayTask>> {
     let scope = ctx.scope(false);
     let today = time::paris_date(time::now());
     let today_iso = today.format("%Y-%m-%d").to_string();
     let midnight = time::day_start(today);
-
-    let tasks: Vec<TaskItem> = sqlx::query!(
+    Ok(sqlx::query_as!(
+        DayTask,
         r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
            WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
@@ -327,25 +336,31 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> App
         midnight
     )
     .fetch_all(db)
-    .await?
-    .into_iter()
-    .map(|t| {
-        let late_since = t
-            .due_date
-            .as_deref()
-            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
-            .filter(|due| !t.done && *due < today)
-            .map(time::date_short);
-        TaskItem {
-            id: t.id,
-            space_id: t.space_id,
-            space: ctx.tag_of(t.space_id),
-            title: t.title,
-            done: t.done,
-            late_since,
-        }
-    })
-    .collect();
+    .await?)
+}
+
+async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> AppResult<Response> {
+    let today = time::paris_date(time::now());
+    let tasks: Vec<TaskItem> = day_tasks(db, ctx)
+        .await?
+        .into_iter()
+        .map(|t| {
+            let late_since = t
+                .due_date
+                .as_deref()
+                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+                .filter(|due| !t.done && *due < today)
+                .map(time::date_short);
+            TaskItem {
+                id: t.id,
+                space_id: t.space_id,
+                space: ctx.tag_of(t.space_id),
+                title: t.title,
+                done: t.done,
+                late_since,
+            }
+        })
+        .collect();
 
     let done_count = tasks.iter().filter(|t| t.done).count();
     Ok(web::html(TasksWidget {
@@ -475,18 +490,42 @@ pub async fn delete_task(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
-    let deleted = sqlx::query!(
-        "DELETE FROM tasks WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if deleted == 0 {
+    if !remove_task(&state.db, ctx.user.id, id).await? {
         return Err(AppError::NotFound);
     }
     tasks_widget(&state.db, &ctx, None).await
+}
+
+/// Supprime une tâche de l'utilisateur ; `false` si elle n'existe pas.
+pub(crate) async fn remove_task(db: &SqlitePool, user: i64, id: i64) -> AppResult<bool> {
+    let deleted = sqlx::query!("DELETE FROM tasks WHERE id = ? AND user_id = ?", id, user)
+        .execute(db)
+        .await?
+        .rows_affected();
+    Ok(deleted > 0)
+}
+
+/// Coche (avec l'heure) ou décoche une tâche de l'utilisateur ; `false` si
+/// elle n'existe pas ou l'était déjà.
+pub(crate) async fn set_task_done(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    done: bool,
+) -> AppResult<bool> {
+    let at = done.then(time::now);
+    let changed = sqlx::query!(
+        "UPDATE tasks SET done = ?, done_at = ? WHERE id = ? AND user_id = ? AND done <> ?",
+        done,
+        at,
+        id,
+        user,
+        done
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    Ok(changed > 0)
 }
 
 // ---------------------------------------------------------------------

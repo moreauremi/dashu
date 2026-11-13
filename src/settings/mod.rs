@@ -116,8 +116,8 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
 #[derive(Deserialize)]
 pub struct ThemeForm {
     /// `dark`, `light` ou `system`.
-    theme: String,
-    next: Option<String>,
+    pub(crate) theme: String,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /settings/theme` : le thème est enregistré sur le compte, il suit
@@ -244,9 +244,9 @@ pub async fn unlink_google(ctx: Ctx, State(state): State<AppState>) -> AppResult
 
 #[derive(Deserialize)]
 pub struct CalendarForm {
-    name: String,
-    url: String,
-    space_id: i64,
+    pub(crate) name: String,
+    pub(crate) url: String,
+    pub(crate) space_id: i64,
 }
 
 /// `POST /settings/calendars` : ajoute une source iCal et la synchronise aussitôt.

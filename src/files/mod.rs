@@ -161,7 +161,7 @@ fn menu(tools: bool, mime: &str, with_pages: bool) -> Vec<(&'static str, &'stati
 
 #[derive(Deserialize)]
 pub struct KeepForm {
-    space_id: i64,
+    pub(crate) space_id: i64,
 }
 
 /// `POST /files/{id}/keep` : garde dans un espace un fichier de l'onglet
@@ -725,7 +725,7 @@ pub async fn download(
 #[derive(Deserialize)]
 pub struct DeleteForm {
     /// Page où revenir (l'onglet Outils) ; la liste sans précision.
-    next: Option<String>,
+    pub(crate) next: Option<String>,
 }
 
 /// `POST /files/{id}/delete`

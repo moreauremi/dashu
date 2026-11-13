@@ -446,6 +446,7 @@
     history: null, // position dans l'historique, ou null
     help: false, // liste de /help affichée
     pendingEnter: false, // Entrée pressée avant l'arrivée des commandes
+    confirm: "", // ligne qui attend un second Entrée (suppression)
     remote: { q: null, items: [], timer: 0 },
   };
 
@@ -566,6 +567,15 @@
     const spec = a.node.arg;
     if (!spec) return [];
     if (spec.mode === "remote") return cmd.remote.q === a.arg.trim() ? cmd.remote.items : [];
+    if (spec.mode === "line") {
+      // Toute la ligne (le titre d'une tâche) : ce qui commence par la
+      // saisie d'abord, puis ce qui la contient.
+      const whole = fold(a.arg.trim());
+      return (spec.values || [])
+        .filter((c) => fold(c.v).includes(whole))
+        .sort((x, y) => fold(y.v).startsWith(whole) - fold(x.v).startsWith(whole))
+        .map((c) => ({ ...c, mode: spec.mode }));
+    }
     // Texte libre : on ne propose qu'une fois un mot commencé (@ecole, demain).
     if (spec.mode === "free" && !typed) return [];
     return (spec.values || []).filter((c) => matches(c, typed)).map((c) => ({ ...c, mode: spec.mode }));
@@ -608,9 +618,12 @@
     draw(a);
   }
 
+  /** L'argument se complète en entier (/open, titre d'une tâche), pas mot à mot. */
+  const wholeLine = (a) => ["remote", "line"].includes(a.node?.arg?.mode);
+
   /** Suite grisée dans la ligne : ce que Tab ajouterait au mot commencé. */
   function ghost(a) {
-    const typed = a.node?.arg?.mode === "remote" ? a.arg.trimStart() : a.token;
+    const typed = wholeLine(a) ? a.arg.trimStart() : a.token;
     const s = !cmd.cycle && !cmd.help && cmd.list[Math.max(cmd.index, 0)];
     return s && typed && fold(s.v).startsWith(fold(typed)) ? s.v.slice(typed.length) : "";
   }
@@ -746,6 +759,7 @@
     input.setSelectionRange(1, 1);
     $("#cmd-msg").replaceChildren();
     cmd.pendingEnter = false;
+    cmd.confirm = "";
     update();
     loadTree();
   }
@@ -796,7 +810,7 @@
   function replaceFrom(value) {
     const a = analyse(value);
     if (cmd.help) return 0;
-    return a.node?.arg?.mode === "remote" ? a.argStart : a.start;
+    return wholeLine(a) ? a.argStart : a.start;
   }
 
   function setValue(value) {
@@ -927,6 +941,11 @@
     const problem = missing(line);
     if (problem) return refuse(problem);
     const node = analyse(`${line} `).node;
+    // Suppression : un second Entrée sur la même ligne confirme.
+    if (node.confirm && cmd.confirm !== line) {
+      cmd.confirm = line;
+      return refuse(node.confirm);
+    }
     if (node.client === "help") {
       cmd.help = true;
       cmd.cycle = null;
@@ -976,6 +995,7 @@
     cmd.cycle = null;
     cmd.history = null;
     cmd.help = false;
+    cmd.confirm = "";
     $("#cmd-msg").replaceChildren();
     update();
   });
@@ -997,7 +1017,11 @@
   // ferme si le serveur ouvre une page (htmx s'en charge ensuite).
   document.addEventListener("htmx:afterRequest", (event) => {
     if (event.detail.elt?.id !== "cmd-form") return;
-    if (event.detail.successful && event.detail.xhr.getResponseHeader("HX-Location")) closeBar();
+    const xhr = event.detail.xhr;
+    // Une page s'ouvre, ou un téléchargement part : la barre a fini.
+    if (event.detail.successful && (xhr.getResponseHeader("HX-Location") || xhr.getResponseHeader("HX-Redirect"))) {
+      closeBar();
+    }
   });
 
   // ------------------------------------------------------------- Clics

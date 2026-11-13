@@ -41,8 +41,16 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | `/open <titre ou mot du texte>` | Ouvre une note ou un fichier, suggestions pendant la frappe |
 | `/search <texte>` | Notes de l'espace filtrées par ce texte |
 | `/space <espace>` | Change d'espace |
-| `/add task <titre> [@espace]`, `/add note [titre] [@espace]`, `/add file` | Crée une tâche du jour, une note, envoie un fichier |
-| `/move <espace>`, `/convert <format>`, `/compress` | Sur une note ou un fichier ouvert : le déplace, le convertit (ce que son menu « Convertir » propose) |
+| `/add task <titre> [@espace] [+quand]` | Crée une tâche, pour aujourd'hui ou un autre jour (`+demain`, `+lundi`, `+25/11` : elle apparaît ce jour-là) |
+| `/add note [titre] [@espace]`, `/add file`, `/add space <nom>`, `/add agenda <url> [@espace] [nom]` | Crée une note, envoie un fichier, crée un espace (on y entre), ajoute un flux iCal |
+| `/done <tâche>`, `/undone <tâche>`, `/delete task <tâche>` | Coche, décoche, supprime une tâche du jour, choisie par son titre |
+| `/move <espace>`, `/delete` | Sur une note ou un fichier ouvert : le déplace, le supprime |
+| `/tag <tag>`, `/untag <tag>`, `/pin` | Sur une note ouverte : tags, épinglage |
+| `/convert <format>`, `/compress`, `/download`, `/keep <espace>` | Sur un fichier ouvert : le convertit (ce que son menu « Convertir » propose), le télécharge, le garde (onglet Outils) |
+| `/theme sombre\|clair\|systeme`, `/size petit\|normal\|grand`, `/sidebar` | Thème, taille de l'interface, barre latérale ancrée ou détachée |
+| `/refresh`, `/logout` | Resynchronise l'agenda, se déconnecte |
+
+Une suppression demande un second `Entrée`.
 
 L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 

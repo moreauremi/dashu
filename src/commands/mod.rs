@@ -50,6 +50,25 @@ pub enum Action {
     Move,
     Convert(crate::tools::Conversion),
     Compress,
+    AddSpace,
+    AddAgenda,
+    Done,
+    Undone,
+    /// Supprime la note ou le fichier ouvert.
+    Delete,
+    DeleteTask,
+    Tag,
+    Untag,
+    Pin,
+    Keep,
+    Download,
+    /// Thème : `dark`, `light` ou `system`.
+    Theme(&'static str),
+    /// Taille de l'interface : `small`, `normal` ou `large`.
+    Size(&'static str),
+    Sidebar,
+    Refresh,
+    Logout,
 }
 
 impl Action {
@@ -89,6 +108,9 @@ pub struct Node {
     /// Action faite par le navigateur seul (`help`, `file`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client: Option<&'static str>,
+    /// Suppression : le navigateur montre ce texte et attend un second Entrée.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirm: Option<String>,
 }
 
 impl Node {
@@ -103,6 +125,7 @@ impl Node {
             run: false,
             off: None,
             client: action.client(),
+            confirm: None,
         }
     }
 
@@ -126,6 +149,18 @@ impl Node {
     /// Indisponible ici, avec la raison.
     fn off(mut self, why: &'static str) -> Self {
         self.off = Some(why);
+        self
+    }
+
+    /// Se lance aussi sans sous-commande (`/delete`, qui a `/delete task`).
+    fn runnable(mut self) -> Self {
+        self.run = true;
+        self
+    }
+
+    /// Demande un second Entrée, avec ce texte.
+    fn confirm(mut self, text: impl Into<String>) -> Self {
+        self.confirm = Some(text.into());
         self
     }
 
@@ -171,6 +206,8 @@ pub enum Mode {
     Free,
     /// Un mot parmi `values`.
     Choice,
+    /// Toute la fin de la ligne, parmi `values` (le titre d'une tâche).
+    Line,
     /// Suggestions cherchées sur le serveur (`GET /cmd/suggest`).
     Remote,
 }
@@ -383,40 +420,98 @@ const WEEKDAYS: [(&str, Weekday); 7] = [
     ("dimanche", Weekday::Sun),
 ];
 
-/// Mots de jour proposés par la complétion.
-fn day_choices() -> Vec<Choice> {
+/// Mots de jour proposés par la complétion, préfixés (`+` pour une option).
+fn day_choices(prefix: &str) -> Vec<Choice> {
     let mut out = vec![
-        Choice::new("aujourdhui", "Aujourd'hui"),
-        Choice::new("demain", "Demain"),
-        Choice::new("hier", "Hier"),
+        Choice::new(format!("{prefix}aujourdhui"), "Aujourd'hui"),
+        Choice::new(format!("{prefix}demain"), "Demain"),
     ];
+    if prefix.is_empty() {
+        out.push(Choice::new("hier", "Hier"));
+    }
     out.extend(
         WEEKDAYS
             .iter()
-            .map(|(name, _)| Choice::new(*name, format!("Le prochain {name}"))),
+            .map(|(name, _)| Choice::new(format!("{prefix}{name}"), format!("Le prochain {name}"))),
     );
     out
 }
 
-/// Le jour que désigne un mot : `aujourdhui`, `demain`, `hier`,
-/// `apres-demain`, un jour de la semaine (le prochain, jamais aujourd'hui,
-/// trois lettres suffisent), `14/11` (cette année), `14/11/2026` ou
-/// `2026-11-14`.
+/// L'élément que désigne un texte, par son titre : en entier, sinon le seul
+/// qui commence par ce texte, sinon le seul qui le contient (accents et
+/// majuscules ignorés). Des homonymes ne sont pas une ambiguïté : le premier
+/// est pris. `none` commence le message d'échec : « Aucune tâche du jour ».
+fn find_by_title<'a, T>(
+    items: &'a [T],
+    title: impl Fn(&T) -> &str,
+    text: &str,
+    none: &str,
+) -> Result<&'a T, String> {
+    let wanted = fold(text.trim());
+    let rules: [&dyn Fn(&str) -> bool; 3] = [
+        &|t: &str| t == wanted,
+        &|t: &str| t.starts_with(&wanted),
+        &|t: &str| t.contains(&wanted),
+    ];
+    for rule in rules {
+        let found: Vec<&T> = items.iter().filter(|i| rule(&fold(title(i)))).collect();
+        let mut names: Vec<&str> = Vec::new();
+        for item in &found {
+            let name = title(item);
+            if !names.iter().any(|n| fold(n) == fold(name)) {
+                names.push(name);
+            }
+        }
+        match names.len() {
+            0 => continue,
+            1 => return Ok(found[0]),
+            _ => {
+                return Err(format!(
+                    "« {} » peut être : {}.",
+                    text.trim(),
+                    names.join(", ")
+                ));
+            }
+        }
+    }
+    Err(format!("{none} ne correspond à « {} ».", text.trim()))
+}
+
+/// Mots de jour, avec leur écart à aujourd'hui.
+const RELATIVE_DAYS: [(&str, i64); 4] = [
+    ("aujourdhui", 0),
+    ("demain", 1),
+    ("apres-demain", 2),
+    ("hier", -1),
+];
+
+/// Le jour que désigne un mot : `aujourdhui`, `demain`, `apres-demain`,
+/// `hier`, un jour de la semaine (le prochain, jamais aujourd'hui) ; trois
+/// lettres suffisent s'il n'y a pas d'ambiguïté. Ou une date : `14/11`
+/// (cette année), `14/11/2026`, `2026-11-14`.
 pub fn parse_day(word: &str, today: NaiveDate) -> Option<NaiveDate> {
     let word = fold(word).replace('\'', "");
-    match word.as_str() {
-        "aujourdhui" | "auj" => return Some(today),
-        "demain" => return today.checked_add_signed(Duration::days(1)),
-        "apres-demain" | "apresdemain" => return today.checked_add_signed(Duration::days(2)),
-        "hier" => return today.checked_sub_signed(Duration::days(1)),
-        _ => {}
-    }
-    if word.len() >= 3
-        && let Some((_, day)) = WEEKDAYS.iter().find(|(name, _)| name.starts_with(&word))
-    {
-        let ahead = (day.num_days_from_monday() + 7 - today.weekday().num_days_from_monday()) % 7;
-        let ahead = if ahead == 0 { 7 } else { ahead };
-        return today.checked_add_signed(Duration::days(i64::from(ahead)));
+    if word.len() >= 3 {
+        let relative: Vec<i64> = RELATIVE_DAYS
+            .iter()
+            .filter(|(name, _)| name.starts_with(&word) || name.replace('-', "") == word)
+            .map(|(_, offset)| *offset)
+            .collect();
+        let weekday: Vec<Weekday> = WEEKDAYS
+            .iter()
+            .filter(|(name, _)| name.starts_with(&word))
+            .map(|(_, day)| *day)
+            .collect();
+        match (relative.as_slice(), weekday.as_slice()) {
+            ([offset], []) => return today.checked_add_signed(Duration::days(*offset)),
+            ([], [day]) => {
+                let ahead =
+                    (day.num_days_from_monday() + 7 - today.weekday().num_days_from_monday()) % 7;
+                let ahead = if ahead == 0 { 7 } else { ahead };
+                return today.checked_add_signed(Duration::days(i64::from(ahead)));
+            }
+            _ => {}
+        }
     }
     if let Ok(date) = NaiveDate::parse_from_str(&word, "%Y-%m-%d") {
         return Some(date);
@@ -452,7 +547,7 @@ pub async fn catalogue(
 ) -> AppResult<Response> {
     let page = local_path(query.page.as_deref());
     let opened = catalogue::opened(&ctx, &state, page).await?;
-    let commands = catalogue::tree(&ctx, &state, &opened);
+    let commands = catalogue::tree(&ctx, &state, &opened).await?;
     Ok(Json(serde_json::json!({ "commands": commands })).into_response())
 }
 
@@ -701,6 +796,9 @@ mod tests {
         assert_eq!(day("demain").as_deref(), Some("2026-11-14"));
         assert_eq!(day("Aujourd'hui").as_deref(), Some("2026-11-13"));
         assert_eq!(day("hier").as_deref(), Some("2026-11-12"));
+        assert_eq!(day("dem").as_deref(), Some("2026-11-14"));
+        assert_eq!(day("apresdemain").as_deref(), Some("2026-11-15"));
+        assert_eq!(day("mar").as_deref(), Some("2026-11-17"));
         assert_eq!(day("lundi").as_deref(), Some("2026-11-16"));
         // Le prochain vendredi, pas aujourd'hui.
         assert_eq!(day("ven").as_deref(), Some("2026-11-20"));
@@ -717,5 +815,29 @@ mod tests {
         assert_eq!(fold("Réglages"), "reglages");
         assert_eq!(fold("École"), "ecole");
         assert_eq!(space_word("Vie de  Famille"), "vie-de-famille");
+    }
+
+    #[test]
+    fn retrouver_par_le_titre() {
+        let tasks = [
+            "Réviser le bac",
+            "Rendre le DM",
+            "Appeler mamie",
+            "Rendre le DM",
+        ];
+        let find = |text| find_by_title(&tasks, |t| t, text, "Aucune tâche").copied();
+        assert_eq!(find("appeler mamie"), Ok("Appeler mamie"));
+        assert_eq!(find("rev"), Ok("Réviser le bac"));
+        assert_eq!(find("mamie"), Ok("Appeler mamie"));
+        // Deux tâches du même nom : la première.
+        assert_eq!(find("rendre"), Ok("Rendre le DM"));
+        assert_eq!(
+            find("re"),
+            Err("« re » peut être : Réviser le bac, Rendre le DM.".into())
+        );
+        assert_eq!(
+            find("zz"),
+            Err("Aucune tâche ne correspond à « zz ».".into())
+        );
     }
 }
