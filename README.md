@@ -52,6 +52,8 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 
 Une suppression demande un second `Entrée`.
 
+Dans un texte que l'on écrit (titre d'une tâche ou d'une note, tag, recherche, nom d'un espace ou d'un agenda), `#date` devient la date du jour (`13/11/2026`) et `#cours` la matière du cours qui a lieu maintenant : `/add note #cours du #date` crée « MATHS du 13/11/2026 ». Hors d'un cours, `#cours` est refusé. Tout autre `#mot` reste tel quel.
+
 L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 
 ## Installation locale

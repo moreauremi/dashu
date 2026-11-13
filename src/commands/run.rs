@@ -16,7 +16,9 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 
 use super::catalogue::{self, Opened};
-use super::{Action, find_by_title, find_space, fold, parse_day, resolve, split_options};
+use super::{
+    Action, Vars, expand, find_by_title, find_space, fold, parse_day, resolve, split_options,
+};
 use crate::AppState;
 use crate::auth::session::{ACTIVE_SPACE, Ctx};
 use crate::settings::{self, profile};
@@ -47,7 +49,21 @@ pub async fn run(
     let opened = catalogue::opened(&ctx, &state, &page).await?;
     let tree = catalogue::tree(&ctx, &state, &opened).await?;
     let found = resolve(&tree, &form.line).map_err(AppError::BadRequest)?;
-    let (action, arg) = (found.node.action, found.arg.to_string());
+    let (action, mut arg) = (found.node.action, found.arg.to_string());
+    // #date, #cours : remplacés dans les textes que l'on écrit (titres,
+    // noms, tags, recherche).
+    let writes = matches!(
+        action,
+        Action::AddTask
+            | Action::AddNote
+            | Action::AddSpace
+            | Action::AddAgenda
+            | Action::Tag
+            | Action::Search
+    );
+    if writes && arg.contains('#') {
+        arg = expand(&arg, &Vars::now(&ctx, &state).await?).map_err(refuse)?;
+    }
     let here = ctx.active.slug.clone();
     let today = time::paris_date(time::now());
 
