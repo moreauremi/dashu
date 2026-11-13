@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT e.title FROM calendar_events e\n               JOIN calendar_sources s ON s.id = e.source_id\n               WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2)\n                 AND e.all_day = 0 AND e.starts_at <= ?4 AND e.ends_at > ?4\n               ORDER BY e.starts_at\n               LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "title",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "676f5c48a22c48c5cd279b0fdf1a1096fb7d3f9a3626e23fe5e45afe870897a3"
+}

@@ -33,7 +33,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. |
 | Fichiers (v2, en cours) | Envoi par glisser-déposer (sur n'importe quelle page) ou par bouton, plusieurs fichiers à la fois, liste par espace, téléchargement, déplacement, suppression. Une image collée dans une note y est rangée et insérée. Menu « Convertir » par fichier : compression, photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF ; puis « Remplacer l'original » si on veut. Règles par espace (vidéos en MP4, HEIC doublées d'un JPEG à l'arrivée). Onglet Outils : un fichier déposé y reste 24 heures hors des espaces, le temps de le convertir et de le garder ou le télécharger. Les conversions en cours se voient dans la barre latérale de toutes les pages. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
 
-**Barre de commandes.** Hors d'un champ, `/` ouvre une barre où l'on tape des commandes, comme dans le chat de Minecraft ou un terminal : tout se fait au clavier. `Tab` complète (encore `Tab` : la suggestion suivante), `↑` `↓` choisissent, `Entrée` exécute, effacer le `/` referme la barre. Un début de mot suffit (`/g ag` vaut `/go agenda`), accents et majuscules ne comptent pas. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/`. Sur téléphone, le bouton « Commandes » ouvre la barre et on touche les suggestions. `/help` liste tout ; les principales :
+**Barre de commandes.** Hors d'un champ, `/` ouvre une barre où l'on tape des commandes, comme dans le chat de Minecraft ou un terminal : tout se fait au clavier. `Tab` complète (encore `Tab` : la suggestion suivante), `↑` `↓` choisissent, `Entrée` exécute, effacer le `/` referme la barre. Un début de mot suffit (`/g ag` vaut `/go agenda`), accents et majuscules ne comptent pas. Un espace se tape par son nom actuel : renommé « Général », Perso devient `/space general`, même si son adresse reste `/e/perso/`. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/`. Sur téléphone, le bouton « Commandes » ouvre la barre et on touche les suggestions. `/help` liste tout ; les principales :
 
 | Commande | Effet |
 | --- | --- |
@@ -51,6 +51,8 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | `/refresh`, `/logout` | Resynchronise l'agenda, se déconnecte |
 
 Une suppression demande un second `Entrée`.
+
+Dans un texte que l'on écrit (titre d'une tâche ou d'une note, tag, recherche, nom d'un espace ou d'un agenda), `#date` devient la date du jour (`13/11/2026`) et `#cours` la matière du cours qui a lieu maintenant : `/add note #cours du #date` crée « MATHS du 13/11/2026 ». Hors d'un cours, `#cours` est refusé. Tout autre `#mot` reste tel quel.
 
 L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite.
 

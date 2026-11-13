@@ -610,11 +610,12 @@ Demandé par Rémi le 13 novembre 2026 : remplacer la palette `Ctrl+K` par des c
 
 - **`/` ouvre la barre**, avec `/` déjà tapé, quand le curseur n'est pas dans un champ. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/` ouvre la barre. Sur téléphone, le bouton « Commandes » (barre du haut ou barre de raccourcis) l'ouvre aussi.
 - **Effacer le `/`** ferme la barre. `Échap` aussi.
-- **Grammaire** : `/commande [sous-commande] [arguments]`. Les mots sont en anglais (`/add`, `/go`), les valeurs en français comme dans l'interface (`agenda`, `ecole`), avec quelques alias (`fichiers` ou `files`). Majuscules et accents ne comptent pas. Un début de mot suffit s'il n'y a pas d'ambiguïté : `/g ag` vaut `/go agenda`.
+- **Grammaire** : `/commande [sous-commande] [arguments]`. Les mots sont en anglais (`/add`, `/go`), les valeurs en français comme dans l'interface (`agenda`, `ecole`), avec quelques alias (`fichiers` ou `files`). Majuscules et accents ne comptent pas. Un début de mot suffit s'il n'y a pas d'ambiguïté : `/g ag` vaut `/go agenda`. Un espace se tape par son **nom actuel** (`/space general` pour Perso renommé « Général »), jamais par l'identifiant fixé à sa création, qui reste dans les adresses (`/e/perso/`) : un nouvel espace « Perso » se tape `perso`, même si son identifiant est `perso-2`.
 - **Complétion** : les suggestions s'affichent sous la saisie, la première en gris dans la ligne. `Tab` la complète ; `Tab` encore passe à la suivante, `Maj+Tab` revient. `↑` et `↓` parcourent la liste, `Entrée` exécute. Une ligne d'aide montre l'usage de la commande en cours (`/add task <titre> [@espace]`).
 - **Erreurs en rouge**, dans la barre, sans la fermer : commande inconnue, ambiguë, argument manquant, commande qui ne s'emploie pas sur cette page.
 - **Historique** : sur un `/` seul, `↑` rappelle les commandes précédentes (gardées dans le navigateur, 50 au plus).
 - **Une suppression se confirme** par un second `Entrée`.
+- **Variables** (demandées le 13 novembre 2026) : dans un texte que l'on écrit (titre d'une tâche, d'une note, d'un espace, nom d'un agenda, tag, recherche), `#date` devient la date du jour (`13/11/2026`) et `#cours` la matière du cours qui a lieu maintenant, comme l'écrit le widget « Prochains cours » (dans Perso, le cours de n'importe quel espace). `/add note #cours du #date` crée « MATHS du 13/11/2026 ». Hors d'un cours, `#cours` est refusé avec un message. Tout autre `#mot` reste tel quel (« Exercice #3 »). La complétion propose les deux, avec ce qu'elles donneront.
 - Le résultat d'une commande s'annonce comme une action de l'interface : la page visée s'ouvre, avec le message habituel (« Tâche ajoutée »).
 
 ## Commandes
@@ -681,6 +682,8 @@ Lot 2 :
 - [ ] `/done` puis `/undone` cochent et décochent une tâche ; `/delete task` la supprime après confirmation
 - [ ] `/tag`, `/untag`, `/pin`, `/delete` sur une note ; `/download`, `/keep`, `/delete` sur un fichier
 - [ ] `/theme`, `/size`, `/sidebar`, `/refresh`, `/logout`, `/add space`, `/add agenda` font ce que font leurs boutons
+- [ ] `/add note #cours du #date` pendant un cours donne « MATHS du 13/11/2026 » ; hors d'un cours, `#cours` est refusé ; « Exercice #3 » reste tel quel
+- [ ] Perso renommé « Général » puis un nouvel espace « Perso » : `/space perso` mène au nouveau, `/space general` à l'ancien
 - [ ] Chaque commande a son test d'intégration ; STATUS et README à jour
 
 ## Décisions
@@ -689,3 +692,4 @@ Lot 2 :
 - **La navigation qui suit une commande** passe par l'en-tête `HX-Location` de htmx : même transition qu'un lien, adresse mise à jour dans l'historique, espace de l'onglet gardé.
 - **`+` pour une date, `@` pour un espace** : sans ces signes, « Réviser pour demain » serait coupé en titre et date.
 - **« lundi » veut dire le prochain lundi**, jamais aujourd'hui ; `14/11` est dans l'année en cours.
+- **`#date` s'écrit `13/11/2026`**, et **`#cours` exige un cours en cours** (pas le prochain ni le précédent) : choix par défaut, faciles à changer (`Vars` dans `src/commands/mod.rs`).

@@ -24,8 +24,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 use crate::auth::session::Ctx;
+use crate::calendar::ical;
 use crate::notes::{self, markdown};
 use crate::spaces::Space;
+use crate::time;
 use crate::web::{AppResult, local_path};
 
 pub use run::run;
@@ -354,32 +356,54 @@ fn split_options(arg: &str, days: bool) -> (String, Vec<&str>, Vec<&str>) {
     (words.join(" "), at, plus)
 }
 
-/// L'espace que désigne un mot : son slug ou son nom (sans accents), en
-/// entier ou par son début s'il n'y a pas d'ambiguïté.
-fn find_space<'a>(spaces: &'a [Space], word: &str) -> Result<&'a Space, String> {
-    let word = fold(word);
-    let keys = |s: &Space| [s.slug.clone(), space_word(&s.name)];
-    if let Some(space) = spaces.iter().find(|s| keys(s).contains(&word)) {
+/// Le mot qui désigne chaque espace dans la barre : son nom actuel, écrit
+/// comme un mot de commande (« Vie de famille » -> `vie-de-famille`).
+///
+/// Le slug, fixé à la création et gardé dans les adresses (`/e/perso/`), n'y
+/// sert pas : Perso renommé « Général » se tape `general`, et un nouvel
+/// espace « Perso » se tape `perso`, même si son slug est `perso-2`. Deux noms
+/// qui donneraient le même mot (« École » et « Ecole ») : le second prend son
+/// slug, qui est unique.
+fn space_words(spaces: &[Space]) -> Vec<(String, &Space)> {
+    let mut out: Vec<(String, &Space)> = Vec::with_capacity(spaces.len());
+    for space in spaces {
+        let word = space_word(&space.name);
+        let word = if word.is_empty() || out.iter().any(|(w, _)| *w == word) {
+            space.slug.clone()
+        } else {
+            word
+        };
+        out.push((word, space));
+    }
+    out
+}
+
+/// L'espace que désigne un mot : son nom en entier (accents, majuscules et
+/// espaces ignorés), sinon le seul dont le nom commence par ce mot.
+fn find_space<'a>(spaces: &'a [Space], typed: &str) -> Result<&'a Space, String> {
+    let typed = space_word(typed);
+    let words = space_words(spaces);
+    if let Some((_, space)) = words.iter().find(|(w, _)| *w == typed) {
         return Ok(space);
     }
-    let matching: Vec<&Space> = spaces
+    let matching: Vec<&(String, &Space)> = words
         .iter()
-        .filter(|s| keys(s).iter().any(|k| k.starts_with(&word)))
+        .filter(|(w, _)| w.starts_with(&typed))
         .collect();
+    let all = || {
+        words
+            .iter()
+            .map(|(w, _)| w.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
     match matching.as_slice() {
-        [space] => Ok(space),
-        [] => Err(format!(
-            "Espace inconnu : {word}. Possible : {}.",
-            spaces
-                .iter()
-                .map(|s| s.slug.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
+        [only] => Ok(only.1),
+        [] => Err(format!("Espace inconnu : {typed}. Possible : {}.", all())),
         many => Err(format!(
-            "« {word} » peut être : {}.",
+            "« {typed} » peut être : {}.",
             many.iter()
-                .map(|s| s.slug.as_str())
+                .map(|(w, _)| w.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
         )),
@@ -392,17 +416,13 @@ fn space_word(name: &str) -> String {
     fold(name).split_whitespace().collect::<Vec<_>>().join("-")
 }
 
-/// Valeurs proposées pour choisir un espace, préfixées (`@` pour une option).
-fn space_choices<'a>(spaces: impl Iterator<Item = &'a Space>, prefix: &str) -> Vec<Choice> {
-    spaces
-        .map(|space| {
-            let mut choice = Choice::new(format!("{prefix}{}", space.slug), space.name.clone());
-            let word = space_word(&space.name);
-            if word != space.slug {
-                choice.alias.push(format!("{prefix}{word}"));
-            }
-            choice
-        })
+/// Valeurs proposées pour choisir un espace (ceux que garde `keep`),
+/// préfixées (`@` pour une option), avec leur vrai nom en aide.
+fn space_choices(spaces: &[Space], keep: impl Fn(&Space) -> bool, prefix: &str) -> Vec<Choice> {
+    space_words(spaces)
+        .into_iter()
+        .filter(|(_, space)| keep(space))
+        .map(|(word, space)| Choice::new(format!("{prefix}{word}"), space.name.clone()))
         .collect()
 }
 
@@ -527,6 +547,98 @@ pub fn parse_day(word: &str, today: NaiveDate) -> Option<NaiveDate> {
         }
         _ => None,
     }
+}
+
+// ---------------------------------------------------------------------
+// Variables : #date, #cours
+// ---------------------------------------------------------------------
+
+/// Ce que valent les variables d'un texte au moment de la commande : on tape
+/// `/add note #cours du #date`, la note s'appelle « MATHS du 13/11/2026 ».
+pub struct Vars {
+    /// `#date` : la date du jour, à Paris.
+    pub date: String,
+    /// `#cours` : la matière du cours qui a lieu maintenant, comme l'écrit le
+    /// widget « Prochains cours » (dans Perso, celui de n'importe quel espace).
+    pub course: Option<String>,
+}
+
+impl Vars {
+    pub async fn now(ctx: &Ctx, state: &AppState) -> AppResult<Self> {
+        let now = time::now();
+        let overview = ctx.active.is_overview();
+        let title = sqlx::query_scalar!(
+            r#"SELECT e.title FROM calendar_events e
+               JOIN calendar_sources s ON s.id = e.source_id
+               WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2)
+                 AND e.all_day = 0 AND e.starts_at <= ?4 AND e.ends_at > ?4
+               ORDER BY e.starts_at
+               LIMIT 1"#,
+            ctx.user.id,
+            ctx.active.id,
+            overview,
+            now
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        Ok(Self {
+            date: time::paris_date(now).format("%d/%m/%Y").to_string(),
+            course: title
+                .map(|t| ical::subject(&t).to_string())
+                .filter(|s| !s.is_empty()),
+        })
+    }
+
+    /// Valeurs proposées par la complétion, avec ce qu'elles donneront.
+    fn choices(&self) -> Vec<Choice> {
+        vec![
+            Choice::new("#date", format!("Date du jour : {}", self.date)),
+            Choice::new(
+                "#cours",
+                match &self.course {
+                    Some(course) => format!("Cours en cours : {course}"),
+                    None => "Aucun cours en ce moment".into(),
+                },
+            ),
+        ]
+    }
+}
+
+/// Remplace `#date` et `#cours` dans un texte (majuscules et accents
+/// ignorés, ponctuation autour permise). Tout autre `#mot` reste tel quel :
+/// « Exercice #3 », un tag. Refusé si `#cours` est demandé hors d'un cours.
+pub fn expand(text: &str, vars: &Vars) -> Result<String, String> {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('#') {
+        let (before, after) = rest.split_at(at);
+        out.push_str(before);
+        let word: String = after[1..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric())
+            .collect();
+        // « a#date » n'est pas une variable : le # doit commencer un mot.
+        let starts_word = out.chars().last().is_none_or(|c| !c.is_alphanumeric());
+        let value = match fold(&word).as_str() {
+            "date" if starts_word => Some(vars.date.clone()),
+            "cours" if starts_word => Some(vars.course.clone().ok_or_else(|| {
+                "Aucun cours en ce moment : #cours n'a rien à mettre.".to_string()
+            })?),
+            _ => None,
+        };
+        match value {
+            Some(value) => {
+                out.push_str(&value);
+                rest = &after[1 + word.len()..];
+            }
+            None => {
+                out.push('#');
+                rest = &after[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------
@@ -815,6 +927,78 @@ mod tests {
         assert_eq!(fold("Réglages"), "reglages");
         assert_eq!(fold("École"), "ecole");
         assert_eq!(space_word("Vie de  Famille"), "vie-de-famille");
+    }
+
+    fn space(id: i64, slug: &str, name: &str) -> Space {
+        Space {
+            id,
+            slug: slug.into(),
+            name: name.into(),
+            color: "orange".into(),
+            icon: "home".into(),
+            archived: false,
+            auto_mp4: false,
+            auto_heic_jpeg: false,
+        }
+    }
+
+    #[test]
+    fn les_espaces_par_leur_nom() {
+        // Perso renommé « Général », puis un nouvel espace « Perso » (slug
+        // perso-2) : la barre suit les noms, pas les slugs.
+        let spaces = [
+            space(1, "perso", "Général"),
+            space(2, "ecole", "École"),
+            space(3, "perso-2", "Perso"),
+            space(4, "vie", "Vie de famille"),
+        ];
+        let id = |typed| find_space(&spaces, typed).map(|s| s.id);
+        assert_eq!(id("perso"), Ok(3));
+        assert_eq!(id("general"), Ok(1));
+        assert_eq!(id("Gén"), Ok(1));
+        assert_eq!(id("ECOLE"), Ok(2));
+        assert_eq!(id("vie de famille"), Ok(4));
+        assert_eq!(id("vie"), Ok(4));
+        assert!(id("perso-2").unwrap_err().contains("Espace inconnu"));
+        let words: Vec<String> = space_choices(&spaces, |s| s.id != 2, "@")
+            .into_iter()
+            .map(|c| c.v)
+            .collect();
+        assert_eq!(words, ["@general", "@perso", "@vie-de-famille"]);
+        // Deux noms qui donnent le même mot : le second garde son slug.
+        let twins = [space(1, "ecole", "École"), space(2, "ecole-2", "Ecole")];
+        assert_eq!(find_space(&twins, "ecole").map(|s| s.id), Ok(1));
+        assert_eq!(find_space(&twins, "ecole-2").map(|s| s.id), Ok(2));
+    }
+
+    #[test]
+    fn variables() {
+        let vars = Vars {
+            date: "13/11/2026".into(),
+            course: Some("MATHS".into()),
+        };
+        let x = |text| expand(text, &vars);
+        assert_eq!(x("#cours du #date").unwrap(), "MATHS du 13/11/2026");
+        assert_eq!(
+            x("Notes (#Cours), #DATE.").unwrap(),
+            "Notes (MATHS), 13/11/2026."
+        );
+        // Les autres # restent : numéros, tags, mots collés.
+        assert_eq!(
+            x("Exercice #3 #projet a#date").unwrap(),
+            "Exercice #3 #projet a#date"
+        );
+        assert_eq!(x("#dates # ##date").unwrap(), "#dates # #13/11/2026");
+        let nothing = Vars {
+            date: "13/11/2026".into(),
+            course: None,
+        };
+        assert!(
+            expand("#cours", &nothing)
+                .unwrap_err()
+                .contains("Aucun cours")
+        );
+        assert_eq!(expand("sans variable", &nothing).unwrap(), "sans variable");
     }
 
     #[test]
