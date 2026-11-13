@@ -1,6 +1,6 @@
 // Produit les fichiers statiques tiers de dashu dans static/ :
 //   - static/js/htmx.js        htmx minifié, copié tel quel depuis npm
-//   - static/js/editor.js      CodeMirror 6 + notre code d'éditeur, bundle esbuild
+//   - static/js/editor.js      ProseMirror + notre code d'éditeur, bundle esbuild
 //   - static/icons.svg         sprite SVG unique, icônes Lucide (licence ISC)
 //   - static/fonts/*.woff2     Rethink Sans et JetBrains Mono (licence OFL), sous-ensemble latin
 //
@@ -23,7 +23,7 @@ await mkdir(out("fonts"), { recursive: true });
 // --- htmx -------------------------------------------------------------
 await copyFile(nm("htmx.org", "dist", "htmx.min.js"), out("js", "htmx.js"));
 
-// --- Éditeur (CodeMirror) ---------------------------------------------
+// --- Éditeur (ProseMirror) --------------------------------------------
 await build({
   entryPoints: [join(root, "frontend", "editor.js")],
   outfile: out("js", "editor.js"),
@@ -33,8 +33,12 @@ await build({
   target: ["es2020"],
   legalComments: "none",
   logLevel: "info",
-  // Voir frontend/stub-lang-html.js : on n'embarque pas les grammaires HTML/CSS/JS.
-  alias: { "@codemirror/lang-html": join(root, "frontend", "stub-lang-html.js") },
+  // Voir les deux fichiers : les entités HTML rares et la détection des
+  // adresses nues ne servent pas à l'éditeur.
+  alias: {
+    entities: join(root, "frontend", "stub-entities.js"),
+    "linkify-it": join(root, "frontend", "stub-linkify.js"),
+  },
 });
 
 // --- Polices ----------------------------------------------------------
@@ -121,6 +125,27 @@ const icons = {
   unarchive: "archive-restore",
   // Barre de commandes « / ».
   commands: "square-slash",
+  // Éditeur de notes : menu « / », barre de mise en forme, tableaux.
+  "b-text": "type",
+  "b-h1": "heading-1",
+  "b-h2": "heading-2",
+  "b-h3": "heading-3",
+  "b-list": "list",
+  "b-olist": "list-ordered",
+  "b-table": "table",
+  "b-quote": "text-quote",
+  "b-hr": "minus",
+  image: "image",
+  paperclip: "paperclip",
+  bold: "bold",
+  italic: "italic",
+  strike: "strikethrough",
+  "code-inline": "code",
+  unlink: "unlink",
+  "row-add": "between-horizontal-end",
+  "col-add": "between-vertical-end",
+  "row-del": "table-rows-split",
+  "col-del": "table-columns-split",
 };
 
 let sprite =

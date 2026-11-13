@@ -25,7 +25,7 @@ La v1 couvre cinq modules. Tout le reste est explicitement hors périmètre et l
 | Authentification | Identifiants + Google, sessions, déconnexion, rate limiting | 2FA, gestion multi-utilisateurs avancée |
 | Espaces | Perso, École, Taff ; bascule rapide ; tout contenu rattaché à un espace | Espaces créés librement par l'utilisateur |
 | Dashboard d'accueil | Widgets par espace : prochains cours, tâches du jour, dernières notes, horloge/date | Widgets configurables par glisser-déposer |
-| Notes Markdown | Créer, éditer, supprimer, tags, recherche plein texte, aperçu en direct | Partage public, collaboration temps réel |
+| Notes Markdown | Créer, éditer (une seule vue mise en forme, menu `/`), supprimer, tags, recherche plein texte | Partage public, collaboration temps réel |
 | Emploi du temps | Import iCal Pronote Campus par URL, vue jour/semaine, rafraîchissement auto | Édition des cours, synchro Google Calendar |
 
 Hors périmètre v1 : cloud de fichiers, convertisseur, outils PDF, retouche photo, TTS, transcription, assistant IA. Ils arrivent dans les versions suivantes.
@@ -49,10 +49,10 @@ Rust côté serveur avec du HTML rendu par le serveur et HTMX pour l'interactivi
 | Markdown | pulldown-cmark + ammonia | Conversion Markdown → HTML, puis nettoyage contre le XSS |
 | iCal | icalendar + reqwest | Téléchargement et lecture du flux Pronote Campus |
 | Dates | chrono + chrono-tz | Fuseau Europe/Paris, heure d'été |
-| Éditeur de notes | CodeMirror 6 (JS, mode Markdown) | Seule brique JS significative, chargée uniquement sur la page éditeur |
+| Éditeur de notes | ProseMirror + markdown-it (JS) | Seule brique JS significative, chargée uniquement sur la page éditeur. Remplace CodeMirror 6 depuis le 13 novembre 2026 (justification dans le README) |
 | Styles | CSS écrit à la main, variables CSS | Design sur mesure, pas de framework CSS |
 
-Règle : aucune dépendance front en dehors de htmx et CodeMirror sans justification écrite dans le README.
+Règle : aucune dépendance front en dehors de htmx et de l'éditeur (ProseMirror, markdown-it) sans justification écrite dans le README.
 
 ## Architecture et structure du projet
 
@@ -81,7 +81,7 @@ dashu/
 │   ├── commands/           barre de commandes « / », FTS5
 │   └── web/                erreurs, CSRF, en-têtes de sécurité
 ├── templates/              askama : layout, pages, fragments htmx
-├── static/                 css, js (htmx, CodeMirror), icônes, polices
+├── static/                 css, js (htmx, éditeur ProseMirror), icônes, polices
 ├── tests/                  tests d'intégration + fixtures/ (.ics)
 ├── scripts/backup.sh
 ├── Dockerfile
@@ -172,12 +172,13 @@ Règles :
 
 ### Notes
 
-- Éditeur CodeMirror en Markdown, aperçu rendu côté serveur à côté (rafraîchi 300 ms après la dernière frappe).
+- Une seule vue, comme une page Notion (décidé le 13 novembre 2026, à la place de l'éditeur CodeMirror et de l'aperçu à côté) : le texte s'édite mis en forme. `/` ouvre le menu des blocs : texte, titres 1 à 3, listes à puces, numérotées ou à cocher, tableau, citation, séparateur, bloc de code, lien (adresse, note ou fichier), image, fichier, date du jour. Les raccourcis Markdown marchent pendant la frappe ; une sélection montre une barre de mise en forme.
+- Le Markdown reste le format enregistré : seuls existent les blocs que le Markdown sait écrire. Le serveur le met en forme (nettoyé par ammonia) en attendant le chargement de l'éditeur.
 - Sauvegarde automatique toutes les 2 secondes après une modification, indicateur « Enregistré ».
 - Tags ajoutables depuis l'éditeur, filtre par tag dans la liste.
 - Recherche plein texte avec extrait surligné du passage trouvé.
 - Épingler, supprimer (avec confirmation), déplacer vers un autre espace.
-- Support : titres, listes, cases à cocher, code avec coloration, tableaux, liens.
+- Support : titres, listes, cases à cocher, code (coloré dans le rendu du serveur), tableaux, liens, images.
 
 ### Emploi du temps
 
@@ -209,7 +210,7 @@ Les cibles sont mesurées sur le serveur homelab réel, via Cloudflare, depuis u
 | Mesure | Cible |
 | --- | --- |
 | Poids d'une page hors éditeur (HTML + CSS + JS, compressés) | < 60 Ko |
-| Poids de la page éditeur (avec CodeMirror) | < 250 Ko |
+| Poids de la page éditeur (avec l'éditeur) | < 250 Ko |
 | Temps de réponse serveur d'une page (hors réseau) | < 20 ms |
 | Score Lighthouse Performance (mobile) | ≥ 95 |
 | Mémoire du binaire au repos | < 50 Mo |
@@ -220,7 +221,7 @@ Moyens imposés :
 - Compilation en mode `release` avec LTO (optimisation à l'édition de liens).
 - Fichiers statiques versionnés par empreinte dans le nom, cache navigateur d'un an.
 - Compression brotli/gzip sur toutes les réponses texte.
-- CodeMirror chargé uniquement sur la page éditeur.
+- L'éditeur (ProseMirror) chargé uniquement sur la page éditeur.
 - SQLite en mode WAL (lectures et écritures simultanées sans blocage).
 
 ## Déploiement homelab + Cloudflare Tunnel
@@ -608,7 +609,7 @@ Demandé par Rémi le 13 novembre 2026 : remplacer la palette `Ctrl+K` par des c
 
 ## Fonctionnement
 
-- **`/` ouvre la barre**, avec `/` déjà tapé, quand le curseur n'est pas dans un champ. Dans un champ (l'éditeur de notes compris), `Échap` en sort, puis `/` ouvre la barre. Sur téléphone, le bouton « Commandes » (barre du haut ou barre de raccourcis) l'ouvre aussi.
+- **`/` ouvre la barre**, avec `/` déjà tapé, quand le curseur n'est pas dans un champ. Dans un champ (l'éditeur de notes compris, où `/` ouvre le menu des blocs), `Échap` en sort, puis `/` ouvre la barre. Sur téléphone, le bouton « Commandes » (barre du haut ou barre de raccourcis) l'ouvre aussi.
 - **Effacer le `/`** ferme la barre. `Échap` aussi.
 - **Grammaire** : `/commande [sous-commande] [arguments]`. Les mots sont en anglais (`/add`, `/go`), les valeurs en français comme dans l'interface (`agenda`, `ecole`), avec quelques alias (`fichiers` ou `files`). Majuscules et accents ne comptent pas. Un début de mot suffit s'il n'y a pas d'ambiguïté : `/g ag` vaut `/go agenda`. Un espace se tape par son **nom actuel** (`/space general` pour Perso renommé « Général »), jamais par l'identifiant fixé à sa création, qui reste dans les adresses (`/e/perso/`) : un nouvel espace « Perso » se tape `perso`, même si son identifiant est `perso-2`.
 - **Complétion** : les suggestions s'affichent sous la saisie, la première en gris dans la ligne. `Tab` la complète ; `Tab` encore passe à la suivante, `Maj+Tab` revient. `↑` et `↓` parcourent la liste, `Entrée` exécute. Une ligne d'aide montre l'usage de la commande en cours (`/add task <titre> [@espace]`).

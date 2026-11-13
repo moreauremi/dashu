@@ -2551,21 +2551,28 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   display: block;
 }
 
-input.note-title {
+/* Le titre est le haut de la page, comme dans Notion : grand, sans cadre,
+   aligné sur le texte. ([type] : plus précis que la règle des 16 px des
+   écrans tactiles, que le titre dépasse de toute façon.) */
+input.note-title[type="text"] {
   width: 100%;
   height: auto;
-  padding: 16px 24px 4px;
+  padding: 40px 0 8px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 24px;
-  font-weight: 500;
-  line-height: 32px;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
 }
 
 input.note-title:focus-visible {
   outline: none;
-  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+input.note-title::placeholder {
+  color: var(--text-3);
+  opacity: 0.6;
 }
 
 .note-tags {
@@ -2573,7 +2580,8 @@ input.note-title:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 4px 24px 12px;
+  padding: 4px 0 16px;
+  margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
   color: var(--text-3);
 }
@@ -2623,34 +2631,28 @@ input.note-title:focus-visible {
   background: var(--field);
 }
 
-.pane-tabs {
-  display: none;
-  align-self: center;
-  margin: 8px 0;
+/* Une seule page qui défile : titre, tags et texte ensemble. */
+.note-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
 }
 
-.note-panes {
-  display: grid;
-  flex: 1;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  min-height: 0;
+.note-sheet {
+  width: 100%;
+  max-width: calc(78ch + 96px);
+  margin-inline: auto;
+  padding-inline: 48px;
 }
 
 .editor {
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
 }
 
-.preview {
-  min-width: 0;
-  overflow: auto;
-  padding: 24px 24px 40vh;
-}
-
-/* Rendu d'une note (aperçu). Le HTML vient du Markdown, nettoyé par ammonia. */
+/* Rendu d'une note. Le HTML vient du Markdown, nettoyé par ammonia (aperçu
+   d'un fichier, page éditeur avant le chargement de l'éditeur) ; dans
+   l'éditeur, de ProseMirror, avec les mêmes balises. */
 .prose {
   max-width: 78ch;
   margin-inline: auto;
@@ -2781,6 +2783,362 @@ input.note-title:focus-visible {
   height: 1px;
   border: 0;
   background: var(--border-strong);
+}
+
+/* ---------- Éditeur de notes (ProseMirror) ----------
+   Le texte s'édite mis en forme, avec les règles de .prose ci-dessus.
+   Les règles de base de ProseMirror sont reprises ici (pas de feuille à
+   part, pas de style injecté). */
+.note-body {
+  position: relative;
+  min-height: 50vh;
+  padding-bottom: 30vh;
+  caret-color: var(--accent);
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  word-wrap: break-word;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+}
+
+.note-body:focus,
+.note-body:focus-visible {
+  outline: none;
+}
+
+.note-body pre {
+  position: relative;
+  white-space: pre-wrap;
+}
+
+.note-body li {
+  position: relative;
+}
+
+.note-body .li-body > * + * {
+  margin-top: 0.25em;
+}
+
+/* Langue d'un bloc de code (« ```rust »), en haut à droite. */
+.note-body pre[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 16px;
+  user-select: none;
+}
+
+/* Cases à cocher : la case prend la place de la puce ; une tâche faite
+   se grise et se barre. */
+/* (.ProseMirror : plus précis que les cases du rendu serveur, .prose.) */
+.note-body.ProseMirror li[data-checked] {
+  margin-left: 0;
+  list-style: none;
+}
+
+.note-body.ProseMirror .li-check {
+  position: absolute;
+  top: 4px;
+  left: -1.4em;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.note-body li[data-checked="true"] > .li-body > p:first-child {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+/* Texte d'aide sur la ligne vide du curseur (et dans une note vide). */
+.note-body .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.note-body:not(.ProseMirror-focused) .is-empty:not(.is-doc-empty)::before {
+  content: none;
+}
+
+/* Tableaux : colonnes d'une largeur minimale, défilement de côté. */
+.note-body .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.note-body table {
+  display: table;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.note-body th,
+.note-body td {
+  position: relative;
+  min-width: 7em;
+  vertical-align: top;
+}
+
+.note-body [data-align="center"] {
+  text-align: center;
+}
+
+.note-body [data-align="right"] {
+  text-align: right;
+}
+
+.note-body .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--selection);
+  pointer-events: none;
+}
+
+.note-body .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.note-body li.ProseMirror-selectednode {
+  outline: none;
+}
+
+.note-body hr.ProseMirror-selectednode {
+  outline-offset: 4px;
+}
+
+.note-body [draggable][contenteditable="false"] {
+  user-select: text;
+}
+
+.note-body img.ProseMirror-separator {
+  display: inline !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+/* Curseur entre deux blocs (avant un tableau, après une image…). */
+.ProseMirror-gapcursor {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+.ProseMirror-gapcursor::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  display: block;
+  width: 20px;
+  border-top: 2px solid var(--accent);
+  animation: gapcursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes gapcursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.ed-drop-cursor {
+  background: var(--accent);
+}
+
+.ed-uploading {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+/* Menus flottants de l'éditeur (popover) : placés par editor.js, via une
+   feuille construite (pas de style en ligne). */
+.ed-pop {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.4);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.slash-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(360px, 50dvh);
+  overflow-y: auto;
+}
+
+.slash-group {
+  padding: 8px 8px 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.slash-item,
+.ed-hit {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.slash-item[aria-selected="true"],
+.ed-hit[aria-selected="true"],
+.ed-hit:hover {
+  background: var(--surface-2);
+}
+
+.slash-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+}
+
+.slash-text,
+.ed-hit-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slash-desc,
+.ed-hit-help {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-hit-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-hint {
+  flex: none;
+  color: var(--text-3);
+}
+
+.slash-empty {
+  padding: 8px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.ed-bubble:popover-open,
+.ed-table-bar:popover-open,
+.ed-link-card:popover-open {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ed-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.ed-tool:hover {
+  background: var(--surface-2);
+}
+
+.ed-tool[aria-pressed="true"] {
+  background: var(--surface-2);
+  color: var(--accent-text);
+}
+
+.ed-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.ed-link-href {
+  max-width: 260px;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-link-form:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(340px, calc(100vw - 16px));
+}
+
+.ed-link-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.ed-link-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-link-results:empty {
+  display: none;
 }
 
 /* Coloration du code : classes posées par syntect (préfixe hl-). */
@@ -3368,6 +3726,16 @@ input.note-title:focus-visible {
   .cmd-line input,
   .cmd-ghost {
     font-size: 16px;
+  }
+
+  .note-body,
+  .ed-link-input {
+    font-size: 16px;
+  }
+
+  .ed-tool {
+    min-width: 40px;
+    height: 40px;
   }
 
   .cmd-item {
@@ -4425,38 +4793,20 @@ input.note-title:focus-visible {
     gap: 12px;
   }
 
-  /* Éditeur : un seul panneau à la fois, choisi par les onglets. */
-  .pane-tabs {
-    display: inline-flex;
+  /* Éditeur : la page prend toute la largeur. */
+  .note-sheet {
+    padding-inline: 16px;
   }
 
-  .note-panes {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .note-panes[data-show="write"] .preview,
-  .note-panes[data-show="preview"] .editor {
-    display: none;
-  }
-
-  .editor {
-    border-right: 0;
-    border-top: 1px solid var(--border);
-  }
-
-  input.note-title {
-    padding: 12px 16px 4px;
-    font-size: 18px;
-    line-height: 24px;
+  input.note-title[type="text"] {
+    padding: 20px 0 4px;
+    font-size: 24px;
+    line-height: 32px;
   }
 
   .note-tags {
-    padding: 4px 16px 12px;
-  }
-
-  .preview {
-    padding: 16px 16px 30vh;
-    border-top: 1px solid var(--border);
+    margin-bottom: 12px;
+    padding-bottom: 12px;
   }
 
   .note-row {

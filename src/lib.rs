@@ -148,7 +148,6 @@ pub fn build_router(state: AppState) -> Router {
         // Notes
         .route("/notes", get(notes::list).post(notes::create))
         .route("/notes/new", get(notes::new_page))
-        .route("/notes/preview", post(notes::preview))
         .route("/notes/{id}", get(notes::edit_page).post(notes::save))
         .route("/notes/{id}/pin", post(notes::toggle_pin))
         .route("/notes/{id}/move", post(notes::move_to_space))

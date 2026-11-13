@@ -29,33 +29,34 @@
     </div>
   </header>
 
-  {#- Sauvegarde automatique : le formulaire s'envoie 2 s après la dernière
-      modification (ou tout de suite sur « flush », déclenché par Ctrl+S).
-      Le serveur répond par le texte de l'indicateur d'état. -#}
-  <form id="note-form" class="note-form" data-save-url="/notes/{{ id }}" data-csrf="{{ shell.csrf }}"
-        hx-post="/notes/{{ id }}" hx-trigger="input delay:2s, flush, submit"
-        hx-target="#save-status" hx-swap="innerHTML" hx-sync="this:replace">
-    <input class="note-title" type="text" name="title" value="{{ title }}" maxlength="200" autocomplete="off"
-           placeholder="Titre" aria-label="Titre de la note">
-    {#- Miroir du contenu de CodeMirror. Il demande l'aperçu 300 ms après la dernière frappe. -#}
-    <textarea name="body_md" hidden
-              hx-post="/notes/preview" hx-trigger="input delay:300ms"
-              hx-target="#preview" hx-swap="innerHTML" hx-sync="this:replace">{{ body_md }}</textarea>
-  </form>
+  {#- Une seule vue, comme une page Notion : titre, tags, puis le texte, qui
+      défilent ensemble. Le texte s'édite mis en forme ; « / » choisit un bloc. -#}
+  <div class="note-scroll" data-note-scroll>
+    <div class="note-sheet">
+      {#- Sauvegarde automatique : le formulaire s'envoie 2 s après la dernière
+          modification (ou tout de suite sur « flush », déclenché par Ctrl+S).
+          Le serveur répond par le texte de l'indicateur d'état. -#}
+      <form id="note-form" class="note-form" data-save-url="/notes/{{ id }}" data-csrf="{{ shell.csrf }}"
+            hx-post="/notes/{{ id }}" hx-trigger="input delay:2s, flush, submit"
+            hx-target="#save-status" hx-swap="innerHTML" hx-sync="this:replace">
+        <input class="note-title" type="text" name="title" value="{{ title }}" maxlength="200" autocomplete="off"
+               placeholder="Sans titre" aria-label="Titre de la note">
+        {#- Source Markdown de la note. L'éditeur la lit à l'ouverture et la
+            réécrit à chaque modification ; c'est elle qui part au serveur. -#}
+        <textarea name="body_md" hidden>{{ body_md }}</textarea>
+      </form>
 
-  {% include "notes/_tags.html" %}
+      {% include "notes/_tags.html" %}
 
-  <div class="pane-tabs segmented" role="group" aria-label="Affichage">
-    <button type="button" data-pane-tab="write" aria-pressed="true">{{ crate::assets::icon("pencil")|safe }}Écrire</button>
-    <button type="button" data-pane-tab="preview" aria-pressed="false">{{ crate::assets::icon("eye")|safe }}Aperçu</button>
-  </div>
-
-  <div id="note-panes" class="note-panes" data-show="write">
-    <div id="editor" class="editor"></div>
-    <article id="preview" class="preview prose" aria-label="Aperçu de la note">{{ preview_html|safe }}</article>
+      {#- Rendu du serveur (nettoyé par ammonia), affiché le temps que
+          l'éditeur se charge, puis remplacé par lui. -#}
+      <div id="editor" class="editor" data-icons="{{ crate::assets::url("icons.svg") }}">
+        <article class="prose note-body" aria-label="Contenu de la note">{{ body_html|safe }}</article>
+      </div>
+    </div>
   </div>
 </div>
 
-{#- CodeMirror n'est chargé que sur cette page. -#}
+{#- L'éditeur (ProseMirror) n'est chargé que sur cette page. -#}
 <script src="{{ crate::assets::url("js/editor.js") }}"></script>
 {% endblock %}

@@ -400,8 +400,9 @@ struct EditPage {
     title: String,
     body_md: String,
     pinned: bool,
-    /// Aperçu initial, déjà nettoyé par ammonia.
-    preview_html: String,
+    /// Rendu du texte, déjà nettoyé par ammonia : affiché le temps que
+    /// l'éditeur se charge (et sans JavaScript).
+    body_html: String,
     saved_label: String,
     tags: Vec<NoteTag>,
     /// Tags existants, proposés à la saisie.
@@ -438,7 +439,7 @@ pub async fn edit_page(
 
     let page = EditPage {
         id,
-        preview_html: markdown::render(&note.body_md),
+        body_html: markdown::render(&note.body_md),
         saved_label: format!(
             "Enregistré · modifié {}",
             time::ago(note.updated_at, time::now())
@@ -500,16 +501,6 @@ pub async fn save(
         .await?;
     }
     Ok(Html(format!("Enregistré à {}", time::hm(now))).into_response())
-}
-
-#[derive(Deserialize)]
-pub struct PreviewForm {
-    body_md: String,
-}
-
-/// `POST /notes/preview` : rend le Markdown en cours de frappe.
-pub async fn preview(_ctx: Ctx, axum::Form(form): axum::Form<PreviewForm>) -> Html<String> {
-    Html(markdown::render(&normalize_newlines(&form.body_md)))
 }
 
 /// Un formulaire HTML envoie les retours à la ligne en CRLF : on stocke en LF.
