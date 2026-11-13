@@ -171,6 +171,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/folders", post(folders::create))
         .route("/folders/{id}/rename", post(folders::rename))
         .route("/folders/{id}/delete", post(folders::delete))
+        .route("/folders/{id}/move", post(folders::move_folder))
         .route("/destinations", get(folders::picker))
         // Outils : compression et conversions (le travail est fait par
         // dashu-worker), onglet Outils, suivi dans la barre latérale

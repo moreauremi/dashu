@@ -541,6 +541,153 @@ pub async fn delete(
     Ok(see_other(&back))
 }
 
+#[derive(Deserialize)]
+pub struct MoveForm {
+    space_id: i64,
+    /// Dossier du premier niveau où le mettre ; vide : la racine de l'espace.
+    folder_id: Option<String>,
+    /// Page où revenir ; le nouvel emplacement sans précision.
+    next: Option<String>,
+}
+
+/// `POST /folders/{id}/move` : déplace un dossier, avec ses notes, ses
+/// fichiers et ses sous-dossiers, à la racine d'un espace ou dans un dossier
+/// du premier niveau. Trois niveaux au plus : un dossier qui a des
+/// sous-dossiers ne va que directement dans un espace. Un refus (niveau de
+/// trop, homonyme, le dossier dans lui-même) est dit, et rien ne bouge.
+pub async fn move_folder(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<MoveForm>,
+) -> AppResult<Response> {
+    let user = ctx.user.id;
+    let folders = all(&state.db, user).await?;
+    let folder = folders
+        .iter()
+        .find(|f| f.id == id)
+        .ok_or(AppError::NotFound)?;
+    // L'espace et le dossier de destination doivent être au compte, et le
+    // dossier dans cet espace.
+    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let parent = match parse_id(form.folder_id.as_deref())? {
+        Some(pid) => Some(
+            folders
+                .iter()
+                .find(|f| f.id == pid && f.space_id == target.id)
+                .ok_or(AppError::NotFound)?,
+        ),
+        None => None,
+    };
+    let parent_id = parent.map(|p| p.id);
+    let back = form
+        .next
+        .as_deref()
+        .map(|n| web::local_path(Some(n)).to_string())
+        .unwrap_or_else(|| view_url(&target.slug, parent_id));
+    let subs: Vec<i64> = folders
+        .iter()
+        .filter(|f| f.parent_id == Some(id))
+        .map(|f| f.id)
+        .collect();
+
+    if folder.space_id == target.id && folder.parent_id == parent_id {
+        return Ok(see_other(&back));
+    }
+    let refusal = match parent {
+        Some(p) if p.id == id => Some("Un dossier ne va pas dans lui-même.".to_string()),
+        Some(p) if !p.is_top() => {
+            Some("Pas de dossier dans un sous-dossier : trois niveaux au plus.".to_string())
+        }
+        Some(_) if !subs.is_empty() => Some(format!(
+            "« {} » contient des sous-dossiers : il ne va que directement dans un espace (trois niveaux au plus).",
+            folder.name
+        )),
+        _ if neighbours(&folders, target.id, parent_id, Some(id))
+            .iter()
+            .any(|n| same_name(n, &folder.name)) =>
+        {
+            Some(format!(
+                "Un dossier « {} » existe déjà dans « {} ».",
+                folder.name,
+                label(&target.name, &folders, parent_id)
+            ))
+        }
+        _ => None,
+    };
+    if let Some(message) = refusal {
+        ctx.flash_error(message).await?;
+        return Ok(see_other(&back));
+    }
+
+    let mut tx = state.db.begin().await?;
+    sqlx::query!(
+        "UPDATE folders SET space_id = ?, parent_id = ? WHERE id = ? AND user_id = ?",
+        target.id,
+        parent_id,
+        id,
+        user
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Un autre espace : tout son contenu le suit, sous-dossiers, envois et
+    // conversions en cours compris (une copie convertie arrive ainsi à côté
+    // de son original).
+    if target.id != folder.space_id {
+        for folder_id in std::iter::once(id).chain(subs.iter().copied()) {
+            sqlx::query!(
+                "UPDATE folders SET space_id = ? WHERE id = ? AND user_id = ?",
+                target.id,
+                folder_id,
+                user
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(
+                "UPDATE notes SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+                target.id,
+                user,
+                folder_id
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(
+                "UPDATE jobs SET space_id = ?1 WHERE user_id = ?2
+                   AND file_id IN (SELECT id FROM files WHERE user_id = ?2 AND folder_id = ?3)",
+                target.id,
+                user,
+                folder_id
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(
+                "UPDATE files SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+                target.id,
+                user,
+                folder_id
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(
+                "UPDATE uploads SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+                target.id,
+                user,
+                folder_id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+    tx.commit().await?;
+    ctx.flash_ok(format!(
+        "Dossier « {} » déplacé dans « {} »",
+        folder.name,
+        label(&target.name, &folders, parent_id)
+    ))
+    .await?;
+    Ok(see_other(&back))
+}
+
 // ---------------------------------------------------------------------
 // Fenêtre « Ranger » : tous les espaces et tous les dossiers
 // ---------------------------------------------------------------------
@@ -557,14 +704,23 @@ pub struct Dest {
     pub current: bool,
 }
 
+/// Ce que la fenêtre « Ranger » propose pour un élément.
+pub struct Reach {
+    /// L'espace et le dossier où l'élément est déjà (grisés).
+    pub here: Option<(i64, Option<i64>)>,
+    /// Niveau le plus profond où il peut aller : 2 pour une note ou un
+    /// fichier ; 1 pour un dossier sans sous-dossier ; 0 pour un dossier qui
+    /// en a (trois niveaux au plus).
+    pub depth: u8,
+    /// Le dossier qu'on déplace : ni lui ni ses sous-dossiers ne sont des
+    /// destinations.
+    pub moving: Option<i64>,
+}
+
 /// Toutes les destinations possibles, dans l'ordre de l'arborescence :
 /// chaque espace, puis ses dossiers, chacun suivi de ses sous-dossiers.
-/// `here` : l'espace et le dossier actuels de l'élément.
-pub fn destinations(
-    spaces: &[Space],
-    folders: &[Folder],
-    here: Option<(i64, Option<i64>)>,
-) -> Vec<Dest> {
+pub fn destinations(spaces: &[Space], folders: &[Folder], reach: &Reach) -> Vec<Dest> {
+    let here = reach.here;
     let mut out = Vec::new();
     let mut push = |space: &Space, folder: Option<&Folder>, depth: u8| {
         let folder_id = folder.map(|f| f.id);
@@ -579,11 +735,17 @@ pub fn destinations(
     };
     for space in spaces {
         push(space, None, 0);
+        if reach.depth == 0 {
+            continue;
+        }
         for top in folders
             .iter()
-            .filter(|f| f.space_id == space.id && f.is_top())
+            .filter(|f| f.space_id == space.id && f.is_top() && Some(f.id) != reach.moving)
         {
             push(space, Some(top), 1);
+            if reach.depth < 2 {
+                continue;
+            }
             for sub in folders.iter().filter(|f| f.parent_id == Some(top.id)) {
                 push(space, Some(sub), 2);
             }
@@ -596,8 +758,8 @@ pub fn destinations(
 #[template(path = "folders/_destinations.html")]
 struct DestinationsFragment {
     title: String,
-    /// Adresse des formulaires : déplacer une note, un fichier, ou garder un
-    /// fichier de l'onglet Outils.
+    /// Adresse des formulaires : déplacer une note, un fichier ou un dossier,
+    /// ou garder un fichier de l'onglet Outils.
     action: String,
     /// Page où revenir après le rangement (vide : celle par défaut).
     next: String,
@@ -608,12 +770,14 @@ struct DestinationsFragment {
 pub struct DestinationsQuery {
     note: Option<i64>,
     fichier: Option<i64>,
+    dossier: Option<i64>,
     /// Page où revenir après le rangement.
     next: Option<String>,
 }
 
-/// `GET /destinations?note=…` ou `?fichier=…` : le contenu de la fenêtre
-/// « Ranger » (htmx), un bouton par espace et par dossier.
+/// `GET /destinations?note=…`, `?fichier=…` ou `?dossier=…` : le contenu de
+/// la fenêtre « Ranger » (htmx), un bouton par espace et par dossier où
+/// l'élément peut aller.
 pub async fn picker(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -625,8 +789,9 @@ pub async fn picker(
         .as_deref()
         .map(|n| web::local_path(Some(n)).to_string())
         .unwrap_or_default();
-    let (title, action, here, next) = match (query.note, query.fichier) {
-        (Some(id), _) => {
+    let folders = all(&state.db, user).await?;
+    let (title, action, reach, next) = match (query.note, query.fichier, query.dossier) {
+        (Some(id), _, _) => {
             let note = sqlx::query!(
                 "SELECT space_id, folder_id, title FROM notes WHERE id = ? AND user_id = ?",
                 id,
@@ -649,11 +814,15 @@ pub async fn picker(
             (
                 title,
                 format!("/notes/{id}/move"),
-                Some((note.space_id, note.folder_id)),
+                Reach {
+                    here: Some((note.space_id, note.folder_id)),
+                    depth: 2,
+                    moving: None,
+                },
                 next,
             )
         }
-        (None, Some(id)) => {
+        (None, Some(id), _) => {
             let file = sqlx::query!(
                 "SELECT space_id, folder_id, name, expires_at FROM files WHERE id = ? AND user_id = ?",
                 id,
@@ -667,31 +836,57 @@ pub async fn picker(
                 (
                     format!("Garder « {} » dans", file.name),
                     format!("/files/{id}/keep"),
-                    None,
+                    Reach {
+                        here: None,
+                        depth: 2,
+                        moving: None,
+                    },
                     next,
                 )
             } else {
                 (
                     format!("Ranger « {} »", file.name),
                     format!("/files/{id}/move"),
-                    Some((file.space_id, file.folder_id)),
+                    Reach {
+                        here: Some((file.space_id, file.folder_id)),
+                        depth: 2,
+                        moving: None,
+                    },
                     next,
                 )
             }
         }
-        (None, None) => return Err(AppError::NotFound),
+        (None, None, Some(id)) => {
+            let folder = folders
+                .iter()
+                .find(|f| f.id == id)
+                .ok_or(AppError::NotFound)?;
+            // Trois niveaux au plus : un dossier qui a des sous-dossiers ne
+            // va que directement dans un espace.
+            let has_subs = folders.iter().any(|f| f.parent_id == Some(id));
+            (
+                format!("Déplacer le dossier « {} »", folder.name),
+                format!("/folders/{id}/move"),
+                Reach {
+                    here: Some((folder.space_id, folder.parent_id)),
+                    depth: if has_subs { 0 } else { 1 },
+                    moving: Some(id),
+                },
+                next,
+            )
+        }
+        (None, None, None) => return Err(AppError::NotFound),
     };
-    let folders = all(&state.db, user).await?;
     Ok(web::html(DestinationsFragment {
         title,
         action,
         next,
-        items: destinations(&ctx.spaces, &folders, here),
+        items: destinations(&ctx.spaces, &folders, &reach),
     }))
 }
 
-/// Adresse de la fenêtre « Ranger » d'un élément (`note` ou `fichier`), avec
-/// la page où revenir.
+/// Adresse de la fenêtre « Ranger » d'un élément (`note`, `fichier` ou
+/// `dossier`), avec la page où revenir.
 pub fn picker_url(kind: &str, id: i64, next: Option<&str>) -> String {
     let mut params = form_urlencoded::Serializer::new(String::new());
     params.append_pair(kind, &id.to_string());

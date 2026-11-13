@@ -396,9 +396,34 @@ pub async fn new_page(ctx: Ctx) -> AppResult<Response> {
     }))
 }
 
-/// `POST /notes` : crée une note vide dans l'espace actif et ouvre l'éditeur.
-pub async fn create(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+#[derive(Deserialize)]
+pub struct CreateQuery {
+    /// Dossier de l'espace actif où créer la note (bouton « Nouvelle note »
+    /// d'un dossier de l'onglet Fichiers) ; sa racine sans précision.
+    dossier: Option<i64>,
+}
+
+/// `POST /notes?dossier=…` : crée une note vide dans l'espace actif (et le
+/// dossier demandé) et ouvre l'éditeur. Le dossier passe par l'adresse :
+/// un POST sans corps reste accepté.
+pub async fn create(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Query(query): Query<CreateQuery>,
+) -> AppResult<Response> {
+    // Un dossier d'un autre espace ou d'un autre compte : 404, rien n'est créé.
+    let folder = folders::target(&state.db, ctx.user.id, ctx.active.id, query.dossier).await?;
     let id = create_note(&state.db, ctx.user.id, ctx.active.id, "").await?;
+    // Toujours écrit : une note vierge réutilisée (voir `create_note`) quitte
+    // le dossier où elle était restée.
+    sqlx::query!(
+        "UPDATE notes SET folder_id = ? WHERE id = ? AND user_id = ?",
+        folder,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
     Ok(see_other(&format!("/notes/{id}")))
 }
 

@@ -176,7 +176,7 @@ Moyens imposés par la spec : compilation `release` avec LTO (fait), empreinte d
 
 ## Dossiers : avancement
 
-Demandé par Rémi le 13 novembre 2026, cahier des charges dans `SPEC.md` (« Dossiers »). Il revient sur la décision du 11 novembre (fichiers sans dossiers). Tout est écrit et vérifié par les tests d'intégration (`tests/dossiers.rs`, 11 tests) et dans le navigateur sur une instance locale ; **rien n'est encore vérifié sur le serveur** (il faut `dashu-update`, puis essayer sur l'ordinateur et sur l'iPhone).
+Demandé par Rémi le 13 novembre 2026, cahier des charges dans `SPEC.md` (« Dossiers »). Il revient sur la décision du 11 novembre (fichiers sans dossiers). Tout est écrit et vérifié par les tests d'intégration (`tests/dossiers.rs`, 14 tests) et dans le navigateur sur une instance locale ; **rien n'est encore vérifié sur le serveur** (il faut `dashu-update`, puis essayer sur l'ordinateur et sur l'iPhone).
 
 - [x] La racine de Fichiers montre un dossier par espace (pas les archivés) et Temporaire ; renommer un espace renomme son dossier. Test `la_racine_montre_les_espaces_et_temporaire`.
 - [x] Un dossier se crée dans un espace et dans un dossier ; un troisième niveau est refusé par le serveur ; deux voisins ne portent pas le même nom (« Math » et « math », « Économie » et « économie »). Test `des_dossiers_sur_trois_niveaux_au_plus`.
@@ -188,10 +188,12 @@ Demandé par Rémi le 13 novembre 2026, cahier des charges dans `SPEC.md` (« Do
 - [x] Supprimer un dossier non vide : avertissement, puis « Transférer » (tout monte d'un niveau, un nom pris devient « Exercices (2) ») ou « Tout supprimer » (notes, fichiers, disque compris, sous-dossiers) ; sans choix, refus. Test `supprimer_un_dossier_vide_ou_non`. Vu dans le navigateur.
 - [x] Un second compte ne voit, ne remplit, ne renomme ni ne supprime les dossiers du premier ; ranger dans un dossier d'un autre espace que celui demandé est refusé. Test `un_autre_compte_ne_touche_pas_aux_dossiers`.
 - [x] Supprimer un espace en gardant son contenu emmène ses dossiers (« MATH (2) » si le nom est pris). Test `supprimer_un_espace_emmene_ses_dossiers`. L'API range une note qui change d'espace à la racine du nouveau. Test `l_api_range_a_la_racine_du_nouvel_espace`.
+- [x] Déplacer un dossier entier (ajouté le même jour) : avec ses notes, ses fichiers, ses sous-dossiers et ses conversions en cours, vers un autre dossier ou un autre espace ; un dossier qui a des sous-dossiers ne va que directement dans un espace (la fenêtre ne propose que les espaces) ; pas dans lui-même ni à côté d'un homonyme. Test `deplacer_un_dossier_entier`. Vu dans le navigateur.
+- [x] Glisser-déposer dans l'onglet Fichiers (ajouté le même jour) : un fichier, une note ou un dossier lâché sur un dossier, le dossier d'un espace ou un pas du fil d'Ariane y est rangé ; des fichiers de l'ordinateur lâchés sur un dossier y arrivent. Test `glisser_deposer_dans_l_onglet_fichiers` (adresses et cibles dans la page, rangements). Vu dans le navigateur à la souris (note, dossier, fichier sur le fil d'Ariane) ; le dépôt de fichiers de l'ordinateur sur un dossier, par un événement simulé (l'automatisation ne glisse pas un vrai fichier du bureau).
+- [x] « Nouvelle note » dans le dossier d'un espace et dans un dossier (ajouté le même jour) : la note naît dans le dossier ouvert. Test `creer_une_note_depuis_fichiers`. Vu dans le navigateur.
 - [x] Aucune erreur dans la console (rien de bloqué par la CSP) ; largeur téléphone sans défilement horizontal.
-- [ ] Essayé sur le serveur et sur l'iPhone.
+- [ ] Essayé sur le serveur et sur l'iPhone. Au doigt, le glisser-déposer de Safari n'est pas visé : la fenêtre « Ranger » fait la même chose.
 - Migration 0013 (`folders`, `folder_id` sur `notes`, `files` et `uploads`). Les tests existants ont été adaptés là où Perso montrait la liste des fichiers (`/files?dossier=espace`).
-- Hors de ce lot : glisser-déposer sur un dossier, déplacer un dossier entier, créer une note depuis Fichiers.
 
 ## Écarts par rapport au cahier des charges
 

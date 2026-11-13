@@ -5209,3 +5209,24 @@ input.note-title::placeholder {
     display: none;
   }
 }
+
+/* Ranger en glissant (onglet Fichiers, files.js) : la ligne qu'on glisse
+   s'estompe, le dossier où elle va tomber s'allume. */
+.file-row[draggable="true"] {
+  cursor: grab;
+}
+
+.file-row.is-dragging {
+  opacity: 0.45;
+}
+
+.folder-row.is-drop-target,
+.crumb.is-drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-soft);
+}
+
+.crumb.is-drop-target {
+  border-radius: var(--radius-sm);
+}
