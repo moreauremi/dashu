@@ -1,6 +1,6 @@
 # État de la v1
 
-Mis à jour le 11 novembre 2026, branche `v1`.
+Mis à jour le 13 novembre 2026, branche `v1`.
 
 **En bref.** La v1 est terminée : **tous les critères d'acceptation sont vérifiés**, la plupart sur le serveur réel. dashu tourne sur le homelab, dans un conteneur LXC Debian du serveur Proxmox, joignable sur `https://app.dashu.dev` (tunnel Cloudflare) et sur le réseau Tailscale. Il sert au quotidien, sur ordinateur et sur iPhone (en app sur l'écran d'accueil). La CI GitHub tourne à chaque PR.
 
@@ -74,7 +74,12 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - le service ne voit que l'interface réseau `lo` ;
   - la base, les fichiers rangés et `dashu.env` lui sont invisibles.
 - Vérifié par les tests et dans un navigateur, sur un dashu local : envoi par morceaux d'un fichier de 120 Mo, identique à l'arrivée ; compression d'une vidéo ; vignettes ; aperçu, lecture et avance rapide d'une vidéo.
-- Reste à faire par Rémi, sur `app.dashu.dev` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
+- **Corrigé le 13 novembre 2026 : le bouton « Compresser » échouait sur le serveur** (« Une erreur est survenue de notre côté »). Deux causes, propres au bac à sable systemd de dashu (`deploy/lxc/hardening.conf`), absent en local comme dans les tests :
+  - dashu ouvrait le dossier de la tâche en `chmod 2770`, et `RestrictSUIDSGID=yes` refuse tout `chmod` qui pose le bit setgid. Les vignettes échouaient pour la même raison (la liste montrait des icônes). Le dossier passe maintenant en `770`, après la création des fichiers, qui ont déjà hérité du groupe `dashu-jobs`.
+  - Chaque `ReadWritePaths=` est un point de montage à part : ranger le résultat de `/srv/dashu/tmp` vers `/srv/dashu/fichiers` par `rename` aurait échoué (EXDEV). dashu copie puis efface quand `rename` échoue.
+  - La CI rejoue ce bac à sable (`systemd-run` avec les mêmes options) pour le test `bac_a_sable_du_serveur` : il vérifie que le bit setgid est bien refusé et les deux dossiers bien séparés, puis qu'une tâche se prépare et que son résultat se range.
+  - Après `dashu-update`, dashu demande au démarrage les vignettes manquantes (200 fichiers au plus à la fois).
+- Reste à faire par Rémi, sur `app.dashu.dev`, après `dashu-update` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
 
 ## Mesures de performance
 

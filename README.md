@@ -340,7 +340,7 @@ Si la copie n'est pas plus petite, elle n'est pas gardée et la page le dit.
 - deux conversions à la fois au plus, chacune avec sa limite de temps (1 h pour une vidéo, 10 min pour un PDF, 2 min pour une photo HEIC) ;
 - après un arrêt brutal, les conversions commencées reprennent de zéro.
 
-dashu relève le travail toutes les 2 secondes : progression, résultat (rangé parmi les fichiers), ou message d'échec. La page suit l'avancement et recharge la liste à la fin. Le dossier de travail est partagé par le groupe `dashu-jobs`, dont dashu fait partie.
+dashu relève le travail toutes les 2 secondes : progression, résultat (rangé parmi les fichiers), ou message d'échec. La page suit l'avancement et recharge la liste à la fin. Le dossier de travail est partagé par le groupe `dashu-jobs`, dont dashu fait partie : `jobs/` est en `2770` (ce qui s'y crée prend ce groupe), et chaque tâche y a son dossier en `770`.
 
 `install.sh` installe tout quand `/srv/dashu` est monté. Sur un serveur déjà installé, en root dans le conteneur, après le `dashu-update` qui apporte cette version :
 

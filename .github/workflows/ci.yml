@@ -37,6 +37,26 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: cargo test
         run: cargo test --locked
+      # Le service dashu du serveur tourne dans un bac à sable systemd
+      # (deploy/lxc/hardening.conf) que ni Windows ni « cargo test » n'ont :
+      # bit setgid refusé, un point de montage par ReadWritePaths. La
+      # compression y échouait alors que tous les tests passaient. On rejoue
+      # ces options pour le test qui prépare une tâche et range son résultat.
+      - name: Compression dans le bac à sable du serveur
+        run: |
+          sudo install -d -m 2777 /srv/dashu/tmp/jobs
+          sudo install -d -m 0777 /srv/dashu/fichiers
+          test_bin=$(cargo test --locked --lib --no-run --message-format=json \
+            | jq -r 'select(.reason == "compiler-artifact" and .profile.test and (.target.kind | index("lib"))) | .executable')
+          sudo systemd-run --wait --pipe --collect \
+            -p ProtectSystem=strict \
+            -p ReadWritePaths=/srv/dashu/fichiers \
+            -p ReadWritePaths=/srv/dashu/tmp \
+            -p RestrictSUIDSGID=yes \
+            -p NoNewPrivileges=yes \
+            "$test_bin" --ignored --exact tools::tests::bac_a_sable_du_serveur \
+            | tee sandbox.log
+          grep -q "test result: ok. 1 passed" sandbox.log
 
   docker:
     name: image Docker

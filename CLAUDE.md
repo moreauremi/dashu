@@ -28,6 +28,7 @@ Le contexte privé (infra, adresses, historique, suite prévue) est dans `PASSAT
 - **Notes** : Markdown → HTML par pulldown-cmark, puis nettoyé par ammonia. Ne jamais afficher du contenu utilisateur sans ce nettoyage ou l'échappement d'askama.
 - **Formulaires** : tout `POST` porte le jeton CSRF ; l'API `/api/v1` passe par le jeton `Bearer` (comparaison à temps constant).
 - **Logs** : couleurs seulement dans un terminal. Sous systemd, journald classerait sinon les lignes en « blob data ».
+- **Bac à sable systemd** (`deploy/lxc/hardening.conf`), absent en local et dans `cargo test` : `RestrictSUIDSGID=yes` refuse tout `chmod` qui pose le bit setgid (EPERM), et chaque `ReadWritePaths=` est un point de montage à part, donc `rename` de `/srv/dashu/tmp` vers `/srv/dashu/fichiers` échoue (EXDEV). La compression en est tombée en panne le 13 novembre 2026. Pour passer d'un dossier à l'autre : `move_file` (`src/tools/mod.rs`). La CI rejoue ce bac à sable (étape « Compression dans le bac à sable du serveur »).
 - **Dépendances front** : rien en dehors de htmx et CodeMirror sans justification écrite dans le README (règle de `SPEC.md`). Elles sont produites par `npm run build` et versionnées dans `static/`.
 - **Téléphone** : l'application s'installe sur l'écran d'accueil de l'iPhone (`static/manifest.webmanifest`). En mode app, le zoom est bloqué (`touch-action` dans le CSS, viewport et gestes dans `app.js`) ; dans Safari il reste permis. Les champs de saisie font 16 px au moins sur écran tactile, sinon iOS zoome au focus.
 

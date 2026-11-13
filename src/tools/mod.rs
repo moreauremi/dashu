@@ -200,16 +200,18 @@ async fn prepare_job(
     tokio::fs::create_dir_all(&dir)
         .await
         .with_context(|| format!("dossier de travail {}", dir.display()))?;
-    share_with_worker(&dir)?;
 
     // Une copie, pas un lien : le service de conversion n'a aucun droit sur
     // les fichiers rangés.
-    tokio::fs::copy(source, dir.join(&spec.input))
+    let input = dir.join(&spec.input);
+    tokio::fs::copy(source, &input)
         .await
         .context("copie du fichier à traiter")?;
 
     let tmp = dir.join(".job.json");
     tokio::fs::write(&tmp, serde_json::to_vec_pretty(spec)?).await?;
+    share_with_worker(&dir, &[&input, &tmp]).context("droits du dossier de travail")?;
+    // En dernier : le service ne prend la tâche qu'une fois `job.json` là.
     tokio::fs::rename(&tmp, dir.join("job.json")).await?;
     Ok(())
 }
@@ -321,16 +323,49 @@ async fn remove_orphan_dirs(state: &AppState, work_dir: &FsPath) -> anyhow::Resu
     Ok(())
 }
 
-/// Droits `2770` : le groupe du dossier (`dashu-jobs` en production) peut y
-/// écrire, et ce qui s'y crée hérite de ce groupe.
-fn share_with_worker(dir: &FsPath) -> std::io::Result<()> {
+/// Ouvre le dossier d'une tâche au service de conversion (groupe
+/// `dashu-jobs` en production) : `770` pour le dossier, où il écrit, `640`
+/// pour les fichiers déposés par dashu, qu'il lit.
+///
+/// Le groupe vient du dossier `jobs/`, en `2770` (bit setgid) : ce qui s'y
+/// crée en hérite. Le dossier de la tâche hérite aussi du bit, mais le `chmod`
+/// ci-dessous l'efface : c'est pourquoi les fichiers sont créés avant. Ne
+/// jamais demander `2770` ici : dashu tourne avec `RestrictSUIDSGID=yes`
+/// (`deploy/lxc/hardening.conf`), qui refuse (EPERM) tout `chmod` posant le
+/// bit setgid. Le service de conversion, lui, a `dashu-jobs` pour groupe
+/// principal : ce qu'il crée prend ce groupe sans le bit.
+fn share_with_worker(dir: &FsPath, files: &[&FsPath]) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o2770))?;
+        for file in files {
+            std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o640))?;
+        }
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o770))?;
     }
     #[cfg(not(unix))]
-    let _ = dir;
+    let _ = (dir, files);
+    Ok(())
+}
+
+/// Range un fichier produit par le service de conversion.
+///
+/// En production, le dossier de travail et celui des fichiers sont deux
+/// points de montage distincts (systemd en crée un par `ReadWritePaths=`) :
+/// `rename` y échoue (EXDEV), même sur le même disque. On copie alors, puis
+/// on efface l'original.
+async fn move_file(from: &FsPath, to: &FsPath) -> std::io::Result<()> {
+    let Err(error) = tokio::fs::rename(from, to).await else {
+        return Ok(());
+    };
+    if error.kind() == std::io::ErrorKind::NotFound {
+        return Err(error);
+    }
+    if let Err(error) = tokio::fs::copy(from, to).await {
+        let _ = tokio::fs::remove_file(to).await;
+        return Err(error);
+    }
+    let _ = tokio::fs::remove_file(from).await;
     Ok(())
 }
 
@@ -494,7 +529,9 @@ async fn import(
     if let Some(parent) = dest.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    tokio::fs::rename(&output, &dest).await?;
+    move_file(&output, &dest)
+        .await
+        .context("rangement de la copie compressée")?;
 
     let name = compressed_name(&job.source_name, spec.media);
     let mime = files::mime_for(&name);
@@ -561,8 +598,10 @@ async fn import_thumbnail(
         return Ok(());
     };
     let stored = files::stored_path(&files.dir, &key);
-    tokio::fs::rename(dir.join("thumb.jpg"), files::thumb_path(&stored)).await?;
-    let preview = tokio::fs::rename(dir.join("preview.jpg"), files::preview_path(&stored))
+    move_file(&dir.join("thumb.jpg"), &files::thumb_path(&stored))
+        .await
+        .context("rangement de la vignette")?;
+    let preview = move_file(&dir.join("preview.jpg"), &files::preview_path(&stored))
         .await
         .is_ok();
     let preview = i64::from(preview);
@@ -758,5 +797,130 @@ mod tests {
         assert_eq!(safe_ext("Vacances.MOV"), "mov");
         assert_eq!(safe_ext("a.b/../../x"), "x");
         assert_eq!(safe_ext("rien"), "bin");
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dashu-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Le dossier d'une tâche s'ouvre au groupe sans jamais demander le bit
+    /// setgid : sur le serveur, `RestrictSUIDSGID=yes` refuserait le `chmod`
+    /// et toute compression échouerait dès le clic (bug du 13 novembre 2026).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn dossier_de_tache_sans_bit_setgid() {
+        use std::os::unix::fs::PermissionsExt;
+        let work = scratch("droits");
+        // Comme sur le serveur : jobs/ en 2770.
+        std::fs::create_dir_all(work.join("jobs")).unwrap();
+        std::fs::set_permissions(work.join("jobs"), std::fs::Permissions::from_mode(0o2770))
+            .unwrap();
+        let source = work.join("source.mov");
+        std::fs::write(&source, b"video").unwrap();
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let spec = JobSpec {
+            task: Task::Compress,
+            media: Media::Video,
+            input: "input.mov".into(),
+            output: "output.mp4".into(),
+            preview: None,
+        };
+
+        prepare_job(&work, 3, &source, &spec).await.unwrap();
+        let dir = job_dir(&work, 3);
+        let mode = |path: &FsPath| std::fs::metadata(path).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode(&dir), 0o770);
+        assert_eq!(mode(&dir.join("input.mov")), 0o640);
+        assert_eq!(mode(&dir.join("job.json")), 0o640);
+        assert!(!dir.join(".job.json").exists());
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[tokio::test]
+    async fn rangement_d_un_resultat() {
+        let dir = scratch("rangement");
+        let (from, to) = (dir.join("output.mp4"), dir.join("range"));
+        std::fs::write(&from, b"resultat").unwrap();
+        move_file(&from, &to).await.unwrap();
+        assert!(!from.exists());
+        assert_eq!(std::fs::read(&to).unwrap(), b"resultat");
+
+        // Pas de grand aperçu produit : erreur, et rien d'écrasé à l'arrivée.
+        let missing = move_file(&dir.join("preview.jpg"), &to).await.unwrap_err();
+        assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(std::fs::read(&to).unwrap(), b"resultat");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Entre deux systèmes de fichiers (ici /dev/shm, en mémoire, et le
+    /// dossier temporaire), `rename` échoue comme entre deux points de montage
+    /// du serveur : le fichier est copié puis effacé.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn rangement_entre_deux_montages() {
+        let shm = FsPath::new("/dev/shm");
+        if !shm.is_dir() {
+            return;
+        }
+        let from = shm.join(format!("dashu-output-{}", std::process::id()));
+        std::fs::write(&from, b"resultat").unwrap();
+        let dir = scratch("montages");
+        let to = dir.join("range");
+        move_file(&from, &to).await.unwrap();
+        assert!(!from.exists());
+        assert_eq!(std::fs::read(&to).unwrap(), b"resultat");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Rejoue le bac à sable du service dashu sur le serveur
+    /// (`deploy/lxc/hardening.conf`) : la CI lance ce test par `systemd-run`,
+    /// avec `RestrictSUIDSGID=yes` et `/srv/dashu/tmp`, `/srv/dashu/fichiers`
+    /// en `ReadWritePaths=` (voir `.github/workflows/ci.yml`). Ignoré ailleurs.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    #[ignore = "bac à sable systemd : lancé par la CI"]
+    async fn bac_a_sable_du_serveur() {
+        use std::os::unix::fs::PermissionsExt;
+        const EPERM: i32 = 1;
+        const EXDEV: i32 = 18;
+        let work = FsPath::new("/srv/dashu/tmp");
+        let stored = FsPath::new("/srv/dashu/fichiers");
+
+        // Le bac à sable est bien là, sinon ce test ne prouverait rien : le
+        // bit setgid est refusé, et les deux dossiers sont deux montages.
+        let probe = work.join("jobs").join("sonde");
+        std::fs::create_dir_all(&probe).unwrap();
+        let refused =
+            std::fs::set_permissions(&probe, std::fs::Permissions::from_mode(0o2770)).unwrap_err();
+        assert_eq!(refused.raw_os_error(), Some(EPERM), "{refused}");
+        std::fs::write(probe.join("f"), b"x").unwrap();
+        let crossed = std::fs::rename(probe.join("f"), stored.join("f")).unwrap_err();
+        assert_eq!(crossed.raw_os_error(), Some(EXDEV), "{crossed}");
+        std::fs::remove_dir_all(&probe).unwrap();
+
+        // Une compression comme au clic sur « Compresser », puis le rangement
+        // de son résultat parmi les fichiers.
+        let source = stored.join("source.mov");
+        std::fs::write(&source, b"video").unwrap();
+        let spec = JobSpec {
+            task: Task::Compress,
+            media: Media::Video,
+            input: "input.mov".into(),
+            output: "output.mp4".into(),
+            preview: None,
+        };
+        prepare_job(work, 1, &source, &spec).await.unwrap();
+        let dir = job_dir(work, 1);
+        assert!(dir.join("job.json").exists());
+        assert_eq!(std::fs::read(dir.join("input.mov")).unwrap(), b"video");
+
+        std::fs::write(dir.join("output.mp4"), b"plus leger").unwrap();
+        let dest = stored.join("range");
+        move_file(&dir.join("output.mp4"), &dest).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"plus leger");
+        assert!(!dir.join("output.mp4").exists());
     }
 }
