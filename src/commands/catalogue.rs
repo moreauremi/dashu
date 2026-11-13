@@ -5,7 +5,7 @@
 //! Ce qui dépend de la page (une note ou un fichier ouvert) et du compte
 //! (ses espaces, ses tâches du jour, ses tags) y est déjà résolu.
 
-use super::{Action, Arg, Choice, Mode, Node, day_choices, space_choices};
+use super::{Action, Arg, Choice, Mode, Node, Vars, day_choices, space_choices};
 use crate::AppState;
 use crate::auth::session::Ctx;
 use crate::tools::{self, Conversion};
@@ -92,6 +92,12 @@ const CONFIRM: &str = "Entrée encore pour confirmer.";
 /// Toutes les commandes, dans l'ordre où la barre les propose.
 pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec<Node>> {
     let spaces = |prefix: &str| space_choices(ctx.spaces.iter(), prefix);
+    // #date et #cours, proposés dans les textes libres (titres, tags…).
+    let vars = Vars::now(ctx, state).await?.choices();
+    let with_vars = |mut values: Vec<Choice>| {
+        values.extend(vars.iter().cloned());
+        values
+    };
 
     let agenda_words = {
         let mut words = vec![
@@ -104,7 +110,7 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
     let task_options = {
         let mut options = spaces("@");
         options.extend(day_choices("+"));
-        options
+        with_vars(options)
     };
 
     let mut tree = vec![
@@ -143,7 +149,7 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
             "Chercher dans les notes de l'espace",
             Action::Search,
         )
-        .arg(Arg::new(Mode::Free, "<texte>", true)),
+        .arg(Arg::new(Mode::Free, "<texte>", true).values(with_vars(Vec::new()))),
         Node::new("space", "Changer d'espace", Action::Space).arg(
             Arg::new(Mode::Choice, "<espace>", true).values(space_choices(
                 ctx.spaces.iter().filter(|s| s.id != ctx.active.id),
@@ -164,8 +170,9 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
                         )
                         .values(task_options),
                     ),
-                Node::new("note", "Créer une note", Action::AddNote)
-                    .arg(Arg::new(Mode::Free, "[titre] [@espace]", false).values(spaces("@"))),
+                Node::new("note", "Créer une note", Action::AddNote).arg(
+                    Arg::new(Mode::Free, "[titre] [@espace]", false).values(with_vars(spaces("@"))),
+                ),
                 {
                     let file = Node::new("file", "Envoyer un fichier", Action::AddFile)
                         .aliases(&["fichier"]);
@@ -177,7 +184,7 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
                 },
                 Node::new("space", "Créer un espace", Action::AddSpace)
                     .aliases(&["espace"])
-                    .arg(Arg::new(Mode::Free, "<nom>", true)),
+                    .arg(Arg::new(Mode::Free, "<nom>", true).values(with_vars(Vec::new()))),
                 Node::new("agenda", "Ajouter un agenda (flux iCal)", Action::AddAgenda)
                     .aliases(&["calendar"])
                     .arg(
@@ -326,7 +333,7 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
                 .filter(|name| !mine.contains(name))
                 .map(|name| Choice::new(name, ""))
                 .collect();
-            tree.push(tag.arg(Arg::new(Mode::Free, "<tag>", true).values(others)));
+            tree.push(tag.arg(Arg::new(Mode::Free, "<tag>", true).values(with_vars(others))));
             tree.push(if mine.is_empty() {
                 untag.off("Cette note n'a pas de tag.")
             } else {

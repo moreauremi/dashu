@@ -24,8 +24,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 use crate::auth::session::Ctx;
+use crate::calendar::ical;
 use crate::notes::{self, markdown};
 use crate::spaces::Space;
+use crate::time;
 use crate::web::{AppResult, local_path};
 
 pub use run::run;
@@ -530,6 +532,98 @@ pub fn parse_day(word: &str, today: NaiveDate) -> Option<NaiveDate> {
 }
 
 // ---------------------------------------------------------------------
+// Variables : #date, #cours
+// ---------------------------------------------------------------------
+
+/// Ce que valent les variables d'un texte au moment de la commande : on tape
+/// `/add note #cours du #date`, la note s'appelle « MATHS du 13/11/2026 ».
+pub struct Vars {
+    /// `#date` : la date du jour, à Paris.
+    pub date: String,
+    /// `#cours` : la matière du cours qui a lieu maintenant, comme l'écrit le
+    /// widget « Prochains cours » (dans Perso, celui de n'importe quel espace).
+    pub course: Option<String>,
+}
+
+impl Vars {
+    pub async fn now(ctx: &Ctx, state: &AppState) -> AppResult<Self> {
+        let now = time::now();
+        let overview = ctx.active.is_overview();
+        let title = sqlx::query_scalar!(
+            r#"SELECT e.title FROM calendar_events e
+               JOIN calendar_sources s ON s.id = e.source_id
+               WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2)
+                 AND e.all_day = 0 AND e.starts_at <= ?4 AND e.ends_at > ?4
+               ORDER BY e.starts_at
+               LIMIT 1"#,
+            ctx.user.id,
+            ctx.active.id,
+            overview,
+            now
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        Ok(Self {
+            date: time::paris_date(now).format("%d/%m/%Y").to_string(),
+            course: title
+                .map(|t| ical::subject(&t).to_string())
+                .filter(|s| !s.is_empty()),
+        })
+    }
+
+    /// Valeurs proposées par la complétion, avec ce qu'elles donneront.
+    fn choices(&self) -> Vec<Choice> {
+        vec![
+            Choice::new("#date", format!("Date du jour : {}", self.date)),
+            Choice::new(
+                "#cours",
+                match &self.course {
+                    Some(course) => format!("Cours en cours : {course}"),
+                    None => "Aucun cours en ce moment".into(),
+                },
+            ),
+        ]
+    }
+}
+
+/// Remplace `#date` et `#cours` dans un texte (majuscules et accents
+/// ignorés, ponctuation autour permise). Tout autre `#mot` reste tel quel :
+/// « Exercice #3 », un tag. Refusé si `#cours` est demandé hors d'un cours.
+pub fn expand(text: &str, vars: &Vars) -> Result<String, String> {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('#') {
+        let (before, after) = rest.split_at(at);
+        out.push_str(before);
+        let word: String = after[1..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric())
+            .collect();
+        // « a#date » n'est pas une variable : le # doit commencer un mot.
+        let starts_word = out.chars().last().is_none_or(|c| !c.is_alphanumeric());
+        let value = match fold(&word).as_str() {
+            "date" if starts_word => Some(vars.date.clone()),
+            "cours" if starts_word => Some(vars.course.clone().ok_or_else(|| {
+                "Aucun cours en ce moment : #cours n'a rien à mettre.".to_string()
+            })?),
+            _ => None,
+        };
+        match value {
+            Some(value) => {
+                out.push_str(&value);
+                rest = &after[1 + word.len()..];
+            }
+            None => {
+                out.push('#');
+                rest = &after[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+// ---------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------
 
@@ -815,6 +909,36 @@ mod tests {
         assert_eq!(fold("Réglages"), "reglages");
         assert_eq!(fold("École"), "ecole");
         assert_eq!(space_word("Vie de  Famille"), "vie-de-famille");
+    }
+
+    #[test]
+    fn variables() {
+        let vars = Vars {
+            date: "13/11/2026".into(),
+            course: Some("MATHS".into()),
+        };
+        let x = |text| expand(text, &vars);
+        assert_eq!(x("#cours du #date").unwrap(), "MATHS du 13/11/2026");
+        assert_eq!(
+            x("Notes (#Cours), #DATE.").unwrap(),
+            "Notes (MATHS), 13/11/2026."
+        );
+        // Les autres # restent : numéros, tags, mots collés.
+        assert_eq!(
+            x("Exercice #3 #projet a#date").unwrap(),
+            "Exercice #3 #projet a#date"
+        );
+        assert_eq!(x("#dates # ##date").unwrap(), "#dates # #13/11/2026");
+        let nothing = Vars {
+            date: "13/11/2026".into(),
+            course: None,
+        };
+        assert!(
+            expand("#cours", &nothing)
+                .unwrap_err()
+                .contains("Aucun cours")
+        );
+        assert_eq!(expand("sans variable", &nothing).unwrap(), "sans variable");
     }
 
     #[test]

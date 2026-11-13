@@ -658,3 +658,101 @@ async fn les_reglages_au_clavier() {
     assert_eq!(out.header("hx-redirect"), "/login");
     assert_eq!(alice.get("/").await.location(), "/login");
 }
+
+// ---------------------------------------------------------------------
+// Variables #date et #cours
+// ---------------------------------------------------------------------
+
+/// Un cours qui a commencé il y a dix minutes, dans l'agenda d'École.
+async fn course_now(app: &TestApp, title: &str) {
+    let now = dashu::time::now();
+    let source: i64 = sqlx::query_scalar(
+        "INSERT INTO calendar_sources (user_id, space_id, name, ical_url, created_at)
+         VALUES (?, ?, 'Pronote', 'https://pronote.example.test/a.ics', ?) RETURNING id",
+    )
+    .bind(app.user_id(ALICE).await)
+    .bind(app.space_id(ALICE, "ecole").await)
+    .bind(now)
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap();
+    let event = dashu::calendar::ical::ParsedEvent {
+        uid: "cours".into(),
+        title: title.into(),
+        location: "Salle 12".into(),
+        starts_at: now - 600,
+        ends_at: now + 3000,
+        all_day: false,
+    };
+    dashu::calendar::sync::store(&app.state.db, source, &[event], now)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn date_et_cours_dans_les_textes() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let date = today().format("%d/%m/%Y").to_string();
+
+    // #date : la date du jour, dans une tâche comme dans une note.
+    hx_location(
+        &alice
+            .command("/add task Relire le cours du #date", "/")
+            .await,
+    );
+    assert_eq!(
+        scalar::<String>(&app, "SELECT title FROM tasks").await,
+        format!("Relire le cours du {date}")
+    );
+
+    // Sans cours en ce moment, #cours est refusé, et la complétion le dit.
+    let refused = alice.command("/add note #cours", "/").await;
+    assert!(refused.body.contains("Aucun cours en ce moment"));
+    let tree = alice.catalogue("/").await;
+    let values = &command_node(&tree, &["add", "note"])["arg"]["values"];
+    let help = |v: &str| {
+        values
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["v"] == v)
+            .map(|c| c["help"].as_str().unwrap().to_string())
+            .unwrap()
+    };
+    assert_eq!(help("#date"), format!("Date du jour : {date}"));
+    assert_eq!(help("#cours"), "Aucun cours en ce moment");
+
+    // Pendant un cours d'École : sa matière, aussi depuis Perso.
+    course_now(&app, "MATHS - DUPONT J. - Salle 12").await;
+    let tree = alice.catalogue("/").await;
+    let values = &command_node(&tree, &["add", "note"])["arg"]["values"];
+    assert!(values.to_string().contains("Cours en cours : MATHS"));
+    let created = hx_location(&alice.command("/add note #cours du #date @ecole", "/").await);
+    let id: i64 = created["path"]
+        .as_str()
+        .unwrap()
+        .trim_start_matches("/notes/")
+        .parse()
+        .unwrap();
+    let title: String = sqlx::query_scalar("SELECT title FROM notes WHERE id = ?")
+        .bind(id)
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert_eq!(title, format!("MATHS du {date}"));
+    // Un tag au nom du cours, sur la note ouverte.
+    hx_location(&alice.command("/tag #cours", &format!("/notes/{id}")).await);
+    assert_eq!(
+        scalar::<String>(&app, "SELECT name FROM tags").await,
+        "maths"
+    );
+    // Un autre # reste tel quel.
+    hx_location(&alice.command("/add task Exercice #3", "/").await);
+    let kept = "SELECT COUNT(*) FROM tasks WHERE title = 'Exercice #3'";
+    assert_eq!(count(&app, kept).await, 1);
+    // Depuis Taff, le cours d'École n'est pas « en cours ».
+    alice.with_header("x-espace", "taff");
+    let refused = alice.command("/add note #cours", "/").await;
+    assert!(refused.body.contains("Aucun cours en ce moment"));
+}
