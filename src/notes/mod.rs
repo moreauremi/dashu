@@ -39,6 +39,9 @@ pub struct NoteItem {
     pub pinned: bool,
     pub updated: String,
     pub tags: Vec<String>,
+    /// Vue d'ensemble de Perso : l'espace d'une note venue d'ailleurs.
+    pub space: Option<crate::spaces::SpaceTag>,
+    space_id: i64,
 }
 
 pub struct TagChip {
@@ -58,12 +61,20 @@ struct ListPage {
     chips: Vec<TagChip>,
     /// Lien qui retire le filtre par tag en gardant la recherche.
     clear_tag_href: String,
+    /// Perso : filtre « Tous les espaces » / « Seulement Perso ».
+    overview: bool,
+    only: bool,
+    all_href: String,
+    only_href: String,
 }
 
 #[derive(Deserialize)]
 pub struct ListQuery {
     q: Option<String>,
     tag: Option<String>,
+    /// `1` : dans Perso, seulement ses propres notes.
+    #[serde(default)]
+    seul: u8,
 }
 
 /// `GET /notes?q=…&tag=…`
@@ -77,7 +88,9 @@ pub async fn list(
         .tag
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty());
-    let (user, space) = (ctx.user.id, ctx.active.id);
+    let only = query.seul == 1;
+    // Perso montre les notes de tous les espaces, sauf « Seulement Perso ».
+    let (user, space) = (ctx.user.id, ctx.scope(only));
     let now = time::now();
 
     let mut items = match fts_query(&q) {
@@ -92,7 +105,7 @@ pub async fn list(
            FROM note_tags nt
            JOIN tags t ON t.id = nt.tag_id
            JOIN notes n ON n.id = nt.note_id
-           WHERE n.user_id = ? AND n.space_id = ?
+           WHERE n.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
            ORDER BY t.name"#,
         user,
         space
@@ -104,6 +117,7 @@ pub async fn list(
     }
     for item in &mut items {
         item.tags = tags_by_note.remove(&item.id).unwrap_or_default();
+        item.space = ctx.tag_of(item.space_id);
     }
 
     let chips = sqlx::query!(
@@ -111,7 +125,7 @@ pub async fn list(
            FROM tags t
            JOIN note_tags nt ON nt.tag_id = t.id
            JOIN notes n ON n.id = nt.note_id
-           WHERE t.user_id = ? AND n.space_id = ?
+           WHERE t.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
            GROUP BY t.id
            ORDER BY t.name"#,
         user,
@@ -126,7 +140,7 @@ pub async fn list(
             .is_some_and(|t| t.eq_ignore_ascii_case(&row.name));
         TagChip {
             // Recliquer sur le tag actif retire le filtre.
-            href: list_url(&q, if active { None } else { Some(&row.name) }),
+            href: list_url(&q, if active { None } else { Some(&row.name) }, only),
             name: row.name,
             count: row.count,
             active,
@@ -136,7 +150,11 @@ pub async fn list(
 
     let page = ListPage {
         shell: ctx.shell("notes").await?,
-        clear_tag_href: list_url(&q, None),
+        clear_tag_href: list_url(&q, None, only),
+        overview: ctx.active.is_overview(),
+        only,
+        all_href: list_url(&q, tag.as_deref(), false),
+        only_href: list_url(&q, tag.as_deref(), true),
         q,
         tag,
         items,
@@ -145,14 +163,17 @@ pub async fn list(
     Ok(web::html(page))
 }
 
-/// `/notes?q=…&tag=…` avec les paramètres encodés.
-fn list_url(q: &str, tag: Option<&str>) -> String {
+/// `/notes?q=…&tag=…&seul=1` avec les paramètres encodés.
+fn list_url(q: &str, tag: Option<&str>, only: bool) -> String {
     let mut params = form_urlencoded::Serializer::new(String::new());
     if !q.is_empty() {
         params.append_pair("q", q);
     }
     if let Some(tag) = tag {
         params.append_pair("tag", tag);
+    }
+    if only {
+        params.append_pair("seul", "1");
     }
     let params = params.finish();
     if params.is_empty() {
@@ -201,15 +222,16 @@ fn display_title(title: &str) -> String {
 async fn recent_in_space(
     db: &SqlitePool,
     user: i64,
-    space: i64,
+    space: Option<i64>,
     tag: Option<&str>,
     now: i64,
 ) -> AppResult<Vec<NoteItem>> {
     let rows = sqlx::query!(
         r#"SELECT n.id AS "id!", n.title AS "title!", substr(n.body_md, 1, 600) AS "head!: String",
-                  n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64"
+                  n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
+                  n.space_id AS "space_id!: i64"
            FROM notes n
-           WHERE n.user_id = ?1 AND n.space_id = ?2
+           WHERE n.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
              AND (?3 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?3))
@@ -231,6 +253,8 @@ async fn recent_in_space(
             pinned: row.pinned,
             updated: time::ago(row.updated_at, now),
             tags: Vec::new(),
+            space: None,
+            space_id: row.space_id,
         })
         .collect())
 }
@@ -238,7 +262,7 @@ async fn recent_in_space(
 async fn search_in_space(
     db: &SqlitePool,
     user: i64,
-    space: i64,
+    space: Option<i64>,
     fts: &str,
     tag: Option<&str>,
     now: i64,
@@ -248,10 +272,11 @@ async fn search_in_space(
         r#"SELECT n.id AS "id!", n.title AS "title!",
                   highlight(notes_fts, 0, char(1), char(2)) AS "title_marked!: String",
                   snippet(notes_fts, 1, char(1), char(2), '…', 24) AS "snippet!: String",
-                  n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64"
+                  n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
+                  n.space_id AS "space_id!: i64"
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
-           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND n.space_id = ?3
+           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL OR n.space_id = ?3)
              AND (?4 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?4))
@@ -278,6 +303,8 @@ async fn search_in_space(
             pinned: row.pinned,
             updated: time::ago(row.updated_at, now),
             tags: Vec::new(),
+            space: None,
+            space_id: row.space_id,
         })
         .collect())
 }
@@ -719,10 +746,11 @@ mod tests {
 
     #[test]
     fn url_de_liste() {
-        assert_eq!(list_url("", None), "/notes");
+        assert_eq!(list_url("", None, false), "/notes");
         assert_eq!(
-            list_url("a b", Some("école")),
+            list_url("a b", Some("école"), false),
             "/notes?q=a+b&tag=%C3%A9cole"
         );
+        assert_eq!(list_url("", None, true), "/notes?seul=1");
     }
 }

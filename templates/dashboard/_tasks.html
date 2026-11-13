@@ -10,6 +10,7 @@
       <button class="check" type="button" role="checkbox" aria-checked="{{ task.done }}" aria-label="{{ task.title }}"
               hx-post="/tasks/{{ task.id }}/toggle" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("check")|safe }}</button>
       <span class="task-title">{{ task.title }}</span>
+      {% if let Some(space) = task.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
       {% if let Some(since) = task.late_since %}<span class="live late"><span class="dot" aria-hidden="true"></span>depuis {{ since }}</span>{% endif %}
       {#- Le menu natif d'un <select> transparent, posé sur l'icône : il
           s'ouvre au clic comme au clavier, et n'est jamais coupé par le bord

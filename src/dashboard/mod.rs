@@ -240,6 +240,8 @@ pub async fn courses(
 struct TaskItem {
     id: i64,
     space_id: i64,
+    /// Perso : l'espace d'une tâche venue d'ailleurs.
+    space: Option<crate::spaces::SpaceTag>,
     title: String,
     done: bool,
     /// Pour une tâche en retard : sa date d'origine, « lun. 9 nov. ».
@@ -268,6 +270,8 @@ pub async fn tasks(ctx: Ctx, State(state): State<AppState>) -> AppResult<Respons
 /// faites, et celles cochées aujourd'hui (elles restent visibles, barrées,
 /// jusqu'à minuit).
 async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> AppResult<Response> {
+    // Perso : les tâches de tous les espaces.
+    let scope = ctx.scope(false);
     let today = time::paris_date(time::now());
     let today_iso = today.format("%Y-%m-%d").to_string();
     let midnight = time::day_start(today);
@@ -275,12 +279,12 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> App
     let tasks: Vec<TaskItem> = sqlx::query!(
         r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
-           WHERE user_id = ?1 AND space_id = ?2
+           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)
              AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))
                OR (done = 1 AND done_at >= ?4))
            ORDER BY done, due_date, created_at"#,
         ctx.user.id,
-        ctx.active.id,
+        scope,
         today_iso,
         midnight
     )
@@ -297,6 +301,7 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> App
         TaskItem {
             id: t.id,
             space_id: t.space_id,
+            space: ctx.tag_of(t.space_id),
             title: t.title,
             done: t.done,
             late_since,
@@ -348,7 +353,7 @@ pub async fn add_task(
         )
         .execute(&state.db)
         .await?;
-        if space.id != ctx.active.id {
+        if ctx.scope(false).is_some_and(|shown| shown != space.id) {
             notice = Some(format!("Tâche ajoutée dans {}", space.name));
         }
     }
@@ -437,6 +442,8 @@ struct NoteLink {
     id: i64,
     title: String,
     updated: String,
+    /// Perso : l'espace d'une note venue d'ailleurs.
+    space: Option<crate::spaces::SpaceTag>,
 }
 
 #[derive(Template)]
@@ -455,14 +462,16 @@ pub async fn recent_notes(
 ) -> AppResult<Response> {
     let now = time::now();
     let limit = usize::try_from(size.items([2, 6, 10, 14], 5)).unwrap_or(5);
+    // Perso : les notes de tous les espaces.
+    let scope = ctx.scope(false);
     let rows = sqlx::query!(
-        r#"SELECT id AS "id!", title, pinned AS "pinned!: bool", updated_at
+        r#"SELECT id AS "id!", space_id, title, pinned AS "pinned!: bool", updated_at
            FROM notes
-           WHERE user_id = ? AND space_id = ?
+           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)
            ORDER BY pinned DESC, updated_at DESC
            LIMIT 40"#,
         ctx.user.id,
-        ctx.active.id
+        scope
     )
     .fetch_all(&state.db)
     .await?;
@@ -477,6 +486,7 @@ pub async fn recent_notes(
                 row.title
             },
             updated: time::ago(row.updated_at, now),
+            space: ctx.tag_of(row.space_id),
         };
         if row.pinned {
             pinned.push(link);
@@ -494,6 +504,8 @@ pub async fn recent_notes(
 struct FileLink {
     id: i64,
     name: String,
+    /// Perso : l'espace d'un fichier venu d'ailleurs.
+    space: Option<crate::spaces::SpaceTag>,
     /// « PDF · 2,4 Mo · il y a 3 h »
     meta: String,
     thumb: bool,
@@ -525,13 +537,15 @@ pub async fn recent_files(
     }
     let now = time::now();
     let limit = size.items([2, 5, 9, 13], 5);
+    // Perso : les fichiers de tous les espaces.
+    let scope = ctx.scope(false);
     let items = sqlx::query!(
-        r#"SELECT id AS "id!", name, mime, size, updated_at, thumb
-           FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL
+        r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
+           FROM files WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC
-           LIMIT ?"#,
+           LIMIT ?3"#,
         ctx.user.id,
-        ctx.active.id,
+        scope,
         limit
     )
     .fetch_all(&state.db)
@@ -539,6 +553,7 @@ pub async fn recent_files(
     .into_iter()
     .map(|row| FileLink {
         id: row.id,
+        space: ctx.tag_of(row.space_id),
         meta: format!(
             "{} · {} · {}",
             files::kind_label(&row.mime),
@@ -551,9 +566,9 @@ pub async fn recent_files(
     })
     .collect();
     let total = sqlx::query_scalar!(
-        "SELECT count(*) FROM files WHERE user_id = ? AND space_id = ? AND expires_at IS NULL",
+        "SELECT count(*) FROM files WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL",
         ctx.user.id,
-        ctx.active.id
+        scope
     )
     .fetch_one(&state.db)
     .await?;

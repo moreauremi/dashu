@@ -13,13 +13,21 @@
 <form class="searchbar" action="/notes" method="get" role="search">
   {{ crate::assets::icon("search")|safe }}
   <input type="search" name="q" value="{{ q }}" autocomplete="off"
-         placeholder="Rechercher dans {{ shell.active.name }}" aria-label="Rechercher dans les notes"
+         placeholder="{% if overview && !only %}Rechercher dans tous les espaces{% else %}Rechercher dans {{ shell.active.name }}{% endif %}" aria-label="Rechercher dans les notes"
          hx-get="/notes" hx-trigger="input changed delay:200ms" hx-include="closest form"
          hx-target="#note-results" hx-select="#note-results" hx-swap="outerHTML" hx-push-url="true">
   {% if let Some(tag) = tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+  {% if only %}<input type="hidden" name="seul" value="1">{% endif %}
 </form>
 
 <div id="note-results">
+  {#- Perso montre les notes de tous les espaces ; ce filtre ne garde que les siennes. -#}
+  {% if overview %}
+  <nav class="chips scope-filter" aria-label="Espaces montrés">
+    <a class="chip" href="{{ all_href }}"{% if !only %} aria-current="true"{% endif %}>Tous les espaces</a>
+    <a class="chip" href="{{ only_href }}"{% if only %} aria-current="true"{% endif %}>Seulement {{ shell.active.name }}</a>
+  </nav>
+  {% endif %}
   {% if !chips.is_empty() %}
   <nav class="chips" aria-label="Filtrer par tag">
     {% for chip in chips %}
@@ -49,6 +57,7 @@
         </span>
         <span class="note-row-excerpt">{{ item.excerpt_html|safe }}</span>
         <span class="note-row-meta">
+          {% if let Some(space) = item.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
           {% for name in item.tags %}<span class="tag">#{{ name }}</span>{% endfor %}
           <span class="muted">{{ item.updated }}</span>
         </span>

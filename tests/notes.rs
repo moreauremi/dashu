@@ -111,11 +111,25 @@ async fn cycle_de_vie_d_une_note() {
         .await;
     let list = alice.follow(moved).await;
     assert!(list.body.contains("Note déplacée vers École<"));
+    // Perso montre tous les espaces : la note y reste, marquée École ;
+    // « Seulement Perso » ne la montre plus.
+    assert!(list.body.contains("Révisions réseau</span>"));
     assert!(
-        !list.body.contains("Révisions réseau</span>"),
+        list.body
+            .contains("<span class=\"dot\" aria-hidden=\"true\"></span>École</span>")
+    );
+    let only = alice.get("/notes?seul=1").await;
+    assert!(
+        !only.body.contains("Révisions réseau</span>"),
         "la note a quitté l'espace Perso"
     );
-    assert!(!alice.get("/notes?q=trunk").await.body.contains("<mark>"));
+    assert!(
+        !alice
+            .get("/notes?q=trunk&seul=1")
+            .await
+            .body
+            .contains("<mark>")
+    );
 
     // Ouvrir la note bascule sur son espace ; elle y garde ses tags.
     let opened = alice.get(&url).await;

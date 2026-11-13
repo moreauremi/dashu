@@ -15,7 +15,7 @@ use tower_sessions::cookie::time::Duration;
 use tower_sessions::{Expiry, Session};
 
 use crate::AppState;
-use crate::spaces::{self, Space};
+use crate::spaces::{self, Space, SpaceTag};
 use crate::tabbar::{self, Tab};
 use crate::web::{self, AppError, AppResult, csrf};
 
@@ -179,6 +179,23 @@ impl Ctx {
     /// Espace de l'utilisateur portant cet identifiant, s'il existe.
     pub fn space_by_id(&self, id: i64) -> Option<&Space> {
         self.spaces.iter().find(|s| s.id == id)
+    }
+
+    /// Espace dont montrer le contenu : `None` pour tous (Perso, vue
+    /// d'ensemble), sauf si `only` demande le seul contenu propre de Perso.
+    pub fn scope(&self, only: bool) -> Option<i64> {
+        (only || !self.active.is_overview()).then_some(self.active.id)
+    }
+
+    /// Pastille d'un élément dont l'espace n'est pas l'espace actif.
+    pub fn tag_of(&self, space_id: i64) -> Option<SpaceTag> {
+        if space_id == self.active.id {
+            return None;
+        }
+        self.space_by_id(space_id).map(|s| SpaceTag {
+            name: s.name.clone(),
+            color: s.color.clone(),
+        })
     }
 }
 

@@ -60,13 +60,27 @@ async fn une_tache_ajoutee_dans_un_autre_espace() {
         )
         .await;
     assert_eq!(added.status, StatusCode::OK);
-    assert!(added.body.contains("Tâche ajoutée dans École"));
-    assert!(
-        !added
-            .body
-            .contains("<span class=\"task-title\">Rendre le TP</span>")
-    );
     assert_eq!(task_space(&app, "Rendre le TP").await, ecole);
+    // Perso montre toutes les tâches : elle y reste visible, marquée École.
+    let row = common::between(&added.body, "Rendre le TP</span>", "</li>").unwrap();
+    assert!(row.contains("École</span>"));
+
+    // Depuis École, une tâche pour Perso : elle ne se voit plus ici, la
+    // phrase le dit.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let added = alice
+        .post(
+            "/tasks",
+            &[
+                ("title", "Acheter du pain"),
+                ("space_id", &perso.to_string()),
+            ],
+        )
+        .await;
+    assert!(added.body.contains("Tâche ajoutée dans Perso"));
+    assert!(!added.body.contains("Acheter du pain"));
+    assert_eq!(task_space(&app, "Acheter du pain").await, perso);
+    alice.post("/space", &[("slug", "perso")]).await;
 
     // Sans précision, l'espace actif.
     alice.post("/tasks", &[("title", "Courses")]).await;
@@ -187,8 +201,8 @@ async fn un_fichier_se_deplace_avec_sa_vignette() {
     assert_eq!(thumb.status, StatusCode::OK);
     assert_eq!(thumb.bytes, b"vignette");
 
-    // Plus dans Perso, mais dans École.
-    assert!(!alice.get("/files").await.body.contains("cours.pdf"));
+    // Plus dans Perso (« Seulement Perso »), mais dans École.
+    assert!(!alice.get("/files?seul=1").await.body.contains("cours.pdf"));
     alice.post("/space", &[("slug", "ecole")]).await;
     assert!(alice.get("/files").await.body.contains("cours.pdf"));
 
@@ -288,4 +302,67 @@ async fn on_sait_toujours_dans_quel_espace_on_est() {
     }
     // Réglages n'appartient à aucun espace : pas de rappel.
     assert!(!alice.get("/settings").await.body.contains("space-kicker"));
+}
+
+/// Crée une note dans l'espace actif, avec ce titre.
+async fn note(client: &mut common::Client, title: &str) {
+    let created = client.post("/notes", &[]).await;
+    let path = created.location().to_string();
+    client
+        .post(&path, &[("title", title), ("body_md", "contenu")])
+        .await;
+}
+
+#[tokio::test]
+async fn perso_montre_tous_les_espaces() {
+    let app = TestApp::new().await;
+    let mut bob = app.logged_in(BOB).await;
+    note(&mut bob, "Note de Bob").await;
+    let mut alice = app.logged_in(ALICE).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+
+    // Du contenu dans École, et un peu dans Perso.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    note(&mut alice, "Cours de réseau").await;
+    alice.post("/tasks", &[("title", "Rendre le TP")]).await;
+    let start = alice.start_upload_in("td.pdf", 4, ecole).await;
+    alice.put_chunk(&start.body, 0, b"%PDF", true).await;
+    alice.post("/space", &[("slug", "perso")]).await;
+    note(&mut alice, "Liste de courses").await;
+    alice.post("/tasks", &[("title", "Courses")]).await;
+
+    // Dans Perso : tout, et ce qui vient d'École porte son nom.
+    let tag = "<span class=\"space-tag\" data-accent=\"blue\"><span class=\"dot\" aria-hidden=\"true\"></span>École</span>";
+    let tasks = alice.get_fragment("/widgets/tasks").await;
+    assert!(tasks.body.contains("Rendre le TP") && tasks.body.contains("Courses"));
+    assert!(tasks.body.contains(tag));
+    let notes = alice.get_fragment("/widgets/notes").await;
+    assert!(notes.body.contains("Cours de réseau") && notes.body.contains(tag));
+    let files = alice.get_fragment("/widgets/files").await;
+    assert!(files.body.contains("td.pdf") && files.body.contains(tag));
+
+    let list = alice.get("/notes").await;
+    assert!(list.body.contains("Cours de réseau") && list.body.contains("Liste de courses"));
+    assert!(list.body.contains(tag));
+    assert!(list.body.contains("Seulement Perso"));
+    assert!(!list.body.contains("Note de Bob"));
+    // La recherche aussi couvre tous les espaces.
+    assert!(alice.get("/notes?q=reseau").await.body.contains("Cours de"));
+
+    // « Seulement Perso » : le contenu propre de Perso.
+    let only = alice.get("/notes?seul=1").await;
+    assert!(only.body.contains("Liste de courses"));
+    assert!(!only.body.contains("Cours de réseau"));
+    assert!(alice.get("/files").await.body.contains("td.pdf"));
+    assert!(!alice.get("/files?seul=1").await.body.contains("td.pdf"));
+
+    // Dans École : seulement École, sans pastille ni filtre.
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let ecole_notes = alice.get("/notes").await;
+    assert!(ecole_notes.body.contains("Cours de réseau"));
+    assert!(!ecole_notes.body.contains("Liste de courses"));
+    assert!(!ecole_notes.body.contains("space-tag"));
+    assert!(!ecole_notes.body.contains("Seulement"));
+    let ecole_tasks = alice.get_fragment("/widgets/tasks").await;
+    assert!(!ecole_tasks.body.contains("Courses</span>"));
 }

@@ -49,6 +49,8 @@ const FILE_CSP: &str = "default-src 'none'; sandbox";
 pub struct FileItem {
     pub id: i64,
     pub space_id: i64,
+    /// Vue d'ensemble de Perso : l'espace d'un fichier venu d'ailleurs.
+    pub space: Option<crate::spaces::SpaceTag>,
     pub name: String,
     pub size: String,
     /// Libellé court du type : « PDF », « Image »…
@@ -78,19 +80,36 @@ struct ListPage {
     /// Espaces proposés pour un envoi et un déplacement.
     spaces: Vec<Space>,
     active_id: i64,
+    /// Perso : filtre « Tous les espaces » / « Seulement Perso ».
+    overview: bool,
+    only: bool,
 }
 
-/// `GET /files` : les fichiers de l'espace actif, les plus récents d'abord.
-pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+#[derive(Deserialize)]
+pub struct ListQuery {
+    /// `1` : dans Perso, seulement ses propres fichiers.
+    #[serde(default)]
+    seul: u8,
+}
+
+/// `GET /files` : les fichiers de l'espace actif (de tous les espaces dans
+/// Perso), les plus récents d'abord.
+pub async fn list(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
+) -> AppResult<Response> {
+    let only = query.seul == 1;
+    let scope = ctx.scope(only);
     let now = time::now();
     let tools = state.config.work_dir.is_some();
     let items = sqlx::query!(
         r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
            FROM files
-           WHERE user_id = ? AND space_id = ? AND expires_at IS NULL
+           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC"#,
         ctx.user.id,
-        ctx.active.id
+        scope
     )
     .fetch_all(&state.db)
     .await?
@@ -98,6 +117,7 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     .map(|row| FileItem {
         id: row.id,
         space_id: row.space_id,
+        space: ctx.tag_of(row.space_id),
         size: human_size(row.size),
         kind: kind_label(&row.mime),
         conversions: menu(tools, &row.mime, false),
@@ -117,9 +137,11 @@ pub async fn list(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
             .unwrap_or_default(),
         max_bytes: files.map(|f| f.max_upload_bytes).unwrap_or_default(),
         items,
-        jobs: crate::tools::panel(&state, ctx.user.id, Some(ctx.active.id)).await?,
+        jobs: crate::tools::panel(&state, ctx.user.id, scope).await?,
         spaces: ctx.spaces.clone(),
         active_id: ctx.active.id,
+        overview: ctx.active.is_overview(),
+        only,
     };
     Ok(web::html(page))
 }

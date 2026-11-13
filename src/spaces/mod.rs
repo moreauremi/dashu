@@ -32,9 +32,18 @@ pub struct Space {
 }
 
 /// Slug de Perso, l'espace « vue d'ensemble » : son agenda (page Agenda,
-/// widget « Prochains cours », API) réunit les agendas de tous les espaces.
-/// Il ne se supprime pas ; renommé, il garde ce rôle (le slug ne change pas).
+/// widget « Prochains cours », API), ses tâches, notes et fichiers réunissent
+/// ceux de tous les espaces (sauf filtre « Seulement Perso »). Il ne se
+/// supprime pas ; renommé, il garde ce rôle (le slug ne change pas).
 pub const OVERVIEW: &str = "perso";
+
+/// Pastille d'un élément d'un autre espace, dans la vue d'ensemble de Perso :
+/// le point de couleur et le nom de son espace.
+#[derive(Debug, Clone)]
+pub struct SpaceTag {
+    pub name: String,
+    pub color: String,
+}
 
 impl Space {
     /// Icône du sprite associée à l'espace.

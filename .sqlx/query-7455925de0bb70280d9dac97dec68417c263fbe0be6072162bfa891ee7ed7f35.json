@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", space_id, title, done AS \"done!: bool\", due_date\n           FROM tasks\n           WHERE user_id = ?1 AND space_id = ?2\n             AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))\n               OR (done = 1 AND done_at >= ?4))\n           ORDER BY done, due_date, created_at",
+  "query": "SELECT id AS \"id!\", space_id, title, done AS \"done!: bool\", due_date\n           FROM tasks\n           WHERE user_id = ?1 AND (?2 IS NULL OR space_id = ?2)\n             AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))\n               OR (done = 1 AND done_at >= ?4))\n           ORDER BY done, due_date, created_at",
   "describe": {
     "columns": [
       {
@@ -40,5 +40,5 @@
       true
     ]
   },
-  "hash": "554e4cd7637c84afa0d83f3e54e8c23c646772b86603a78efc8e2106f310723d"
+  "hash": "7455925de0bb70280d9dac97dec68417c263fbe0be6072162bfa891ee7ed7f35"
 }

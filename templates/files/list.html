@@ -42,6 +42,13 @@
 <div hidden hx-get="/files" hx-select="#file-results" hx-target="#file-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
 
 <div id="file-results">
+  {#- Perso montre les fichiers de tous les espaces ; ce filtre ne garde que les siens. -#}
+  {% if overview %}
+  <nav class="chips scope-filter" aria-label="Espaces montrés">
+    <a class="chip" href="/files"{% if !only %} aria-current="true"{% endif %}>Tous les espaces</a>
+    <a class="chip" href="/files?seul=1"{% if only %} aria-current="true"{% endif %}>Seulement {{ shell.active.name }}</a>
+  </nav>
+  {% endif %}
   {% if items.is_empty() %}
   <div class="empty-state"><p>Aucun fichier dans l'espace {{ shell.active.name }}</p></div>
   {% else %}
@@ -56,7 +63,7 @@
         {%- endif %}
         <span>{{ item.name }}</span>
       </a>
-      <span class="file-meta">{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
+      <span class="file-meta">{% if let Some(space) = item.space %}<span class="space-tag" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span> · {% endif %}{{ item.kind }} · {{ item.size }} · {{ item.updated }}</span>
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>

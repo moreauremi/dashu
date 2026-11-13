@@ -93,7 +93,11 @@ async fn compresser_prepare_une_tache_pour_le_service() {
     // La page le montre, et se redemandera tant que la tâche tourne.
     let page = alice.get("/files").await;
     assert!(page.body.contains("En attente"));
-    assert!(page.body.contains("hx-get=\"/files/jobs?active=1\""));
+    // Perso montre les tâches de tous les espaces : le suivi aussi.
+    assert!(
+        page.body
+            .contains("hx-get=\"/files/jobs?active=1&amp;all=1\"")
+    );
 }
 
 #[tokio::test]
