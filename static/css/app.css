@@ -416,14 +416,25 @@ html {
     border-radius: var(--radius-xl);
     box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.45);
     translate: calc(-100% - 16px) 0;
-    transition: translate var(--enter) var(--ease) 0.3s;
+    /* Sa propre couche dès le départ : le navigateur ne fait que la déplacer,
+       sans la redessiner à la première image du mouvement. */
+    will-change: translate;
+    /* Retour à gauche : un départ doux qui accélère, après 0,3 s de répit. */
+    transition: translate 260ms cubic-bezier(0.4, 0, 0.7, 0.2) 0.3s;
   }
 
   .app[data-sidebar="floating"] > .sidebar-edge:hover + .sidebar,
   .app[data-sidebar="floating"] > .sidebar:hover,
   .app[data-sidebar="floating"] > .sidebar:focus-within {
     translate: 0 0;
-    transition-delay: 0s;
+    /* Arrivée : rapide puis qui ralentit jusqu'à sa place, sans à-coup. */
+    transition: translate 320ms cubic-bezier(0.32, 0.72, 0, 1) 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app[data-sidebar="floating"] > .sidebar {
+      transition-duration: 0s;
+    }
   }
 }
 
@@ -2064,6 +2075,28 @@ ul.note-links {
     grid-row: auto;
     justify-content: flex-start;
   }
+}
+
+/* Élément d'un autre espace dans la vue d'ensemble de Perso : le point de
+   couleur de son espace et son nom. */
+.space-tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.space-tag .dot {
+  width: 6px;
+  height: 6px;
+}
+
+.scope-filter {
+  margin-bottom: 12px;
 }
 
 .upload-space {
