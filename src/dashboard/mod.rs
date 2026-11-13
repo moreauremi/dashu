@@ -292,7 +292,8 @@ struct TasksWidget {
     done_count: usize,
     /// Espaces proposés à l'ajout et au déplacement d'une tâche.
     spaces: Vec<Space>,
-    active_id: i64,
+    /// Espace proposé par défaut à l'ajout : l'espace actif.
+    active: Space,
     /// « Tâche ajoutée dans École » : ce qui est parti dans un autre espace
     /// ne se voit plus ici, la phrase le dit.
     notice: Option<String>,
@@ -351,7 +352,7 @@ async fn tasks_widget(db: &SqlitePool, ctx: &Ctx, notice: Option<String>) -> App
         tasks,
         done_count,
         spaces: ctx.spaces.clone(),
-        active_id: ctx.active.id,
+        active: ctx.active.clone(),
         notice,
     }))
 }

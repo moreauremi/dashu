@@ -12,18 +12,15 @@
       <span class="task-title">{{ task.title }}</span>
       {% if let Some(space) = task.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
       {% if let Some(since) = task.late_since %}<span class="live late"><span class="dot" aria-hidden="true"></span>depuis {{ since }}</span>{% endif %}
-      {#- Le menu natif d'un <select> transparent, posé sur l'icône : il
-          s'ouvre au clic comme au clavier, et n'est jamais coupé par le bord
-          du widget. -#}
-      <label class="icon-btn icon-btn-sm task-move" title="Déplacer vers un autre espace">{{ crate::assets::icon("move")|safe }}
-        <select class="overlay-select" name="space_id" aria-label="Déplacer « {{ task.title }} » vers un autre espace"
-                hx-post="/tasks/{{ task.id }}/move" hx-trigger="change" hx-target="#w-tasks" hx-swap="outerHTML">
-          <option value="" selected disabled>Déplacer vers…</option>
-          {%- for space in spaces %}{% if space.id != task.space_id %}
-          <option value="{{ space.id }}">{{ space.name }}</option>
-          {%- endif %}{% endfor %}
-        </select>
-      </label>
+      {#- Menu de l'app (popover) : affiché par-dessus la page, aux couleurs
+          du thème, jamais coupé par le bord du widget (voir app.js, « Menus »). -#}
+      <button class="icon-btn icon-btn-sm task-move" type="button" popovertarget="pm-task-{{ task.id }}" title="Déplacer vers un autre espace" aria-label="Déplacer « {{ task.title }} » vers un autre espace">{{ crate::assets::icon("move")|safe }}</button>
+      <div id="pm-task-{{ task.id }}" class="pop-menu" popover>
+        <p class="pop-title">Déplacer vers</p>
+        {%- for space in spaces %}{% if space.id != task.space_id %}
+        <button type="button" data-accent="{{ space.color }}" hx-post="/tasks/{{ task.id }}/move" hx-vals='{"space_id": "{{ space.id }}"}' hx-target="#w-tasks" hx-swap="outerHTML"><span class="dot" aria-hidden="true"></span>{{ space.name }}</button>
+        {%- endif %}{% endfor %}
+      </div>
       <button class="icon-btn icon-btn-sm task-delete" type="button" aria-label="Supprimer la tâche « {{ task.title }} »"
               hx-delete="/tasks/{{ task.id }}" hx-target="#w-tasks" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button>
     </li>
@@ -34,11 +31,16 @@
   {% if let Some(notice) = notice %}<p class="widget-notice" role="status">{{ notice }}</p>{% endif %}
 
   <form class="task-add" hx-post="/tasks" hx-target="#w-tasks" hx-swap="outerHTML">
-    <select class="task-space" name="space_id" aria-label="Espace de la tâche">
+    {#- Espace de la tâche : un bouton qui ouvre un menu de l'app (app.js,
+        « data-set-space » pose la valeur et le nom choisis). -#}
+    <input type="hidden" name="space_id" value="{{ active.id }}" data-space-value>
+    <button class="btn task-space" type="button" popovertarget="pm-task-space" data-accent="{{ active.color }}" aria-label="Espace de la tâche : {{ active.name }}" data-space-button><span class="dot" aria-hidden="true"></span><span data-space-label>{{ active.name }}</span></button>
+    <div id="pm-task-space" class="pop-menu" popover>
+      <p class="pop-title">Ajouter dans</p>
       {%- for space in spaces %}
-      <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
+      <button type="button" data-set-space="{{ space.id }}" data-name="{{ space.name }}" data-color="{{ space.color }}" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</button>
       {%- endfor %}
-    </select>
+    </div>
     {#- L'id permet à htmx de rendre le focus au champ après l'ajout. -#}
     <input id="task-new" type="text" name="title" maxlength="200" required autocomplete="off"
            placeholder="Ajouter une tâche" aria-label="Nouvelle tâche">

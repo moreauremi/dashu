@@ -47,25 +47,37 @@
       <span class="file-meta">{{ item.meta }}</span>
       <div class="tool-actions">
         {% if !item.conversions.is_empty() %}
-        <form class="tool-form" method="post" action="/files/{{ item.id }}/convert">
-          <input type="hidden" name="next" value="/tools">
-          <select name="to" aria-label="Conversion de « {{ item.name }} »">
-            {%- for (key, label) in item.conversions %}
-            <option value="{{ key }}">{{ label }}</option>
-            {%- endfor %}
-          </select>
-          {% if item.pdf %}<input class="tool-pages" type="text" name="pages" inputmode="numeric" placeholder="Pages : 2-4" aria-label="Pages à extraire de « {{ item.name }} »">{% endif %}
-          <button class="btn" type="submit">{{ crate::assets::icon("convert")|safe }}<span>Convertir</span></button>
-        </form>
+        <button class="btn" type="button" popovertarget="pm-convert-{{ item.id }}" aria-label="Convertir « {{ item.name }} »">{{ crate::assets::icon("convert")|safe }}<span>Convertir</span></button>
+        <div id="pm-convert-{{ item.id }}" class="pop-menu" popover>
+          <p class="pop-title">Convertir</p>
+          {%- for (key, label) in item.conversions %}
+          {%- if key == &"pages" %}
+          <form class="pop-pages" method="post" action="/files/{{ item.id }}/convert">
+            <input type="hidden" name="to" value="pages">
+            <input type="hidden" name="next" value="/tools">
+            <input type="text" name="pages" inputmode="numeric" required placeholder="Pages : 2-4" aria-label="Pages à extraire de « {{ item.name }} »">
+            <button class="btn" type="submit">Extraire</button>
+          </form>
+          {%- else %}
+          <form method="post" action="/files/{{ item.id }}/convert">
+            <input type="hidden" name="to" value="{{ key }}">
+            <input type="hidden" name="next" value="/tools">
+            <button type="submit">{{ label }}</button>
+          </form>
+          {%- endif %}
+          {%- endfor %}
+        </div>
         {% endif %}
-        <form class="tool-form" method="post" action="/files/{{ item.id }}/keep">
-          <select name="space_id" aria-label="Espace où garder « {{ item.name }} »">
-            {%- for space in spaces %}
-            <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
-            {%- endfor %}
-          </select>
-          <button class="btn" type="submit">Garder</button>
-        </form>
+        <button class="btn" type="button" popovertarget="pm-keep-{{ item.id }}" aria-label="Garder « {{ item.name }} » dans un espace">Garder dans…</button>
+        <div id="pm-keep-{{ item.id }}" class="pop-menu" popover>
+          <p class="pop-title">Garder dans</p>
+          {%- for space in spaces %}
+          <form method="post" action="/files/{{ item.id }}/keep">
+            <input type="hidden" name="space_id" value="{{ space.id }}">
+            <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</button>
+          </form>
+          {%- endfor %}
+        </div>
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
         <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer « {{ item.name }} » ?">
           <input type="hidden" name="next" value="/tools">

@@ -44,13 +44,9 @@ async fn une_tache_ajoutee_dans_un_autre_espace() {
     // Le formulaire propose les espaces, l'espace actif choisi par défaut.
     let widget = alice.get_fragment("/widgets/tasks").await;
     assert!(widget.body.contains(&format!(
-        "<option value=\"{perso}\" selected>Perso</option>"
+        "<input type=\"hidden\" name=\"space_id\" value=\"{perso}\" data-space-value>"
     )));
-    assert!(
-        widget
-            .body
-            .contains(&format!("<option value=\"{ecole}\">École</option>"))
-    );
+    assert!(widget.body.contains(&format!("data-set-space=\"{ecole}\"")));
 
     // Depuis Perso, une tâche pour École, sans changer d'espace.
     let added = alice
@@ -116,8 +112,8 @@ async fn une_tache_se_deplace() {
     let widget = alice.get_fragment("/widgets/tasks").await;
     let row = common::between(&widget.body, "Réviser", "</li>").unwrap();
     assert!(row.contains(&format!("hx-post=\"/tasks/{id}/move\"")));
-    assert!(row.contains("École</option>"));
-    assert!(!row.contains("Perso</option>"));
+    assert!(row.contains("École</button>"));
+    assert!(!row.contains("Perso</button>"));
 
     let moved = alice
         .post(
@@ -253,9 +249,10 @@ async fn un_envoi_dans_l_espace_choisi() {
     );
     let page = alice.get("/files").await;
     assert!(page.body.contains("data-upload-space"));
-    assert!(page.body.contains(&format!(
-        "<option value=\"{perso}\" selected>Perso</option>"
-    )));
+    assert!(
+        page.body
+            .contains(&format!("value=\"{perso}\" data-upload-space checked>"))
+    );
 
     let content = b"notes de cours";
     let start = alice.start_upload_in("td.txt", content.len(), ecole).await;

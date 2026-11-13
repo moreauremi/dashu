@@ -294,3 +294,12 @@ async fn ecran_de_lancement_au_chargement_seulement() {
             .contains("data-splash")
     );
 }
+
+/// Le catalogue des widgets garde sa marge : la règle générale
+/// `ul[role="list"] { padding: 0 }` collait ses lignes aux bords.
+#[tokio::test]
+async fn le_catalogue_des_widgets_garde_sa_marge() {
+    let css = std::fs::read_to_string("static/css/app.css").unwrap();
+    assert!(css.contains("ul.dash-options {"));
+    assert!(!css.contains("\n.dash-options {"));
+}

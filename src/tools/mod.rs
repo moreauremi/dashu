@@ -1273,7 +1273,6 @@ struct ToolsPage {
     items: Vec<ToolItem>,
     jobs: JobsPanel,
     spaces: Vec<crate::spaces::Space>,
-    active_id: i64,
 }
 
 /// Temps restant avant une échéance : « 23 h », « 40 min » (arrondi au-dessus).
@@ -1335,7 +1334,6 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         items,
         jobs: panel(&state, ctx.user.id, None).await?,
         spaces: ctx.spaces.clone(),
-        active_id: ctx.active.id,
     };
     Ok(web::html(page))
 }

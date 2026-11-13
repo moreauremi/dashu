@@ -170,15 +170,18 @@
     <div class="card-body">
       <p class="hint">L'app s'ouvre sur l'espace du cours en cours, ou du prochain cours de la journée. Un jour sans cours, sur l'espace choisi ici.</p>
       <form class="moment-form" method="post" action="/settings/moment">
-        <label class="field">
-          <span class="field-label">Espace du moment</span>
-          <select name="space">
-            <option value=""{% if moment_id == 0 %} selected{% endif %}>Désactivé : le dernier espace utilisé</option>
-            {%- for space in shell.spaces %}
-            <option value="{{ space.id }}"{% if space.id == moment_id %} selected{% endif %}>Un jour sans cours : {{ space.name }}</option>
-            {%- endfor %}
-          </select>
-        </label>
+        <div class="space-choices" role="radiogroup" aria-label="Un jour sans cours">
+          <span class="space-choices-label">Un jour sans cours</span>
+          <label class="space-choice">
+            <input class="sr-only" type="radio" name="space" value=""{% if moment_id == 0 %} checked{% endif %}>Désactivé
+          </label>
+          {%- for space in shell.spaces %}
+          <label class="space-choice" data-accent="{{ space.color }}">
+            <input class="sr-only" type="radio" name="space" value="{{ space.id }}"{% if space.id == moment_id %} checked{% endif %}>
+            <span class="dot" aria-hidden="true"></span>{{ space.name }}
+          </label>
+          {%- endfor %}
+        </div>
         <button class="btn btn-primary" type="submit">Enregistrer</button>
       </form>
     </div>

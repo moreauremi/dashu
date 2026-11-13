@@ -196,7 +196,7 @@ async fn seuls_videos_photos_et_pdf_se_compressent() {
     assert!(page.body.contains("aria-label=\"Convertir « cours.pdf »\""));
     assert!(
         page.body
-            .contains("<option value=\"compress\">Compresser</option>")
+            .contains("<input type=\"hidden\" name=\"to\" value=\"compress\">")
     );
     assert!(
         !page

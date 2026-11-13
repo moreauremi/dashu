@@ -1632,7 +1632,9 @@ select:focus-visible {
   justify-content: space-between;
 }
 
-.dash-options {
+/* ul.… : passe devant ul[role="list"] { padding: 0 }, sinon les lignes
+   collent aux bords de la fenêtre et sont coupées. */
+ul.dash-options {
   display: flex;
   flex-direction: column;
   padding: 8px 16px 16px;
@@ -1924,28 +1926,128 @@ ul.note-links {
   color: var(--text-3);
 }
 
-/* Un <select> invisible posé sur une icône : la liste native s'ouvre au clic
-   et au clavier, l'anneau de focus se voit sur l'icône. */
-.task-move,
-.row-move {
-  position: relative;
+/* Menus de l'app (popover) : placés sous leur bouton par app.js (« Menus »),
+   aux couleurs du thème, au-dessus de tout. */
+.pop-menu {
+  position: fixed;
+  inset: auto;
+  min-width: 180px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(420px, calc(100dvh - 16px));
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.4);
+  color: var(--text);
 }
 
-.overlay-select {
-  position: absolute;
-  inset: 0;
+.pop-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.pop-title {
+  padding: 6px 10px 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.pop-menu form {
+  display: contents;
+}
+
+.pop-menu button:not(.btn) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  height: 100%;
-  padding: 0;
+  min-height: 36px;
+  padding: 0 10px;
   border: 0;
-  opacity: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
   cursor: pointer;
-  /* 16 px : sinon iOS zoome à l'ouverture. */
-  font-size: 16px;
 }
 
-.task-move:has(.overlay-select:focus-visible),
-.row-move:has(.overlay-select:focus-visible) {
+.pop-menu button:not(.btn):hover,
+.pop-menu button:not(.btn):focus-visible {
+  background: var(--surface-2);
+}
+
+.pop-menu button .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.pop-pages {
+  display: flex !important;
+  gap: 4px;
+  padding: 4px;
+}
+
+.pop-pages input {
+  width: 120px;
+  height: 36px;
+}
+
+/* Choix d'un espace : toutes les options sur une ligne, des pastilles. */
+.space-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dropzone .space-choices {
+  margin-top: 12px;
+}
+
+.space-choices-label {
+  margin-right: 4px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.space-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.space-choice:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.space-choice .dot {
+  width: 6px;
+  height: 6px;
+}
+
+.space-choice:has(input:checked) {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--border));
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface));
+  color: var(--text);
+}
+
+.space-choice:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -2083,19 +2185,6 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   justify-content: flex-end;
 }
 
-.tool-form {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.tool-form select {
-  width: auto;
-}
-
-.tool-pages {
-  width: 112px;
-}
 
 @media (max-width: 860px) {
   .tool-row {
@@ -2203,9 +2292,9 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   gap: 12px;
 }
 
-.moment-form .field {
+.moment-form .space-choices {
   flex: 1;
-  min-width: 240px;
+  justify-content: flex-start;
 }
 
 /* Dépôt hors des pages Fichiers et Outils : un voile dit où part le
@@ -2257,19 +2346,6 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   }
 }
 
-.upload-space {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 0 0;
-  color: var(--text-2);
-  font-size: 13px;
-}
-
-.upload-space select {
-  width: auto;
-  min-width: 160px;
-}
 
 .widget-notice {
   padding: 4px 12px 0;
@@ -2285,12 +2361,20 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   border-top: 1px solid var(--border);
 }
 
-.task-add .task-space {
+/* .btn.task-space : passe devant .task-add .btn (le bouton « + », carré). */
+.task-add .btn.task-space {
   flex: none;
+  gap: 6px;
   width: auto;
   max-width: 40%;
-  padding: 0 8px;
+  padding: 0 10px;
   color: var(--text-2);
+}
+
+.task-add .task-space span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-add .btn {

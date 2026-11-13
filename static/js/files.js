@@ -162,7 +162,7 @@
     const name = encodeURIComponent(job.name || file.name);
     // Espace choisi au-dessus de la zone de dépôt (l'espace actif par défaut) ;
     // onglet Outils : un fichier pas encore rangé.
-    const space = document.querySelector("[data-upload-space]")?.value;
+    const space = document.querySelector("[data-upload-space]:checked")?.value;
     let where = space ? `&space=${encodeURIComponent(space)}` : "";
     if (document.querySelector("[data-dropzone][data-tools]")) where += "&tools=1";
     const opened = await request("POST", `/files/uploads?name=${name}&size=${file.size}${where}`);

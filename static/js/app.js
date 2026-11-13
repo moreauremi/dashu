@@ -542,6 +542,71 @@
     }
   });
 
+  // ------------------------------------------------------------- Menus
+  //
+  // Menus de l'app (attribut popover, ouverts par popovertarget) : affichés
+  // par-dessus la page, jamais coupés par un widget, fermés au clic dehors ou
+  // par Échap. On les place sous leur bouton, aligné à droite, ou au-dessus
+  // s'ils dépasseraient du bas de l'écran. La position passe par une feuille
+  // construite (pas de style en ligne, voir la CSP).
+  const menuSheet = new CSSStyleSheet();
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, menuSheet];
+
+  /** Facteur de zoom de l'app (taille de l'interface). */
+  const zoom = () => parseFloat(getComputedStyle($("#app") || document.body).getPropertyValue("--zoom")) || 1;
+
+  function placeMenu(menu, above) {
+    const opener = $(`[popovertarget="${CSS.escape(menu.id)}"]`);
+    if (!opener) return;
+    const z = zoom();
+    const r = opener.getBoundingClientRect();
+    const right = Math.max(8, innerWidth - r.right) / z;
+    const top = above ? (r.top - 4 - menu.getBoundingClientRect().height) / z : (r.bottom + 4) / z;
+    menuSheet.replaceSync(`#${CSS.escape(menu.id)} { top: ${Math.max(8 / z, top)}px; right: ${right}px; }`);
+  }
+
+  // Ces événements ne remontent pas : on les écoute à la capture.
+  document.addEventListener(
+    "beforetoggle",
+    (event) => {
+      const menu = event.target;
+      if (menu instanceof HTMLElement && menu.matches(".pop-menu") && event.newState === "open") {
+        placeMenu(menu, false);
+      }
+    },
+    true,
+  );
+  document.addEventListener(
+    "toggle",
+    (event) => {
+      const menu = event.target;
+      if (!(menu instanceof HTMLElement) || !menu.matches(".pop-menu") || event.newState !== "open") return;
+      if (menu.getBoundingClientRect().bottom > innerHeight - 8) placeMenu(menu, true);
+      // Au clavier, le premier choix prend le focus.
+      menu.querySelector("button:not([disabled]), input")?.focus({ preventScroll: true });
+    },
+    true,
+  );
+
+  // Choix d'un espace dans un formulaire (ajout d'une tâche) : la valeur et
+  // le nom passent sur le bouton qui a ouvert le menu.
+  document.addEventListener("click", (event) => {
+    const choice = event.target instanceof Element && event.target.closest("[data-set-space]");
+    if (!choice) return;
+    const form = choice.closest("form");
+    const menu = choice.closest(".pop-menu");
+    const value = form?.querySelector("[data-space-value]");
+    const button = form?.querySelector("[data-space-button]");
+    if (!value || !button) return;
+    value.value = choice.dataset.setSpace;
+    button.dataset.accent = choice.dataset.color;
+    button.setAttribute("aria-label", `Espace de la tâche : ${choice.dataset.name}`);
+    const label = button.querySelector("[data-space-label]");
+    if (label) label.textContent = choice.dataset.name;
+    menu?.hidePopover();
+    form.querySelector("input[name=title]")?.focus();
+  });
+
   // ------------------------------------------------- Photo de profil
 
   // Réglages : la photo choisie est recadrée au carré et réduite à 256 px

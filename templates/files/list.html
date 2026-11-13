@@ -23,14 +23,16 @@
   {{ crate::assets::icon("upload")|safe }}
   <p>Glisse des fichiers ici, ou utilise « Envoyer des fichiers »</p>
   <p class="muted">{{ max_size }} au plus par fichier</p>
-</div>
-<div class="upload-space">
-  <label for="upload-space">Envoyer dans</label>
-  <select id="upload-space" data-upload-space>
+  {#- L'espace d'arrivée : tous les choix sur une ligne. -#}
+  <div class="space-choices" role="radiogroup" aria-label="Espace où envoyer">
+    <span class="space-choices-label">Envoyer dans</span>
     {%- for space in spaces %}
-    <option value="{{ space.id }}"{% if space.id == active_id %} selected{% endif %}>{{ space.name }}</option>
+    <label class="space-choice" data-accent="{{ space.color }}">
+      <input class="sr-only" type="radio" name="upload-space" value="{{ space.id }}" data-upload-space{% if space.id == active_id %} checked{% endif %}>
+      <span class="dot" aria-hidden="true"></span>{{ space.name }}
+    </label>
     {%- endfor %}
-  </select>
+  </div>
 </div>
 <ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
 
@@ -67,25 +69,29 @@
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
-        <form class="icon-btn row-move" method="post" action="/files/{{ item.id }}/move" hx-trigger="change" title="Déplacer vers un autre espace">
-          {{ crate::assets::icon("move")|safe }}
-          <select class="overlay-select" name="space_id" aria-label="Déplacer « {{ item.name }} » vers un autre espace">
-            <option value="" selected disabled>Déplacer vers…</option>
-            {%- for space in spaces %}{% if space.id != item.space_id %}
-            <option value="{{ space.id }}">{{ space.name }}</option>
-            {%- endif %}{% endfor %}
-          </select>
-        </form>
+        {#- Menus de l'app (popover) : par-dessus la page, aux couleurs du
+            thème (voir app.js, « Menus »). -#}
+        <button class="icon-btn" type="button" popovertarget="pm-move-{{ item.id }}" title="Déplacer vers un autre espace" aria-label="Déplacer « {{ item.name }} » vers un autre espace">{{ crate::assets::icon("move")|safe }}</button>
+        <div id="pm-move-{{ item.id }}" class="pop-menu" popover>
+          <p class="pop-title">Déplacer vers</p>
+          {%- for space in spaces %}{% if space.id != item.space_id %}
+          <form method="post" action="/files/{{ item.id }}/move">
+            <input type="hidden" name="space_id" value="{{ space.id }}">
+            <button type="submit" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</button>
+          </form>
+          {%- endif %}{% endfor %}
+        </div>
         {% if !item.conversions.is_empty() %}
-        <form class="icon-btn row-move" method="post" action="/files/{{ item.id }}/convert" hx-trigger="change" title="Convertir : crée une copie, l'original est gardé">
-          {{ crate::assets::icon("convert")|safe }}
-          <select class="overlay-select" name="to" aria-label="Convertir « {{ item.name }} »">
-            <option value="" selected disabled>Convertir…</option>
-            {%- for (key, label) in item.conversions %}
-            <option value="{{ key }}">{{ label }}</option>
-            {%- endfor %}
-          </select>
-        </form>
+        <button class="icon-btn" type="button" popovertarget="pm-convert-{{ item.id }}" title="Convertir : crée une copie, l'original est gardé" aria-label="Convertir « {{ item.name }} »">{{ crate::assets::icon("convert")|safe }}</button>
+        <div id="pm-convert-{{ item.id }}" class="pop-menu" popover>
+          <p class="pop-title">Convertir</p>
+          {%- for (key, label) in item.conversions %}
+          <form method="post" action="/files/{{ item.id }}/convert">
+            <input type="hidden" name="to" value="{{ key }}">
+            <button type="submit">{{ label }}</button>
+          </form>
+          {%- endfor %}
+        </div>
         {% endif %}
         <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
           <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>

@@ -54,7 +54,7 @@ async fn le_menu_ne_propose_que_le_possible() {
     let list = alice.get("/files").await;
     let row = common::between(&list.body, "IMG_1.HEIC</span>", "</li>").unwrap();
     for label in ["Compresser", "En JPEG", "En PNG", "En WebP"] {
-        assert!(row.contains(&format!(">{label}</option>")), "{label}");
+        assert!(row.contains(&format!(">{label}</button>")), "{label}");
     }
     assert!(!row.contains("MP3"));
 
