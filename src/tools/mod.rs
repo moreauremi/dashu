@@ -85,6 +85,9 @@ pub enum Media {
     Pdf,
     /// Son : lu par ffmpeg (conversion en MP3 seulement).
     Audio,
+    /// Markdown ou texte : lu par pandoc (conversion en PDF, HTML ou DOCX
+    /// seulement ; pas de compression ni de vignette).
+    Document,
 }
 
 impl Media {
@@ -105,6 +108,7 @@ impl Media {
         match mime {
             "image/gif" => Some(Self::Image),
             m if m.starts_with("audio/") => Some(Self::Audio),
+            "text/markdown" | "text/plain" => Some(Self::Document),
             _ => Self::for_mime(mime),
         }
     }
@@ -128,7 +132,7 @@ impl Media {
         match self {
             Self::Video => "mp4",
             Self::Image | Self::Heic => "jpg",
-            Self::Pdf => "pdf",
+            Self::Pdf | Self::Document => "pdf",
             Self::Audio => "mp3",
         }
     }
@@ -150,10 +154,16 @@ pub enum Conversion {
     Mp3,
     /// Une plage de pages d'un PDF, dans un nouveau PDF.
     Pages,
+    /// Un document (Markdown, texte) en PDF, par pandoc et Typst.
+    Pdf,
+    /// Un document en page HTML autonome (servie en téléchargement).
+    Html,
+    /// Un document en DOCX (Word, LibreOffice).
+    Docx,
 }
 
 impl Conversion {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::Compress,
         Self::Jpg,
         Self::Png,
@@ -161,6 +171,9 @@ impl Conversion {
         Self::Mp4,
         Self::Mp3,
         Self::Pages,
+        Self::Pdf,
+        Self::Html,
+        Self::Docx,
     ];
 
     /// Valeur envoyée par le formulaire (et rangée dans `jobs.target`).
@@ -173,6 +186,9 @@ impl Conversion {
             Self::Mp4 => "mp4",
             Self::Mp3 => "mp3",
             Self::Pages => "pages",
+            Self::Pdf => "pdf",
+            Self::Html => "html",
+            Self::Docx => "docx",
         }
     }
 
@@ -190,6 +206,9 @@ impl Conversion {
             Self::Mp4 => "En MP4",
             Self::Mp3 => "Le son en MP3",
             Self::Pages => "Extraire des pages",
+            Self::Pdf => "En PDF",
+            Self::Html => "En page web (HTML)",
+            Self::Docx => "En Word (DOCX)",
         }
     }
 
@@ -202,14 +221,16 @@ impl Conversion {
             Self::Webp => "webp",
             Self::Mp4 => "mp4",
             Self::Mp3 => "mp3",
-            Self::Pages => "pdf",
+            Self::Pages | Self::Pdf => "pdf",
+            Self::Html => "html",
+            Self::Docx => "docx",
         }
     }
 }
 
-/// Conversions possibles pour un type MIME, dans l'ordre du menu. Seules
-/// celles des outils installés : pandoc et Typst (Markdown vers PDF…)
-/// viendront plus tard.
+/// Conversions possibles pour un type MIME, dans l'ordre du menu : celles
+/// des outils installés sur le serveur (ffmpeg, Ghostscript, libheif, pandoc
+/// et Typst).
 pub fn conversions_for(mime: &str) -> Vec<Conversion> {
     use Conversion::*;
     let mut out = Vec::new();
@@ -226,6 +247,7 @@ pub fn conversions_for(mime: &str) -> Vec<Conversion> {
         "audio/mpeg" => {}
         m if m.starts_with("audio/") => out.push(Mp3),
         "application/pdf" => out.push(Pages),
+        "text/markdown" | "text/plain" => out.extend([Pdf, Html, Docx]),
         _ => {}
     }
     out
@@ -1418,6 +1440,12 @@ mod tests {
         assert_eq!(conversions_for("audio/x-m4a"), vec![Mp3]);
         assert_eq!(conversions_for("audio/mpeg"), Vec::<Conversion>::new());
         assert_eq!(conversions_for("application/pdf"), vec![Compress, Pages]);
+        assert_eq!(conversions_for("text/markdown"), vec![Pdf, Html, Docx]);
+        assert_eq!(conversions_for("text/plain"), vec![Pdf, Html, Docx]);
+        assert_eq!(Media::for_input("text/markdown"), Some(Media::Document));
+        // Un document ne se compresse pas et n'a pas de vignette.
+        assert_eq!(Media::for_mime("text/markdown"), None);
+        assert_eq!(Media::for_thumbnail("text/plain"), None);
         assert!(conversions_for("application/zip").is_empty());
         for c in Conversion::ALL {
             assert_eq!(Conversion::from_key(c.key()), Some(c));

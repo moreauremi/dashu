@@ -31,8 +31,18 @@ healthy() {
 say "Paquets système"
 apt-get update -q
 apt-get -y -q install curl git ca-certificates build-essential pkg-config openssl sqlite3 rsync
-# Outils de conversion (compression des vidéos, photos HEIC et PDF)
-apt-get -y -q install ffmpeg ghostscript libheif-examples
+# Outils de conversion : vidéos, photos HEIC et PDF ; documents (Markdown et
+# texte vers PDF, HTML, DOCX) par pandoc
+apt-get -y -q install ffmpeg ghostscript libheif-examples pandoc xz-utils
+# Typst, moteur PDF de pandoc (bien plus léger que LaTeX) : binaire officiel,
+# version fixée, contemporaine du pandoc de Debian 13 (README, « Compression
+# et conversions »).
+TYPST_VERSION=0.11.1
+if ! command -v typst >/dev/null; then
+  curl -fsSL "https://github.com/typst/typst/releases/download/v$TYPST_VERSION/typst-x86_64-unknown-linux-musl.tar.xz" | tar -xJ -C /tmp
+  install -m 755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
+  rm -rf /tmp/typst-x86_64-unknown-linux-musl
+fi
 
 say "Rust (installé pour la machine, dans /opt/rust)"
 command -v cargo >/dev/null ||

@@ -284,6 +284,16 @@ impl Tools {
                 cmd.args(pages_args(&output, first, last)).arg(&input);
                 run_tool(cmd, Duration::from_secs(600), |_| {})
             }
+            (to @ (Conversion::Pdf | Conversion::Html | Conversion::Docx), Media::Document) => {
+                let mut cmd = Command::new("pandoc");
+                cmd.args(pandoc_args(to, &input, &output).ok_or_else(impossible)?)
+                    // Fichiers de travail de pandoc et de Typst dans le dossier
+                    // de la tâche : le service ne peut écrire que là.
+                    .env("TMPDIR", dir)
+                    .env("HOME", dir)
+                    .env("XDG_CACHE_HOME", dir);
+                run_tool(cmd, Duration::from_secs(300), |_| {})
+            }
             _ => Err(impossible()),
         }
     }
@@ -294,7 +304,7 @@ impl Tools {
         match spec.media {
             Media::Video => self.video(&input, &output, progress),
             Media::Image => compress_image(&input, &output),
-            Media::Audio => Err("Conversion impossible pour ce fichier.".into()),
+            Media::Audio | Media::Document => Err("Conversion impossible pour ce fichier.".into()),
             Media::Heic => {
                 // libheif applique la rotation enregistrée par l'iPhone.
                 let decoded = dir.join("decoded.png");
@@ -322,6 +332,7 @@ impl Tools {
         let image = match spec.media {
             Media::Image => load_image(&input)?,
             Media::Audio => return Err("Pas de vignette pour un son.".into()),
+            Media::Document => return Err("Pas de vignette pour un document.".into()),
             Media::Heic => {
                 let decoded = dir.join("decoded.png");
                 let mut cmd = Command::new("heif-dec");
@@ -454,6 +465,31 @@ pub fn full_size_filters(tonemap: bool) -> String {
 }
 
 /// Arguments ffmpeg du son en MP3 (qualité variable, autour de 190 kb/s).
+/// Arguments de pandoc pour un document (Markdown ou texte, lu comme du
+/// Markdown) vers `to`. `--sandbox` : pandoc ne lit que le fichier donné
+/// (pas d'image ni d'inclusion ailleurs sur le disque), en plus de
+/// l'isolement du service. Le PDF passe par Typst, bien plus léger que LaTeX.
+/// `None` pour une sortie qui n'est pas un document.
+pub fn pandoc_args(to: Conversion, input: &Path, output: &Path) -> Option<Vec<String>> {
+    let mut args: Vec<String> = ["--sandbox", "--from", "markdown"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    match to {
+        Conversion::Pdf => {
+            args.extend(["--to", "typst", "--pdf-engine", "typst"].map(String::from))
+        }
+        // Une page complète (en-tête, styles), lisible seule dans un navigateur.
+        Conversion::Html => args.extend(["--to", "html5", "--standalone"].map(String::from)),
+        Conversion::Docx => args.extend(["--to", "docx"].map(String::from)),
+        _ => return None,
+    }
+    args.push("--output".into());
+    args.push(output.to_string_lossy().into_owned());
+    args.push(input.to_string_lossy().into_owned());
+    Some(args)
+}
+
 pub fn mp3_args() -> Vec<String> {
     [
         "-map",
@@ -825,6 +861,23 @@ mod tests {
         assert!(mp3_args().contains(&"libmp3lame".to_string()));
         assert!(full_size_filters(false).starts_with("scale=w=trunc(iw/2)*2"));
         assert!(full_size_filters(true).contains("tonemap=tonemap=hable"));
+    }
+
+    #[test]
+    fn arguments_de_pandoc() {
+        let (input, output) = (Path::new("/j/input.md"), Path::new("/j/output.pdf"));
+        let pdf = pandoc_args(Conversion::Pdf, input, output).unwrap();
+        // Toujours en bac à sable, lu comme du Markdown, le fichier en dernier.
+        assert_eq!(&pdf[..3], ["--sandbox", "--from", "markdown"]);
+        assert!(pdf.windows(2).any(|w| w == ["--pdf-engine", "typst"]));
+        assert!(pdf.windows(2).any(|w| w == ["--output", "/j/output.pdf"]));
+        assert_eq!(pdf.last().unwrap(), "/j/input.md");
+        let html = pandoc_args(Conversion::Html, input, Path::new("/j/output.html")).unwrap();
+        assert!(html.contains(&"--standalone".to_string()) && html.contains(&"html5".to_string()));
+        let docx = pandoc_args(Conversion::Docx, input, Path::new("/j/output.docx")).unwrap();
+        assert!(docx.windows(2).any(|w| w == ["--to", "docx"]));
+        // Rien d'autre ne passe par pandoc.
+        assert!(pandoc_args(Conversion::Mp3, input, output).is_none());
     }
 
     #[test]

@@ -402,8 +402,9 @@ Le menu « Convertir » d'un fichier (sur sa ligne, sur son aperçu, ou `/conver
 | Vidéo | Compresser, en MP4 (H.264 et AAC, définition d'origine, HDR ramené en SDR), le son en MP3 |
 | Son | En MP3 |
 | PDF | Compresser, extraire des pages (« 2-4 ») |
+| Markdown, texte | En PDF (pandoc, moteur Typst), en page web HTML (autonome, servie en téléchargement comme tout HTML), en Word (DOCX) |
 
-Markdown et texte vers PDF, HTML ou DOCX viendront avec pandoc et Typst (étape 8 de la v2). Une règle par espace (Réglages > Espaces) peut convertir à l'arrivée : vidéos en MP4, photos HEIC doublées d'un JPEG.
+Les documents passent par pandoc, en bac à sable (`--sandbox` : il ne lit que le fichier donné), dans le même service isolé que le reste, ses fichiers de travail dans le dossier de la tâche. Une règle par espace (Réglages > Espaces) peut convertir à l'arrivée : vidéos en MP4, photos HEIC doublées d'un JPEG.
 
 L'onglet **Outils** reçoit un fichier pas encore rangé : il y reste 24 heures, hors des listes, le temps de le convertir, puis de le garder dans un espace ou de le télécharger. Passé ce délai, le nettoyage horaire l'efface.
 
@@ -446,6 +447,24 @@ cd /opt/dashu/src/deploy/lxc && install -m 644 dashu-worker.service /etc/systemd
 ```
 
 Vérifier : `systemctl status dashu-worker`, puis `journalctl -u dashu-worker -n 20`. La ligne « service de conversion démarré » dit aussi si le filtre `zscale` (couleurs des vidéos HDR) est présent. `dashu-update` redémarre le service de conversion avec dashu.
+
+**Documents (pandoc et Typst), sur un serveur où le service de conversion tourne déjà.** En root dans le conteneur, après le `dashu-update` qui apporte cette version : pandoc depuis Debian, puis Typst, le moteur PDF de pandoc, en binaire officiel (version fixée, contemporaine du pandoc de Debian 13 ; `install.sh` fait la même chose) :
+
+```bash
+apt-get install -y pandoc xz-utils
+```
+
+```bash
+curl -fsSL https://github.com/typst/typst/releases/download/v0.11.1/typst-x86_64-unknown-linux-musl.tar.xz | tar -xJ -C /tmp && install -m 755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst && typst --version
+```
+
+Puis le service de conversion à jour (il ne voit plus non plus les sauvegardes des fichiers) :
+
+```bash
+install -m 644 /opt/dashu/src/deploy/lxc/dashu-worker.service /etc/systemd/system/ && systemctl daemon-reload && systemctl restart dashu-worker
+```
+
+Essai : envoyer un fichier `.md`, « Convertir » > « En PDF ». Si le PDF échoue (`journalctl -u dashu-worker -n 20` montre l'erreur de Typst), c'est sans doute l'écart de version entre pandoc et Typst : essayer une autre version de Typst dans la commande ci-dessus.
 
 ### Variante : Docker
 
