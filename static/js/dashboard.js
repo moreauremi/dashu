@@ -278,20 +278,30 @@
   // --- Un widget ne défile pas : à l'arrivée de son contenu, les éléments
   // de liste qui dépassent sont retirés en partant de la fin, et une ligne
   // « + N de plus » le dit. Le calendrier, lui, est placé (placeCalendar).
+  //
+  // Un widget qui a son propre compteur (« 5 fichiers dans cet espace »,
+  // « 1 sur 3 terminée ») le garde à la place de « + N de plus » : il dit le
+  // vrai total, alors que « + N » ne compte que ce qui est retiré ici.
+  //
+  // Au moins un élément reste : dans un petit widget, c'est la ligne de pied
+  // qui part, pas le contenu. Avant, le pied prenait la place et tous les
+  // éléments partaient : il ne restait que les compteurs.
 
   function fit(body) {
     body.dataset.fitted = "";
     const overflows = () => body.scrollHeight > body.clientHeight + 1;
     if (!overflows()) return;
     const items = [...body.querySelectorAll("li")];
+    const count = body.querySelector(".widget-count");
     let hidden = 0;
     let more = null;
-    while (overflows() && items.length) {
+    while (overflows() && items.length > 1) {
       const item = items.pop();
       const list = item.parentElement;
       item.remove();
       if (list && !list.children.length) list.remove();
       hidden += 1;
+      if (count) continue;
       if (!more) {
         more = document.createElement("p");
         more.className = "widget-more";
@@ -299,6 +309,9 @@
       }
       more.textContent = `+ ${hidden} de plus`;
     }
+    // Toujours trop haut avec un seul élément : la ligne de pied part. Ce qui
+    // dépasse encore est coupé par le widget (overflow hidden).
+    if (overflows()) (count ?? more)?.remove();
   }
 
   function settle() {
