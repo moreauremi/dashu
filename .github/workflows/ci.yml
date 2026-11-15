@@ -52,6 +52,7 @@ jobs:
           sudo install -d -m 0777 /srv/dashu/fichiers
           test_bin=$(cargo test --locked --lib --no-run --message-format=json \
             | jq -r 'select(.reason == "compiler-artifact" and .profile.test and (.target.kind | index("lib"))) | .executable')
+          echo "TEST_BIN=$test_bin" >> "$GITHUB_ENV"
           sudo systemd-run --wait --pipe --collect \
             -p ProtectSystem=strict \
             -p ReadWritePaths=/srv/dashu/fichiers \
@@ -61,6 +62,36 @@ jobs:
             "$test_bin" --ignored --exact tools::tests::bac_a_sable_du_serveur \
             | tee sandbox.log
           grep -q "test result: ok. 1 passed" sandbox.log
+      # Documents (Markdown vers PDF, HTML, DOCX) avec le vrai pandoc et le
+      # vrai Typst, dans le bac à sable du service de conversion
+      # (deploy/lxc/dashu-worker.service) : dossier courant « / » en lecture
+      # seule, seul /srv/dashu/tmp inscriptible, pas de réseau. Le PDF y
+      # échouait sur le serveur alors que tous les tests passaient. pandoc
+      # 3.1.11.1 est celui de Debian 13 ; Typst, la version de install.sh.
+      - name: Documents dans le bac à sable du service de conversion
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/pandoc.deb" \
+            https://github.com/jgm/pandoc/releases/download/3.1.11.1/pandoc-3.1.11.1-1-amd64.deb
+          sudo dpkg -i "$RUNNER_TEMP/pandoc.deb"
+          typst=$(sed -n 's/^TYPST_VERSION=//p' deploy/lxc/install.sh)
+          curl -fsSL "https://github.com/typst/typst/releases/download/v$typst/typst-x86_64-unknown-linux-musl.tar.xz" \
+            | tar -xJ -C "$RUNNER_TEMP"
+          sudo install -m 755 "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl/typst" /usr/local/bin/typst
+          pandoc --version | head -1 && typst --version
+          # Hors de /home, que ProtectHome cache.
+          sudo install -m 755 "$TEST_BIN" /usr/local/bin/dashu-tests
+          sudo systemd-run --wait --pipe --collect \
+            -p ProtectSystem=strict \
+            -p ProtectHome=yes \
+            -p PrivateTmp=yes \
+            -p PrivateNetwork=yes \
+            -p ReadWritePaths=/srv/dashu/tmp \
+            -p NoNewPrivileges=yes \
+            -p RestrictSUIDSGID=yes \
+            -p MemoryMax=1536M \
+            /usr/local/bin/dashu-tests --ignored --exact tools::worker::tests::documents_dans_le_bac_a_sable \
+            | tee documents.log
+          grep -q "test result: ok. 1 passed" documents.log
 
   docker:
     name: image Docker
