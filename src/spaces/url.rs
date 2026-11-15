@@ -45,7 +45,7 @@ pub fn prefixed(slug: &str, path: &str) -> String {
 }
 
 /// `/e/ecole/notes` -> (`ecole`, `/notes`) ; `/e/ecole` -> (`ecole`, `/`).
-fn split(path: &str) -> Option<(&str, &str)> {
+pub fn split(path: &str) -> Option<(&str, &str)> {
     let rest = path.strip_prefix(PREFIX)?;
     let (slug, tail) = match rest.find('/') {
         Some(at) => rest.split_at(at),
