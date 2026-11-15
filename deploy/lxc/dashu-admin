@@ -42,6 +42,8 @@ case "$ACTION" in
     echo "disque : $(df -h / | awk 'NR==2 {print $4 " libres sur " $2}')"
     LAST="$(find /var/backups/dashu -name 'dashu-*.db' -printf '%T@ %f\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2)"
     echo "dernière sauvegarde : ${LAST:-aucune}"
+    SNAP="$(find /var/backups/dashu-fichiers -mindepth 1 -maxdepth 1 -type d -name 'fichiers-*' ! -name '*.partiel' -printf '%f\n' 2>/dev/null | sort | tail -1 || true)"
+    echo "dernière sauvegarde des fichiers : ${SNAP:-aucune}"
     if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "mise à jour : en cours"; fi
     ;;
   logs)

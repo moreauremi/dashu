@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Sauvegarde des fichiers envoyés (v2, SPEC « Prérequis serveur » point 2).
+#
+# Les fichiers vivent sur le second disque (/srv/dashu/fichiers) ; leur copie
+# va sur le premier, dans un volume dédié monté sur /var/backups/dashu-fichiers
+# (README, « Sauvegardes et restauration »). Chaque donnée existe ainsi sur
+# deux disques physiques.
+#
+#   dashu-backup-files <horodatage>           instantané fichiers-<horodatage>
+#   dashu-backup-files restore <horodatage>   remet les fichiers absents
+#
+# Un instantané est un dossier complet, mais incrémental : un fichier déjà
+# présent la veille n'est pas recopié, il est relié au précédent par un lien
+# dur (rsync --link-dest). Un fichier envoyé ne change jamais sous sa clé, donc
+# chaque nuit ne copie que les nouveaux. Les instantanés de plus de 14 jours
+# sont effacés. Lancé par dashu-backup, juste après la copie de la base, avec
+# le même horodatage : dashu-restore retrouve ainsi les fichiers d'une base.
+#
+# Les chemins se changent par l'environnement (tests de la CI).
+set -euo pipefail
+
+SRC="${DASHU_FILES_DIR:-/srv/dashu/fichiers}"
+ROOT="${DASHU_FILES_BACKUP_DIR:-/var/backups/dashu-fichiers}"
+KEEP_DAYS=14
+
+valid_stamp() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}$ ]]; }
+
+# Instantané complet le plus récent (pas un instantané interrompu).
+latest() {
+  find "$ROOT" -mindepth 1 -maxdepth 1 -type d -name 'fichiers-*' ! -name '*.partiel' 2>/dev/null |
+    sort | tail -1
+}
+
+need_rsync() {
+  command -v rsync >/dev/null || {
+    echo "rsync manque : apt-get install rsync (README, « Sauvegardes et restauration »)." >&2
+    exit 4
+  }
+}
+
+if [ "${1:-}" = restore ]; then
+  STAMP="${2:-}"
+  valid_stamp "$STAMP" || { echo "horodatage invalide : $STAMP" >&2; exit 2; }
+  SNAP="$ROOT/fichiers-$STAMP"
+  [ -d "$SNAP" ] || { echo "pas d'instantané des fichiers pour $STAMP" >&2; exit 3; }
+  need_rsync
+  count() { find "$SRC" -type f ! -path '*/.envois/*' | wc -l; }
+  BEFORE="$(count)"
+  # Seulement ce qui manque : rien n'est remplacé ni effacé. Un fichier
+  # arrivé depuis reste là (la base restaurée ne le connaît plus : il ne sera
+  # plus servi, mais rien n'est perdu).
+  rsync -a --ignore-existing "$SNAP/" "$SRC/"
+  echo "$(( $(count) - BEFORE )) fichier(s) remis en place depuis fichiers-$STAMP"
+  exit 0
+fi
+
+STAMP="${1:-}"
+valid_stamp "$STAMP" || { echo "usage : dashu-backup-files <AAAA-MM-JJ_HHMMSS> | restore <AAAA-MM-JJ_HHMMSS>" >&2; exit 2; }
+[ -d "$SRC" ] || { echo "pas de fichiers à sauvegarder ($SRC absent)"; exit 0; }
+# Sur le serveur, le volume dédié doit être monté : sans lui, la copie
+# remplirait le disque système du conteneur.
+if [ -z "${DASHU_FILES_BACKUP_DIR:-}" ] && ! mountpoint -q "$ROOT"; then
+  echo "Sauvegarde des fichiers sautée : aucun volume monté sur $ROOT (README, « Sauvegardes et restauration »)." >&2
+  exit 0
+fi
+need_rsync
+
+SNAP="$ROOT/fichiers-$STAMP"
+WORK="$SNAP.partiel"
+PREV="$(latest)"
+rm -rf "$WORK"
+# Les envois en cours (.envois) ne sont pas des fichiers rangés.
+rsync -a --delete --exclude '/.envois/' ${PREV:+--link-dest="$PREV"} "$SRC/" "$WORK/"
+mv "$WORK" "$SNAP"
+# L'âge d'un instantané est celui de sa création (rsync recopie la date du
+# dossier source).
+touch "$SNAP"
+find "$ROOT" -mindepth 1 -maxdepth 1 -type d -name 'fichiers-*' -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+echo "$SNAP"

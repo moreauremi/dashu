@@ -56,7 +56,7 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - Reste à vérifier au prochain redémarrage de l'hôte.
 - [ ] **La base est sauvegardée sur le second disque, les fichiers sur le premier**
   - La base : vérifié sur le serveur. Les 12 sauvegardes existantes ont été recopiées sur le volume, avec les mêmes empreintes SHA-256. Une sauvegarde lancée par `dashu-backup` y a été écrite.
-  - Les fichiers : à l'étape 6.
+  - Les fichiers (étape 6, écrite le 15 novembre 2026) : chaque nuit après la base, `dashu-backup-files` fait un instantané incrémental (liens durs, 14 jours) sur un volume du premier disque, `mp2` sur `/var/backups/dashu-fichiers` ; `dashu-restore` remet les fichiers absents avec la base de la même nuit. Vérifié par un test du script dans la CI (`tests/deploy/sauvegarde-fichiers.sh` : lien dur pour un fichier inchangé, envois en cours exclus, purge, restauration d'un fichier supprimé). **À mettre en service** : créer le volume `mp2`, `apt-get install rsync`, `dashu-update`, puis l'exercice de restauration d'un fichier (README).
 - [x] **Le conteneur a 4 Go de mémoire** : appliqué à chaud le 11 novembre 2026 (`pct set --memory 4096`).
 
 **Fichiers, envoi par morceaux, compression** (déployés le 11 novembre 2026, version 43a7b21)

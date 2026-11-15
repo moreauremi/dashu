@@ -232,7 +232,13 @@ pct set 120 -mp0 ssd2:45,mp=/srv/dashu
 pct set 120 -mp1 ssd2:5,mp=/var/backups/dashu
 ```
 
-`/srv/dashu` (45 Go) accueillera les fichiers de la v2. `/var/backups/dashu` (5 Go) reçoit les sauvegardes de la base : les scripts écrivent déjà là, rien d'autre à changer. Sur un conteneur déjà installé, copier d'abord le contenu de `/var/backups/dashu` ailleurs, monter le volume, puis remettre les fichiers (propriétaire `dashu:dashu`, droits `750`). Un volume s'agrandit à chaud : `pct resize 120 mp0 +10G`.
+`/srv/dashu` (45 Go) accueille les fichiers de la v2. `/var/backups/dashu` (5 Go) reçoit les sauvegardes de la base : les scripts écrivent déjà là, rien d'autre à changer.
+
+Les fichiers, eux, sont sauvegardés dans l'autre sens : sur le **premier** disque (`local-lvm`, celui du système), dans un troisième volume. Vérifier d'abord la place libre sur `local-lvm` (`pvesm status`), puis, sur l'hôte (50 Go, autant que les fichiers ; à réduire si la place manque) :
+
+```bash
+pct set 120 -mp2 local-lvm:50,mp=/var/backups/dashu-fichiers
+``` Sur un conteneur déjà installé, copier d'abord le contenu de `/var/backups/dashu` ailleurs, monter le volume, puis remettre les fichiers (propriétaire `dashu:dashu`, droits `750`). Un volume s'agrandit à chaud : `pct resize 120 mp0 +10G`.
 
 ### 2. dashu
 
@@ -302,7 +308,7 @@ Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sa
 
 ### 6. Supervision et accès d'un assistant
 
-- `https://app.dashu.dev/health` répond `ok` sans authentification : à interroger avec Uptime Kuma ou un équivalent.
+- `https://app.dashu.dev/health` répond `ok` sans authentification : [Uptime Kuma](https://github.com/louislam/uptime-kuma) l'interroge et prévient si dashu ne répond plus (voir ci-dessous).
 - Logs : `journalctl -u dashu -f`. Ajouter `LOG_FORMAT=json` dans `/etc/dashu/dashu.env` pour un format exploitable par un collecteur.
 - Un assistant (Hermès) peut administrer dashu en SSH sans avoir la main sur le conteneur : sa clé est limitée à [`dashu-admin`](deploy/lxc/dashu-admin) dans `/root/.ssh/authorized_keys` (`restrict,command="/usr/local/sbin/dashu-admin" ssh-ed25519 …`). Six actions existent : `status`, `logs [N]`, `restart`, `update`, `update-status`, `backup`. La restauration n'en fait pas partie.
 - Côté Hermès, tout est versionné dans [`deploy/hermes/`](deploy/hermes) : la commande `dashu` (Python, sans dépendance) qui appelle l'API avec l'adresse et le jeton rangés dans `~/.config/dashu/`, et le skill qui dit à Hermès quand et comment s'en servir. [`install.sh`](deploy/hermes/install.sh) installe ou met à jour les deux, et met en place l'accès d'admin s'il manque. Sans danger à relancer, il se lance en root sur l'hôte Proxmox après un `dashu-update` (remplacer `<n>` par le numéro du conteneur dashu) :
@@ -310,6 +316,51 @@ Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sa
 ```bash
 bash <(pct exec <n> -- cat /opt/dashu/src/deploy/hermes/install.sh)
 ```
+
+**Uptime Kuma.** Un outil de supervision (monitoring) : il interroge une adresse à intervalle régulier et envoie une alerte quand elle ne répond plus. Il tourne à part de dashu, dans son propre conteneur : si dashu ou son conteneur tombe, la supervision reste debout. Sur l'hôte Proxmox, un petit conteneur Debian 13 (le numéro 121 et l'adresse sont des exemples) :
+
+```bash
+pct create 121 local:vztmpl/debian-13-standard_<version>_amd64.tar.zst --hostname kuma --cores 1 --memory 512 --swap 512 --rootfs local-lvm:4 --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --onboot 1 && pct start 121
+```
+
+Puis dans ce conteneur (`pct enter 121`), l'installation sans Docker décrite par Uptime Kuma (Node.js de Debian, version 20 ou plus) :
+
+```bash
+apt-get update && apt-get -y install git nodejs npm
+```
+
+```bash
+git clone https://github.com/louislam/uptime-kuma.git /opt/uptime-kuma && cd /opt/uptime-kuma && npm run setup
+```
+
+Le service, pour qu'il redémarre avec le conteneur (`/etc/systemd/system/uptime-kuma.service`) :
+
+```ini
+[Unit]
+Description=Uptime Kuma
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/uptime-kuma
+ExecStart=/usr/bin/node server/server.js
+Restart=on-failure
+StateDirectory=uptime-kuma
+Environment=DATA_DIR=/var/lib/uptime-kuma
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload && systemctl enable --now uptime-kuma
+```
+
+L'interface répond sur le port 3001 du conteneur (réseau local, ou Tailscale si on l'y installe ; ne pas la publier sur Internet). On y crée le compte administrateur, puis deux sondes HTTP, toutes les minutes :
+
+- `https://app.dashu.dev/health` : le chemin complet (Cloudflare, tunnel, dashu) ;
+- si le conteneur d'Uptime Kuma est aussi sur Tailscale (mêmes réglages `/dev/net/tun` que dashu, puis `tailscale up`) : `https://dashu.<tailnet>.ts.net/health`, qui ne passe pas par Cloudflare. dashu n'écoute que sur lui-même (127.0.0.1) : le réseau local ne le joint pas directement.
+
+Pour être prévenu, ajouter une notification (e-mail, Telegram, ntfy…) dans les réglages d'Uptime Kuma. Deux sondes en panne ensemble : dashu est tombé ; seule celle de Cloudflare : c'est le tunnel ou Cloudflare.
 
 ### 7. Fichiers (v2)
 
@@ -428,6 +479,10 @@ Chaque nuit à 3 h 30 (heure du conteneur, UTC par défaut : 4 h 30 ou 5 h 30 à
 
 Sauvegarder tout de suite : `systemctl start dashu-backup`.
 
+**Les fichiers envoyés** (v2) sont copiés juste après la base, avec le même horodatage, par [`dashu-backup-files`](deploy/lxc/dashu-backup-files) : un instantané `fichiers-AAAA-MM-JJ_HHMMSS` dans `/var/backups/dashu-fichiers`, un volume du **premier** disque (`mp2`, voir « Le conteneur »), alors que les fichiers sont sur le second. Chaque instantané est un dossier complet mais incrémental : un fichier déjà sauvegardé la veille n'est pas recopié, il est relié au précédent (lien dur, `rsync --link-dest`). Un fichier ne change jamais sous sa clé : chaque nuit ne copie donc que les nouveaux. Les instantanés de plus de 14 jours sont effacés. Les envois en cours (`.envois`) ne sont pas copiés.
+
+Il faut `rsync` (installé par `install.sh` ; sur un serveur déjà en place : `apt-get install rsync`) et le volume monté : sans lui, la sauvegarde des fichiers est sautée avec un message, pour ne pas remplir le disque système du conteneur. `dashu-admin status` affiche la dernière sauvegarde des fichiers.
+
 **Restaurer.** [`dashu-restore`](deploy/lxc/dashu-restore) sans argument liste les sauvegardes, la plus récente en premier :
 
 ```bash
@@ -438,6 +493,8 @@ dashu-restore
 dashu-restore dashu-2026-11-12_033000.db
 ```
 
+Une sauvegarde de la nuit marquée « + fichiers » a son instantané : après la base, les fichiers envoyés absents reviennent avec elle (rien n'est remplacé ni effacé : un fichier arrivé depuis reste sur le disque, la base restaurée ne le connaît simplement plus).
+
 Le script vérifie que le fichier est une base dashu saine (sinon il ne touche à rien), met la base actuelle de côté dans `avant-restauration-*.db`, arrête dashu, remplace la base, redémarre et vérifie que `/health` répond. Si dashu ne démarre pas avec la sauvegarde, la base d'avant est remise en place automatiquement. Une restauration se défait donc en restaurant le fichier `avant-restauration-*.db` qu'elle indique. Les sessions étant dans la base, revenir à la veille peut déconnecter les appareils connectés depuis.
 
 Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exercice, sans rien perdre :
@@ -445,6 +502,8 @@ Une sauvegarde n'est fiable que si on a déjà réussi à la restaurer. L'exerci
 1. `systemctl start dashu-backup` (le service que lance la minuterie chaque nuit), puis créer une note « test restauration » dans dashu.
 2. `dashu-restore dashu-….db` avec la sauvegarde qui vient d'être faite : la note doit avoir disparu.
 3. `dashu-restore avant-restauration-….db` avec le fichier indiqué à la fin de l'étape 2 : la note doit être revenue.
+
+Le même exercice avec un fichier : `systemctl start dashu-backup`, supprimer un fichier dans dashu, puis `dashu-restore dashu-….db` avec la sauvegarde qui vient d'être faite. Le fichier doit revenir dans la liste, et s'ouvrir (« 1 fichier(s) remis en place »). Puis `dashu-restore avant-restauration-….db` pour revenir à l'état d'avant : le fichier y est supprimé, mais son contenu reste sur le disque.
 
 > `/var/backups/dashu` est un volume du second disque (`mp1`, voir « Le conteneur ») : une panne du disque de la base n'emporte pas ses sauvegardes. Sans second disque, les sauvegardes restent sur le disque du conteneur : elles protègent alors d'une erreur ou d'une mise à jour ratée, pas d'une panne du disque.
 
