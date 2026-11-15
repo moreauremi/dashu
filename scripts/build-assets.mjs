@@ -146,6 +146,8 @@ const icons = {
   "col-add": "between-vertical-end",
   "row-del": "table-rows-split",
   "col-del": "table-columns-split",
+  // Menu « … » des lignes de l'onglet Fichiers.
+  more: "ellipsis",
 };
 
 let sprite =

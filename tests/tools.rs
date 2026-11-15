@@ -192,8 +192,15 @@ async fn seuls_videos_photos_et_pdf_se_compressent() {
     alice.upload("archive.zip", b"PK").await;
     alice.upload("cours.pdf", b"%PDF").await;
     let page = alice.get("/files?dossier=espace").await;
-    // Le menu « Convertir » de la ligne, avec la compression.
-    assert!(page.body.contains("aria-label=\"Convertir « cours.pdf »\""));
+    // Le menu « … » de la ligne propose « Convertir… », avec la compression.
+    let (pdf, zip) = (
+        id_of(&page.body, "cours.pdf"),
+        id_of(&page.body, "archive.zip"),
+    );
+    assert!(
+        page.body
+            .contains(&format!("popovertarget=\"pm-convert-{pdf}\""))
+    );
     assert!(
         page.body
             .contains("<input type=\"hidden\" name=\"to\" value=\"compress\">")
@@ -201,10 +208,10 @@ async fn seuls_videos_photos_et_pdf_se_compressent() {
     assert!(
         !page
             .body
-            .contains("aria-label=\"Convertir « archive.zip »\"")
+            .contains(&format!("popovertarget=\"pm-convert-{zip}\""))
     );
 
-    let id = id_of(&page.body, "archive.zip");
+    let id = zip;
     let refused = alice.post(&format!("/files/{id}/compress"), &[]).await;
     assert_eq!(refused.status, StatusCode::BAD_REQUEST);
 }
