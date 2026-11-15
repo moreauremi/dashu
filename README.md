@@ -23,7 +23,7 @@ Le nom de code du projet reste **dashu** : c'est le nom du dépôt, du binaire e
 - **v1 terminée et en service.** Tous les critères d'acceptation sont vérifiés, la plupart sur le serveur réel. L'application sert au quotidien, sur ordinateur et sur iPhone.
 - **Ajouté depuis, le 12 novembre 2026** : espaces à la carte, dashboard modulaire (grille bento propre à chaque espace, widget Calendrier), profil avec photo, taille de l'interface et barre latérale détachable.
 - **Ajouté le 13 novembre 2026** : barre de commandes `/`, éditeur de notes en une seule vue (façon Notion), Perso qui montre tous les espaces, espace dans l'adresse, archivage d'un espace.
-- **v2 en cours : les fichiers.** En service : l'envoi, l'aperçu, la compression et les conversions, l'onglet Outils, les images dans les notes et les dossiers, puis, depuis le 15 novembre 2026, les tags et la recherche, le partage par lien temporaire, la sauvegarde nocturne des fichiers sur l'autre disque et la conversion des documents. Reste : renommer un fichier, et les fichiers dans l'API de l'assistant (voir la [feuille de route](#feuille-de-route)).
+- **v2 en cours : les fichiers.** En service : l'envoi, l'aperçu, la compression et les conversions, l'onglet Outils, les images dans les notes et les dossiers, puis, depuis le 15 novembre 2026, les tags et la recherche, le partage par lien temporaire, la sauvegarde nocturne des fichiers sur l'autre disque, la conversion des documents et le renommage d'un fichier. Reste : les fichiers dans l'API de l'assistant (voir la [feuille de route](#feuille-de-route)).
 
 Le détail, critère par critère, est dans [STATUS.md](https://github.com/moreauremi/dashu/blob/v1/STATUS.md). Le cahier des charges est dans [SPEC.md](https://github.com/moreauremi/dashu/blob/v1/SPEC.md).
 
@@ -106,7 +106,7 @@ Avancement de la v2 (une case cochée : en service sur le serveur) :
 - [x] Onglet Outils : déposer un fichier, le convertir, puis le garder ou le télécharger
 - [x] Images collées et liens vers les fichiers dans les notes
 - [x] Widget Fichiers sur le dashboard
-- [ ] Renommer un fichier
+- [x] Renommer un fichier
 - [ ] Les fichiers dans l'API de l'assistant
 
 ## Branches du dépôt
