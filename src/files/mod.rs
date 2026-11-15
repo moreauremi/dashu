@@ -76,6 +76,9 @@ pub struct FileItem {
     pub place: Option<String>,
     /// Un lien de partage est valable.
     pub shared: bool,
+    /// Le nom sans son extension, et l'extension (renommage).
+    pub stem: String,
+    pub ext: String,
 }
 
 /// Un endroit où lâcher ce qu'on glisse (onglet Fichiers) : un espace et,
@@ -453,6 +456,8 @@ pub async fn list(
                 expires: None,
                 tags: file_tags.get(&row.id).cloned().unwrap_or_default(),
                 shared: shared.contains(&row.id),
+                stem: split_name(&row.name).0.to_string(),
+                ext: split_name(&row.name).1.to_string(),
                 place: ctx
                     .space_by_id(row.space_id)
                     .map(|s| folders::label(&s.name, &all, row.folder_id)),
@@ -492,6 +497,8 @@ pub async fn list(
                 .map(|at| format!("effacé dans {}", crate::tools::time_left(at, now))),
             tags: file_tags.get(&row.id).cloned().unwrap_or_default(),
             shared: shared.contains(&row.id),
+            stem: split_name(&row.name).0.to_string(),
+            ext: split_name(&row.name).1.to_string(),
             place: None,
             name: row.name,
             updated: time::ago(row.updated_at, now),
@@ -731,6 +738,50 @@ pub(crate) async fn place_label(
         }
         None => space.name.clone(),
     })
+}
+
+#[derive(Deserialize)]
+pub struct RenameForm {
+    /// La partie avant l'extension (celle-ci ne change pas).
+    name: String,
+    /// Page où revenir ; l'aperçu du fichier sans précision.
+    next: Option<String>,
+}
+
+/// `POST /files/{id}/rename` : renomme un fichier, en gardant son extension.
+pub async fn rename(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<RenameForm>,
+) -> AppResult<Response> {
+    let old = sqlx::query_scalar!(
+        "SELECT name FROM files WHERE id = ? AND user_id = ?",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let back = match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)).to_string(),
+        None => format!("/files/{id}"),
+    };
+    let Some(name) = renamed(&old, &form.name) else {
+        ctx.flash_error("Donne un nom au fichier.").await?;
+        return Ok(see_other(&back));
+    };
+    sqlx::query!(
+        "UPDATE files SET name = ? WHERE id = ? AND user_id = ?",
+        name,
+        id,
+        ctx.user.id
+    )
+    .execute(&state.db)
+    .await?;
+    ctx.flash_ok(format!("Fichier renommé en « {name} »"))
+        .await?;
+    Ok(see_other(&back))
 }
 
 #[derive(Deserialize)]
@@ -1375,6 +1426,9 @@ struct ViewPage {
     back_label: String,
     /// Adresse de la fenêtre « Ranger ».
     picker: String,
+    /// Le nom sans son extension, et l'extension (renommage).
+    stem: String,
+    ext: String,
     /// Ses tags, et ceux qui existent déjà (proposés à la saisie).
     tags: Vec<crate::notes::NoteTag>,
     suggestions: Vec<String>,
@@ -1502,6 +1556,8 @@ pub async fn view(
         back,
         back_label,
         picker: crate::folders::picker_url("fichier", id, Some(&format!("/files/{id}"))),
+        stem: split_name(&row.name).0.to_string(),
+        ext: split_name(&row.name).1.to_string(),
         tags: tags::tags_of(&state.db, ctx.user.id, id).await?,
         share_html: if row.expires_at.is_none() {
             share::ShareFragment::load(&state.db, ctx.user.id, id)
@@ -1786,6 +1842,35 @@ pub fn clean_name(raw: &str) -> String {
     }
 }
 
+/// Nom et extension (avec son point) : « cours.pdf » -> (« cours », « .pdf »).
+/// Sans extension (ou un nom qui commence par un point) : l'extension est vide.
+pub fn split_name(name: &str) -> (&str, &str) {
+    match name.rfind('.') {
+        Some(at) if at > 0 && at + 1 < name.len() => name.split_at(at),
+        _ => (name, ""),
+    }
+}
+
+/// Nom d'un fichier renommé : la partie tapée, nettoyée comme à l'envoi, et
+/// l'extension d'origine, qui ne change jamais (le type du fichier, tiré de
+/// l'extension, non plus). Une extension retapée n'est pas doublée. `None`
+/// si la partie tapée est vide.
+pub fn renamed(old: &str, typed: &str) -> Option<String> {
+    let (_, ext) = split_name(old);
+    let base = typed.rsplit(['/', '\\']).next().unwrap_or_default();
+    let mut stem: String = base.chars().filter(|c| !c.is_control()).collect();
+    if !ext.is_empty() && stem.to_lowercase().ends_with(&ext.to_lowercase()) {
+        stem.truncate(stem.len() - ext.len());
+    }
+    let stem = stem.trim().trim_end_matches('.').trim();
+    if stem.is_empty() || stem == "." || stem == ".." {
+        return None;
+    }
+    let room = NAME_MAX_CHARS.saturating_sub(ext.chars().count());
+    let stem: String = stem.chars().take(room).collect();
+    Some(format!("{}{ext}", stem.trim_end()))
+}
+
 /// Type MIME d'après l'extension. Celui annoncé par le navigateur n'est pas
 /// utilisé : il ne prouve rien.
 pub fn mime_for(name: &str) -> &'static str {
@@ -1930,6 +2015,35 @@ pub(crate) fn to_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renommer_garde_l_extension() {
+        assert_eq!(split_name("cours.pdf"), ("cours", ".pdf"));
+        assert_eq!(split_name("archive.tar.gz"), ("archive.tar", ".gz"));
+        assert_eq!(split_name(".bashrc"), (".bashrc", ""));
+        assert_eq!(split_name("sans-extension"), ("sans-extension", ""));
+        assert_eq!(
+            renamed("cours.pdf", "  Cours VLAN "),
+            Some("Cours VLAN.pdf".into())
+        );
+        // L'extension retapée n'est pas doublée ; une autre ne change pas le type.
+        assert_eq!(renamed("cours.pdf", "vlan.PDF"), Some("vlan.pdf".into()));
+        assert_eq!(
+            renamed("cours.pdf", "vlan.html"),
+            Some("vlan.html.pdf".into())
+        );
+        assert_eq!(renamed("notes", "idées"), Some("idées".into()));
+        assert_eq!(
+            renamed("cours.pdf", "../../etc/passwd"),
+            Some("passwd.pdf".into())
+        );
+        assert_eq!(renamed("cours.pdf", "a\u{0}b"), Some("ab.pdf".into()));
+        assert_eq!(renamed("cours.pdf", "  "), None);
+        assert_eq!(renamed("cours.pdf", ".pdf"), None);
+        assert_eq!(renamed("cours.pdf", ".."), None);
+        let long = renamed("cours.pdf", &"é".repeat(300)).unwrap();
+        assert!(long.ends_with(".pdf") && long.chars().count() == NAME_MAX_CHARS);
+    }
 
     #[test]
     fn noms_nettoyes() {
