@@ -1165,6 +1165,89 @@
     if (menu && opener.getAttribute("popovertarget") !== menu.id) menu.hidePopover();
   });
 
+  // ------------------------------------------------ Retour à la bonne place
+  //
+  // La page d'un fichier revient là où on l'a ouverte (un dossier, une
+  // recherche, un tag, la racine de Perso, le dashboard, une note) : on lui
+  // passe l'adresse de la page quittée, espace compris, dans le paramètre
+  // « depuis » (src/files/mod.rs, view). Son lien de retour (data-retour) y
+  // ramène.
+  const FILE_PAGE = /^(\/e\/[a-z0-9-]+)?\/files\/\d+$/;
+  const SPACE_PREFIX = /^\/e\/[a-z0-9-]+(\/|$)/;
+
+  /** Adresse de la page affichée, avec l'espace de l'onglet. */
+  function currentPage() {
+    const page = location.pathname + location.search;
+    if (SPACE_PREFIX.test(location.pathname)) return page;
+    let tab = "";
+    try {
+      tab = JSON.parse($("#app")?.getAttribute("hx-headers") || "{}")["X-Espace"] || "";
+    } catch {}
+    return tab ? `/e/${tab}${page}` : page;
+  }
+
+  document.addEventListener("htmx:configRequest", (event) => {
+    const detail = event.detail;
+    if (detail.verb !== "get") return;
+    const url = new URL(detail.path, location.origin);
+    if (FILE_PAGE.test(url.pathname) && !url.searchParams.has("depuis")) {
+      detail.parameters.depuis = currentPage();
+    }
+  });
+
+  // En revenant sur une page, par ce lien ou par le retour du navigateur, on
+  // retrouve le même défilement : htmx ne garde pas de copie des pages
+  // (historyCacheSize à 0 dans base.html), il les redemande et les montre en
+  // haut. La position de chaque page quittée est notée pour l'onglet
+  // (sessionStorage), les 30 dernières.
+  const SCROLLS = "dashu:defilement";
+  const RETURNING = "dashu:retour";
+
+  function readScrolls() {
+    try {
+      return JSON.parse(sessionStorage.getItem(SCROLLS) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function restoreScroll() {
+    const y = readScrolls()[location.pathname + location.search];
+    if (y > 0) requestAnimationFrame(() => scrollTo(0, y));
+  }
+
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    if (!event.detail.boosted) return;
+    try {
+      const scrolls = readScrolls();
+      const page = location.pathname + location.search;
+      delete scrolls[page];
+      scrolls[page] = scrollY;
+      const pages = Object.keys(scrolls);
+      if (pages.length > 30) delete scrolls[pages[0]];
+      sessionStorage.setItem(SCROLLS, JSON.stringify(scrolls));
+    } catch {}
+  });
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element) || !event.target.closest("a[data-retour]")) return;
+    try {
+      sessionStorage.setItem(RETURNING, "1");
+    } catch {}
+  });
+  document.addEventListener("htmx:afterSettle", (event) => {
+    // Seulement à l'arrivée sur la nouvelle page (pas un fragment qui se
+    // recharge entre-temps, comme le suivi des conversions).
+    if (!event.detail.boosted) return;
+    try {
+      if (sessionStorage.getItem(RETURNING) !== "1") return;
+      sessionStorage.removeItem(RETURNING);
+    } catch {
+      return;
+    }
+    restoreScroll();
+  });
+  document.addEventListener("htmx:historyRestore", restoreScroll);
+
   // Fenêtre « Ranger » (#picker, layout.html) : un bouton data-picker l'ouvre
   // (popovertarget) et y charge les choix de son élément (hx-get). Ses choix
   // arrivés, le premier possible prend le focus ; fermée, elle se vide, pour

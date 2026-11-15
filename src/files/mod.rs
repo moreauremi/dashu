@@ -1424,6 +1424,10 @@ struct ViewPage {
     /// Le dossier du fichier (ou Temporaire) : adresse et nom, pour revenir.
     back: String,
     back_label: String,
+    /// Adresse de cette page, origine comprise : retour après une action.
+    here: String,
+    /// Où aller après la suppression du fichier.
+    after_delete: String,
     /// Adresse de la fenêtre « Ranger ».
     picker: String,
     /// Le nom sans son extension, et l'extension (renommage).
@@ -1475,12 +1479,141 @@ fn is_text(mime: &str) -> bool {
     mime.starts_with("text/") || mime == "application/json" || mime == "image/svg+xml"
 }
 
+#[derive(Deserialize)]
+pub struct ViewQuery {
+    /// Page d'où l'on a ouvert le fichier, posée par app.js (« Retour à la
+    /// bonne place ») : le lien de retour y ramène.
+    depuis: Option<String>,
+}
+
+/// Une adresse `depuis` acceptée : un chemin de l'app (jamais un autre site),
+/// de longueur raisonnable.
+fn valid_origin(depuis: Option<&str>) -> Option<&str> {
+    depuis.filter(|d| d.len() <= 2000 && web::local_path(Some(d)) == *d)
+}
+
+/// `path` avec son paramètre `depuis`, s'il y en a un.
+fn with_origin(path: &str, depuis: Option<&str>) -> String {
+    match depuis {
+        Some(depuis) => format!(
+            "{path}?{}",
+            form_urlencoded::Serializer::new(String::new())
+                .append_pair("depuis", depuis)
+                .finish()
+        ),
+        None => path.to_string(),
+    }
+}
+
+/// Nom de la page d'où l'on a ouvert un fichier, pour son lien de retour :
+/// un endroit de l'onglet Fichiers (avec sa recherche ou son tag), le
+/// dashboard, une note… `None` pour l'adresse d'un espace inconnu, d'un
+/// dossier ou d'une note disparus : le retour se fait alors au dossier du
+/// fichier.
+async fn origin_label(
+    ctx: &Ctx,
+    db: &SqlitePool,
+    all: &[crate::folders::Folder],
+    depuis: &str,
+) -> AppResult<Option<String>> {
+    let (path, query) = depuis.split_once('?').unwrap_or((depuis, ""));
+    let (space, tail) = match crate::spaces::url::split(path) {
+        Some((slug, tail)) => match ctx.spaces.iter().find(|s| s.slug == slug) {
+            Some(space) => (space, tail),
+            None => return Ok(None),
+        },
+        None => (&ctx.active, path),
+    };
+    let params: Vec<(String, String)> = form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect();
+    let param = |key: &str| {
+        params
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.trim())
+            .filter(|v| !v.is_empty())
+    };
+    let label = match tail {
+        "/files" => {
+            let place = match param("dossier") {
+                Some("racine") => "Fichiers".to_string(),
+                Some("temporaire") => "Temporaire".to_string(),
+                Some("espace") => space.name.clone(),
+                Some(raw) => {
+                    let found = raw
+                        .parse::<i64>()
+                        .ok()
+                        .and_then(|id| all.iter().find(|f| f.id == id && f.space_id == space.id));
+                    match found {
+                        Some(folder) => crate::folders::label(&space.name, all, Some(folder.id)),
+                        None => return Ok(None),
+                    }
+                }
+                None if param("seul") == Some("1") || !space.is_overview() => space.name.clone(),
+                None => "Fichiers".to_string(),
+            };
+            let short = |text: &str| text.chars().take(40).collect::<String>();
+            match (param("q"), param("tag")) {
+                (Some(q), _) => format!("{place} · « {} »", short(q)),
+                (None, Some(tag)) => format!("{place} · #{}", short(tag)),
+                _ => place,
+            }
+        }
+        "/" => "Dashboard".to_string(),
+        "/notes" => "Notes".to_string(),
+        "/calendar" => "Agenda".to_string(),
+        "/tools" => "Outils".to_string(),
+        other => {
+            let note = other
+                .strip_prefix("/notes/")
+                .and_then(|n| n.parse::<i64>().ok());
+            let file = other
+                .strip_prefix("/files/")
+                .and_then(|n| n.parse::<i64>().ok());
+            let title = match (note, file) {
+                (Some(id), _) => sqlx::query_scalar!(
+                    "SELECT title FROM notes WHERE id = ? AND user_id = ?",
+                    id,
+                    ctx.user.id
+                )
+                .fetch_optional(db)
+                .await?
+                .map(|t| {
+                    if t.trim().is_empty() {
+                        "Sans titre".to_string()
+                    } else {
+                        t
+                    }
+                }),
+                (None, Some(id)) => {
+                    sqlx::query_scalar!(
+                        "SELECT name FROM files WHERE id = ? AND user_id = ?",
+                        id,
+                        ctx.user.id
+                    )
+                    .fetch_optional(db)
+                    .await?
+                }
+                _ => Some("Retour".to_string()),
+            };
+            match title {
+                Some(title) => title,
+                None => return Ok(None),
+            }
+        }
+    };
+    Ok(Some(label))
+}
+
 /// `GET /files/{id}` : la page d'aperçu d'un fichier.
 pub async fn view(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(query): Query<ViewQuery>,
 ) -> AppResult<Response> {
+    let depuis = valid_origin(query.depuis.as_deref());
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
         "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
@@ -1496,7 +1629,7 @@ pub async fn view(
         let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
         return Ok(see_other(&crate::spaces::url::prefixed(
             &space.slug,
-            &format!("/files/{id}"),
+            &with_origin(&format!("/files/{id}"), depuis),
         )));
     }
     let tools = state.config.work_dir.is_some();
@@ -1536,26 +1669,44 @@ pub async fn view(
         _ => "none",
     };
 
-    // Retour au dossier du fichier ; Temporaire pour un fichier de l'onglet
-    // Outils, qui n'est encore dans aucun dossier.
-    let (back, back_label) = if row.expires_at.is_some() {
-        (
+    // Retour à la page d'où l'on vient ; à défaut, au dossier du fichier, ou
+    // à Temporaire pour un fichier de l'onglet Outils pas encore rangé.
+    let all = crate::folders::all(&state.db, ctx.user.id).await?;
+    let origin = match depuis {
+        Some(depuis) => origin_label(&ctx, &state.db, &all, depuis)
+            .await?
+            .map(|label| (depuis.to_string(), label)),
+        None => None,
+    };
+    let (back, back_label) = match origin {
+        Some(origin) => origin,
+        None if row.expires_at.is_some() => (
             "/files?dossier=temporaire".to_string(),
             "Temporaire".to_string(),
-        )
-    } else {
-        let all = crate::folders::all(&state.db, ctx.user.id).await?;
-        (
+        ),
+        None => (
             crate::folders::view_url(&ctx.active.slug, row.folder_id),
             crate::folders::label(&ctx.active.name, &all, row.folder_id),
-        )
+        ),
+    };
+    // Cette page, avec sa page d'origine : on y revient après une action
+    // (renommer, convertir, ranger) sans perdre le chemin du retour.
+    let here = with_origin(&format!("/files/{id}"), depuis);
+    // Après une suppression, la page d'où l'on vient (l'onglet Outils pour
+    // un fichier pas encore rangé ouvert sans origine).
+    let after_delete = if depuis.is_none() && row.expires_at.is_some() {
+        "/tools".to_string()
+    } else {
+        back.clone()
     };
     let page = ViewPage {
         shell: ctx.shell("files").await?,
         id,
         back,
         back_label,
-        picker: crate::folders::picker_url("fichier", id, Some(&format!("/files/{id}"))),
+        picker: crate::folders::picker_url("fichier", id, Some(&here)),
+        here,
+        after_delete,
         stem: split_name(&row.name).0.to_string(),
         ext: split_name(&row.name).1.to_string(),
         tags: tags::tags_of(&state.db, ctx.user.id, id).await?,

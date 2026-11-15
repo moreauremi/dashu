@@ -3,7 +3,9 @@
 {% block content %}
 <header class="page-head file-view-head">
   <div class="file-view-title">
-    <a class="back-link" href="{{ back }}">{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
+    {#- Retour à la page d'où l'on vient (app.js, « Retour à la bonne
+        place », qui retrouve aussi le défilement). -#}
+    <a class="back-link" href="{{ back }}" data-retour>{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
     <h1>{{ name }}</h1>
     <p class="muted">{{ meta }}</p>
     {% include "files/_tags.html" %}
@@ -13,7 +15,7 @@
     <a class="btn btn-primary" href="/files/{{ id }}/download" download hx-boost="false">{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></a>
     {% if let Some(job) = replace_job %}
     <form method="post" action="/files/jobs/{{ job }}/replace" hx-confirm="Supprimer l'original et ne garder que cette copie ?">
-      <input type="hidden" name="next" value="/files/{{ id }}">
+      <input type="hidden" name="next" value="{{ here }}">
       <button class="btn" type="submit" title="L'original est supprimé, cette copie prend son nom">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
     </form>
     {% endif %}
@@ -23,7 +25,7 @@
     <div id="pm-rename-file" class="pop-menu" popover>
       <p class="pop-title">Renommer le fichier</p>
       <form class="pop-pages rename-file" method="post" action="/files/{{ id }}/rename">
-        <input type="hidden" name="next" value="/files/{{ id }}">
+        <input type="hidden" name="next" value="{{ here }}">
         <input type="text" name="name" value="{{ stem }}" maxlength="200" required autocomplete="off" aria-label="Nouveau nom de « {{ name }} »">
         {%- if !ext.is_empty() %}<span class="rename-ext">{{ ext }}</span>{% endif %}
         <button class="btn btn-primary" type="submit">Renommer</button>
@@ -45,14 +47,14 @@
         {% if key == &"pages" %}
         <form class="menu-pages" method="post" action="/files/{{ id }}/convert">
           <input type="hidden" name="to" value="pages">
-          <input type="hidden" name="next" value="/files/{{ id }}">
+          <input type="hidden" name="next" value="{{ here }}">
           <input type="text" name="pages" inputmode="numeric" required placeholder="2-4" aria-label="Pages à extraire, par exemple 2-4">
           <button type="submit">Extraire</button>
         </form>
         {% else %}
         <form method="post" action="/files/{{ id }}/convert">
           <input type="hidden" name="to" value="{{ key }}">
-          <input type="hidden" name="next" value="/files/{{ id }}">
+          <input type="hidden" name="next" value="{{ here }}">
           <button type="submit">{{ label }}</button>
         </form>
         {% endif %}
@@ -61,7 +63,7 @@
     </details>
     {% endif %}
     <form method="post" action="/files/{{ id }}/delete" hx-confirm="Supprimer définitivement « {{ name }} » ?">
-      {% if expires.is_some() %}<input type="hidden" name="next" value="/tools">{% endif %}
+      <input type="hidden" name="next" value="{{ after_delete }}">
       <button class="btn" type="submit">{{ crate::assets::icon("trash")|safe }}<span>Supprimer</span></button>
     </form>
   </div>
