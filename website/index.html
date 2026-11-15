@@ -324,7 +324,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
           <h3>Fichiers et dossiers</h3>
-          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes. On range en glissant, ou par une fenêtre qui montre tout. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversion et compression dans un service isolé, sans réseau.</p>
+          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes, avec des tags et une recherche. On range en glissant, ou par une fenêtre qui montre tout. Un fichier se partage par un lien qui expire. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversions (photos, vidéos, PDF, documents Markdown) dans un service isolé, sans réseau.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
@@ -364,14 +364,14 @@ footer a{color:var(--text-2);text-underline-offset:3px}
     <div class="wrap">
       <p class="kicker">Sous le capot</p>
       <h2>Léger, rapide, et rien à exposer</h2>
-      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardé à chaud chaque nuit sur un second disque. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
+      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardée à chaud chaque nuit sur un second disque, et les fichiers sont copiés chaque nuit sur l'autre : chaque donnée existe sur deux disques. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
       <div class="facts">
         <div class="fact"><strong>1</strong><span>binaire Rust : l'application et son service de conversion</span></div>
         <div class="fact"><strong>0,5 ms</strong><span>de temps de réponse du serveur</span></div>
         <div class="fact"><strong>7,6 Mo</strong><span>de mémoire au repos</span></div>
         <div class="fact"><strong>98 – 100</strong><span>au score Lighthouse mobile</span></div>
       </div>
-      <p class="stack">Mesures faites sur le serveur réel, via Cloudflare, en 4G simulée. Rust, axum, SQLite, htmx, askama ; ffmpeg, Ghostscript et libheif pour les fichiers. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
+      <p class="stack">Mesures faites sur le serveur réel, via Cloudflare, en 4G simulée. Rust, axum, SQLite, htmx, askama ; ffmpeg, Ghostscript, libheif, pandoc et Typst pour les fichiers. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
     </div>
   </section>
 
@@ -386,15 +386,17 @@ footer a{color:var(--text-2);text-underline-offset:3px}
           <ul class="todo">
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Dossiers et sous-dossiers, pour les fichiers et les notes</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Tags et recherche dans les fichiers</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Vignettes et aperçu des photos (HEIC compris), vidéos et PDF</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Partage par lien temporaire et révocable</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Sauvegarde nocturne des fichiers, sur un autre disque que la base</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Compression et conversion des photos, vidéos, sons et PDF, dans un service isolé</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Conversion des documents : Markdown et texte vers PDF, HTML ou DOCX</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Onglet Outils : déposer un fichier, le convertir, puis le garder ou le télécharger</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Images collées et liens vers les fichiers dans les notes</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Widget Fichiers sur le dashboard</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Tags et recherche dans les fichiers</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Partage par lien temporaire et révocable</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Sauvegarde nocturne des fichiers</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Conversion des documents : Markdown et texte vers PDF, HTML ou DOCX</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Renommer un fichier</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Les fichiers dans l'API de l'assistant</span></li>
           </ul>
         </div>
         <div class="step"><h3>v3 · OCR</h3><p>Le texte des images et des PDF scannés.</p></div>
