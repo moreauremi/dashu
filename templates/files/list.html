@@ -84,13 +84,39 @@
 
 {% include "files/_jobs.html" %}
 
+{% if view != "temporaire" %}
+{#- Recherche sur le nom, dans l'endroit montré et tout ce qu'il contient :
+    htmx redemande la page à chaque frappe et n'en garde que #file-results
+    (hx-select). Sans JavaScript, Entrée envoie le formulaire. -#}
+<form class="searchbar" action="/files" method="get" role="search">
+  {{ crate::assets::icon("search")|safe }}
+  <input type="hidden" name="dossier" value="{{ dossier }}">
+  <input type="search" name="q" value="{{ q }}" autocomplete="off" placeholder="{{ search_label }}" aria-label="{{ search_label }}"
+         hx-get="/files" hx-trigger="input changed delay:200ms" hx-include="closest form"
+         hx-target="#file-results" hx-select="#file-results" hx-swap="outerHTML" hx-push-url="true">
+  {% if let Some(tag) = tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+</form>
+{% endif %}
+
 {#- Recharge la liste quand une compression se termine (événement envoyé par
     /files/jobs). Élément à part et vide : posés sur #file-results, ces
     attributs seraient hérités par les formulaires de la liste. -#}
 <div hidden hx-get="{{ here }}" hx-select="#file-results" hx-target="#file-results" hx-swap="outerHTML" hx-trigger="files-changed from:body"></div>
 
 <div id="file-results">
-  {% if folders.is_empty() && notes.is_empty() && items.is_empty() %}
+  {% if !chips.is_empty() %}
+  <nav class="chips" aria-label="Filtrer par tag">
+    {% for chip in chips %}
+    <a class="chip" href="{{ chip.href }}"{% if chip.active %} aria-current="true"{% endif %}>#{{ chip.name }}<span class="chip-count">{{ chip.count }}</span></a>
+    {% endfor %}
+    {% if tag.is_some() %}<a class="chip chip-clear" href="{{ clear_tag_href }}">{{ crate::assets::icon("x")|safe }}Retirer le filtre</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% if searching %}
+  <p class="muted files-found" role="status">{% if items.is_empty() %}Aucun fichier ne correspond{% else %}{{ items.len() }} fichier{% if items.len() > 1 %}s{% endif %} trouvé{% if items.len() > 1 %}s{% endif %} dans {{ place }}{% endif %}</p>
+  {% endif %}
+  {% if searching && items.is_empty() %}
+  {% else if folders.is_empty() && notes.is_empty() && items.is_empty() %}
   <div class="empty-state">
     {% if view == "temporaire" %}
     <p>Rien en attente dans Temporaire</p>
@@ -178,7 +204,12 @@
         {%- endif %}
         <span>{{ item.name }}</span>
       </a>
-      <span class="file-meta">{{ item.kind }} · {{ item.size }} · {% if let Some(expires) = item.expires %}{{ expires }}{% else %}{{ item.updated }}{% endif %}</span>
+      <span class="file-meta">
+        {%- if let Some(place) = item.place %}<span class="file-place">{{ crate::assets::icon("folder")|safe }}{{ place }}</span> · {% endif -%}
+        {{ item.kind }} · {{ item.size }} · {% if let Some(expires) = item.expires %}{{ expires }}{% else %}{{ item.updated }}{% endif %}
+        {%- if item.shared %} <span class="file-shared" title="Partagé par un lien valable">{{ crate::assets::icon("link")|safe }}<span class="sr-only">partagé</span></span>{% endif -%}
+        {%- for name in item.tags %} <span class="tag">#{{ name }}</span>{% endfor -%}
+      </span>
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>

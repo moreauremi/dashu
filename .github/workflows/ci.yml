@@ -37,6 +37,10 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: cargo test
         run: cargo test --locked
+      # Script du serveur (deploy/lxc/dashu-backup-files) : instantanés
+      # incrémentaux, purge, restauration d'un fichier supprimé.
+      - name: Sauvegarde des fichiers (script du serveur)
+        run: bash tests/deploy/sauvegarde-fichiers.sh
       # Le service dashu du serveur tourne dans un bac à sable systemd
       # (deploy/lxc/hardening.conf) que ni Windows ni « cargo test » n'ont :
       # bit setgid refusé, un point de montage par ReadWritePaths. La

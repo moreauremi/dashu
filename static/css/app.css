@@ -5230,3 +5230,125 @@ input.note-title::placeholder {
 .crumb.is-drop-target {
   border-radius: var(--radius-sm);
 }
+
+/* Tags d'un fichier, sous son nom (page d'aperçu) : la ligne des tags des
+   notes, sans son filet. */
+.file-tags {
+  padding: 8px 0 0;
+  margin: 0;
+  border: 0;
+}
+
+/* Recherche dans l'onglet Fichiers : le dossier de chaque résultat. */
+.files-found {
+  margin: 0 0 12px;
+}
+
+.file-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.file-place .i {
+  width: 12px;
+  height: 12px;
+}
+
+.file-meta .tag {
+  margin-left: 4px;
+}
+
+/* Partage d'un fichier par lien (aperçu, files/_share.html) et sa page
+   publique (share/page.html). */
+.share-menu {
+  width: min(360px, calc(100vw - 16px));
+  max-width: none;
+  padding: 8px;
+}
+
+.file-share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-new {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+
+.share-copy {
+  display: flex;
+  gap: 6px;
+}
+
+.share-copy input {
+  flex: 1;
+  min-width: 0;
+}
+
+.share-durations {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px 4px;
+}
+
+.share-links {
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+  font-size: 13px;
+}
+
+.share-links li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.share-links li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-links .i,
+.file-shared .i {
+  width: 14px;
+  height: 14px;
+}
+
+.file-shared {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--accent-text);
+  vertical-align: middle;
+}
+
+.share-card {
+  text-align: center;
+}
+
+.share-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 1.125rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.share-file .i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}

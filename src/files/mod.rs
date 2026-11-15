@@ -10,7 +10,10 @@
 //!   dépend pas de la taille du fichier.
 //! * Toutes les requêtes filtrent sur `user_id`, comme les notes.
 
-use std::collections::HashSet;
+pub mod share;
+pub mod tags;
+
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -67,6 +70,12 @@ pub struct FileItem {
     pub picker: String,
     /// Temporaire : « effacé dans 5 h ».
     pub expires: Option<String>,
+    /// Ses tags.
+    pub tags: Vec<String>,
+    /// Résultat d'une recherche : où il est rangé, « École / Math ».
+    pub place: Option<String>,
+    /// Un lien de partage est valable.
+    pub shared: bool,
 }
 
 /// Un endroit où lâcher ce qu'on glisse (onglet Fichiers) : un espace et,
@@ -149,6 +158,21 @@ struct ListPage {
     /// « Nouvelle note » : l'adresse qui la crée ici (dossier d'un espace et
     /// dossiers seulement).
     new_note: Option<String>,
+    /// Recherche sur le nom et filtre par tag, dans l'endroit montré et tout
+    /// ce qu'il contient (pas dans Temporaire).
+    q: String,
+    tag: Option<String>,
+    /// Une recherche ou un filtre est en cours : la page montre ses
+    /// résultats, à plat, au lieu du contenu du dossier.
+    searching: bool,
+    /// Valeur de `dossier` pour le formulaire de recherche.
+    dossier: String,
+    /// « Rechercher dans École »
+    search_label: String,
+    /// Tags des fichiers de l'endroit, avec leur nombre.
+    chips: Vec<crate::notes::TagChip>,
+    /// La même adresse, sans le filtre par tag.
+    clear_tag_href: String,
 }
 
 #[derive(Deserialize)]
@@ -158,6 +182,10 @@ pub struct ListQuery {
     /// Ancien filtre « Seulement Perso » : le dossier de l'espace.
     #[serde(default)]
     seul: u8,
+    /// Recherche sur le nom des fichiers.
+    q: Option<String>,
+    /// Filtre par tag.
+    tag: Option<String>,
 }
 
 /// Endroit montré par l'onglet Fichiers.
@@ -324,7 +352,115 @@ pub async fn list(
     };
 
     let temp = matches!(view, View::Temp);
-    let items = if matches!(view, View::Root) {
+    let file_tags = tags::by_file(&state.db, user).await?;
+    let shared = share::shared_files(&state.db, user).await?;
+    // Recherche sur le nom et filtre par tag : dans l'endroit montré et tout
+    // ce qu'il contient (à la racine, tous les espaces en service).
+    let q = query.q.as_deref().unwrap_or_default().trim().to_string();
+    let tag = query
+        .tag
+        .as_deref()
+        .map(crate::notes::normalize_tag)
+        .filter(|t| !t.is_empty());
+    let fts = crate::notes::fts_query(&q);
+    let searching = !temp && (fts.is_some() || tag.is_some());
+    let dossier = match &view {
+        View::Root => "racine".to_string(),
+        View::Space => "espace".to_string(),
+        View::Temp => "temporaire".to_string(),
+        View::Folder(f) => f.id.to_string(),
+    };
+    let in_scope = |space_id: i64, folder_id: Option<i64>| match &view {
+        View::Root => ctx.spaces.iter().any(|s| s.id == space_id),
+        View::Space => space_id == space.id,
+        View::Folder(f) => {
+            space_id == space.id
+                && folder_id.is_some_and(|id| {
+                    id == f.id || all.iter().any(|x| x.id == id && x.parent_id == Some(f.id))
+                })
+        }
+        View::Temp => false,
+    };
+    let scoped: Vec<_> = if temp {
+        Vec::new()
+    } else {
+        sqlx::query!(
+            r#"SELECT id AS "id!", space_id, folder_id, name, mime, size, updated_at, thumb
+               FROM files WHERE user_id = ? AND expires_at IS NULL
+               ORDER BY updated_at DESC, id DESC"#,
+            user
+        )
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .filter(|row| in_scope(row.space_id, row.folder_id))
+        .collect()
+    };
+    // Les tags des fichiers de l'endroit, avec leur nombre.
+    let mut counts: BTreeMap<String, i64> = BTreeMap::new();
+    for row in &scoped {
+        for name in file_tags.get(&row.id).into_iter().flatten() {
+            *counts.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let chips: Vec<crate::notes::TagChip> = counts
+        .into_iter()
+        .map(|(name, count)| {
+            let active = tag.as_deref() == Some(name.as_str());
+            crate::notes::TagChip {
+                // Recliquer sur le tag actif retire le filtre.
+                href: filter_url(&dossier, &q, if active { None } else { Some(&name) }),
+                name,
+                count,
+                active,
+            }
+        })
+        .collect();
+
+    let items = if searching {
+        let found: Option<HashSet<i64>> = match &fts {
+            Some(fts) => Some(
+                sqlx::query_scalar!(
+                    r#"SELECT rowid AS "id!: i64" FROM files_fts WHERE files_fts MATCH ?"#,
+                    fts
+                )
+                .fetch_all(&state.db)
+                .await?
+                .into_iter()
+                .collect(),
+            ),
+            None => None,
+        };
+        scoped
+            .into_iter()
+            .filter(|row| found.as_ref().is_none_or(|ids| ids.contains(&row.id)))
+            .filter(|row| {
+                tag.as_ref().is_none_or(|t| {
+                    file_tags
+                        .get(&row.id)
+                        .is_some_and(|names| names.contains(t))
+                })
+            })
+            .take(200)
+            .map(|row| FileItem {
+                id: row.id,
+                size: human_size(row.size),
+                kind: kind_label(&row.mime),
+                conversions: menu(tools, &row.mime, false),
+                thumb: row.thumb == 1,
+                icon: icon_for(&row.mime),
+                picker: folders::picker_url("fichier", row.id, Some(&here)),
+                expires: None,
+                tags: file_tags.get(&row.id).cloned().unwrap_or_default(),
+                shared: shared.contains(&row.id),
+                place: ctx
+                    .space_by_id(row.space_id)
+                    .map(|s| folders::label(&s.name, &all, row.folder_id)),
+                name: row.name,
+                updated: time::ago(row.updated_at, now),
+            })
+            .collect()
+    } else if matches!(view, View::Root) {
         Vec::new()
     } else {
         let folder = inside.flatten();
@@ -354,10 +490,24 @@ pub async fn list(
             expires: row
                 .expires_at
                 .map(|at| format!("effacé dans {}", crate::tools::time_left(at, now))),
+            tags: file_tags.get(&row.id).cloned().unwrap_or_default(),
+            shared: shared.contains(&row.id),
+            place: None,
             name: row.name,
             updated: time::ago(row.updated_at, now),
         })
         .collect()
+    };
+    // Pendant une recherche, la page ne montre que ses résultats.
+    let (folder_rows, notes) = if searching {
+        (Vec::new(), Vec::new())
+    } else {
+        (folder_rows, notes)
+    };
+    let search_label = match &view {
+        View::Root => "Rechercher dans tous les espaces".to_string(),
+        View::Folder(f) => format!("Rechercher dans {}", f.name),
+        _ => format!("Rechercher dans {}", space.name),
     };
 
     let place = match &view {
@@ -401,8 +551,28 @@ pub async fn list(
         },
         new_folder,
         new_note,
+        clear_tag_href: filter_url(&dossier, &q, None),
+        q,
+        tag,
+        searching,
+        dossier,
+        search_label,
+        chips,
     };
     Ok(web::html(page))
+}
+
+/// `/files?dossier=…&q=…&tag=…` avec les paramètres encodés.
+fn filter_url(dossier: &str, q: &str, tag: Option<&str>) -> String {
+    let mut params = form_urlencoded::Serializer::new(String::new());
+    params.append_pair("dossier", dossier);
+    if !q.is_empty() {
+        params.append_pair("q", q);
+    }
+    if let Some(tag) = tag {
+        params.append_pair("tag", tag);
+    }
+    format!("/files?{}", params.finish())
 }
 
 /// La racine de l'onglet Fichiers : le dossier de chaque espace (pas les
@@ -1021,6 +1191,15 @@ pub async fn cleanup_stale(db: &SqlitePool, config: &FilesConfig) -> anyhow::Res
         remove_stored(config, &key).await;
     }
 
+    // Liens de partage expirés ou révoqués depuis plus de 30 jours.
+    let old = now - 30 * 24 * 3600;
+    sqlx::query!(
+        "DELETE FROM share_links WHERE expires_at < ?1 OR revoked_at < ?1",
+        old
+    )
+    .execute(db)
+    .await?;
+
     let limit = now - STALE_UPLOAD_SECONDS;
     sqlx::query!("DELETE FROM uploads WHERE updated_at < ?", limit)
         .execute(db)
@@ -1075,7 +1254,7 @@ fn part_path(dir: &FsPath, id: &str) -> PathBuf {
 
 /// Vrai pour un identifiant tel que dashu les fabrique : 64 caractères
 /// hexadécimaux. Rien d'autre ne peut donc atteindre un chemin.
-fn is_token(id: &str) -> bool {
+pub(crate) fn is_token(id: &str) -> bool {
     id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
@@ -1098,11 +1277,22 @@ pub async fn download(
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
+    attachment_response(files, &row.name, row.size, &row.storage_key).await
+}
 
-    let path = stored_path(&files.dir, &row.storage_key);
+/// Un fichier servi en téléchargement, jamais comme une page : type
+/// générique, `Content-Disposition: attachment`, CSP `sandbox`, pas de cache
+/// partagé. Aussi pour un lien de partage (`share`).
+pub(crate) async fn attachment_response(
+    files: &FilesConfig,
+    name: &str,
+    size: i64,
+    key: &str,
+) -> AppResult<Response> {
+    let path = stored_path(&files.dir, key);
     let file = tokio::fs::File::open(&path)
         .await
-        .with_context(|| format!("fichier #{id} absent du disque ({})", path.display()))?;
+        .with_context(|| format!("fichier absent du disque ({})", path.display()))?;
 
     let mut response = Body::from_stream(tokio_util::io::ReaderStream::new(file)).into_response();
     let headers = response.headers_mut();
@@ -1110,8 +1300,8 @@ pub async fn download(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
     );
-    headers.insert(header::CONTENT_LENGTH, HeaderValue::from(row.size));
-    headers.insert(header::CONTENT_DISPOSITION, attachment(&row.name));
+    headers.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
+    headers.insert(header::CONTENT_DISPOSITION, attachment(name));
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(FILE_CSP),
@@ -1185,6 +1375,12 @@ struct ViewPage {
     back_label: String,
     /// Adresse de la fenêtre « Ranger ».
     picker: String,
+    /// Ses tags, et ceux qui existent déjà (proposés à la saisie).
+    tags: Vec<crate::notes::NoteTag>,
+    suggestions: Vec<String>,
+    /// Le bloc « Partager » (déjà rendu), vide pour un fichier de l'onglet
+    /// Outils, qui ne se partage pas.
+    share_html: String,
     name: String,
     /// « Vidéo · 98 Mo · il y a 2 min »
     meta: String,
@@ -1306,6 +1502,16 @@ pub async fn view(
         back,
         back_label,
         picker: crate::folders::picker_url("fichier", id, Some(&format!("/files/{id}"))),
+        tags: tags::tags_of(&state.db, ctx.user.id, id).await?,
+        share_html: if row.expires_at.is_none() {
+            share::ShareFragment::load(&state.db, ctx.user.id, id)
+                .await?
+                .render()
+                .context("bloc de partage")?
+        } else {
+            String::new()
+        },
+        suggestions: crate::notes::all_tag_names(&state.db, ctx.user.id).await?,
         meta: format!(
             "{} · {} · {}",
             kind_label(&row.mime),
@@ -1712,7 +1918,7 @@ fn disposition(kind: &str, name: &str) -> HeaderValue {
     .unwrap_or_else(|_| HeaderValue::from_static("attachment"))
 }
 
-fn to_hex(bytes: &[u8]) -> String {
+pub(crate) fn to_hex(bytes: &[u8]) -> String {
     bytes
         .iter()
         .fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {

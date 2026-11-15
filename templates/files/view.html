@@ -6,6 +6,7 @@
     <a class="back-link" href="{{ back }}">{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
     <h1>{{ name }}</h1>
     <p class="muted">{{ meta }}</p>
+    {% include "files/_tags.html" %}
     {% if let Some(expires) = expires %}<p class="file-expires">{{ expires }} · <a href="/tools">Le garder</a></p>{% endif %}
   </div>
   <div class="file-view-actions">
@@ -15,6 +16,11 @@
       <input type="hidden" name="next" value="/files/{{ id }}">
       <button class="btn" type="submit" title="L'original est supprimé, cette copie prend son nom">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
     </form>
+    {% endif %}
+    {% if !share_html.is_empty() %}
+    {#- Partager par un lien temporaire (files/_share.html, déjà rendu). -#}
+    <button class="btn" type="button" popovertarget="pm-share">{{ crate::assets::icon("link")|safe }}<span>Partager</span></button>
+    <div id="pm-share" class="pop-menu share-menu" popover>{{ share_html|safe }}</div>
     {% endif %}
     {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs dossiers ;
         pour un fichier de l'onglet Outils, le garder. -#}

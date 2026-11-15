@@ -522,7 +522,7 @@ Prises le 11 novembre 2026 :
 
 Reste à trancher, dans la PR concernée :
 
-- **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go au plus.
+- *(tranché le 15 novembre)* **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go par défaut (`mp2`, `local-lvm`), moins si `pvesm status` montre trop peu de place. Instantanés incrémentaux par liens durs (`rsync --link-dest`), 14 jours ; une restauration de la base remet aussi les fichiers absents de la même nuit.
 - *(tranché le 11 novembre)* **Aperçu des PDF** : la première page, rendue en image par le service de conversion, et le bouton Télécharger. Le PDF n'est jamais servi pour être affiché par le navigateur.
 
 # dashu — Espaces et outils (v2, suite)
@@ -592,7 +592,7 @@ Prises le 13 novembre 2026, par défaut, pour avancer sans attendre :
 
 - **A plutôt qu'une vue « Tout » à part** : c'est déjà le modèle de Perso pour l'agenda.
 - **C par un préfixe `/e/<slug>`** retiré avant le routage : les routes existantes ne changent pas, et les adresses sans préfixe restent valides.
-- **G avec les outils déjà installés** (ffmpeg, Ghostscript, libheif, crate `image`). Markdown et texte vers PDF, HTML ou DOCX demandent pandoc et Typst : ils restent à l'étape 8 de la v2.
+- **G avec les outils déjà installés** (ffmpeg, Ghostscript, libheif, crate `image`). Markdown et texte vers PDF, HTML ou DOCX demandent pandoc et Typst : ils restent à l'étape 8 de la v2. *(Fait le 15 novembre 2026 : pandoc en `--sandbox`, PDF par Typst, binaire officiel en version fixée.)*
 - **Le WebP produit est sans perte** : l'encodeur de la crate `image` ne fait que ça.
 
 ---

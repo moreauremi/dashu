@@ -1,0 +1,20 @@
+{#- Tags d'un fichier, sur sa page d'aperçu : les mêmes que ceux des notes.
+    Ajouter ou retirer un tag remplace ce bloc (htmx), sans recharger. -#}
+<div id="file-tags" class="note-tags file-tags">
+  {{ crate::assets::icon("tag")|safe }}
+  {% if !tags.is_empty() %}
+  <ul class="tag-list" role="list">
+    {% for tag in tags %}
+    <li class="tag tag-removable">#{{ tag.name }}<button type="button" aria-label="Retirer le tag {{ tag.name }}"
+        hx-delete="/files/{{ id }}/tags/{{ tag.id }}" hx-target="#file-tags" hx-swap="outerHTML">{{ crate::assets::icon("x")|safe }}</button></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form class="tag-add" hx-post="/files/{{ id }}/tags" hx-target="#file-tags" hx-swap="outerHTML">
+    <input type="text" name="name" list="file-tag-suggestions" maxlength="40" autocomplete="off"
+           placeholder="Ajouter un tag" aria-label="Ajouter un tag au fichier">
+    <datalist id="file-tag-suggestions">
+      {% for name in suggestions %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+  </form>
+</div>

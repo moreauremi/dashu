@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM file_tags WHERE file_id = ? AND tag_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "913e24b6f5d91551ba89d71ddf3e35758500ba67725d69271acb42a6e6320923"
+}

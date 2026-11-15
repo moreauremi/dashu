@@ -56,7 +56,7 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - Reste à vérifier au prochain redémarrage de l'hôte.
 - [ ] **La base est sauvegardée sur le second disque, les fichiers sur le premier**
   - La base : vérifié sur le serveur. Les 12 sauvegardes existantes ont été recopiées sur le volume, avec les mêmes empreintes SHA-256. Une sauvegarde lancée par `dashu-backup` y a été écrite.
-  - Les fichiers : à l'étape 6.
+  - Les fichiers (étape 6, écrite le 15 novembre 2026) : chaque nuit après la base, `dashu-backup-files` fait un instantané incrémental (liens durs, 14 jours) sur un volume du premier disque, `mp2` sur `/var/backups/dashu-fichiers` ; `dashu-restore` remet les fichiers absents avec la base de la même nuit. Vérifié par un test du script dans la CI (`tests/deploy/sauvegarde-fichiers.sh` : lien dur pour un fichier inchangé, envois en cours exclus, purge, restauration d'un fichier supprimé). **À mettre en service** : créer le volume `mp2`, `apt-get install rsync`, `dashu-update`, puis l'exercice de restauration d'un fichier (README).
 - [x] **Le conteneur a 4 Go de mémoire** : appliqué à chaud le 11 novembre 2026 (`pct set --memory 4096`).
 
 **Fichiers, envoi par morceaux, compression** (déployés le 11 novembre 2026, version 43a7b21)
@@ -80,6 +80,13 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - La CI rejoue ce bac à sable (`systemd-run` avec les mêmes options) pour le test `bac_a_sable_du_serveur` : il vérifie que le bit setgid est bien refusé et les deux dossiers bien séparés, puis qu'une tâche se prépare et que son résultat se range.
   - Après `dashu-update`, dashu demande au démarrage les vignettes manquantes (200 fichiers au plus à la fois).
 - Reste à faire par Rémi, sur `app.dashu.dev`, après `dashu-update` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
+
+**Suite de la v2, demandée le 15 novembre 2026** (« fait tout » : la suite annoncée sur le portfolio). Écrite et vérifiée par les tests ; rien n'est encore vérifié sur le serveur.
+
+- [ ] **Tags et recherche dans les fichiers** (étape 3) : les mêmes tags que les notes, posés depuis l'aperçu d'un fichier, montrés dans la liste, avec un filtre par tag (nombre de fichiers par tag) ; recherche sur le nom (FTS5, accents ignorés, début de mot) dans l'endroit montré et tout ce qu'il contient (à la racine : tous les espaces), chaque résultat avec son dossier. Le nettoyage des tags inutilisés tient compte des fichiers (il ne regardait que les notes). La barre de commandes trouvait déjà un fichier par son nom (`/open`). Migration 0014, tests `tests/fichiers_tags.rs` (4). Vu dans Chrome (instance locale) : tag posé depuis l'aperçu, recherche pendant la frappe, résultat avec son dossier.
+- [ ] **Partage par lien temporaire** (étape 4) : depuis l'aperçu d'un fichier rangé, un lien de 1 heure, 1 jour ou 7 jours (32 octets aléatoires, seule l'empreinte SHA-256 en base, lien entier affiché une seule fois, bouton « Copier »), révocable ; la liste marque les fichiers partagés. Page publique `/s/<jeton>` sans connexion : nom, taille, téléchargement (`attachment`, CSP `sandbox`, `nosniff`, `noindex`) ; expiré, révoqué ou inconnu : la même page 404 ; limitée à 20 requêtes d'un coup puis une toutes les 3 s par adresse, avec un compteur à part de celui de la connexion. Les liens finis depuis 30 jours sont effacés. Migration 0015, tests `tests/partage.rs` (4). Vu dans Chrome : lien créé, ouvert dans une session vierge, téléchargé.
+- [ ] **Conversion des documents** (étape 8, en partie) : Markdown et texte vers PDF, HTML ou DOCX, dans le menu « Convertir » ; pandoc en `--sandbox` dans le service de conversion isolé, ses fichiers de travail (et ceux de Typst) dans le dossier de la tâche ; le résultat arrive à côté de l'original. Tests : arguments de pandoc (`arguments_de_pandoc`), menu et circuit complet avec le faux service (`tests/documents.rs`). **pandoc et Typst ne sont pas installés en local : la vraie conversion n'est vérifiée que sur le serveur**, après installation (README, « Compression et conversions ») ; Typst 0.11.1 est choisi pour aller avec le pandoc de Debian 13, à confirmer par un essai. Le service de conversion ne voit pas non plus les sauvegardes des fichiers.
+- [ ] **Uptime Kuma** : hors de dashu, dans son propre conteneur ; installation décrite dans le README (« Supervision et accès d'un assistant »), à faire sur l'hôte.
 
 ## Espaces et outils : avancement
 

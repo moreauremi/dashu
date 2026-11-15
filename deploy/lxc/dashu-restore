@@ -9,12 +9,17 @@
 # elle-même sauvegardée (avant-restauration-*.db). Pour annuler une
 # restauration, il suffit de restaurer ce fichier-là.
 #
+# Une sauvegarde de la nuit (dashu-<horodatage>.db) a ses fichiers envoyés,
+# copiés le même soir sur l'autre disque : les fichiers absents reviennent
+# avec elle (dashu-backup-files restore). Rien n'est effacé ni remplacé.
+#
 # Étapes : vérification du fichier choisi, copie de la base actuelle, arrêt de
 # dashu, remplacement, redémarrage. Si dashu ne répond pas ensuite, la base
 # d'avant est remise en place automatiquement.
 set -euo pipefail
 
 DIR=/var/backups/dashu
+FILES_BACKUP=/var/backups/dashu-fichiers
 DB=/var/lib/dashu/dashu.db
 
 healthy() {
@@ -45,9 +50,16 @@ put_in_place() {
 }
 
 if [ "$#" -eq 0 ]; then
-  echo "Sauvegardes disponibles (la plus récente en premier) :"
+  echo "Sauvegardes disponibles (la plus récente en premier ; « + fichiers » : les"
+  echo "fichiers envoyés de ce soir-là reviennent avec la base) :"
   find "$DIR" -maxdepth 1 -name '*.db' -printf '%T@\t%TF %TH:%TM\t%s\t%f\n' 2>/dev/null |
-    sort -rn | awk -F'\t' '{ printf "  %s  %6.0f Ko  %s\n", $2, $3 / 1024, $4 }'
+    sort -rn | while IFS=$'\t' read -r _ when size name; do
+      stamp="${name#dashu-}"
+      stamp="${stamp%.db}"
+      extra=""
+      [ -d "$FILES_BACKUP/fichiers-$stamp" ] && extra="  + fichiers"
+      printf '  %s  %6.0f Ko  %s%s\n' "$when" "$((size / 1024))" "$name" "$extra"
+    done
   echo
   echo "Restaurer : dashu-restore <nom du fichier>"
   exit 0
@@ -83,6 +95,14 @@ echo "Base actuelle mise de côté : $(basename "$SAFE") ($(summary "$SAFE"))"
 put_in_place "$FILE"
 if healthy; then
   echo "Restauration terminée : dashu tourne sur $(basename "$FILE")."
+  # 4. Les fichiers envoyés de ce soir-là, s'ils ont été copiés.
+  NAME="$(basename "$FILE" .db)"
+  STAMP="${NAME#dashu-}"
+  if [ "$STAMP" != "$NAME" ] && [ -d "$FILES_BACKUP/fichiers-$STAMP" ]; then
+    FILES_SCRIPT=/usr/local/sbin/dashu-backup-files
+    [ -x "$FILES_SCRIPT" ] || FILES_SCRIPT=/opt/dashu/src/deploy/lxc/dashu-backup-files
+    "$FILES_SCRIPT" restore "$STAMP"
+  fi
   echo "Pour revenir à l'état d'avant : dashu-restore $(basename "$SAFE")"
   exit 0
 fi
