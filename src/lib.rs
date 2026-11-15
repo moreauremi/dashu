@@ -189,6 +189,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/delete", post(files::delete))
         .route("/files/{id}/move", post(files::move_to_space))
         .route("/files/{id}/keep", post(files::keep))
+        .route("/files/{id}/rename", post(files::rename))
         .route("/files/{id}/share", post(files::share::create))
         .route(
             "/files/{id}/share/{link}/revoke",

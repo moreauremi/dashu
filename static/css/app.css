@@ -5352,3 +5352,20 @@ input.note-title::placeholder {
   width: 20px;
   height: 20px;
 }
+
+/* Renommer un fichier : l'extension, qui ne change pas, suit le champ. */
+.rename-file {
+  align-items: center;
+}
+
+.rename-file input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.rename-ext {
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: nowrap;
+}

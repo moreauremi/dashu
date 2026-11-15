@@ -213,6 +213,16 @@
       <div class="file-actions">
         {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
         <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
+        <button class="icon-btn" type="button" popovertarget="pm-rename-file-{{ item.id }}" title="Renommer" aria-label="Renommer « {{ item.name }} »">{{ crate::assets::icon("pencil")|safe }}</button>
+        <div id="pm-rename-file-{{ item.id }}" class="pop-menu" popover>
+          <p class="pop-title">Renommer le fichier</p>
+          <form class="pop-pages rename-file" method="post" action="/files/{{ item.id }}/rename">
+            <input type="hidden" name="next" value="{{ here }}">
+            <input type="text" name="name" value="{{ item.stem }}" maxlength="200" required autocomplete="off" aria-label="Nouveau nom de « {{ item.name }} »">
+            {%- if !item.ext.is_empty() %}<span class="rename-ext">{{ item.ext }}</span>{% endif %}
+            <button class="btn btn-primary" type="submit">Renommer</button>
+          </form>
+        </div>
         {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs
             dossiers ; dans Temporaire, garder le fichier. -#}
         <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ item.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="{% if item.expires.is_some() %}Garder dans un dossier{% else %}Ranger ailleurs{% endif %}" aria-label="Ranger « {{ item.name }} »">{{ crate::assets::icon("move")|safe }}</button>
