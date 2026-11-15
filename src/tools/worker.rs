@@ -285,13 +285,11 @@ impl Tools {
                 run_tool(cmd, Duration::from_secs(600), |_| {})
             }
             (to @ (Conversion::Pdf | Conversion::Html | Conversion::Docx), Media::Document) => {
-                let mut cmd = Command::new("pandoc");
-                cmd.args(pandoc_args(to, &input, &output).ok_or_else(impossible)?)
-                    // Fichiers de travail de pandoc et de Typst dans le dossier
-                    // de la tâche : le service ne peut écrire que là.
-                    .env("TMPDIR", dir)
-                    .env("HOME", dir)
-                    .env("XDG_CACHE_HOME", dir);
+                if to == Conversion::Pdf {
+                    fs::write(dir.join(PDF_FILTER), PDF_FILTER_LUA)
+                        .map_err(|_| "La conversion a échoué.".to_string())?;
+                }
+                let cmd = pandoc_command(to, dir, &input, &output).ok_or_else(impossible)?;
                 run_tool(cmd, Duration::from_secs(300), |_| {})
             }
             _ => Err(impossible()),
@@ -464,20 +462,55 @@ pub fn full_size_filters(tonemap: bool) -> String {
     }
 }
 
-/// Arguments ffmpeg du son en MP3 (qualité variable, autour de 190 kb/s).
+/// Filtre Lua du PDF, écrit dans le dossier de la tâche. Pour un PDF, pandoc
+/// laisse les images à Typst, qui ne lit que des fichiers présents (et
+/// pandoc, en bac à sable, ne va rien chercher) : une image du Markdown
+/// ferait échouer toute la conversion. Elle devient son texte de
+/// remplacement, en italique.
+const PDF_FILTER: &str = "images.lua";
+const PDF_FILTER_LUA: &str = r#"function Image(img)
+  if #img.caption == 0 then
+    return pandoc.Emph({ pandoc.Str("[image]") })
+  end
+  return pandoc.Emph(img.caption)
+end
+
+function Figure(fig)
+  return fig.content
+end
+"#;
+
+/// pandoc prêt à convertir un document de la tâche `dir`. Il tourne dans ce
+/// dossier : pour un PDF, pandoc 3.1 (celui de Debian 13) écrit le source
+/// Typst et le PDF intermédiaire dans le dossier courant, sans regarder
+/// `TMPDIR`, et sous systemd le dossier courant est `/`, en lecture seule.
+/// Ses autres fichiers de travail (et ceux de Typst) vont au même endroit.
+pub fn pandoc_command(to: Conversion, dir: &Path, input: &Path, output: &Path) -> Option<Command> {
+    let mut cmd = Command::new("pandoc");
+    cmd.args(pandoc_args(to, dir, input, output)?)
+        .current_dir(dir)
+        .env("TMPDIR", dir)
+        .env("HOME", dir)
+        .env("XDG_CACHE_HOME", dir);
+    Some(cmd)
+}
+
 /// Arguments de pandoc pour un document (Markdown ou texte, lu comme du
 /// Markdown) vers `to`. `--sandbox` : pandoc ne lit que le fichier donné
 /// (pas d'image ni d'inclusion ailleurs sur le disque), en plus de
-/// l'isolement du service. Le PDF passe par Typst, bien plus léger que LaTeX.
-/// `None` pour une sortie qui n'est pas un document.
-pub fn pandoc_args(to: Conversion, input: &Path, output: &Path) -> Option<Vec<String>> {
+/// l'isolement du service. Le PDF passe par Typst, bien plus léger que LaTeX,
+/// avec le filtre des images. `None` pour une sortie qui n'est pas un
+/// document.
+pub fn pandoc_args(to: Conversion, dir: &Path, input: &Path, output: &Path) -> Option<Vec<String>> {
     let mut args: Vec<String> = ["--sandbox", "--from", "markdown"]
         .into_iter()
         .map(String::from)
         .collect();
     match to {
         Conversion::Pdf => {
-            args.extend(["--to", "typst", "--pdf-engine", "typst"].map(String::from))
+            args.extend(["--to", "typst", "--pdf-engine", "typst"].map(String::from));
+            args.push("--lua-filter".into());
+            args.push(dir.join(PDF_FILTER).to_string_lossy().into_owned());
         }
         // Une page complète (en-tête, styles), lisible seule dans un navigateur.
         Conversion::Html => args.extend(["--to", "html5", "--standalone"].map(String::from)),
@@ -490,6 +523,7 @@ pub fn pandoc_args(to: Conversion, input: &Path, output: &Path) -> Option<Vec<St
     Some(args)
 }
 
+/// Arguments ffmpeg du son en MP3 (qualité variable, autour de 190 kb/s).
 pub fn mp3_args() -> Vec<String> {
     [
         "-map",
@@ -865,19 +899,99 @@ mod tests {
 
     #[test]
     fn arguments_de_pandoc() {
+        let dir = Path::new("/j");
         let (input, output) = (Path::new("/j/input.md"), Path::new("/j/output.pdf"));
-        let pdf = pandoc_args(Conversion::Pdf, input, output).unwrap();
+        let pdf = pandoc_args(Conversion::Pdf, dir, input, output).unwrap();
         // Toujours en bac à sable, lu comme du Markdown, le fichier en dernier.
         assert_eq!(&pdf[..3], ["--sandbox", "--from", "markdown"]);
         assert!(pdf.windows(2).any(|w| w == ["--pdf-engine", "typst"]));
+        assert!(
+            pdf.windows(2)
+                .any(|w| w == ["--lua-filter", "/j/images.lua"])
+        );
         assert!(pdf.windows(2).any(|w| w == ["--output", "/j/output.pdf"]));
         assert_eq!(pdf.last().unwrap(), "/j/input.md");
-        let html = pandoc_args(Conversion::Html, input, Path::new("/j/output.html")).unwrap();
+        let html = pandoc_args(Conversion::Html, dir, input, Path::new("/j/output.html")).unwrap();
         assert!(html.contains(&"--standalone".to_string()) && html.contains(&"html5".to_string()));
-        let docx = pandoc_args(Conversion::Docx, input, Path::new("/j/output.docx")).unwrap();
+        let docx = pandoc_args(Conversion::Docx, dir, input, Path::new("/j/output.docx")).unwrap();
         assert!(docx.windows(2).any(|w| w == ["--to", "docx"]));
+        // Le filtre des images ne sert qu'au PDF.
+        assert!(!html.contains(&"--lua-filter".to_string()));
         // Rien d'autre ne passe par pandoc.
-        assert!(pandoc_args(Conversion::Mp3, input, output).is_none());
+        assert!(pandoc_args(Conversion::Mp3, dir, input, output).is_none());
+    }
+
+    #[test]
+    fn pandoc_tourne_dans_le_dossier_de_la_tache() {
+        // Panne du 15 novembre 2026 : lancé depuis `/` (en lecture seule sous
+        // systemd), pandoc ne pouvait pas écrire le source Typst du PDF.
+        let dir = Path::new("/srv/dashu/tmp/jobs/7");
+        let cmd = pandoc_command(
+            Conversion::Pdf,
+            dir,
+            &dir.join("input.md"),
+            &dir.join("output.pdf"),
+        )
+        .unwrap();
+        assert_eq!(cmd.get_program(), "pandoc");
+        assert_eq!(cmd.get_current_dir(), Some(dir));
+        for var in ["TMPDIR", "HOME", "XDG_CACHE_HOME"] {
+            assert!(
+                cmd.get_envs()
+                    .any(|(k, v)| k == var && v == Some(dir.as_os_str())),
+                "{var}"
+            );
+        }
+    }
+
+    /// La vraie conversion, avec pandoc et Typst, dans le bac à sable du
+    /// service de conversion (`deploy/lxc/dashu-worker.service`) : dossier
+    /// courant `/` en lecture seule, seul `/srv/dashu/tmp` inscriptible, pas
+    /// de réseau. Rejoué par la CI (étape « Documents dans le bac à sable du
+    /// service de conversion »).
+    #[test]
+    #[ignore = "pandoc, Typst et le bac à sable systemd : étape de la CI"]
+    fn documents_dans_le_bac_a_sable() {
+        // Le piège est bien là, sinon ce test ne prouverait rien.
+        let cwd = std::env::current_dir().unwrap();
+        assert!(fs::write(cwd.join("sonde"), b"x").is_err(), "{cwd:?}");
+
+        let dir = Path::new("/srv/dashu/tmp/jobs/documents");
+        fs::create_dir_all(dir).unwrap();
+        fs::write(
+            dir.join("input.md"),
+            "# Flux principaux\n\n\
+             Été, œuvre, « guillemets » et **gras**.\n\n\
+             - un\n- deux\n\n\
+             | Flux | Débit |\n|---|---|\n| entrée | 10 |\n\n\
+             ```rust\nfn main() {}\n```\n\n\
+             ![Schéma des flux](schema.png)\n\n\
+             Une image dans le texte : ![](https://dashu.dev/logo.png).\n\n\
+             [Le site](https://dashu.dev)\n",
+        )
+        .unwrap();
+        let tools = Tools { zscale: false };
+        for (to, magic) in [
+            (Conversion::Pdf, &b"%PDF"[..]),
+            (Conversion::Html, &b"<!DOCTYPE html>"[..]),
+            (Conversion::Docx, &b"PK"[..]),
+        ] {
+            let spec = JobSpec {
+                task: Task::Convert,
+                media: Media::Document,
+                input: "input.md".into(),
+                output: format!("output.{}", to.key()),
+                preview: None,
+                to: Some(to),
+                pages: None,
+            };
+            tools
+                .convert(&spec, dir, &|_| {})
+                .unwrap_or_else(|e| panic!("{to:?} : {e}"));
+            let out = fs::read(dir.join(&spec.output)).unwrap();
+            assert!(out.starts_with(magic), "{to:?}");
+        }
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
