@@ -1,0 +1,159 @@
+// Gabarit des documents convertis en PDF (src/tools/worker.rs), à la place
+// de celui de pandoc (format US Letter, police serif, texte justifié, en
+// anglais). Une page sobre, façon Notion : A4, police Inter (paquet Debian
+// fonts-inter ; à défaut DejaVu Sans, puis les polices de Typst), texte
+// aligné à gauche en gris très foncé, titres en demi-gras, code, citations
+// et tableaux discrets.
+//
+// C'est un gabarit pandoc : ses variables s'écrivent entre deux signes
+// dollar. Le Typst écrit ici ne doit donc pas en contenir.
+
+#let encre = rgb("#37352f")
+#let discret = rgb("#787774")
+#let filet = rgb("#e9e9e7")
+#let fond = rgb("#f7f6f3")
+
+// Définitions attendues par le Typst que produit pandoc.
+#let horizontalrule = block(
+  above: 1.6em,
+  below: 1.6em,
+  line(length: 100%, stroke: 0.6pt + filet),
+)
+
+#let endnote(num, contents) = [
+  #stack(dir: ltr, spacing: 3pt, super[#num], contents)
+]
+
+#show terms: it => {
+  it.children
+    .map(child => [
+      #strong[#child.term]
+      #block(inset: (left: 1.5em, top: -0.4em))[#child.description]
+      ])
+    .join()
+}
+
+#set document(
+$if(title)$
+  title: [$title$],
+$endif$
+)
+
+// A4, numéro de page en bas à droite, seulement s'il y a plusieurs pages.
+#set page(
+  paper: "a4",
+  margin: (x: 2.3cm, top: 2.2cm, bottom: 2.4cm),
+  footer: context {
+    if counter(page).final().first() > 1 {
+      set text(size: 8pt, fill: discret)
+      h(1fr)
+      counter(page).display()
+    }
+  },
+)
+
+#set text(
+  font: ("Inter", "DejaVu Sans"),
+  size: 10.5pt,
+  fill: encre,
+  lang: "$if(lang)$$lang$$else$fr$endif$",
+$if(region)$
+  region: "$region$",
+$endif$
+)
+#set par(justify: false, leading: 0.78em)
+#show par: set block(spacing: 1.2em)
+// Le gras de Notion est un demi-gras.
+#set strong(delta: 200)
+
+// Titres : demi-gras, l'échelle de Notion, de l'air au-dessus.
+#show heading: set text(weight: 600, hyphenate: false)
+#show heading: set block(above: 1.5em, below: 0.65em)
+#show heading.where(level: 1): set text(size: 1.75em, tracking: -0.01em)
+#show heading.where(level: 1): set block(above: 1.25em)
+#show heading.where(level: 2): set text(size: 1.4em, tracking: -0.005em)
+#show heading.where(level: 3): set text(size: 1.18em)
+#show heading.where(level: 4): set text(size: 1.05em)
+
+// Listes : puces simples, un peu de retrait.
+#set list(indent: 0.25em, body-indent: 0.55em, marker: ([•], [◦], [▪]))
+#set enum(indent: 0.25em, body-indent: 0.55em)
+
+// Code dans le texte : petit fond gris, texte rouge brique.
+#show raw.where(block: false): it => box(
+  fill: rgb("#87837826"),
+  inset: (x: 0.28em),
+  outset: (y: 0.28em),
+  radius: 3pt,
+  text(fill: rgb("#eb5757"), it),
+)
+// Bloc de code : fond gris clair, coins arrondis, toute la largeur.
+#show raw.where(block: true): set par(leading: 0.6em)
+#show raw.where(block: true): it => block(
+  width: 100%,
+  fill: fond,
+  inset: (x: 1.1em, y: 1em),
+  radius: 4pt,
+  it,
+)
+
+// Citation : une barre à gauche.
+#show quote.where(block: true): it => block(
+  stroke: (left: 2.5pt + encre),
+  inset: (left: 1em, y: 0.15em),
+  it.body,
+)
+
+// Liens vers le web : soulignés finement (pas les renvois aux notes).
+#show link: it => {
+  if type(it.dest) == str {
+    underline(stroke: 0.6pt + rgb("#37352f66"), offset: 2.5pt, it)
+  } else {
+    it
+  }
+}
+
+// Tableaux : filets fins, première ligne sur fond gris, en demi-gras, calés
+// à gauche (pandoc les centre) ; un long tableau continue sur la page
+// suivante.
+#set table(stroke: 0.6pt + filet, fill: (_, y) => if y == 0 { fond })
+#show table.cell.where(y: 0): set text(weight: 600)
+#show figure.caption: set text(size: 0.9em, fill: discret)
+#show figure.where(kind: table): it => block(width: 100%, breakable: true, {
+  if it.body.func() == align { it.body.body } else { it.body }
+  if it.caption != none { it.caption }
+})
+
+// Notes de bas de page : un court filet, un texte plus petit.
+#set footnote.entry(separator: line(length: 30%, stroke: 0.6pt + filet))
+#show footnote.entry: set text(size: 0.85em)
+
+$if(title)$
+#block(below: 1.8em)[
+  #text(size: 2.3em, weight: 700, tracking: -0.015em)[$title$]
+$if(subtitle)$
+  #block(above: 0.6em, text(size: 1.15em, fill: discret)[$subtitle$])
+$endif$
+$if(date)$
+  #block(above: 0.6em, text(fill: discret)[$date$])
+$endif$
+]
+
+$endif$
+$for(header-includes)$
+$header-includes$
+
+$endfor$
+$for(include-before)$
+$include-before$
+
+$endfor$
+$if(toc)$
+#outline(title: auto, depth: $toc-depth$)
+
+$endif$
+$body$
+$for(include-after)$
+
+$include-after$
+$endfor$

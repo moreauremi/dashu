@@ -286,8 +286,13 @@ impl Tools {
             }
             (to @ (Conversion::Pdf | Conversion::Html | Conversion::Docx), Media::Document) => {
                 if to == Conversion::Pdf {
-                    fs::write(dir.join(PDF_FILTER), PDF_FILTER_LUA)
-                        .map_err(|_| "La conversion a échoué.".to_string())?;
+                    for (name, content) in [
+                        (PDF_TEMPLATE, PDF_TEMPLATE_TYPST),
+                        (PDF_FILTER, PDF_FILTER_LUA),
+                    ] {
+                        fs::write(dir.join(name), content)
+                            .map_err(|_| "La conversion a échoué.".to_string())?;
+                    }
                 }
                 let cmd = pandoc_command(to, dir, &input, &output).ok_or_else(impossible)?;
                 run_tool(cmd, Duration::from_secs(300), |_| {})
@@ -462,23 +467,12 @@ pub fn full_size_filters(tonemap: bool) -> String {
     }
 }
 
-/// Filtre Lua du PDF, écrit dans le dossier de la tâche. Pour un PDF, pandoc
-/// laisse les images à Typst, qui ne lit que des fichiers présents (et
-/// pandoc, en bac à sable, ne va rien chercher) : une image du Markdown
-/// ferait échouer toute la conversion. Elle devient son texte de
-/// remplacement, en italique.
+/// Gabarit du PDF (mise en page façon Notion) et filtre des images, écrits
+/// dans le dossier de la tâche : voir `src/tools/pdf/`.
+const PDF_TEMPLATE: &str = "gabarit.typst";
+const PDF_TEMPLATE_TYPST: &str = include_str!("pdf/gabarit.typst");
 const PDF_FILTER: &str = "images.lua";
-const PDF_FILTER_LUA: &str = r#"function Image(img)
-  if #img.caption == 0 then
-    return pandoc.Emph({ pandoc.Str("[image]") })
-  end
-  return pandoc.Emph(img.caption)
-end
-
-function Figure(fig)
-  return fig.content
-end
-"#;
+const PDF_FILTER_LUA: &str = include_str!("pdf/images.lua");
 
 /// pandoc prêt à convertir un document de la tâche `dir`. Il tourne dans ce
 /// dossier : pour un PDF, pandoc 3.1 (celui de Debian 13) écrit le source
@@ -499,8 +493,8 @@ pub fn pandoc_command(to: Conversion, dir: &Path, input: &Path, output: &Path) -
 /// Markdown) vers `to`. `--sandbox` : pandoc ne lit que le fichier donné
 /// (pas d'image ni d'inclusion ailleurs sur le disque), en plus de
 /// l'isolement du service. Le PDF passe par Typst, bien plus léger que LaTeX,
-/// avec le filtre des images. `None` pour une sortie qui n'est pas un
-/// document.
+/// avec notre gabarit et le filtre des images. `None` pour une sortie qui
+/// n'est pas un document.
 pub fn pandoc_args(to: Conversion, dir: &Path, input: &Path, output: &Path) -> Option<Vec<String>> {
     let mut args: Vec<String> = ["--sandbox", "--from", "markdown"]
         .into_iter()
@@ -509,6 +503,8 @@ pub fn pandoc_args(to: Conversion, dir: &Path, input: &Path, output: &Path) -> O
     match to {
         Conversion::Pdf => {
             args.extend(["--to", "typst", "--pdf-engine", "typst"].map(String::from));
+            args.push("--template".into());
+            args.push(dir.join(PDF_TEMPLATE).to_string_lossy().into_owned());
             args.push("--lua-filter".into());
             args.push(dir.join(PDF_FILTER).to_string_lossy().into_owned());
         }
@@ -907,6 +903,10 @@ mod tests {
         assert!(pdf.windows(2).any(|w| w == ["--pdf-engine", "typst"]));
         assert!(
             pdf.windows(2)
+                .any(|w| w == ["--template", "/j/gabarit.typst"])
+        );
+        assert!(
+            pdf.windows(2)
                 .any(|w| w == ["--lua-filter", "/j/images.lua"])
         );
         assert!(pdf.windows(2).any(|w| w == ["--output", "/j/output.pdf"]));
@@ -915,8 +915,12 @@ mod tests {
         assert!(html.contains(&"--standalone".to_string()) && html.contains(&"html5".to_string()));
         let docx = pandoc_args(Conversion::Docx, dir, input, Path::new("/j/output.docx")).unwrap();
         assert!(docx.windows(2).any(|w| w == ["--to", "docx"]));
-        // Le filtre des images ne sert qu'au PDF.
-        assert!(!html.contains(&"--lua-filter".to_string()));
+        // Le gabarit et le filtre des images ne servent qu'au PDF.
+        assert!(
+            !html
+                .iter()
+                .any(|a| a == "--template" || a == "--lua-filter")
+        );
         // Rien d'autre ne passe par pandoc.
         assert!(pandoc_args(Conversion::Mp3, dir, input, output).is_none());
     }
@@ -958,18 +962,11 @@ mod tests {
 
         let dir = Path::new("/srv/dashu/tmp/jobs/documents");
         fs::create_dir_all(dir).unwrap();
-        fs::write(
-            dir.join("input.md"),
-            "# Flux principaux\n\n\
-             Été, œuvre, « guillemets » et **gras**.\n\n\
-             - un\n- deux\n\n\
-             | Flux | Débit |\n|---|---|\n| entrée | 10 |\n\n\
-             ```rust\nfn main() {}\n```\n\n\
-             ![Schéma des flux](schema.png)\n\n\
-             Une image dans le texte : ![](https://dashu.dev/logo.png).\n\n\
-             [Le site](https://dashu.dev)\n",
-        )
-        .unwrap();
+        // Un peu de tout : titre, listes, cases à cocher, tableau, citation,
+        // code, image absente, note de bas de page, accents.
+        let mut sample = include_str!("../../tests/fixtures/document.md").to_string();
+        sample.push_str("\nUne image distante : ![](https://dashu.dev/logo.png).\n");
+        fs::write(dir.join("input.md"), sample).unwrap();
         let tools = Tools { zscale: false };
         for (to, magic) in [
             (Conversion::Pdf, &b"%PDF"[..]),
@@ -990,6 +987,10 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{to:?} : {e}"));
             let out = fs::read(dir.join(&spec.output)).unwrap();
             assert!(out.starts_with(magic), "{to:?}");
+        }
+        // La CI garde le PDF pour qu'on puisse regarder la mise en page.
+        if let Ok(keep) = std::env::var("DOCUMENT_PDF") {
+            fs::copy(dir.join("output.pdf"), keep).unwrap();
         }
         fs::remove_dir_all(dir).unwrap();
     }
