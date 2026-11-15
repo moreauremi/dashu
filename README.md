@@ -404,7 +404,7 @@ Le menu « Convertir » d'un fichier (sur sa ligne, sur son aperçu, ou `/conver
 | PDF | Compresser, extraire des pages (« 2-4 ») |
 | Markdown, texte | En PDF (pandoc, moteur Typst), en page web HTML (autonome, servie en téléchargement comme tout HTML), en Word (DOCX) |
 
-Les documents passent par pandoc, en bac à sable (`--sandbox` : il ne lit que le fichier donné), dans le même service isolé que le reste, ses fichiers de travail dans le dossier de la tâche. Une règle par espace (Réglages > Espaces) peut convertir à l'arrivée : vidéos en MP4, photos HEIC doublées d'un JPEG.
+Les documents passent par pandoc, en bac à sable (`--sandbox` : il ne lit que le fichier donné), dans le même service isolé que le reste, ses fichiers de travail dans le dossier de la tâche. Le PDF a sa propre mise en page, façon Notion ([`src/tools/pdf/gabarit.typst`](src/tools/pdf/gabarit.typst)) : A4, police Inter (paquet `fonts-inter` ; à défaut, une police de remplacement), texte aligné à gauche, vraies cases à cocher. Une image du Markdown y devient son texte de remplacement : Typst ne lit que des fichiers présents. La CI garde un PDF d'exemple (artefact `document-pdf`) pour juger la mise en page. Une règle par espace (Réglages > Espaces) peut convertir à l'arrivée : vidéos en MP4, photos HEIC doublées d'un JPEG.
 
 L'onglet **Outils** reçoit un fichier pas encore rangé : il y reste 24 heures, hors des listes, le temps de le convertir, puis de le garder dans un espace ou de le télécharger. Passé ce délai, le nettoyage horaire l'efface.
 
@@ -462,6 +462,12 @@ Puis le service de conversion à jour (il ne voit plus non plus les sauvegardes 
 
 ```bash
 install -m 644 /opt/dashu/src/deploy/lxc/dashu-worker.service /etc/systemd/system/ && systemctl daemon-reload && systemctl restart dashu-worker
+```
+
+La police des PDF (sans elle, le PDF sort quand même, dans une police de remplacement) :
+
+```bash
+apt-get install -y fonts-inter
 ```
 
 Essai : envoyer un fichier `.md`, « Convertir » > « En PDF ». Si le PDF échoue (`journalctl -u dashu-worker -n 20` montre l'erreur de Typst), c'est sans doute l'écart de version entre pandoc et Typst : essayer une autre version de Typst dans la commande ci-dessus.

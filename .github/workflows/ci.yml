@@ -67,9 +67,12 @@ jobs:
       # (deploy/lxc/dashu-worker.service) : dossier courant « / » en lecture
       # seule, seul /srv/dashu/tmp inscriptible, pas de réseau. Le PDF y
       # échouait sur le serveur alors que tous les tests passaient. pandoc
-      # 3.1.11.1 est celui de Debian 13 ; Typst, la version de install.sh.
+      # 3.1.11.1 est celui de Debian 13 ; Typst, la version de install.sh ;
+      # la police Inter, comme sur le serveur. Le PDF produit est gardé
+      # (artefact « document-pdf ») pour juger la mise en page.
       - name: Documents dans le bac à sable du service de conversion
         run: |
+          sudo apt-get install -y -q fonts-inter
           curl -fsSL -o "$RUNNER_TEMP/pandoc.deb" \
             https://github.com/jgm/pandoc/releases/download/3.1.11.1/pandoc-3.1.11.1-1-amd64.deb
           sudo dpkg -i "$RUNNER_TEMP/pandoc.deb"
@@ -89,9 +92,16 @@ jobs:
             -p NoNewPrivileges=yes \
             -p RestrictSUIDSGID=yes \
             -p MemoryMax=1536M \
+            -E DOCUMENT_PDF=/srv/dashu/tmp/document.pdf \
             /usr/local/bin/dashu-tests --ignored --exact tools::worker::tests::documents_dans_le_bac_a_sable \
             | tee documents.log
           grep -q "test result: ok. 1 passed" documents.log
+      - name: PDF d'exemple
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-pdf
+          path: /srv/dashu/tmp/document.pdf
+          retention-days: 14
 
   docker:
     name: image Docker

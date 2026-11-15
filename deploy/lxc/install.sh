@@ -32,8 +32,9 @@ say "Paquets système"
 apt-get update -q
 apt-get -y -q install curl git ca-certificates build-essential pkg-config openssl sqlite3 rsync
 # Outils de conversion : vidéos, photos HEIC et PDF ; documents (Markdown et
-# texte vers PDF, HTML, DOCX) par pandoc
-apt-get -y -q install ffmpeg ghostscript libheif-examples pandoc xz-utils
+# texte vers PDF, HTML, DOCX) par pandoc, avec la police Inter pour les PDF
+# (src/tools/pdf/gabarit.typst)
+apt-get -y -q install ffmpeg ghostscript libheif-examples pandoc xz-utils fonts-inter
 # Typst, moteur PDF de pandoc (bien plus léger que LaTeX) : binaire officiel,
 # version fixée, contemporaine du pandoc de Debian 13 (README, « Compression
 # et conversions »).
