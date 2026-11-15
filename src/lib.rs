@@ -168,6 +168,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/delete", post(files::delete))
         .route("/files/{id}/move", post(files::move_to_space))
         .route("/files/{id}/keep", post(files::keep))
+        .route("/files/{id}/tags", post(files::tags::add))
+        .route("/files/{id}/tags/{tag_id}", delete(files::tags::remove))
         .route("/folders", post(folders::create))
         .route("/folders/{id}/rename", post(folders::rename))
         .route("/folders/{id}/delete", post(folders::delete))

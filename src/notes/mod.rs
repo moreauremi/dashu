@@ -936,10 +936,13 @@ pub(crate) async fn all_tag_names(db: &SqlitePool, user: i64) -> AppResult<Vec<S
     .await?)
 }
 
-/// Supprime les tags qui ne sont plus portés par aucune note.
-async fn prune_orphan_tags(db: &SqlitePool, user: i64) -> AppResult<()> {
+/// Supprime les tags qui ne sont plus portés par aucune note ni aucun
+/// fichier (les deux partagent la table `tags`).
+pub(crate) async fn prune_orphan_tags(db: &SqlitePool, user: i64) -> AppResult<()> {
     sqlx::query!(
-        "DELETE FROM tags WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)",
+        "DELETE FROM tags WHERE user_id = ?
+           AND NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)
+           AND NOT EXISTS (SELECT 1 FROM file_tags WHERE tag_id = tags.id)",
         user
     )
     .execute(db)

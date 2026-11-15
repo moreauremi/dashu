@@ -81,6 +81,10 @@ Le cahier des charges et ses critères sont dans `SPEC.md`, partie v2. Faits : l
   - Après `dashu-update`, dashu demande au démarrage les vignettes manquantes (200 fichiers au plus à la fois).
 - Reste à faire par Rémi, sur `app.dashu.dev`, après `dashu-update` : envoyer une vraie vidéo d'iPhone, la compresser et l'ouvrir dans l'aperçu.
 
+**Suite de la v2, demandée le 15 novembre 2026** (« fait tout » : la suite annoncée sur le portfolio). Écrite et vérifiée par les tests ; rien n'est encore vérifié sur le serveur.
+
+- [ ] **Tags et recherche dans les fichiers** (étape 3) : les mêmes tags que les notes, posés depuis l'aperçu d'un fichier, montrés dans la liste, avec un filtre par tag (nombre de fichiers par tag) ; recherche sur le nom (FTS5, accents ignorés, début de mot) dans l'endroit montré et tout ce qu'il contient (à la racine : tous les espaces), chaque résultat avec son dossier. Le nettoyage des tags inutilisés tient compte des fichiers (il ne regardait que les notes). La barre de commandes trouvait déjà un fichier par son nom (`/open`). Migration 0014, tests `tests/fichiers_tags.rs` (4).
+
 ## Espaces et outils : avancement
 
 Cahier des charges dans `SPEC.md` (« Espaces et outils »), accepté en entier le 13 novembre 2026. Tout est écrit et vérifié par les tests d'intégration ; **rien n'est encore vérifié sur le serveur** (il faut `dashu-update`, puis essayer depuis le téléphone et l'ordinateur).

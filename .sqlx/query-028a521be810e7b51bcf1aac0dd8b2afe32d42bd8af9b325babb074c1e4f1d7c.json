@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT rowid AS \"id!: i64\" FROM files_fts WHERE files_fts MATCH ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "028a521be810e7b51bcf1aac0dd8b2afe32d42bd8af9b325babb074c1e4f1d7c"
+}

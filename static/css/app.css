@@ -5230,3 +5230,31 @@ input.note-title::placeholder {
 .crumb.is-drop-target {
   border-radius: var(--radius-sm);
 }
+
+/* Tags d'un fichier, sous son nom (page d'aperçu) : la ligne des tags des
+   notes, sans son filet. */
+.file-tags {
+  padding: 8px 0 0;
+  margin: 0;
+  border: 0;
+}
+
+/* Recherche dans l'onglet Fichiers : le dossier de chaque résultat. */
+.files-found {
+  margin: 0 0 12px;
+}
+
+.file-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.file-place .i {
+  width: 12px;
+  height: 12px;
+}
+
+.file-meta .tag {
+  margin-left: 4px;
+}

@@ -6,6 +6,7 @@
     <a class="back-link" href="{{ back }}">{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
     <h1>{{ name }}</h1>
     <p class="muted">{{ meta }}</p>
+    {% include "files/_tags.html" %}
     {% if let Some(expires) = expires %}<p class="file-expires">{{ expires }} · <a href="/tools">Le garder</a></p>{% endif %}
   </div>
   <div class="file-view-actions">

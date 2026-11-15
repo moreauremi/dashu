@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT ft.file_id AS \"file_id!\", t.name AS \"name!\"\n           FROM file_tags ft JOIN tags t ON t.id = ft.tag_id\n           WHERE t.user_id = ?\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "file_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "dc82a2bc0a23bf4a5268895cf01575103f09d2ead0deb1e94553c33a88956207"
+}

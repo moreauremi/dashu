@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO file_tags (file_id, tag_id)\n                 SELECT ?, id FROM tags WHERE user_id = ? AND name = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "23fd2116052e6426bb24d276429c25113d90ed5add6dd24fe2e8bf931e7cf7ba"
+}
