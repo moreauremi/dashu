@@ -231,7 +231,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
   <section class="wrap hero">
     <p class="eyebrow">Open source · auto-hébergé · v2 en cours</p>
     <h1>École, entreprise, perso <span class="spaces">Chacun son tableau de bord</span></h1>
-    <p class="lead">Hermes Dashboard range l'emploi du temps Pronote, les tâches, les notes Markdown et les fichiers par espace : École, Entreprise, Perso, ou ceux qu'on crée. Une seule connexion, un seul binaire Rust, hébergé à la maison.</p>
+    <p class="lead">Hermes Dashboard range l'emploi du temps Pronote, les tâches, les notes et les fichiers par espace : École, Entreprise, Perso, ou ceux qu'on crée, avec des dossiers à l'intérieur. Une seule connexion, un seul binaire Rust, hébergé à la maison.</p>
     <div class="cta">
       <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
       <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
@@ -313,7 +313,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
           <h3>Espaces à la carte</h3>
-          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso réunit les agendas de tous les autres. Supprimer un espace propose d'abord d'en transférer le contenu.</p>
+          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso montre tout : le dashboard, les notes et l'agenda de tous les espaces. Un espace s'archive en fin d'année ; le supprimer propose d'abord d'en transférer le contenu.</p>
           <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Entreprise</span></div>
         </li>
         <li class="feat">
@@ -323,13 +323,13 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
-          <h3>Fichiers</h3>
-          <p>Rangés par espace, envoyés par glisser-déposer, même les gros. Aperçu des photos, vidéos et PDF, et compression en un clic dans un service isolé, sans réseau.</p>
+          <h3>Fichiers et dossiers</h3>
+          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes. On range en glissant, ou par une fenêtre qui montre tout. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversion et compression dans un service isolé, sans réseau.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
-          <h3>Notes Markdown</h3>
-          <p>Aperçu en direct, sauvegarde automatique, tags, épinglage et recherche plein texte qui ignore les accents.</p>
+          <h3>Notes façon Notion</h3>
+          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
@@ -343,8 +343,8 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#sliders"/></svg></div>
-          <h3>À sa main</h3>
-          <p>Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée sur le côté, profil avec photo ou initiales.</p>
+          <h3>Au clavier, à sa main</h3>
+          <p>«&nbsp;/&nbsp;» ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace, sans quitter le clavier. Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée, profil avec photo.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#lock"/></svg></div>
@@ -380,19 +380,21 @@ footer a{color:var(--text-2);text-underline-offset:3px}
       <p class="kicker">Feuille de route</p>
       <h2>Une version à la fois, utilisée avant la suivante</h2>
       <div class="road">
-        <div class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>terminée, en service</small></h3><p>Espaces, notes Markdown, agenda Pronote, API pour un assistant. Depuis : espaces à la carte, dashboard modulaire, profil et réglages d'affichage.</p></div>
+        <div class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>terminée, en service</small></h3><p>Espaces, notes Markdown, agenda Pronote, API pour un assistant. Depuis : espaces à la carte, dashboard modulaire, profil et réglages d'affichage, barre de commandes, éditeur de notes façon Notion.</p></div>
         <div class="step now">
           <h3>v2 · Fichiers et outils<small>en cours</small></h3>
           <ul class="todo">
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Dossiers et sous-dossiers, pour les fichiers et les notes</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Vignettes et aperçu des photos (HEIC compris), vidéos et PDF</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Compression des vidéos, photos et PDF, dans un service isolé</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Compression et conversion des photos, vidéos, sons et PDF, dans un service isolé</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Onglet Outils : déposer un fichier, le convertir, puis le garder ou le télécharger</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Images collées et liens vers les fichiers dans les notes</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Widget Fichiers sur le dashboard</span></li>
             <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Tags et recherche dans les fichiers</span></li>
             <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Partage par lien temporaire et révocable</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Images collées et pièces jointes dans les notes</span></li>
             <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Sauvegarde nocturne des fichiers</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Onglet Outils : convertir images, PDF, documents, audio et vidéo</span></li>
+            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Conversion des documents : Markdown et texte vers PDF, HTML ou DOCX</span></li>
           </ul>
         </div>
         <div class="step"><h3>v3 · OCR</h3><p>Le texte des images et des PDF scannés.</p></div>

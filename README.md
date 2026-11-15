@@ -14,7 +14,7 @@
 
 ---
 
-Hermes Dashboard réunit un tableau de bord, des notes Markdown, l'emploi du temps Pronote et des fichiers, rangés par espaces derrière une seule connexion. Il tient dans **un seul binaire Rust**, hébergé à la maison.
+Hermes Dashboard réunit un tableau de bord, des notes, l'emploi du temps Pronote et des fichiers, rangés par espaces et par dossiers derrière une seule connexion. Il tient dans **un seul binaire Rust**, hébergé à la maison.
 
 Le nom de code du projet reste **dashu** : c'est le nom du dépôt, du binaire et des commandes (`dashu set-password`, `dashu-update`…).
 
@@ -22,7 +22,8 @@ Le nom de code du projet reste **dashu** : c'est le nom du dépôt, du binaire e
 
 - **v1 terminée et en service.** Tous les critères d'acceptation sont vérifiés, la plupart sur le serveur réel. L'application sert au quotidien, sur ordinateur et sur iPhone.
 - **Ajouté depuis, le 12 novembre 2026** : espaces à la carte, dashboard modulaire (grille bento propre à chaque espace, widget Calendrier), profil avec photo, taille de l'interface et barre latérale détachable.
-- **v2 en cours : les fichiers.** L'envoi, la compression et l'aperçu sont en service depuis le 11 novembre 2026. La suite : tags et recherche, partage par lien temporaire, images dans les notes, onglet Outils (voir la [feuille de route](#feuille-de-route)).
+- **Ajouté le 13 novembre 2026** : barre de commandes `/`, éditeur de notes en une seule vue (façon Notion), Perso qui montre tous les espaces, espace dans l'adresse, archivage d'un espace.
+- **v2 en cours : les fichiers.** En service : l'envoi, l'aperçu, la compression et les conversions, l'onglet Outils, les images dans les notes, et les dossiers (essayés sur le serveur le 15 novembre 2026). La suite : tags et recherche, partage par lien temporaire, sauvegarde des fichiers, conversion des documents (voir la [feuille de route](#feuille-de-route)).
 
 Le détail, critère par critère, est dans [STATUS.md](https://github.com/moreauremi/dashu/blob/v1/STATUS.md). Le cahier des charges est dans [SPEC.md](https://github.com/moreauremi/dashu/blob/v1/SPEC.md).
 
@@ -30,20 +31,20 @@ Le détail, critère par critère, est dans [STATUS.md](https://github.com/morea
 
 | Module | Contenu |
 | --- | --- |
-| Espaces | Le contenu est rangé par espaces (par exemple Perso, École, Entreprise), chacun avec sa couleur et son icône, jusqu'à 8 en tout. On passe de l'un à l'autre en un clic, ou par balayage sur téléphone. Perso sert de vue d'ensemble : son agenda réunit ceux de tous les espaces, et il ne se supprime pas. Avant de supprimer un autre espace, l'application montre ce qu'il contient et propose de tout transférer ailleurs. |
+| Espaces | Le contenu est rangé par espaces (par exemple Perso, École, Entreprise), chacun avec sa couleur et son icône, jusqu'à 8 en tout. On passe de l'un à l'autre en un clic, ou par balayage sur téléphone. Perso sert de vue d'ensemble : son dashboard, ses notes et son agenda réunissent ceux de tous les espaces, et il ne se supprime pas. Un espace s'archive (fin d'année, fin de stage) et se restaure. Avant de supprimer un autre espace, l'application montre ce qu'il contient et propose de tout transférer ailleurs. |
 | Dashboard | Une grille bento propre à chaque espace : calendrier (aujourd'hui, trois jours ou la semaine selon la largeur), prochains cours, tâches, notes, fichiers, réglages rapides. On ajoute, déplace et agrandit chaque widget (petit, moyen, grand, ou jusqu'à 4 × 4 cases) à la souris, au clavier ou au doigt ; deux colonnes sur téléphone. Chaque widget se charge seul : un widget lent ne retarde pas les autres. |
-| Notes | Éditeur Markdown avec aperçu en direct, sauvegarde automatique, tags, épinglage, recherche plein texte qui ignore les accents. |
+| Notes | Une seule vue, comme une page Notion : le texte se met en forme pendant qu'on écrit, `/` ouvre le menu des blocs (titres, listes, cases à cocher, tableau, citation, code, lien, image, fichier). Le Markdown reste le format enregistré. Sauvegarde automatique, tags, épinglage, recherche plein texte qui ignore les accents. Une note se range dans un dossier depuis l'éditeur. |
 | Agenda | Flux iCal de Pronote importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine. |
-| Fichiers (v2) | Envoi par glisser-déposer, jusqu'à 2 Go par fichier. Vignettes et aperçu des photos (HEIC comprises), vidéos, PDF et textes. Compression des vidéos, photos et PDF en une copie plus légère. |
+| Fichiers (v2) | Des dossiers dans chaque espace (trois niveaux au plus : Espace / Dossier / Sous-dossier), pour les fichiers et les notes ; on range par une fenêtre qui montre tout, ou en glissant à la souris. Envoi par glisser-déposer, jusqu'à 2 Go par fichier. Vignettes et aperçu des photos (HEIC comprises), vidéos, PDF et textes. Compression et conversion (photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF). L'onglet Outils garde 24 heures un fichier pas encore rangé, le temps de le convertir. |
 | Profil et affichage | Prénom, nom et photo de profil (sans photo, les initiales sur une couleur tirée au hasard). Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée à gauche, qui apparaît au survol du bord. |
 | Connexion | Mot de passe ou Google, sur le même compte. Pas d'inscription publique : seuls les emails autorisés entrent. |
 | API | Une API JSON, désactivée par défaut et protégée par une clé, pour qu'un assistant gère les tâches et les notes et lise l'agenda. |
 
-`Ctrl+K` ouvre une palette de commandes qui cherche dans les notes et mène à chaque page. Sur iPhone, l'application s'installe sur l'écran d'accueil, comme une app.
+`/` ouvre une barre de commandes : ouvrir une note ou un fichier, ajouter une tâche (`/add task Rendre le DM +demain`), changer d'espace, tout au clavier. Sur iPhone, l'application s'installe sur l'écran d'accueil, comme une app.
 
 ## Sous le capot
 
-Rust (axum), SQLite, htmx et askama. Les pages sont rendues par le serveur et htmx s'occupe de l'interactivité. Pas de framework JavaScript : htmx et l'éditeur CodeMirror, rien d'autre.
+Rust (axum), SQLite, htmx et askama. Les pages sont rendues par le serveur et htmx s'occupe de l'interactivité. Pas de framework JavaScript : htmx et l'éditeur de notes (ProseMirror), rien d'autre.
 
 Mesures de la v1 sur le serveur réel, via Cloudflare en 4G simulée : Lighthouse mobile de 98 à 100, 7,6 Mo de mémoire, 0,5 ms de réponse serveur, image Docker de 7 Mo.
 
@@ -85,8 +86,8 @@ Une version à la fois, utilisée au quotidien avant de passer à la suivante.
 
 | Version | Contenu | État |
 | --- | --- | --- |
-| v1 | Espaces, dashboard, notes Markdown, agenda Pronote, API pour un assistant ; puis espaces à la carte, dashboard modulaire, profil et affichage | En service |
-| v2 | Fichiers par espace, partage par lien temporaire, onglet Outils (conversions) | En cours, détail ci-dessous |
+| v1 | Espaces, dashboard, notes Markdown, agenda Pronote, API pour un assistant ; puis espaces à la carte, dashboard modulaire, profil et affichage, barre de commandes, éditeur façon Notion | En service |
+| v2 | Fichiers par espace et par dossier, partage par lien temporaire, onglet Outils (conversions) | En cours, détail ci-dessous |
 | v3 | OCR : texte des images et des PDF scannés | Prévue |
 | v4 | Médias : retouche et détourage de photos dans le navigateur | Prévue |
 | v5 | Audio : lecture des notes à voix haute, transcription des vocaux et des cours | Prévue |
@@ -95,14 +96,16 @@ Une version à la fois, utilisée au quotidien avant de passer à la suivante.
 Avancement de la v2 (une case cochée : en service sur le serveur) :
 
 - [x] Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux de 50 Mo
+- [x] Dossiers et sous-dossiers, pour les fichiers et les notes
 - [x] Vignettes et aperçu des photos (HEIC comprises), vidéos et PDF
-- [x] Compression des vidéos, photos et PDF, dans un service isolé
+- [x] Compression et conversion des photos, vidéos, sons et PDF, dans un service isolé
+- [x] Onglet Outils : déposer un fichier, le convertir, puis le garder ou le télécharger
+- [x] Images collées et liens vers les fichiers dans les notes
 - [x] Widget Fichiers sur le dashboard
 - [ ] Tags et recherche dans les fichiers
 - [ ] Partage par lien temporaire et révocable
-- [ ] Images collées et pièces jointes dans les notes
 - [ ] Sauvegarde nocturne des fichiers
-- [ ] Onglet Outils : convertir images, PDF, documents, audio et vidéo
+- [ ] Conversion des documents : Markdown et texte vers PDF, HTML ou DOCX
 
 ## Branches du dépôt
 
