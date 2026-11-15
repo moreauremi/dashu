@@ -1957,7 +1957,8 @@ ul.note-links {
   display: contents;
 }
 
-.pop-menu button:not(.btn) {
+.pop-menu button:not(.btn),
+.pop-menu > a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1975,8 +1976,24 @@ ul.note-links {
 }
 
 .pop-menu button:not(.btn):hover,
-.pop-menu button:not(.btn):focus-visible {
+.pop-menu button:not(.btn):focus-visible,
+.pop-menu > a:hover,
+.pop-menu > a:focus-visible {
   background: var(--surface-2);
+}
+
+.pop-menu > a {
+  text-decoration: none;
+}
+
+/* Menu « … » : un trait avant l'action qui détruit, en rouge. */
+.pop-sep {
+  margin: 4px 6px;
+  border-top: 1px solid var(--border);
+}
+
+.pop-menu button.pop-danger:not(.btn) {
+  color: var(--danger);
 }
 
 .pop-menu button .dot {
@@ -3636,7 +3653,8 @@ input.note-title::placeholder {
   font-weight: 600;
 }
 
-.pop-menu button .i {
+.pop-menu button .i,
+.pop-menu > a .i {
   flex: none;
   width: 16px;
   height: 16px;

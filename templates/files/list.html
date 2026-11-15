@@ -140,10 +140,27 @@
       <span class="file-meta">{{ folder.summary }}</span>
       {% if let Some(id) = folder.id %}
       <div class="file-actions">
-        {% if let Some(picker) = folder.picker %}
-        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="Déplacer le dossier" aria-label="Déplacer le dossier « {{ folder.name }} »">{{ crate::assets::icon("move")|safe }}</button>
-        {% endif %}
-        <button class="icon-btn" type="button" popovertarget="pm-rename-{{ id }}" title="Renommer" aria-label="Renommer le dossier « {{ folder.name }} »">{{ crate::assets::icon("pencil")|safe }}</button>
+        {#- Les actions d'une ligne : un bouton « … » et son menu, chaque choix
+            en icône et texte. Un choix qui demande une saisie (renommer,
+            supprimer un dossier plein) ouvre sa propre fenêtre, à la place
+            du menu (app.js, « Menus »). -#}
+        <button class="icon-btn" type="button" popovertarget="pm-actions-folder-{{ id }}" title="Actions" aria-label="Actions sur le dossier « {{ folder.name }} »">{{ crate::assets::icon("more")|safe }}</button>
+        <div id="pm-actions-folder-{{ id }}" class="pop-menu" popover aria-label="Actions sur le dossier « {{ folder.name }} »">
+          <button type="button" popovertarget="pm-rename-{{ id }}">{{ crate::assets::icon("pencil")|safe }}Renommer</button>
+          {% if let Some(picker) = folder.picker %}
+          <button type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}Déplacer</button>
+          {% endif %}
+          <div class="pop-sep" role="separator"></div>
+          {% if folder.empty %}
+          <form method="post" action="/folders/{{ id }}/delete" hx-confirm="Supprimer le dossier « {{ folder.name }} » ?">
+            <button class="pop-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer</button>
+          </form>
+          {% else %}
+          {#- Dossier non vide : avertissement, et le choix de ce que devient
+              son contenu (le serveur refuse une suppression sans ce choix). -#}
+          <button class="pop-danger" type="button" popovertarget="pd-delete-{{ id }}">{{ crate::assets::icon("trash")|safe }}Supprimer…</button>
+          {% endif %}
+        </div>
         <div id="pm-rename-{{ id }}" class="pop-menu" popover>
           <p class="pop-title">Renommer le dossier</p>
           <form class="pop-pages" method="post" action="/folders/{{ id }}/rename">
@@ -151,14 +168,7 @@
             <button class="btn btn-primary" type="submit">Renommer</button>
           </form>
         </div>
-        {% if folder.empty %}
-        <form method="post" action="/folders/{{ id }}/delete" hx-confirm="Supprimer le dossier « {{ folder.name }} » ?">
-          <button class="icon-btn" type="submit" aria-label="Supprimer le dossier « {{ folder.name }} »" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
-        </form>
-        {% else %}
-        {#- Dossier non vide : avertissement, et le choix de ce que devient
-            son contenu (le serveur refuse une suppression sans ce choix). -#}
-        <button class="icon-btn" type="button" popovertarget="pd-delete-{{ id }}" aria-label="Supprimer le dossier « {{ folder.name }} »" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
+        {% if !folder.empty %}
         <div id="pd-delete-{{ id }}" class="pop-dialog pop-warning" popover role="alertdialog" aria-labelledby="pd-delete-{{ id }}-title">
           <p class="pop-dialog-title" id="pd-delete-{{ id }}-title">{{ crate::assets::icon("alert")|safe }}Supprimer le dossier « {{ folder.name }} » ?</p>
           <p>Il contient {{ folder.summary }}.</p>
@@ -189,7 +199,10 @@
       </a>
       <span class="file-meta">Note · {{ note.updated }}</span>
       <div class="file-actions">
-        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ note.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="Ranger ailleurs" aria-label="Ranger la note « {{ note.title }} » ailleurs">{{ crate::assets::icon("move")|safe }}</button>
+        <button class="icon-btn" type="button" popovertarget="pm-actions-note-{{ note.id }}" title="Actions" aria-label="Actions sur la note « {{ note.title }} »">{{ crate::assets::icon("more")|safe }}</button>
+        <div id="pm-actions-note-{{ note.id }}" class="pop-menu" popover aria-label="Actions sur la note « {{ note.title }} »">
+          <button type="button" popovertarget="picker" hx-get="{{ note.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}Ranger ailleurs</button>
+        </div>
       </div>
     </li>
     {% endfor %}
@@ -211,9 +224,23 @@
         {%- for name in item.tags %} <span class="tag">#{{ name }}</span>{% endfor -%}
       </span>
       <div class="file-actions">
-        {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
-        <a class="icon-btn" href="/files/{{ item.id }}/download" download hx-boost="false" aria-label="Télécharger {{ item.name }}" title="Télécharger">{{ crate::assets::icon("download")|safe }}</a>
-        <button class="icon-btn" type="button" popovertarget="pm-rename-file-{{ item.id }}" title="Renommer" aria-label="Renommer « {{ item.name }} »">{{ crate::assets::icon("pencil")|safe }}</button>
+        <button class="icon-btn" type="button" popovertarget="pm-actions-file-{{ item.id }}" title="Actions" aria-label="Actions sur « {{ item.name }} »">{{ crate::assets::icon("more")|safe }}</button>
+        <div id="pm-actions-file-{{ item.id }}" class="pop-menu" popover aria-label="Actions sur « {{ item.name }} »">
+          {#- hx-boost="false" : un téléchargement n'est pas une navigation. -#}
+          <a href="/files/{{ item.id }}/download" download hx-boost="false">{{ crate::assets::icon("download")|safe }}Télécharger</a>
+          <button type="button" popovertarget="pm-rename-file-{{ item.id }}">{{ crate::assets::icon("pencil")|safe }}Renommer</button>
+          {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs
+              dossiers ; dans Temporaire, garder le fichier. -#}
+          <button type="button" popovertarget="picker" hx-get="{{ item.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}{% if item.expires.is_some() %}Garder dans un dossier{% else %}Ranger ailleurs{% endif %}</button>
+          {% if !item.conversions.is_empty() %}
+          <button type="button" popovertarget="pm-convert-{{ item.id }}" title="Crée une copie, l'original est gardé">{{ crate::assets::icon("convert")|safe }}Convertir…</button>
+          {% endif %}
+          <div class="pop-sep" role="separator"></div>
+          <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
+            <input type="hidden" name="next" value="{{ here }}">
+            <button class="pop-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer</button>
+          </form>
+        </div>
         <div id="pm-rename-file-{{ item.id }}" class="pop-menu" popover>
           <p class="pop-title">Renommer le fichier</p>
           <form class="pop-pages rename-file" method="post" action="/files/{{ item.id }}/rename">
@@ -223,13 +250,7 @@
             <button class="btn btn-primary" type="submit">Renommer</button>
           </form>
         </div>
-        {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs
-            dossiers ; dans Temporaire, garder le fichier. -#}
-        <button class="icon-btn" type="button" popovertarget="picker" hx-get="{{ item.picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker title="{% if item.expires.is_some() %}Garder dans un dossier{% else %}Ranger ailleurs{% endif %}" aria-label="Ranger « {{ item.name }} »">{{ crate::assets::icon("move")|safe }}</button>
-        {#- Menus de l'app (popover) : par-dessus la page, aux couleurs du
-            thème (voir app.js, « Menus »). -#}
         {% if !item.conversions.is_empty() %}
-        <button class="icon-btn" type="button" popovertarget="pm-convert-{{ item.id }}" title="Convertir : crée une copie, l'original est gardé" aria-label="Convertir « {{ item.name }} »">{{ crate::assets::icon("convert")|safe }}</button>
         <div id="pm-convert-{{ item.id }}" class="pop-menu" popover>
           <p class="pop-title">Convertir</p>
           {%- for (key, label) in item.conversions %}
@@ -241,10 +262,6 @@
           {%- endfor %}
         </div>
         {% endif %}
-        <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
-          <input type="hidden" name="next" value="{{ here }}">
-          <button class="icon-btn" type="submit" aria-label="Supprimer {{ item.name }}" title="Supprimer">{{ crate::assets::icon("trash")|safe }}</button>
-        </form>
       </div>
     </li>
     {% endfor %}

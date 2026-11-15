@@ -1112,8 +1112,16 @@
   /** Facteur de zoom de l'app (taille de l'interface). */
   const zoom = () => parseFloat(getComputedStyle($("#app") || document.body).getPropertyValue("--zoom")) || 1;
 
-  function placeMenu(menu, above) {
+  /** Bouton qui ouvre ce menu. Ouvert depuis un autre menu (« Renommer » du
+   *  menu « … »), qui se ferme alors, il se place sous le bouton de ce menu. */
+  function menuOpener(menu) {
     const opener = $(`[popovertarget="${CSS.escape(menu.id)}"]`);
+    const parent = opener?.closest(".pop-menu");
+    return (parent && $(`[popovertarget="${CSS.escape(parent.id)}"]`)) || opener;
+  }
+
+  function placeMenu(menu, above) {
+    const opener = menuOpener(menu);
     if (!opener) return;
     const z = zoom();
     const r = opener.getBoundingClientRect();
@@ -1139,21 +1147,29 @@
       const menu = event.target;
       if (!(menu instanceof HTMLElement) || !menu.matches(".pop-menu") || event.newState !== "open") return;
       if (menu.getBoundingClientRect().bottom > innerHeight - 8) placeMenu(menu, true);
-      // Au clavier, le premier choix prend le focus.
-      menu.querySelector("button:not([disabled]), input")?.focus({ preventScroll: true });
+      // Au clavier, le premier choix (ou le champ à remplir) prend le focus ;
+      // un nom à changer est sélectionné, prêt à être retapé.
+      const first = menu.querySelector('button:not([disabled]), a[href], input:not([type="hidden"])');
+      first?.focus({ preventScroll: true });
+      if (first instanceof HTMLInputElement && first.type === "text") first.select();
     },
     true,
   );
 
-  // Fenêtre « Ranger » (#picker, layout.html) : un bouton data-picker l'ouvre
-  // (popovertarget) et y charge les choix de son élément (hx-get). Ouverte
-  // depuis un menu, elle le ferme ; ses choix arrivés, le premier possible
-  // prend le focus ; fermée, elle se vide, pour ne jamais montrer les choix
-  // d'un autre élément pendant le chargement suivant.
+  // Un choix de menu qui ouvre une autre fenêtre (sous-menu, « Ranger »,
+  // avertissement) ferme d'abord son menu : la nouvelle fenêtre le remplace,
+  // au lieu de s'empiler dessus. Ce clic passe avant l'ouverture.
   document.addEventListener("click", (event) => {
-    const opener = event.target instanceof Element && event.target.closest("[data-picker]");
-    opener?.closest(".pop-menu")?.hidePopover();
+    const opener = event.target instanceof Element && event.target.closest("[popovertarget]");
+    const menu = opener?.closest(".pop-menu");
+    if (menu && opener.getAttribute("popovertarget") !== menu.id) menu.hidePopover();
   });
+
+  // Fenêtre « Ranger » (#picker, layout.html) : un bouton data-picker l'ouvre
+  // (popovertarget) et y charge les choix de son élément (hx-get). Ses choix
+  // arrivés, le premier possible prend le focus ; fermée, elle se vide, pour
+  // ne jamais montrer les choix d'un autre élément pendant le chargement
+  // suivant.
   document.addEventListener("htmx:afterSwap", (event) => {
     if (event.detail.target?.id !== "picker-body") return;
     const choice = $("#picker-body button:not([disabled])");
