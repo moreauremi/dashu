@@ -1173,6 +1173,20 @@
     true,
   );
 
+  // « Copier » (lien de partage d'un fichier) : le texte du champ nommé par
+  // data-copy part dans le presse-papiers ; sans lui, le champ est sélectionné.
+  document.addEventListener("click", async (event) => {
+    const button = event.target instanceof Element && event.target.closest("[data-copy]");
+    const field = button && document.getElementById(button.dataset.copy);
+    if (!field) return;
+    try {
+      await navigator.clipboard.writeText(field.value);
+      button.textContent = "Copié";
+    } catch {
+      field.select();
+    }
+  });
+
   // Choix d'un espace dans un formulaire (ajout d'une tâche) : la valeur et
   // le nom passent sur le bouton qui a ouvert le menu.
   document.addEventListener("click", (event) => {

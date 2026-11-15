@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{% if let Some(file) = file %}{{ file.name }}{% else %}Lien invalide{% endif %} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block body %}
+{#- Page publique d'un lien de partage, sans connexion : le nom et la taille
+    du fichier, et son téléchargement. Rien d'autre du compte n'apparaît. Un
+    lien expiré, révoqué ou inconnu donne la même page. -#}
+<main class="auth">
+  <div class="auth-card share-card">
+    <h1 class="wordmark wordmark-lg">{{ crate::assets::logo()|safe }}</h1>
+    {% if let Some(file) = file %}
+    <p class="muted auth-lead">On t'a partagé un fichier</p>
+    <p class="share-file">{{ crate::assets::icon("file")|safe }}<span>{{ file.name }}</span></p>
+    <p class="muted">{{ file.size }} · lien valable {{ file.until }}</p>
+    <a class="btn btn-primary btn-block" href="/s/{{ token }}/fichier" download>{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></a>
+    {% else %}
+    <p class="alert alert-error" role="alert">Ce lien n'est pas valable : il a expiré, a été révoqué, ou n'a jamais existé.</p>
+    <p class="muted">Demande un nouveau lien à la personne qui te l'a envoyé.</p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

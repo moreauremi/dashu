@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM share_links WHERE expires_at < ?1 OR revoked_at < ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "db725f36d7bad031b4d504414e37fbe46c646ead22ce693bb1ee69add2106052"
+}

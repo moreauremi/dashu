@@ -113,6 +113,27 @@ pub fn build_router(state: AppState) -> Router {
     let login_limit = || {
         GovernorLayer::new(limiter_config.clone()).error_handler(auth::ratelimit::too_many_requests)
     };
+    // Liens de partage (pages publiques) : leur propre compteur, plus large
+    // (20 d'un coup, puis un toutes les 3 s) ; sans quoi ouvrir un lien
+    // entamerait les tentatives de connexion.
+    let share_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(Duration::from_secs(3))
+            .burst_size(20)
+            .key_extractor(auth::ratelimit::ClientIp)
+            .finish()
+            .expect("configuration du limiteur valide"),
+    );
+    let share_limiter = share_config.limiter().clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            tick.tick().await;
+            share_limiter.retain_recent();
+        }
+    });
+    let share_limit =
+        || GovernorLayer::new(share_config.clone()).error_handler(files::share::too_many_requests);
 
     // --- Routes qui passent par la session et la protection CSRF ----------
     let app = Router::new()
@@ -168,6 +189,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/{id}/delete", post(files::delete))
         .route("/files/{id}/move", post(files::move_to_space))
         .route("/files/{id}/keep", post(files::keep))
+        .route("/files/{id}/share", post(files::share::create))
+        .route(
+            "/files/{id}/share/{link}/revoke",
+            post(files::share::revoke),
+        )
         .route("/files/{id}/tags", post(files::tags::add))
         .route("/files/{id}/tags/{tag_id}", delete(files::tags::remove))
         .route("/folders", post(folders::create))
@@ -233,6 +259,12 @@ pub fn build_router(state: AppState) -> Router {
     // restent en JSON, au lieu d'être transformées en pages HTML.
     let router = Router::new()
         .route("/health", get(health))
+        // Liens de partage : publics, sans session ni connexion.
+        .route("/s/{token}", get(files::share::page).layer(share_limit()))
+        .route(
+            "/s/{token}/fichier",
+            get(files::share::download).layer(share_limit()),
+        )
         .route("/static/{*path}", get(assets::serve))
         .merge(app)
         .layer(from_fn(web::error::error_pages))

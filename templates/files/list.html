@@ -207,6 +207,7 @@
       <span class="file-meta">
         {%- if let Some(place) = item.place %}<span class="file-place">{{ crate::assets::icon("folder")|safe }}{{ place }}</span> · {% endif -%}
         {{ item.kind }} · {{ item.size }} · {% if let Some(expires) = item.expires %}{{ expires }}{% else %}{{ item.updated }}{% endif %}
+        {%- if item.shared %} <span class="file-shared" title="Partagé par un lien valable">{{ crate::assets::icon("link")|safe }}<span class="sr-only">partagé</span></span>{% endif -%}
         {%- for name in item.tags %} <span class="tag">#{{ name }}</span>{% endfor -%}
       </span>
       <div class="file-actions">

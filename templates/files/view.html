@@ -17,6 +17,11 @@
       <button class="btn" type="submit" title="L'original est supprimé, cette copie prend son nom">{{ crate::assets::icon("replace")|safe }}<span>Remplacer l'original</span></button>
     </form>
     {% endif %}
+    {% if !share_html.is_empty() %}
+    {#- Partager par un lien temporaire (files/_share.html, déjà rendu). -#}
+    <button class="btn" type="button" popovertarget="pm-share">{{ crate::assets::icon("link")|safe }}<span>Partager</span></button>
+    <div id="pm-share" class="pop-menu share-menu" popover>{{ share_html|safe }}</div>
+    {% endif %}
     {#- Fenêtre « Ranger » (layout.html) : tous les espaces et leurs dossiers ;
         pour un fichier de l'onglet Outils, le garder. -#}
     <button class="btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}<span>{% if expires.is_some() %}Garder{% else %}Ranger{% endif %}</span></button>

@@ -1,0 +1,37 @@
+{#- Bloc « Partager » de l'aperçu d'un fichier (dans son menu) : créer un
+    lien de 1 heure, 1 jour ou 7 jours, et révoquer les liens encore valables.
+    Chaque action remplace ce bloc (htmx). Le lien entier ne s'affiche qu'à
+    sa création : la base n'en garde que l'empreinte. -#}
+<div id="file-share" class="file-share">
+  {%- if let Some(link) = new_link %}
+  <div class="share-new" role="status">
+    <p>Lien créé, valable {{ new_for }}. Copie-le maintenant : il ne sera plus affiché.</p>
+    <div class="share-copy">
+      <input id="share-link" type="text" value="{{ link }}" readonly aria-label="Lien de partage">
+      <button class="btn btn-primary" type="button" data-copy="share-link">Copier</button>
+    </div>
+  </div>
+  {%- endif %}
+  <p class="pop-title">Créer un lien valable</p>
+  <div class="share-durations">
+    {%- for (key, _seconds, label) in durations %}
+    <form hx-post="/files/{{ id }}/share" hx-target="#file-share" hx-swap="outerHTML">
+      <input type="hidden" name="duree" value="{{ key }}">
+      <button class="btn" type="submit">{{ label }}</button>
+    </form>
+    {%- endfor %}
+  </div>
+  {%- if !links.is_empty() %}
+  <p class="pop-title">Liens valables</p>
+  <ul class="share-links" role="list">
+    {%- for link in links %}
+    <li>
+      <span>{{ crate::assets::icon("link")|safe }}{{ link.expires }} <span class="muted">· {{ link.created }}</span></span>
+      <form hx-post="/files/{{ id }}/share/{{ link.id }}/revoke" hx-target="#file-share" hx-swap="outerHTML">
+        <button class="btn" type="submit">Révoquer</button>
+      </form>
+    </li>
+    {%- endfor %}
+  </ul>
+  {%- endif %}
+</div>
