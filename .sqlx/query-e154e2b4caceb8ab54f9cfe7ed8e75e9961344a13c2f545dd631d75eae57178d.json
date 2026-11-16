@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM note_tags WHERE note_id = ?\n           AND tag_id IN (SELECT id FROM tags WHERE name = (SELECT name FROM tags WHERE id = ?))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "e154e2b4caceb8ab54f9cfe7ed8e75e9961344a13c2f545dd631d75eae57178d"
+}

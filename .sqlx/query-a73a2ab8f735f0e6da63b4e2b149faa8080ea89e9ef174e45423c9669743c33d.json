@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, folder_id, title, body_md, pinned AS \"pinned!: bool\", updated_at\n           FROM notes WHERE id = ? AND user_id = ?",
+  "query": "SELECT space_id, folder_id, title, body_md, pinned AS \"pinned!: bool\", updated_at,\n                  revision AS \"revision!: i64\"\n           FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "name": "updated_at",
         "ordinal": 5,
         "type_info": "Integer"
+      },
+      {
+        "name": "revision!: i64",
+        "ordinal": 6,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -43,8 +48,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "2212fc8f1d3fc9e727c3c9095c136c252a1abf7c34266212b83bfaf082d8c57f"
+  "hash": "a73a2ab8f735f0e6da63b4e2b149faa8080ea89e9ef174e45423c9669743c33d"
 }

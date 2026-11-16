@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT nt.note_id AS \"note_id!\", t.name AS \"name!\"\n           FROM note_tags nt\n           JOIN tags t ON t.id = nt.tag_id\n           JOIN notes n ON n.id = nt.note_id\n           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "note_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "39868d152eeecb6a95ab2507e3ac9e490963e94b70607c4485b94e429624d3a8"
+}

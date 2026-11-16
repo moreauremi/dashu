@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE notes SET pinned = NOT pinned WHERE id = ? AND user_id = ? RETURNING pinned AS \"pinned!: bool\"",
+  "query": "UPDATE notes SET pinned = NOT pinned WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) RETURNING pinned AS \"pinned!: bool\"",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "b01aa4eabf4922654bf451c1a5cbefc4dac2b7b0fc2dbbf62099e2f07f6783ff"
+  "hash": "b190da09041a30750496e15fb3113885e69dfdbe42216ed239724e33b5e0aee0"
 }

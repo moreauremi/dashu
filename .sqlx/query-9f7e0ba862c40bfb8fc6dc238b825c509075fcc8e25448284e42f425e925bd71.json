@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET title = ?, body_md = ?, updated_at = ?, revision = revision + 1\n               WHERE id = ? AND revision = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)\n               RETURNING revision AS \"revision!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "revision!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9f7e0ba862c40bfb8fc6dc238b825c509075fcc8e25448284e42f425e925bd71"
+}

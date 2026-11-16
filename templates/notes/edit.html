@@ -33,6 +33,8 @@
         {#- Source Markdown de la note. L'éditeur la lit à l'ouverture et la
             réécrit à chaque modification ; c'est elle qui part au serveur. -#}
         <textarea name="body_md" hidden>{{ body_md }}</textarea>
+        {#- Version de la note : refusée si quelqu'un l'a modifiée entre-temps. -#}
+        <input type="hidden" name="revision" id="note-revision" value="{{ revision }}">
       </form>
 
       {#- Dossier et tags de la note, sur une ligne. -#}
