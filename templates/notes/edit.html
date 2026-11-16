@@ -5,6 +5,8 @@
   <header class="editor-head">
     <a class="icon-btn" href="/notes" aria-label="Retour à la liste des notes">{{ crate::assets::icon("arrow-left")|safe }}</a>
     <span id="save-status" class="save-status" role="status" data-state="saved">{{ saved_label }}</span>
+    {#- Les autres personnes sur la note, en direct (frontend/editor/live.js). -#}
+    <span id="live-peers" class="live-peers" role="group" hidden></span>
 
     <div class="editor-actions">
       {% include "notes/_pin.html" %}
@@ -24,8 +26,10 @@
     <div class="note-sheet">
       {#- Sauvegarde automatique : le formulaire s'envoie 2 s après la dernière
           modification (ou tout de suite sur « flush », déclenché par Ctrl+S).
-          Le serveur répond par le texte de l'indicateur d'état. -#}
-      <form id="note-form" class="note-form" data-save-url="/notes/{{ id }}" data-csrf="{{ shell.csrf }}"
+          Le serveur répond par le texte de l'indicateur d'état. En direct
+          (data-live-url), l'éditeur enregistre par le canal et le formulaire
+          ne sert plus que de repli. -#}
+      <form id="note-form" class="note-form" data-save-url="/notes/{{ id }}" data-live-url="/notes/{{ id }}/live" data-csrf="{{ shell.csrf }}"
             hx-post="/notes/{{ id }}" hx-trigger="input delay:2s, flush, submit"
             hx-target="#save-status" hx-swap="innerHTML" hx-sync="this:replace">
         <input class="note-title" type="text" name="title" value="{{ title }}" maxlength="200" autocomplete="off"

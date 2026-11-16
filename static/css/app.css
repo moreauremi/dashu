@@ -2558,6 +2558,58 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   padding: 0;
 }
 
+/* Notes en direct (frontend/editor/live.js) : les avatars des autres
+   personnes sur la note, puis leur curseur et leur sélection dans le texte.
+   La couleur vient de l'attribut data-accent (celle de leur avatar). */
+.live-peers {
+  display: inline-flex;
+  flex: none;
+}
+
+.live-peers[hidden] {
+  display: none;
+}
+
+.live-peers .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.live-peers .avatar + .avatar {
+  margin-left: -6px;
+}
+
+.live-caret {
+  position: relative;
+  margin-right: -2px;
+  border-left: 2px solid var(--accent);
+  pointer-events: none;
+  word-break: normal;
+}
+
+.live-name {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 1px 5px;
+  border-radius: 4px 4px 4px 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.live-sel {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .editor-actions {
   display: flex;
   align-items: center;

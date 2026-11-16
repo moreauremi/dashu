@@ -228,6 +228,23 @@ Demandé par Rémi le 16 novembre 2026, cahier des charges dans `SPEC.md` (« Es
 - [ ] Essayé sur le serveur, avec un second compte réel.
 - Migration 0016 (`space_members`, `space_invitations`, vue `space_access`, `notes.revision`). La colonne `user_id` des contenus garde l'auteur ; l'accès passe par l'espace. Une centaine de requêtes ont changé de filtre ; restent par compte les agendas, Temporaire, les envois en cours et les conversions.
 
+## Notes en temps réel : avancement
+
+Demandé par Rémi le 16 novembre 2026, cahier des charges dans `SPEC.md` (« Notes en temps réel »). Le serveur est vérifié par les tests d'intégration (`tests/notes_direct.rs`, 8 tests sur un vrai serveur local avec un vrai client WebSocket, et un test de l'origine dans `src/notes/live.rs`). L'éditeur a été essayé dans le navigateur, sur une instance locale, avec la même note ouverte dans deux onglets. **Pas encore sur le serveur**, ni à travers le tunnel Cloudflare et Tailscale.
+
+- [x] Ce qu'un onglet tape apparaît dans l'autre dans la seconde. Vu dans le navigateur. Deux ajouts au même endroit au même moment (l'envoi du premier retardé exprès de 1,5 s) : les deux onglets finissent avec le même texte, les deux ajouts gardés, et la base l'enregistre. Tests `les_etapes_sont_numerotees_et_diffusees` (numérotation, version dépassée ignorée, page arrivée en retard).
+- [x] Le curseur de l'autre s'affiche avec son prénom et sa couleur, et suit le texte ; ses avatars sont en haut de la note. Vu dans le navigateur. Le nom et la couleur viennent du profil, jamais de la page. Test `curseurs_titre_et_presents_viennent_du_serveur`.
+- [x] Le titre suit en direct. Test `curseurs_titre_et_presents_viennent_du_serveur`.
+- [x] Seul le Markdown de la dernière version est enregistré ; l'API le lit ; l'indicateur affiche « Enregistré à » dans les deux onglets. Test `seule_la_derniere_version_est_enregistree`. Vu dans le navigateur.
+- [x] Coupure courte : la session est retrouvée (test `une_reconnexion_retrouve_la_session`). Coupure longue (serveur arrêté puis relancé) : le texte tapé pendant la coupure est enregistré par le repli classique, avec le garde-fou de version. Vu dans le navigateur. Cet essai a montré un trou, corrigé : quitter la page pendant une coupure perdait ce qui n'était pas parti, et le repli (`sendBeacon`) part maintenant.
+- [x] Sans WebSocket (pas de réponse en 4 secondes, navigateur trop ancien, note trop fréquentée), l'éditeur enregistre comme avant. C'est le même chemin que le repli ci-dessus, et les tests de l'enregistrement classique passent toujours.
+- [x] Refus sans session, d'une autre origine (dont `dashu.dev`), sans en-tête `Origin`, ou sur une note inaccessible ; un membre retiré perd le canal à son envoi suivant, ou au signe de vie suivant (30 s au plus). Tests `refus_sans_session_d_une_autre_origine_ou_sans_acces`, `un_membre_retire_perd_le_canal`, `une_note_supprimee_ferme_la_session`, `origine_de_dashu_seulement`.
+- [x] Une note modifiée par l'API pendant l'édition n'est pas écrasée : les présents voient « Modifiée ailleurs entre-temps ». Test `une_modification_exterieure_n_est_pas_ecrasee`.
+- [x] Ctrl+Z n'annule que ses propres modifications. Vu dans le navigateur (une saisie annulée, celle de l'autre onglet gardée).
+- [x] Aucune erreur bloquée par la CSP : `connect-src 'self'` laisse passer la WebSocket de la même adresse.
+- [ ] Essayé sur le serveur, à travers le tunnel Cloudflare et Tailscale, avec deux comptes réels et sur l'iPhone. À vérifier en particulier : que Tailscale transmet l'hôte d'origine (sinon l'origine est refusée et l'éditeur reste en enregistrement classique, sans rien perdre).
+- Dépendances : `prosemirror-collab` 1.3.1 côté éditeur (justifié dans le README), fonction `ws` d'axum côté serveur ; `tokio-tungstenite` et `futures-util` pour les tests seulement. Aucune migration : les étapes ne vivent qu'en mémoire.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

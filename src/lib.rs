@@ -53,6 +53,8 @@ pub struct AppState {
     pub google: Option<Arc<GoogleOidc>>,
     /// Envois de fichiers dont un morceau est en train d'arriver.
     pub uploads_busy: files::Busy,
+    /// Sessions des notes ouvertes en direct (voir `notes::live`).
+    pub live: Arc<notes::live::Live>,
 }
 
 impl AppState {
@@ -72,6 +74,7 @@ impl AppState {
             http,
             google,
             uploads_busy: Default::default(),
+            live: Arc::default(),
         })
     }
 }
@@ -171,6 +174,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/notes", get(notes::list).post(notes::create))
         .route("/notes/new", get(notes::new_page))
         .route("/notes/{id}", get(notes::edit_page).post(notes::save))
+        .route("/notes/{id}/live", get(notes::live::socket))
         .route("/notes/{id}/pin", post(notes::toggle_pin))
         .route("/notes/{id}/move", post(notes::move_to_space))
         .route("/notes/{id}/folder", post(notes::set_folder))

@@ -47,10 +47,14 @@ export function placeholder() {
 }
 
 /** Une note se termine toujours par un paragraphe : après un tableau ou un
- *  bloc de code, on peut cliquer dessous et continuer à écrire. */
+ *  bloc de code, on peut cliquer dessous et continuer à écrire. En direct, seule
+ *  une modification faite ici l'ajoute : si chaque page réagissait aussi aux
+ *  modifications des autres, toutes l'ajouteraient en même temps, et la note
+ *  finirait par plusieurs paragraphes vides. */
 export function trailingParagraph() {
   return new Plugin({
-    appendTransaction(_trs, _old, state) {
+    appendTransaction(trs, _old, state) {
+      if (trs.some((tr) => tr.getMeta("collab$"))) return null;
       const last = state.doc.lastChild;
       if (last && last.type === N.paragraph) return null;
       return state.tr.insert(state.doc.content.size, N.paragraph.create());

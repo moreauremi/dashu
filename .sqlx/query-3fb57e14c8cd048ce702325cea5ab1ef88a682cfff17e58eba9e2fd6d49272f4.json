@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT title, body_md, revision AS \"revision!: i64\" FROM notes\n           WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "title",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "body_md",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "revision!: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3fb57e14c8cd048ce702325cea5ab1ef88a682cfff17e58eba9e2fd6d49272f4"
+}

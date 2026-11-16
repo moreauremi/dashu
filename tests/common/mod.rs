@@ -147,6 +147,24 @@ impl TestApp {
             .expect("création du compte");
     }
 
+    /// Sert l'application sur un vrai port local (127.0.0.1, port libre), pour
+    /// les tests qui ont besoin d'une vraie connexion, comme les WebSockets
+    /// des notes en direct. Le serveur s'arrête avec le runtime du test.
+    pub async fn serve(&self) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("port local");
+        let addr = listener.local_addr().expect("adresse locale");
+        let app = self
+            .router
+            .clone()
+            .into_make_service_with_connect_info::<std::net::SocketAddr>();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serveur de test");
+        });
+        addr
+    }
+
     /// Nouveau navigateur, sans cookie, avec sa propre adresse IP.
     pub fn client(&self) -> Client {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -308,6 +326,18 @@ pub struct Client {
     ip: String,
     /// En-têtes ajoutés à la prochaine requête seulement.
     extra: Vec<(String, String)>,
+}
+
+impl Client {
+    /// En-tête `Cookie` de ce navigateur (session comprise), pour ouvrir une
+    /// vraie connexion à côté du routeur de test.
+    pub fn cookie_header(&self) -> String {
+        self.cookies
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
 }
 
 pub struct TestResponse {

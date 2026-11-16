@@ -220,7 +220,7 @@ export const schema = new Schema({
       ],
       toDOM: (mark) => [
         "a",
-        { href: mark.attrs.href, title: mark.attrs.title, rel: "noopener noreferrer nofollow" },
+        { href: safeHref(mark.attrs.href) || "#", title: mark.attrs.title, rel: "noopener noreferrer nofollow" },
         0,
       ],
     },

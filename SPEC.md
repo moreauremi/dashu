@@ -895,3 +895,71 @@ Par défaut, pour avancer :
 - **Garde-fou de version** sur les notes plutôt que l'édition à plusieurs en direct, qui demanderait un serveur temps réel (WebSocket) et un éditeur collaboratif.
 - **Pas de rôle « lecture seule »**, et pas d'affichage de l'auteur dans les listes : à voir à l'usage.
 - **Le tableau de bord d'un espace partagé** (disposition des widgets) est commun, et tout membre peut le modifier.
+
+# dashu — Notes en temps réel
+
+Nov 16, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 16 novembre 2026, juste après les espaces partagés : voir les modifications des autres dans une note partagée pendant qu'ils écrivent, avec le curseur de chacun, comme dans un Google Doc. Ça remplace, quand la connexion le permet, le garde-fou de version (« Modifiée ailleurs entre-temps »), qui protégeait sans permettre d'écrire à plusieurs.
+
+## Fonctionnement
+
+**Pour l'utilisateur.**
+
+- Une note ouverte se connecte au serveur en direct. Ce que tape quelqu'un d'autre apparaît dans la seconde, au bon endroit, sans recharger la page et sans perdre ce qu'on est en train d'écrire.
+- Le curseur de chaque autre personne s'affiche dans le texte : un trait de sa couleur (celle de son avatar), avec son prénom au-dessus. Sa sélection est surlignée de la même couleur.
+- En haut de la note, à côté de l'indicateur d'état, les avatars des personnes présentes sur la note.
+- Le titre suit aussi en direct.
+- L'enregistrement reste automatique, et l'indicateur dit toujours la vérité : « Enregistré à 14:05 » n'apparaît qu'une fois le texte écrit dans la base.
+- Annuler (Ctrl+Z) n'annule que ses propres modifications, pas celles des autres.
+- Ça marche dans toutes les notes, pas seulement les partagées : la même note ouverte sur l'ordinateur et sur l'iPhone reste à jour des deux côtés.
+
+**Coupures.**
+
+- Si la connexion tombe, on continue d'écrire ; l'indicateur affiche « Reconnexion… ». Au retour, les modifications faites entre-temps partent et se fusionnent avec celles des autres.
+- Le serveur garde la session d'une note une minute après le départ de la dernière personne. Une coupure plus longue, ou un redémarrage de dashu, oblige à repartir de la version enregistrée. Ce qui n'était pas encore parti est alors enregistré comme avant, avec le garde-fou de version : ça passe si personne d'autre n'a modifié la note, sinon le message habituel le dit.
+- Sans connexion en direct (navigateur trop ancien, réseau qui bloque), l'éditeur marche comme avant : enregistrement toutes les deux secondes et garde-fou de version.
+- Une note modifiée hors de l'éditeur pendant qu'on l'édite à plusieurs (par Hermès ou l'API) : rien n'est écrasé. Les personnes présentes voient « Modifiée ailleurs entre-temps : copie tes changements, puis recharge la note ».
+
+**Comment ça marche** (ProseMirror, module officiel `prosemirror-collab`) :
+
+- Le serveur sert d'**arbitre** : il numérote les modifications de chaque note (les « étapes » de ProseMirror) et les renvoie, dans le même ordre, à tous ceux qui ont la note ouverte. Une étape envoyée sur une version dépassée est ignorée. Son auteur reçoit d'abord les étapes qui lui manquaient, recale les siennes par-dessus, puis les renvoie.
+- Le serveur ne lit pas le contenu des étapes. Le Markdown reste le format stocké : celui qui vient d'écrire envoie, une seconde après, le Markdown de la note à sa version confirmée, et le serveur l'enregistre si cette version est toujours la dernière.
+- La connexion est une **WebSocket**, un canal ouvert en permanence entre la page et le serveur, sur `/notes/{id}/live`. Le tunnel Cloudflare et Tailscale la laissent passer. Le serveur envoie un signe de vie toutes les 30 secondes, pour que la connexion ne soit pas coupée faute d'activité.
+
+## Sécurité
+
+- La connexion exige une session ouverte et l'accès à la note (son espace est dans `space_access`). Sinon : refus, sans ouvrir de canal.
+- L'**origine** de la connexion doit être dashu lui-même (en-tête `Origin` comparé à l'hôte de la requête). Une page d'un autre site, même sous `dashu.dev`, ne peut pas ouvrir de canal avec le cookie de l'utilisateur.
+- L'accès est revérifié à chaque envoi (étapes, titre, enregistrement) et toutes les 30 secondes. Un membre retiré de l'espace, une note déplacée hors de ses espaces ou une adresse retirée de `ALLOWED_EMAILS` ferment le canal.
+- Le nom et la couleur affichés à côté d'un curseur viennent du serveur (le profil du compte), jamais de ce qu'envoie la page.
+- Limites : 1 Mo par message, 1000 étapes par envoi, 20 personnes par note. Au-delà de 100 000 étapes dans une même session, tout le monde repart de la version enregistrée.
+- Les étapes reçues ne sont jamais rendues comme du HTML brut : elles passent par le schéma de l'éditeur. Un lien venu d'un autre est nettoyé comme un lien collé (`safeHref`). L'enregistrement passe par le même Markdown que d'habitude, et l'affichage par ammonia.
+
+## Critères d'acceptation
+
+- [ ] Deux personnes sur la même note : ce que l'une tape apparaît chez l'autre en moins d'une seconde, y compris en tapant au même moment au même endroit, sans rien perdre
+- [ ] Le curseur et la sélection de l'autre s'affichent avec son prénom et sa couleur ; les avatars des présents sont en haut de la note
+- [ ] Le titre suit en direct
+- [ ] Le Markdown enregistré est celui de la dernière version ; l'API et la recherche le voient
+- [ ] Une coupure courte (moins d'une minute) ne perd rien ; une coupure longue retombe sur le garde-fou de version
+- [ ] Sans WebSocket, l'éditeur marche comme avant
+- [ ] Une connexion sans session, d'une autre origine ou sur une note inaccessible est refusée ; un membre retiré perd le canal
+- [ ] Une note modifiée par l'API pendant l'édition n'est pas écrasée
+- [ ] Ctrl+Z n'annule que ses propres modifications
+- [ ] Chaque point a ses tests d'intégration (serveur) et a été essayé dans le navigateur à deux ; STATUS et README à jour
+
+## Décisions
+
+Prise avec Rémi le 16 novembre 2026 :
+
+- **Collab ProseMirror et WebSocket**, plutôt que Yjs (plus lourd, avec deux vérités à garder d'accord) ou une simple présence sans frappe en direct.
+
+Par défaut, pour avancer :
+
+- **Toutes les notes** passent en direct, pas seulement celles des espaces partagés : un seul chemin à entretenir, et la même note sur deux appareils en profite.
+- **Pas d'édition hors ligne** fusionnée plus tard : au-delà d'une minute de coupure, on retombe sur le garde-fou de version.
+- **Le serveur ne garde pas les étapes sur le disque** : seulement en mémoire, le temps de la session. Le Markdown enregistré reste la seule vérité.
+- **Les tags et le dossier** ne suivent pas en direct (ils se voient au rechargement).

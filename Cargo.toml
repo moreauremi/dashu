@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 # Serveur
 tokio = { version = "1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync", "io-util", "fs"] }
-axum = { version = "0.8.9", features = ["macros"] }
+axum = { version = "0.8.9", features = ["macros", "ws"] }
 tower = { version = "0.5.3", default-features = false, features = ["util"] }
 tower-http = { version = "0.7.1", default-features = false, features = ["compression-br", "compression-gzip", "trace", "set-header"] }
 askama = "0.16.1"
@@ -58,6 +58,12 @@ anyhow = "1.0.104"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "env-filter", "json"] }
 url = "2"
+
+# Tests seulement : un vrai client WebSocket pour les notes en direct
+# (tests/notes_direct.rs). Mêmes versions que celles qu'axum tire déjà.
+[dev-dependencies]
+tokio-tungstenite = { version = "0.29.0", default-features = false, features = ["connect"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 
 [profile.release]
 lto = "fat"

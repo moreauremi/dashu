@@ -8,13 +8,17 @@
 // Construit sur ProseMirror (frontend/editor/) ; le Markdown reste le
 // format stocké. À chaque modification, le document est réécrit en Markdown
 // dans le <textarea> caché du formulaire : ce sont les attributs htmx du
-// formulaire qui déclenchent la sauvegarde automatique (2 s). Ce fichier ne
-// parle jamais au serveur lui-même, sauf pour la sauvegarde de dernière
-// seconde (sendBeacon) et la recherche de notes à lier (GET /cmd/suggest).
+// formulaire qui déclenchent la sauvegarde automatique (2 s). En direct
+// (frontend/editor/live.js), la note s'édite à plusieurs par une WebSocket et
+// l'enregistrement passe par ce canal ; le formulaire reste le repli. Sinon,
+// ce fichier ne parle au serveur que pour la sauvegarde de dernière seconde
+// (sendBeacon) et la recherche de notes à lier (GET /cmd/suggest).
 
 import { EditorState, Selection, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { Fragment, Slice } from "prosemirror-model";
+import { Step } from "prosemirror-transform";
+import { collab } from "prosemirror-collab";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { history } from "prosemirror-history";
@@ -26,6 +30,7 @@ import { schema, parseMarkdown, toMarkdown, sliceToMarkdown, safeHref } from "./
 import { turnInto, insertTable, insertRule, insertText, markdownShortcuts, editorKeys } from "./editor/commands.js";
 import { placeholder, trailingParagraph, uploads, uploadFiles, pickFiles, nodeViews } from "./editor/plugins.js";
 import { slashMenu, floatingTools, setSprite, attachSheet, detachSheet } from "./editor/ui.js";
+import { startLive, liveCursors } from "./editor/live.js";
 
 /** Blocs du menu « / ». `hint` : le raccourci Markdown équivalent. */
 function slashItems(editLink) {
@@ -80,26 +85,37 @@ function initEditor() {
   const host = document.getElementById("editor");
   const form = document.getElementById("note-form");
   const page = host?.closest(".editor-page");
-  if (!host || !form || !page || host.pmView) return;
+  if (!host || !form || !page || host.pmView || host.dataset.starting) return;
 
   const textarea = form.querySelector("textarea[name=body_md]");
   const title = form.querySelector("input[name=title]");
+  const revisionField = form.querySelector("input[name=revision]");
   const status = document.getElementById("save-status");
   setSprite(host.dataset.icons);
   attachSheet();
 
+  const setStatus = (state, text) => {
+    if (!status) return;
+    status.dataset.state = state;
+    status.textContent = text;
+  };
+
+  // Session en direct (frontend/editor/live.js), ou null : enregistrement
+  // classique par le formulaire htmx, avec le garde-fou de version.
+  let live = null;
+  let view = null;
+
   let dirty = false;
   const markDirty = () => {
     dirty = true;
-    if (status) {
-      status.dataset.state = "dirty";
-      status.textContent = "Modifications en cours…";
-    }
+    if (!live) setStatus("dirty", "Modifications en cours…");
   };
 
-  // Sauvegarde immédiate (Ctrl+S) : déclenche le même envoi htmx que l'autosave.
+  // Sauvegarde immédiate (Ctrl+S) : en direct, le Markdown part tout de suite ;
+  // sinon, le même envoi htmx que l'autosave.
   const flush = () => {
-    if (window.htmx) window.htmx.trigger(form, "flush");
+    if (live) live.saveNow();
+    else if (window.htmx) window.htmx.trigger(form, "flush");
   };
 
   const toTitle = () => {
@@ -110,85 +126,161 @@ function initEditor() {
   };
 
   const tools = floatingTools(page);
-  let doc = parseMarkdown(textarea.value);
-  if (doc.lastChild?.type !== schema.nodes.paragraph) {
-    doc = doc.copy(doc.content.addToEnd(schema.nodes.paragraph.create()));
-  }
-  let state = EditorState.create({
-    doc,
-    plugins: [
-      slashMenu(slashItems(tools.editLink), page),
-      markdownShortcuts(),
-      tableEditing(),
-      keymap(editorKeys({ save: flush, link: tools.editLink, toTitle })),
-      keymap(baseKeymap),
-      history(),
-      dropCursor({ class: "ed-drop-cursor", color: false }),
-      gapCursor(),
-      placeholder(),
-      trailingParagraph(),
-      uploads(),
-      tools.plugin,
-    ],
-  });
-  // Tableau mal formé (lignes de longueurs différentes) : complété d'emblée,
-  // sans compter comme une modification.
-  const fixed = fixTables(state);
-  if (fixed) state = state.apply(fixed.setMeta("addToHistory", false));
+  const plugins = [
+    slashMenu(slashItems(tools.editLink), page),
+    markdownShortcuts(),
+    tableEditing(),
+    keymap(editorKeys({ save: flush, link: tools.editLink, toTitle })),
+    keymap(baseKeymap),
+    history(),
+    dropCursor({ class: "ed-drop-cursor", color: false }),
+    gapCursor(),
+    placeholder(),
+    trailingParagraph(),
+    uploads(),
+    tools.plugin,
+  ];
 
-  // Le rendu fait par le serveur (affiché en attendant ce script) laisse la
-  // place à l'éditeur.
-  host.replaceChildren();
-  const view = new EditorView(host, {
-    state,
-    nodeViews,
-    attributes: {
-      class: "prose note-body",
-      "aria-label": "Contenu de la note",
-      "aria-multiline": "true",
-      role: "textbox",
-      spellcheck: "true",
-    },
-    dispatchTransaction(tr) {
-      view.updateState(view.state.apply(tr));
-      if (!tr.docChanged) return;
-      textarea.value = toMarkdown(view.state.doc);
-      // Événement « input » : c'est lui que htmx écoute sur le formulaire.
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    },
-    clipboardTextParser: parsePastedText,
-    clipboardTextSerializer: sliceToMarkdown,
-    handlePaste(view, event) {
-      const data = event.clipboardData;
-      if (data?.files?.length) return uploadFiles(view, data.files);
-      const text = data?.getData("text/plain")?.trim();
-      const href = text && /^(https?:\/\/|mailto:)\S+$/i.test(text) ? safeHref(text) : null;
-      const { selection } = view.state;
-      if (!href || selection.$from.parent.type.spec.code) return false;
-      // Une adresse collée sur une sélection en fait un lien ; seule, elle
-      // s'écrit comme un lien.
-      const mark = schema.marks.link.create({ href });
-      if (!selection.empty) {
-        view.dispatch(view.state.tr.addMark(selection.from, selection.to, mark));
-      } else {
-        const tr = view.state.tr.replaceSelectionWith(schema.text(text, [mark]), false);
-        view.dispatch(tr.removeStoredMark(schema.marks.link).scrollIntoView());
-      }
-      return true;
-    },
-    handleDrop(view, event, _slice, moved) {
-      const files = event.dataTransfer?.files;
-      if (moved || !files?.length) return false;
-      const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
-      event.preventDefault();
-      return uploadFiles(view, files, at ? at.pos : null);
-    },
-  });
-  host.pmView = view;
+  /** Document d'un Markdown, toujours construit de la même façon : en direct,
+   *  toutes les pages doivent partir du même document pour la version 0. Il se
+   *  termine par un paragraphe, et un tableau mal formé (lignes de longueurs
+   *  différentes) est complété, sans compter comme une modification. */
+  function docOf(markdown) {
+    let doc = parseMarkdown(markdown);
+    if (doc.lastChild?.type !== schema.nodes.paragraph) {
+      doc = doc.copy(doc.content.addToEnd(schema.nodes.paragraph.create()));
+    }
+    const bare = EditorState.create({ doc });
+    const fixed = fixTables(bare);
+    return fixed ? bare.apply(fixed).doc : doc;
+  }
+
+  const classicState = (doc, selection) => EditorState.create({ doc, plugins, selection });
+
+  function dispatchTransaction(tr) {
+    view.updateState(view.state.apply(tr));
+    if (live) {
+      if (tr.docChanged) textarea.value = toMarkdown(view.state.doc);
+      live.afterTransaction(tr);
+      return;
+    }
+    if (!tr.docChanged) return;
+    textarea.value = toMarkdown(view.state.doc);
+    // Événement « input » : c'est lui que htmx écoute sur le formulaire.
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function createView(state) {
+    // Le rendu fait par le serveur (affiché en attendant) laisse la place à
+    // l'éditeur.
+    host.replaceChildren();
+    view = new EditorView(host, {
+      state,
+      nodeViews,
+      attributes: {
+        class: "prose note-body",
+        "aria-label": "Contenu de la note",
+        "aria-multiline": "true",
+        role: "textbox",
+        spellcheck: "true",
+      },
+      dispatchTransaction,
+      clipboardTextParser: parsePastedText,
+      clipboardTextSerializer: sliceToMarkdown,
+      handlePaste(view, event) {
+        const data = event.clipboardData;
+        if (data?.files?.length) return uploadFiles(view, data.files);
+        const text = data?.getData("text/plain")?.trim();
+        const href = text && /^(https?:\/\/|mailto:)\S+$/i.test(text) ? safeHref(text) : null;
+        const { selection } = view.state;
+        if (!href || selection.$from.parent.type.spec.code) return false;
+        // Une adresse collée sur une sélection en fait un lien ; seule, elle
+        // s'écrit comme un lien.
+        const mark = schema.marks.link.create({ href });
+        if (!selection.empty) {
+          view.dispatch(view.state.tr.addMark(selection.from, selection.to, mark));
+        } else {
+          const tr = view.state.tr.replaceSelectionWith(schema.text(text, [mark]), false);
+          view.dispatch(tr.removeStoredMark(schema.marks.link).scrollIntoView());
+        }
+        return true;
+      },
+      handleDrop(view, event, _slice, moved) {
+        const files = event.dataTransfer?.files;
+        if (moved || !files?.length) return false;
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        event.preventDefault();
+        return uploadFiles(view, files, at ? at.pos : null);
+      },
+    });
+    host.pmView = view;
+    delete host.dataset.starting;
+    // Note vide : on commence par le titre, sinon directement dans le texte.
+    if (title && !title.value) title.focus();
+    else view.focus();
+    return view;
+  }
+
+  /** Met un état dans la vue (créée au besoin). */
+  const show = (state) => {
+    if (view) {
+      view.updateState(state);
+      return view;
+    }
+    return createView(state);
+  };
+
+  const liveUrl = form.dataset.liveUrl;
+  if (liveUrl && "WebSocket" in window) {
+    // En attendant la session, le rendu du serveur reste affiché.
+    host.dataset.starting = "1";
+    live = startLive({
+      url: liveUrl,
+      title,
+      revisionField,
+      peersBox: document.getElementById("live-peers"),
+      setStatus,
+      toMarkdown,
+      buildDoc(markdown, steps) {
+        let doc = docOf(markdown);
+        for (const json of steps) {
+          const result = Step.fromJSON(schema, json).apply(doc);
+          if (result.failed) throw new Error(result.failed);
+          doc = result.doc;
+        }
+        return doc;
+      },
+      createState: (doc, version, clientID) =>
+        EditorState.create({ doc, plugins: [...plugins, collab({ version, clientID }), liveCursors()] }),
+      ready: (state) => {
+        const shown = show(state);
+        textarea.value = toMarkdown(state.doc);
+        return shown;
+      },
+      fallback(unsaved) {
+        live = null;
+        if (!view) {
+          createView(classicState(docOf(textarea.value)));
+          return;
+        }
+        // Même document, sans le direct : ce qui n'était pas parti
+        // s'enregistre par le formulaire, avec le garde-fou de version.
+        view.updateState(classicState(view.state.doc, view.state.selection));
+        textarea.value = toMarkdown(view.state.doc);
+        if (unsaved) {
+          dirty = true;
+          flush();
+        }
+      },
+      readOnly: () => view?.setProps({ editable: () => false }),
+    });
+  } else {
+    createView(classicState(docOf(textarea.value)));
+  }
 
   // Titre : Entrée ou flèche bas descend dans le texte, comme dans Notion.
   title?.addEventListener("keydown", (event) => {
-    if (event.isComposing) return;
+    if (event.isComposing || !view) return;
     if (event.key === "Enter" || (event.key === "ArrowDown" && title.selectionStart === title.value.length)) {
       event.preventDefault();
       view.focus();
@@ -202,6 +294,7 @@ function initEditor() {
   // Clic sous la fin de la note : le curseur va à la fin.
   const scroller = host.closest("[data-note-scroll]");
   const onScrollerDown = (event) => {
+    if (!view) return;
     if (event.target !== scroller && !event.target.matches?.(".note-sheet")) return;
     if (event.clientY < view.dom.getBoundingClientRect().bottom) return;
     event.preventDefault();
@@ -211,10 +304,17 @@ function initEditor() {
   scroller?.addEventListener("mousedown", onScrollerDown);
 
   // Sauvegarde de dernière seconde quand on quitte la page avec des
-  // modifications pas encore envoyées. sendBeacon ne sait pas poser d'en-tête,
-  // le jeton CSRF part donc dans le corps (champ _csrf accepté par le serveur).
+  // modifications pas encore envoyées. En direct, elles partent par le canal ;
+  // canal fermé (coupure) ou mode classique, par sendBeacon, avec le garde-fou
+  // de version : ça passe si personne d'autre n'a modifié la note. sendBeacon
+  // ne sait pas poser d'en-tête : le jeton CSRF part donc dans le corps (champ
+  // _csrf accepté par le serveur).
   function beacon() {
-    if (!dirty) return;
+    if (live) {
+      if (live.leaving() || !live.unsaved()) return;
+    } else if (!dirty) {
+      return;
+    }
     const data = new URLSearchParams(new FormData(form));
     data.set("_csrf", form.dataset.csrf || "");
     navigator.sendBeacon(form.dataset.saveUrl, data);
@@ -224,9 +324,13 @@ function initEditor() {
   form.addEventListener("input", markDirty);
 
   form.addEventListener("htmx:beforeRequest", (e) => {
-    if (e.target !== form || !status) return;
-    status.dataset.state = "saving";
-    status.textContent = "Enregistrement…";
+    if (e.target !== form) return;
+    // En direct, l'enregistrement passe par le canal, pas par le formulaire.
+    if (live) {
+      e.preventDefault();
+      return;
+    }
+    setStatus("saving", "Enregistrement…");
   });
   form.addEventListener("htmx:afterRequest", (e) => {
     if (e.target !== form) return;
@@ -263,18 +367,16 @@ function initEditor() {
   const observer = new MutationObserver(() => {
     if (host.isConnected) return;
     observer.disconnect();
+    live?.close();
+    live = null;
     document.removeEventListener("visibilitychange", onHide);
     window.removeEventListener("pagehide", beacon);
     document.body.removeEventListener("htmx:beforeRequest", onLeave);
     scroller?.removeEventListener("mousedown", onScrollerDown);
-    view.destroy();
+    view?.destroy();
     detachSheet();
   });
   observer.observe(document.body, { childList: true, subtree: true });
-
-  // Note vide : on commence par le titre, sinon directement dans le texte.
-  if (title && !title.value) title.focus();
-  else view.focus();
 }
 
 initEditor();

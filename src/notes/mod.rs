@@ -8,6 +8,7 @@
 //! Les tags sont rangés par compte mais communs à l'affichage : deux tags de
 //! même nom (un par compte) n'en font qu'un sur une note ou dans les pastilles.
 
+pub mod live;
 pub mod markdown;
 
 use std::collections::HashMap;
