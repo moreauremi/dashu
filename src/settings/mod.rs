@@ -55,6 +55,27 @@ struct SettingsPage {
     /// Réglage « espace du moment » : l'espace des jours sans cours, 0 si
     /// le réglage est désactivé.
     moment_id: i64,
+    /// Invitations reçues, en attente.
+    invitations: Vec<InvitationRow>,
+    /// Mention de partage de chaque espace (« Partagé par Alice »).
+    shared: HashMap<i64, String>,
+}
+
+struct InvitationRow {
+    id: i64,
+    space_name: String,
+    space_color: String,
+    space_icon: String,
+    /// Qui invite.
+    from: String,
+}
+
+/// « Prénom Nom », ou l'adresse tant que le profil est vide.
+fn person_name(first_name: &str, last_name: &str, email: &str) -> String {
+    match format!("{first_name} {last_name}").trim() {
+        "" => email.to_string(),
+        name => name.to_string(),
+    }
 }
 
 /// `GET /settings`
@@ -91,6 +112,61 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         .map(|tab| (tab, current.contains(&tab)))
         .collect();
 
+    let invitations = sqlx::query!(
+        r#"SELECT i.id AS "id!", s.name AS space_name, s.color, s.icon,
+                  u.email, u.first_name, u.last_name
+           FROM space_invitations i
+           JOIN spaces s ON s.id = i.space_id
+           JOIN users u ON u.id = i.invited_by
+           WHERE i.user_id = ? ORDER BY i.id"#,
+        ctx.user.id
+    )
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(|i| InvitationRow {
+        id: i.id,
+        space_name: i.space_name,
+        space_color: i.color,
+        space_icon: i.icon,
+        from: person_name(&i.first_name, &i.last_name, &i.email),
+    })
+    .collect();
+
+    // Espaces rejoints : qui les partage. Espaces à soi : avec combien de personnes.
+    let mut shared = HashMap::new();
+    for space in ctx.all_spaces().iter().filter(|s| !s.mine) {
+        let owner = sqlx::query!(
+            r#"SELECT email, first_name, last_name FROM users WHERE id = ?"#,
+            space.owner_id
+        )
+        .fetch_one(&state.db)
+        .await?;
+        shared.insert(
+            space.id,
+            format!(
+                "Partagé par {}",
+                person_name(&owner.first_name, &owner.last_name, &owner.email)
+            ),
+        );
+    }
+    let counts = sqlx::query!(
+        r#"SELECT m.space_id AS "space_id!", count(*) AS "n!: i64"
+           FROM space_members m JOIN spaces s ON s.id = m.space_id
+           WHERE s.user_id = ? GROUP BY m.space_id"#,
+        ctx.user.id
+    )
+    .fetch_all(&state.db)
+    .await?;
+    for count in counts {
+        let label = if count.n == 1 {
+            "Partagé avec 1 personne".to_string()
+        } else {
+            format!("Partagé avec {} personnes", count.n)
+        };
+        shared.insert(count.space_id, label);
+    }
+
     let (new_color, new_icon) = spaces::suggestion(&ctx.spaces);
     let page = SettingsPage {
         first_name: ctx.user.first_name.clone(),
@@ -103,6 +179,8 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         max_spaces: spaces::MAX_SPACES,
         name_max: spaces::NAME_MAX_CHARS,
         moment_id: ctx.user.moment_space.unwrap_or(0),
+        invitations,
+        shared,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE calendar_sources\n         SET space_id = (SELECT id FROM spaces WHERE user_id = ?1 AND slug = 'perso')\n         WHERE user_id = ?1 AND space_id = ?2\n           AND EXISTS (SELECT 1 FROM spaces WHERE user_id = ?1 AND slug = 'perso')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "2e9dc7365f77d15eebad2272ae2a465472482afb8f796ce651b3d4b35ef92b55"
+}

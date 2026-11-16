@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE share_links SET revoked_at = ?\n         WHERE user_id = ? AND revoked_at IS NULL\n           AND file_id IN (SELECT id FROM files WHERE space_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e6e7af15a904732df863852d8391aaf1b6e3aef40caaf9d49ec9afc93875399c"
+}

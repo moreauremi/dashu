@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT count(*) AS \"n!: i64\", coalesce(sum(size), 0) AS \"bytes!: i64\"\n               FROM files WHERE user_id = ? AND space_id = ?",
+  "query": "SELECT count(*) AS \"n!: i64\", coalesce(sum(size), 0) AS \"bytes!: i64\"\n               FROM files WHERE space_id = ?",
   "describe": {
     "columns": [
       {
@@ -15,12 +15,12 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       false,
       false
     ]
   },
-  "hash": "647c251bd15d8d4d1d7c0a33fddf66a996d1e729bfa64bfad51bcda4d5e1721a"
+  "hash": "c73e8f79fd2c17564dc8d0ba27b9dff97467af0906d276db6a049e5c836e1c61"
 }

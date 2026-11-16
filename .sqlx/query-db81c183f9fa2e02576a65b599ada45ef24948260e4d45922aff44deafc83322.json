@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM space_invitations WHERE id = ? AND space_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "db81c183f9fa2e02576a65b599ada45ef24948260e4d45922aff44deafc83322"
+}
