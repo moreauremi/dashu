@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT min(t.id) AS \"id!: i64\", t.name AS \"name!\"\n           FROM tags t JOIN file_tags ft ON ft.tag_id = t.id\n           WHERE ft.file_id = ?\n           GROUP BY t.name\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "a2e3aed1f0751859428c81a2dac58db10cf238bc7809c1f08bbb520c26633f34"
+}

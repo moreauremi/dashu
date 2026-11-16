@@ -183,6 +183,39 @@ impl TestApp {
         .expect("espace")
     }
 
+    /// Rend `member` membre de l'espace `slug` de `owner`, sans passer par
+    /// l'invitation (raccourci de test). Renvoie le slug de l'espace chez le
+    /// membre : celui du propriétaire, ou suffixé (`ecole-2`) s'il est pris.
+    pub async fn share_space(&self, owner: &str, slug: &str, member: &str) -> String {
+        let space = self.space_id(owner, slug).await;
+        let member_id = self.user_id(member).await;
+        let taken: Vec<String> = sqlx::query_scalar(
+            "SELECT slug FROM spaces WHERE user_id = ?1
+             UNION SELECT slug FROM space_members WHERE user_id = ?1",
+        )
+        .bind(member_id)
+        .fetch_all(&self.state.db)
+        .await
+        .expect("slugs du membre");
+        let mut mine = slug.to_string();
+        let mut n = 2;
+        while taken.contains(&mine) {
+            mine = format!("{slug}-{n}");
+            n += 1;
+        }
+        sqlx::query(
+            "INSERT INTO space_members (space_id, user_id, slug, position, joined_at)
+             VALUES (?, ?, ?, 100, 0)",
+        )
+        .bind(space)
+        .bind(member_id)
+        .bind(&mine)
+        .execute(&self.state.db)
+        .await
+        .expect("membre ajouté");
+        mine
+    }
+
     pub async fn user_id(&self, email: &str) -> i64 {
         sqlx::query_scalar("SELECT id FROM users WHERE email = ?")
             .bind(email)

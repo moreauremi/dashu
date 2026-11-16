@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT ft.file_id AS \"file_id!\", t.name AS \"name!\"\n           FROM file_tags ft JOIN tags t ON t.id = ft.tag_id\n           JOIN files f ON f.id = ft.file_id\n           WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "file_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e666afd646f389e910162944fc092d119bd38ca281a157c0e4fd2bb0b58af744"
+}

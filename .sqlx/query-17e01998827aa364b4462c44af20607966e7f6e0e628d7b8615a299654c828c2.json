@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT f.mime, s.auto_mp4 AS \"auto_mp4!: bool\", s.auto_heic_jpeg AS \"auto_heic_jpeg!: bool\"\n           FROM files f JOIN spaces s ON s.id = f.space_id\n           WHERE f.id = ?2 AND f.expires_at IS NULL\n             AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+  "describe": {
+    "columns": [
+      {
+        "name": "mime",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "auto_mp4!: bool",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "auto_heic_jpeg!: bool",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "17e01998827aa364b4462c44af20607966e7f6e0e628d7b8615a299654c828c2"
+}

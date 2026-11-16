@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE spaces SET dashboard = ? WHERE id = ? AND id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "3e344c1d46e7a3d5074f50833bc858866274b9d404bcae2027bd1e4c5eabef3e"
+}

@@ -237,6 +237,25 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/spaces/{id}/archive", post(spaces::archive))
         .route("/settings/spaces/{id}/restore", post(spaces::restore))
         .route("/settings/moment", post(settings::set_moment))
+        .route("/settings/spaces/{id}/members", get(spaces::members_page))
+        .route("/settings/spaces/{id}/invitations", post(spaces::invite))
+        .route(
+            "/settings/spaces/{id}/invitations/{inv}/cancel",
+            post(spaces::cancel_invitation),
+        )
+        .route(
+            "/settings/spaces/{id}/members/{user}/remove",
+            post(spaces::remove),
+        )
+        .route("/settings/spaces/{id}/leave", post(spaces::leave))
+        .route(
+            "/settings/invitations/{inv}/accept",
+            post(spaces::accept_invitation),
+        )
+        .route(
+            "/settings/invitations/{inv}/decline",
+            post(spaces::decline_invitation),
+        )
         .route(
             "/settings/spaces/{id}/delete",
             get(spaces::delete_page).post(spaces::delete),

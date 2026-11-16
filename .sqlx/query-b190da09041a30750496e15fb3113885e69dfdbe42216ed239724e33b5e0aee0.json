@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET pinned = NOT pinned WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) RETURNING pinned AS \"pinned!: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "pinned!: bool",
+        "ordinal": 0,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b190da09041a30750496e15fb3113885e69dfdbe42216ed239724e33b5e0aee0"
+}

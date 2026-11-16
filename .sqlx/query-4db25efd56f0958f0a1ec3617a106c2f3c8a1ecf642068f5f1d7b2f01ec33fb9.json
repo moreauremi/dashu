@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4db25efd56f0958f0a1ec3617a106c2f3c8a1ecf642068f5f1d7b2f01ec33fb9"
+}

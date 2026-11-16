@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tasks SET done_at = CASE WHEN done THEN NULL ELSE ? END, done = NOT done\n         WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "5fae46d0303d88c2992a28692290d0bb418af97d4cf34463d47b5001e4961ea2"
+}

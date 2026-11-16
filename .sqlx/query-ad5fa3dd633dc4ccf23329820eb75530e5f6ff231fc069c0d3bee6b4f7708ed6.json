@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.space_id AS \"space_id!\", count(*) AS \"n!: i64\"\n           FROM space_members m JOIN spaces s ON s.id = m.space_id\n           WHERE s.user_id = ? GROUP BY m.space_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "ad5fa3dd633dc4ccf23329820eb75530e5f6ff231fc069c0d3bee6b4f7708ed6"
+}

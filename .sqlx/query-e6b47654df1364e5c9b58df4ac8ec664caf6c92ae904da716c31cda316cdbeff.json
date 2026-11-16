@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE uploads SET folder_id = ? WHERE folder_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "e6b47654df1364e5c9b58df4ac8ec664caf6c92ae904da716c31cda316cdbeff"
+}

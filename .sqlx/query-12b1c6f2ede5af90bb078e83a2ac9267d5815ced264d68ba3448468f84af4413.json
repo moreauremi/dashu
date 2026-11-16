@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM tags\n           WHERE NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)\n           AND NOT EXISTS (SELECT 1 FROM file_tags WHERE tag_id = tags.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "12b1c6f2ede5af90bb078e83a2ac9267d5815ced264d68ba3448468f84af4413"
+}

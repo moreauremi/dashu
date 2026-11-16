@@ -45,7 +45,9 @@ fn item_id(page: &str, prefix: &str) -> Option<i64> {
 pub async fn opened(ctx: &Ctx, state: &AppState, page: &str) -> AppResult<Opened> {
     if let Some(id) = item_id(page, "/files/") {
         let file = sqlx::query!(
-            "SELECT space_id, name, mime, expires_at FROM files WHERE id = ? AND user_id = ?",
+            "SELECT space_id, name, mime, expires_at FROM files
+             WHERE id = ?1 AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2))
+                             OR (expires_at IS NOT NULL AND user_id = ?2))",
             id,
             ctx.user.id
         )
@@ -62,7 +64,7 @@ pub async fn opened(ctx: &Ctx, state: &AppState, page: &str) -> AppResult<Opened
         }
     } else if let Some(id) = item_id(page, "/notes/") {
         let note = sqlx::query!(
-            r#"SELECT space_id, title, pinned AS "pinned!: bool" FROM notes WHERE id = ? AND user_id = ?"#,
+            r#"SELECT space_id, title, pinned AS "pinned!: bool" FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
             id,
             ctx.user.id
         )

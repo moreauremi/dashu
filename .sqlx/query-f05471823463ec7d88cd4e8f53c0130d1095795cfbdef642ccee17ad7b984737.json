@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO space_members (space_id, user_id, slug, position, joined_at)\n         VALUES (?1, ?2, ?3,\n                 (SELECT coalesce(max(p), -1) + 1 FROM (\n                      SELECT position AS p FROM spaces WHERE user_id = ?2\n                      UNION ALL SELECT position FROM space_members WHERE user_id = ?2)),\n                 ?4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "f05471823463ec7d88cd4e8f53c0130d1095795cfbdef642ccee17ad7b984737"
+}

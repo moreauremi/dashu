@@ -39,6 +39,29 @@
 </header>
 
 <div class="settings">
+  {% if !invitations.is_empty() %}
+  <section class="card" id="invitations" aria-labelledby="s-invitations">
+    <header class="card-head"><h2 id="s-invitations">Invitations</h2></header>
+    <div class="card-body">
+      <ul class="space-list space-archived" role="list">
+        {% for invitation in invitations %}
+        <li class="space-archived-row" data-accent="{{ invitation.space_color }}">
+          <span class="space-badge">{{ crate::assets::icon(invitation.space_icon.as_str())|safe }}</span>
+          <span class="space-name">{{ invitation.space_name }}</span>
+          <span class="space-tag">invité par {{ invitation.from }}</span>
+          <form method="post" action="/settings/invitations/{{ invitation.id }}/accept">
+            <button class="btn btn-primary" type="submit">Accepter</button>
+          </form>
+          <form method="post" action="/settings/invitations/{{ invitation.id }}/decline">
+            <button class="btn" type="submit">Refuser</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="card" id="profil" aria-labelledby="s-profile">
     <header class="card-head"><h2 id="s-profile">Profil</h2></header>
     <div class="card-body">
@@ -99,6 +122,16 @@
     <div class="card-body">
       <ul class="space-list" role="list">
         {% for space in shell.spaces %}
+        {% if !space.mine %}
+        {#- Espace rejoint : ni Modifier, ni Archiver, ni Supprimer. -#}
+        <li class="space-archived-row" data-accent="{{ space.color }}">
+          <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
+          <span class="space-name">{{ space.name }}</span>
+          {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
+          {% if let Some(label) = shared.get(&space.id) %}<span class="space-tag">{{ label }}</span>{% endif %}
+          <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
+        </li>
+        {% else %}
         <li>
           <details class="space-row" data-accent="{{ space.color }}">
             <summary>
@@ -106,6 +139,7 @@
               <span class="space-name">{{ space.name }}</span>
               {% if space.is_overview() %}<span class="space-tag">vue d'ensemble</span>{% endif %}
               {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
+              {% if let Some(label) = shared.get(&space.id) %}<span class="space-tag">{{ label }}</span>{% endif %}
               <span class="space-more">Modifier{{ crate::assets::icon("chevron-right")|safe }}</span>
             </summary>
             <form class="space-form" method="post" action="/settings/spaces/{{ space.id }}">
@@ -121,6 +155,9 @@
               </fieldset>
               <div class="space-actions">
                 <button class="btn btn-primary" type="submit">Enregistrer</button>
+                {% if !space.is_overview() %}
+                <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
+                {% endif %}
                 {% if !space.is_overview() && shell.spaces.len() > 1 %}
                 <button class="btn" type="submit" formaction="/settings/spaces/{{ space.id }}/archive">{{ crate::assets::icon("archive")|safe }}Archiver</button>
                 <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete">{{ crate::assets::icon("trash")|safe }}Supprimer l'espace</a>
@@ -129,6 +166,7 @@
             </form>
           </details>
         </li>
+        {% endif %}
         {% endfor %}
       </ul>
 
@@ -140,10 +178,15 @@
           <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
           <span class="space-name">{{ space.name }}</span>
           <a class="btn" href="/e/{{ space.slug }}/">Ouvrir</a>
+          {% if space.mine %}
           <form method="post" action="/settings/spaces/{{ space.id }}/restore">
             <button class="btn" type="submit">{{ crate::assets::icon("unarchive")|safe }}Restaurer</button>
           </form>
           <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete" aria-label="Supprimer {{ space.name }}">{{ crate::assets::icon("trash")|safe }}</a>
+          {% else %}
+          {#- Espace rejoint, archivé par son propriétaire : on peut encore le quitter. -#}
+          <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>

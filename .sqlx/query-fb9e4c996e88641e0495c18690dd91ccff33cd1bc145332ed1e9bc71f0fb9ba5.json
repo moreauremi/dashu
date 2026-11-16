@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, count(*) AS \"n!: i64\" FROM notes\n           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) GROUP BY space_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "fb9e4c996e88641e0495c18690dd91ccff33cd1bc145332ed1e9bc71f0fb9ba5"
+}

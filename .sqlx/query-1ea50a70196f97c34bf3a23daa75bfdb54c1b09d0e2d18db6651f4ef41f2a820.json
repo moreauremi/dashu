@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET folder_id = CASE WHEN space_id = ?1 THEN folder_id END, space_id = ?1\n             WHERE id = ?2 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "1ea50a70196f97c34bf3a23daa75bfdb54c1b09d0e2d18db6651f4ef41f2a820"
+}

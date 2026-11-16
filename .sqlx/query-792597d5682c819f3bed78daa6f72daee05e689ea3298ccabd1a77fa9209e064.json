@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", name, space_id FROM files\n           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND expires_at IS NULL\n           ORDER BY updated_at DESC LIMIT 1000",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "792597d5682c819f3bed78daa6f72daee05e689ea3298ccabd1a77fa9209e064"
+}

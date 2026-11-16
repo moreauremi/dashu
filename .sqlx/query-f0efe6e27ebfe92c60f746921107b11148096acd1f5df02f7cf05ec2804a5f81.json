@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET folder_id = ? WHERE folder_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f0efe6e27ebfe92c60f746921107b11148096acd1f5df02f7cf05ec2804a5f81"
+}

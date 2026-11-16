@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT name AS \"name!\" FROM (\n               SELECT name FROM tags WHERE user_id = ?1\n               UNION\n               SELECT t.name FROM tags t\n                 JOIN note_tags nt ON nt.tag_id = t.id\n                 JOIN notes n ON n.id = nt.note_id\n                WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n               UNION\n               SELECT t.name FROM tags t\n                 JOIN file_tags ft ON ft.tag_id = t.id\n                 JOIN files f ON f.id = ft.file_id\n                WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ) ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "name!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9d306bcfad7e043f26c2b5a93e4ac52cb7c541b3bd51d682ff8663ede7b785d0"
+}

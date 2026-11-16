@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tasks SET\n           title = COALESCE(?1, title),\n           due_date = COALESCE(?2, due_date),\n           done_at = CASE WHEN ?3 IS NULL THEN done_at WHEN ?3 THEN COALESCE(done_at, ?4) ELSE NULL END,\n           done = COALESCE(?3, done)\n         WHERE id = ?5 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "acef18fb2dfd8df15834de04b3c2377b0482e8dd1b4c90629980e86a546d48fb"
+}

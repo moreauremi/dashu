@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE folders SET space_id = ? WHERE space_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "42d9c7fab8456dad3970cfb62f86b9205d5997373d764d1ede083cf521eac669"
+}

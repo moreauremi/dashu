@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE files SET name = ?2 WHERE id = ?3\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "7ec218637bfff69426f201471cabcc2763634286f7976921403297ed44ff9df4"
+}

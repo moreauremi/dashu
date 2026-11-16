@@ -1,7 +1,12 @@
 //! Notes Markdown : liste, recherche plein texte, éditeur, tags.
 //!
-//! Toutes les requêtes filtrent sur `user_id` : l'identifiant d'une note dans
-//! l'URL ne suffit jamais à y accéder.
+//! Toutes les requêtes filtrent sur les espaces accessibles à l'utilisateur
+//! (vue `space_access` : les siens et ceux dont il est membre) : l'identifiant
+//! d'une note dans l'URL ne suffit jamais à y accéder. La colonne `user_id`
+//! d'une note garde son auteur.
+//!
+//! Les tags sont rangés par compte mais communs à l'affichage : deux tags de
+//! même nom (un par compte) n'en font qu'un sur une note ou dans les pastilles.
 
 pub mod markdown;
 
@@ -116,11 +121,11 @@ pub async fn list(
     // Tags de chaque note affichée (une seule requête pour toute la liste).
     let mut tags_by_note: HashMap<i64, Vec<String>> = HashMap::new();
     for row in sqlx::query!(
-        r#"SELECT nt.note_id AS "note_id!", t.name AS "name!"
+        r#"SELECT DISTINCT nt.note_id AS "note_id!", t.name AS "name!"
            FROM note_tags nt
            JOIN tags t ON t.id = nt.tag_id
            JOIN notes n ON n.id = nt.note_id
-           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
            ORDER BY t.name"#,
         user,
         space
@@ -137,12 +142,12 @@ pub async fn list(
     let groups = by_folder(&ctx, items, &folders::all(&state.db, user).await?);
 
     let chips = sqlx::query!(
-        r#"SELECT t.name AS "name!", COUNT(*) AS "count!: i64"
+        r#"SELECT t.name AS "name!", COUNT(DISTINCT n.id) AS "count!: i64"
            FROM tags t
            JOIN note_tags nt ON nt.tag_id = t.id
            JOIN notes n ON n.id = nt.note_id
-           WHERE t.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
-           GROUP BY t.id
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           GROUP BY t.name
            ORDER BY t.name"#,
         user,
         space
@@ -296,7 +301,7 @@ async fn recent_in_space(
                   n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
                   n.space_id AS "space_id!: i64", n.folder_id
            FROM notes n
-           WHERE n.user_id = ?1 AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
              AND (?3 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?3))
@@ -343,7 +348,7 @@ async fn search_in_space(
                   n.space_id AS "space_id!: i64", n.folder_id
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
-           WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)
+           WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2) AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)
              AND (?4 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?4))
@@ -417,7 +422,7 @@ pub async fn create(
     // Toujours écrit : une note vierge réutilisée (voir `create_note`) quitte
     // le dossier où elle était restée.
     sqlx::query!(
-        "UPDATE notes SET folder_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE notes SET folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         folder,
         id,
         ctx.user.id
@@ -452,7 +457,7 @@ pub(crate) async fn create_note(
         Some(id) if title.is_empty() => id,
         Some(id) => {
             sqlx::query!(
-                "UPDATE notes SET title = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+                "UPDATE notes SET title = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND user_id = ?",
                 title,
                 now,
                 id,
@@ -498,6 +503,8 @@ struct EditPage {
     /// l'éditeur se charge (et sans JavaScript).
     body_html: String,
     saved_label: String,
+    /// Numéro de version de la note, renvoyé à chaque enregistrement.
+    revision: i64,
     tags: Vec<NoteTag>,
     /// Tags existants, proposés à la saisie.
     suggestions: Vec<String>,
@@ -512,8 +519,9 @@ pub async fn edit_page(
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let note = sqlx::query!(
-        r#"SELECT space_id, folder_id, title, body_md, pinned AS "pinned!: bool", updated_at
-           FROM notes WHERE id = ? AND user_id = ?"#,
+        r#"SELECT space_id, folder_id, title, body_md, pinned AS "pinned!: bool", updated_at,
+                  revision AS "revision!: i64"
+           FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
         ctx.user.id
     )
@@ -538,6 +546,7 @@ pub async fn edit_page(
             "Enregistré · modifié {}",
             time::ago(note.updated_at, time::now())
         ),
+        revision: note.revision,
         title: note.title,
         body_md: note.body_md,
         pinned: note.pinned,
@@ -553,10 +562,31 @@ pub async fn edit_page(
 pub struct SaveForm {
     title: String,
     body_md: String,
+    /// Version de la note quand la page l'a lue. Absente : pas de contrôle.
+    revision: Option<i64>,
+}
+
+/// Le champ caché qui porte la version, mis à jour par htmx après chaque
+/// enregistrement (`hx-swap-oob`).
+fn revision_field(revision: i64) -> String {
+    format!(
+        r#"<input type="hidden" name="revision" id="note-revision" value="{revision}" hx-swap-oob="true">"#
+    )
+}
+
+/// Réponse 409 : la note a changé ailleurs, rien n'est écrit.
+fn conflict() -> Response {
+    (
+        axum::http::StatusCode::CONFLICT,
+        Html("Modifiée ailleurs entre-temps : copie tes changements, puis recharge la note"),
+    )
+        .into_response()
 }
 
 /// `POST /notes/{id}` : sauvegarde automatique. Répond par le texte de
-/// l'indicateur d'état.
+/// l'indicateur d'état, suivi de la nouvelle version de la note. Si la version
+/// reçue n'est plus celle de la base (quelqu'un d'autre, ou un autre onglet, a
+/// enregistré), rien n'est écrit et la réponse est un 409.
 pub async fn save(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -567,7 +597,7 @@ pub async fn save(
     let body = normalize_newlines(&form.body_md);
 
     let current = sqlx::query!(
-        "SELECT title, body_md FROM notes WHERE id = ? AND user_id = ?",
+        r#"SELECT title, body_md, revision AS "revision!: i64" FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
         ctx.user.id
     )
@@ -575,21 +605,40 @@ pub async fn save(
     .await?
     .ok_or(AppError::NotFound)?;
 
+    if form.revision.is_some_and(|r| r != current.revision) {
+        return Ok(conflict());
+    }
+
     let now = time::now();
-    // Rien n'a changé : on ne touche pas à la date de modification.
+    let mut revision = current.revision;
+    // Rien n'a changé : on ne touche ni à la date de modification ni à la version.
     if current.title != title || current.body_md != body {
-        sqlx::query!(
-            "UPDATE notes SET title = ?, body_md = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        // Le test de version est refait dans l'UPDATE : deux enregistrements
+        // simultanés ne passent pas tous les deux.
+        let updated = sqlx::query_scalar!(
+            r#"UPDATE notes SET title = ?, body_md = ?, updated_at = ?, revision = revision + 1
+               WHERE id = ? AND revision = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)
+               RETURNING revision AS "revision!: i64""#,
             title,
             body,
             now,
             id,
+            current.revision,
             ctx.user.id
         )
-        .execute(&state.db)
+        .fetch_optional(&state.db)
         .await?;
+        match updated {
+            Some(new) => revision = new,
+            None => return Ok(conflict()),
+        }
     }
-    Ok(Html(format!("Enregistré à {}", time::hm(now))).into_response())
+    Ok(Html(format!(
+        "Enregistré à {}{}",
+        time::hm(now),
+        revision_field(revision)
+    ))
+    .into_response())
 }
 
 /// Un formulaire HTML envoie les retours à la ligne en CRLF : on stocke en LF.
@@ -618,7 +667,7 @@ pub async fn toggle_pin(
 /// Aussi appelée par la barre de commandes (`/pin`).
 pub(crate) async fn toggle_pinned(db: &SqlitePool, user: i64, id: i64) -> AppResult<bool> {
     sqlx::query_scalar!(
-        r#"UPDATE notes SET pinned = NOT pinned WHERE id = ? AND user_id = ? RETURNING pinned AS "pinned!: bool""#,
+        r#"UPDATE notes SET pinned = NOT pinned WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) RETURNING pinned AS "pinned!: bool""#,
         id,
         user
     )
@@ -649,7 +698,7 @@ pub async fn move_to_space(
     let folder = folders::parse_id(form.folder_id.as_deref())?;
     let folder = folders::target(&state.db, ctx.user.id, target.id, folder).await?;
     let moved = sqlx::query!(
-        "UPDATE notes SET space_id = ?, folder_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE notes SET space_id = ?, folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         target.id,
         folder,
         id,
@@ -743,7 +792,7 @@ pub async fn set_folder(
     axum::Form(form): axum::Form<FolderForm>,
 ) -> AppResult<Response> {
     let space = sqlx::query_scalar!(
-        "SELECT space_id FROM notes WHERE id = ? AND user_id = ?",
+        "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
         ctx.user.id
     )
@@ -753,7 +802,7 @@ pub async fn set_folder(
     let folder = folders::parse_id(form.folder_id.as_deref())?;
     let folder = folders::target(&state.db, ctx.user.id, space, folder).await?;
     sqlx::query!(
-        "UPDATE notes SET folder_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE notes SET folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         folder,
         id,
         ctx.user.id
@@ -773,7 +822,7 @@ pub async fn delete(
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let deleted = sqlx::query!(
-        "DELETE FROM notes WHERE id = ? AND user_id = ?",
+        "DELETE FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
         ctx.user.id
     )
@@ -830,8 +879,9 @@ pub(crate) fn normalize_tag(input: &str) -> String {
         .collect()
 }
 
-/// Pose un tag sur une note (créé au besoin). La note doit appartenir à
-/// `user` : à vérifier avant l'appel. Un nom vide est ignoré.
+/// Pose un tag sur une note (créé au besoin). La note doit être accessible à
+/// `user` : à vérifier avant l'appel. Un nom vide est ignoré, de même qu'un
+/// tag que la note porte déjà (même posé par un autre compte).
 pub(crate) async fn attach_tag(
     db: &SqlitePool,
     user: i64,
@@ -840,6 +890,17 @@ pub(crate) async fn attach_tag(
 ) -> AppResult<()> {
     let name = normalize_tag(input);
     if name.is_empty() {
+        return Ok(());
+    }
+    let already = sqlx::query_scalar!(
+        r#"SELECT nt.tag_id AS "tag_id!" FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+           WHERE nt.note_id = ? AND t.name = ? LIMIT 1"#,
+        note_id,
+        name
+    )
+    .fetch_optional(db)
+    .await?;
+    if already.is_some() {
         return Ok(());
     }
     sqlx::query!(
@@ -872,8 +933,8 @@ pub async fn remove_tag(
     tags_fragment(&state.db, user, id).await
 }
 
-/// Retire un tag d'une note de l'utilisateur (404 si la note n'est pas à
-/// lui). Aussi appelée par la barre de commandes (`/untag`).
+/// Retire un tag d'une note accessible à l'utilisateur (404 sinon), ainsi que
+/// les tags de même nom posés par d'autres comptes. Aussi appelée par la barre de commandes (`/untag`).
 pub(crate) async fn detach_tag(
     db: &SqlitePool,
     user: i64,
@@ -882,7 +943,8 @@ pub(crate) async fn detach_tag(
 ) -> AppResult<()> {
     ensure_owned(db, user, note_id).await?;
     sqlx::query!(
-        "DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?",
+        "DELETE FROM note_tags WHERE note_id = ?
+           AND tag_id IN (SELECT id FROM tags WHERE name = (SELECT name FROM tags WHERE id = ?))",
         note_id,
         tag_id
     )
@@ -899,10 +961,10 @@ async fn tags_fragment(db: &SqlitePool, user: i64, id: i64) -> AppResult<Respons
     }))
 }
 
-/// 404 si la note n'existe pas ou appartient à quelqu'un d'autre.
+/// 404 si la note n'existe pas ou n'est dans aucun espace de l'utilisateur.
 async fn ensure_owned(db: &SqlitePool, user: i64, id: i64) -> AppResult<()> {
     sqlx::query_scalar!(
-        r#"SELECT id AS "id!" FROM notes WHERE id = ? AND user_id = ?"#,
+        r#"SELECT id AS "id!" FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
         user
     )
@@ -912,15 +974,15 @@ async fn ensure_owned(db: &SqlitePool, user: i64, id: i64) -> AppResult<()> {
     .ok_or(AppError::NotFound)
 }
 
-pub(crate) async fn tags_of(db: &SqlitePool, user: i64, note_id: i64) -> AppResult<Vec<NoteTag>> {
+pub(crate) async fn tags_of(db: &SqlitePool, _user: i64, note_id: i64) -> AppResult<Vec<NoteTag>> {
     let tags = sqlx::query_as!(
         NoteTag,
         r#"SELECT t.id AS "id!", t.name AS "name!"
            FROM tags t JOIN note_tags nt ON nt.tag_id = t.id
-           WHERE nt.note_id = ? AND t.user_id = ?
+           WHERE nt.note_id = ?
+           GROUP BY t.name
            ORDER BY t.name"#,
-        note_id,
-        user
+        note_id
     )
     .fetch_all(db)
     .await?;
@@ -929,7 +991,19 @@ pub(crate) async fn tags_of(db: &SqlitePool, user: i64, note_id: i64) -> AppResu
 
 pub(crate) async fn all_tag_names(db: &SqlitePool, user: i64) -> AppResult<Vec<String>> {
     Ok(sqlx::query_scalar!(
-        "SELECT name FROM tags WHERE user_id = ? ORDER BY name",
+        r#"SELECT name AS "name!" FROM (
+               SELECT name FROM tags WHERE user_id = ?1
+               UNION
+               SELECT t.name FROM tags t
+                 JOIN note_tags nt ON nt.tag_id = t.id
+                 JOIN notes n ON n.id = nt.note_id
+                WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
+               UNION
+               SELECT t.name FROM tags t
+                 JOIN file_tags ft ON ft.tag_id = t.id
+                 JOIN files f ON f.id = ft.file_id
+                WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
+           ) ORDER BY name"#,
         user
     )
     .fetch_all(db)
@@ -937,13 +1011,13 @@ pub(crate) async fn all_tag_names(db: &SqlitePool, user: i64) -> AppResult<Vec<S
 }
 
 /// Supprime les tags qui ne sont plus portés par aucune note ni aucun
-/// fichier (les deux partagent la table `tags`).
-pub(crate) async fn prune_orphan_tags(db: &SqlitePool, user: i64) -> AppResult<()> {
+/// fichier (les deux partagent la table `tags`), tous comptes confondus : un
+/// tag posé sur une note partagée peut rester à un autre compte.
+pub(crate) async fn prune_orphan_tags(db: &SqlitePool, _user: i64) -> AppResult<()> {
     sqlx::query!(
-        "DELETE FROM tags WHERE user_id = ?
-           AND NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)
-           AND NOT EXISTS (SELECT 1 FROM file_tags WHERE tag_id = tags.id)",
-        user
+        "DELETE FROM tags
+           WHERE NOT EXISTS (SELECT 1 FROM note_tags WHERE tag_id = tags.id)
+           AND NOT EXISTS (SELECT 1 FROM file_tags WHERE tag_id = tags.id)"
     )
     .execute(db)
     .await?;

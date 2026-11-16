@@ -787,3 +787,111 @@ Par défaut, pour avancer :
 - **Dossiers dans la base seulement** : rien ne bouge sur le disque, et aucun nom choisi par l'utilisateur n'entre dans un chemin.
 - **Un espace supprimé en gardant son contenu** emmène ses dossiers dans l'espace qui le reçoit ; un nom déjà pris devient « Math (2) ».
 - **Glisser-déposer, déplacer un dossier, créer une note depuis Fichiers** : d'abord laissés hors du lot, faits le même jour à la demande de Rémi (voir « Fonctionnement »). Un déplacement refusé (niveau de trop, homonyme) ne renomme rien : il le dit, et l'utilisateur choisit.
+
+# dashu — Espaces partagés
+
+Nov 16, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 16 novembre 2026. dashu accepte plusieurs comptes depuis `dashu-compte` (une adresse ajoutée à `ALLOWED_EMAILS`), mais chacun reste chez soi : un espace appartient à un seul compte. Un **espace partagé** réunit plusieurs comptes autour des mêmes notes, fichiers, dossiers et tâches, par exemple pour un projet de groupe du BTS.
+
+## Fonctionnement
+
+**Partager un espace.** N'importe quel espace se partage, sauf Perso, qui reste toujours privé. Il n'y a pas de type « partagé » à la création : on crée un espace comme avant, puis on y invite quelqu'un.
+
+- Dans Réglages › Espaces, chaque espace (sauf Perso) a un bouton **Membres**. La page montre le propriétaire, les membres et les invitations en attente. Elle permet aussi d'inviter un compte par son adresse e-mail.
+- L'adresse doit être celle d'un compte qui existe, c'est-à-dire qui s'est déjà connecté une fois. Sinon, un message le dit et rien n'est créé. On ne s'invite pas soi-même, et on n'invite pas deux fois la même personne ni quelqu'un qui est déjà membre. Un espace archivé ne reçoit pas d'invitation.
+- Le propriétaire peut annuler une invitation en attente et retirer un membre.
+
+**Recevoir une invitation.** Les invitations en attente s'affichent en haut de Réglages, avec le nom de l'espace et celui de la personne qui invite.
+
+- **Accepter** : l'espace apparaît à la fin de l'île du haut et dans Réglages, avec la mention « Partagé par Alice ».
+- **Refuser** : l'invitation disparaît, et le propriétaire peut réinviter plus tard.
+- Accepter est refusé, avec un message clair, quand on a déjà 8 espaces : les espaces rejoints comptent dans la limite de l'île.
+
+**Dans un espace partagé, tout le contenu est commun.**
+
+- Tous les membres, propriétaire compris, voient, créent, modifient, rangent et suppriment les notes, les fichiers, les dossiers et les tâches de l'espace.
+- Les tags posés par l'un sont vus par tous. Dans la liste et dans le filtre, deux tags de même nom n'en font qu'un.
+- Les liens de partage des fichiers de l'espace sont visibles et révocables par tous les membres.
+- Ranger un élément vers un autre espace marche entre tous les espaces auxquels on a accès. Sortir une note d'un espace partagé la retire donc aux autres membres.
+- Le Perso de chaque membre réunit aussi le contenu des espaces partagés qu'il a rejoints, comme celui de ses autres espaces (sauf avec « Seulement Perso »).
+- La barre de commandes et l'API (Hermès) voient les espaces partagés comme le site.
+
+**Ce qui reste à chacun**, même dans un espace partagé :
+
+- les **agendas** : un agenda iCal rattaché à un espace partagé n'est vu que par celui qui l'a ajouté, parce que son adresse est secrète ;
+- le dossier **Temporaire** et les envois en cours. La copie gardée, compressée ou convertie arrive dans l'espace pour tous.
+
+**Ce que seul le propriétaire fait** : renommer l'espace, changer sa couleur, son icône et ses règles automatiques, l'archiver, le supprimer, inviter et retirer des membres. Le serveur le vérifie, ce n'est pas seulement caché.
+
+**Quitter.** Un membre quitte un espace depuis Réglages, avec une confirmation. Qu'il parte ou qu'il soit retiré :
+
+- il n'a plus accès à l'espace dès la requête suivante ;
+- ce qu'il y a créé reste dans l'espace ;
+- ses agendas rattachés à l'espace reviennent dans son Perso ;
+- les liens de partage qu'il a créés vers les fichiers de l'espace sont révoqués ;
+- si l'espace était son espace « moment », ce réglage revient au défaut.
+
+**Archiver ou supprimer un espace partagé** (propriétaire seulement) : il est archivé ou supprimé pour tous. « Transférer le contenu » ne propose que les espaces du propriétaire. Les agendas des membres reviennent dans leur Perso.
+
+**Adresses.** Chaque membre a son propre identifiant d'adresse pour l'espace : celui du propriétaire (`/e/projet-bts/`), ou suffixé (`/e/projet-bts-2/`) s'il est déjà pris chez lui. Il n'est jamais `perso`.
+
+**Notes modifiées à plusieurs.** L'éditeur enregistre tout seul toutes les deux secondes, et chaque enregistrement remplace tout le texte. Sans garde-fou, deux personnes sur la même note s'effaceraient l'une l'autre. Chaque note porte donc un **numéro de version**, que l'éditeur renvoie à chaque enregistrement.
+
+- Un enregistrement fait sur une version dépassée est refusé, et rien n'est écrasé.
+- L'indicateur d'état le dit : « Modifiée ailleurs entre-temps : copie tes changements, puis recharge la note ».
+- La même protection vaut pour deux onglets du même compte, et pour une note modifiée par Hermès pendant qu'on l'édite.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `space_members` | space\_id, user\_id, slug, position, joined\_at | Un membre qui n'est pas le propriétaire. `slug` et `position` sont ceux de l'espace chez ce membre (adresse, place dans l'île). |
+| `space_invitations` | id, space\_id, user\_id, invited\_by, created\_at | `user_id` : l'invité. Une seule invitation par espace et par compte. |
+| vue `space_access` | user\_id, space\_id | Le propriétaire et les membres de chaque espace. Toutes les requêtes de contenu filtrent sur elle. |
+| `notes` | + `revision` | Augmente de 1 à chaque enregistrement |
+
+La colonne `user_id` des notes, fichiers, dossiers et tâches ne décide plus de l'accès : elle garde l'**auteur**. Les tags gardent le compte qui les a créés, mais s'affichent et se filtrent par nom. Les agendas, Temporaire, les envois en cours et les conversions restent filtrés par compte.
+
+## Sécurité
+
+- Toute requête de contenu passe de « c'est à moi » (`user_id = moi`) à « j'ai accès à son espace » (`space_id` dans `space_access`). Un élément d'un espace où l'on n'est pas répond 404, comme avant.
+- La destination d'un rangement, d'un déplacement ou d'une conversion doit aussi être un espace accessible.
+- Les actions du propriétaire sont vérifiées par le serveur. Accepter ou refuser une invitation n'est permis qu'à l'invité.
+- Retirer un membre lui coupe l'accès à la requête suivante, puisque la liste des espaces est relue à chaque requête. Ses liens de partage vers l'espace sont révoqués.
+- Les noms et adresses affichés sur la page Membres sont échappés, et l'adresse saisie n'entre dans aucune requête autrement que par un paramètre.
+- Retirer un compte de `ALLOWED_EMAILS` lui coupe tout accès, espaces partagés compris. Ce qu'il a créé reste dans les espaces.
+
+## Critères d'acceptation
+
+- [ ] Le propriétaire invite un compte existant ; une adresse sans compte, soi-même, un membre, un doublon, Perso ou un espace archivé sont refusés
+- [ ] L'invité voit l'invitation dans Réglages ; accepter ajoute l'espace à son île et à ses réglages ; refuser la fait disparaître ; une invitation d'un autre compte ne s'accepte pas
+- [ ] Accepter au-delà de 8 espaces est refusé
+- [ ] Un membre voit, crée, modifie, range et supprime les notes, fichiers, dossiers et tâches de l'espace ; un compte qui n'en est pas membre reçoit 404
+- [ ] Les tags d'un espace partagé sont communs ; deux tags de même nom ne s'affichent qu'une fois
+- [ ] Les agendas et Temporaire d'un membre restent invisibles aux autres
+- [ ] Un membre ne renomme, n'archive, ne supprime l'espace ni n'invite (refus du serveur)
+- [ ] Quitter ou être retiré coupe l'accès, laisse le contenu, ramène ses agendas dans son Perso et révoque ses liens de partage
+- [ ] Deux membres dont l'un a déjà un espace du même identifiant ouvrent chacun le partagé à sa propre adresse
+- [ ] Le Perso d'un membre réunit le contenu de l'espace partagé ; l'API et `/open` le trouvent aussi
+- [ ] Un enregistrement de note sur une version dépassée est refusé sans rien écraser
+- [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
+
+## Décisions
+
+Prises avec Rémi le 16 novembre 2026 :
+
+- **Contenu commun** : notes, fichiers, dossiers et tâches. Les agendas restent à chacun.
+- **On partage un espace existant** (bouton « Membres »), sauf Perso.
+- **Membres** : tout sur le contenu. Le propriétaire seul gère l'espace et ses membres.
+- **Invitation à accepter**, pas d'ajout direct.
+
+Par défaut, pour avancer :
+
+- **Seulement des comptes existants** : inviter une adresse autorisée qui ne s'est jamais connectée ne crée pas son compte d'avance.
+- **Invitations visibles dans Réglages** seulement, sans notification ni e-mail.
+- **Garde-fou de version** sur les notes plutôt que l'édition à plusieurs en direct, qui demanderait un serveur temps réel (WebSocket) et un éditeur collaboratif.
+- **Pas de rôle « lecture seule »**, et pas d'affichage de l'auteur dans les listes : à voir à l'usage.
+- **Le tableau de bord d'un espace partagé** (disposition des widgets) est commun, et tout membre peut le modifier.

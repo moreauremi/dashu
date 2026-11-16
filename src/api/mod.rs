@@ -362,9 +362,9 @@ async fn list_tasks(
     };
 
     let tasks = sqlx::query!(
-        r#"SELECT t.id AS "id!", t.title, t.done AS "done!: bool", t.due_date, s.slug AS "space!"
-           FROM tasks t JOIN spaces s ON s.id = t.space_id
-           WHERE t.user_id = ?1 AND (?2 IS NULL OR t.space_id = ?2) AND (?3 IS NULL OR t.done = ?3)
+        r#"SELECT t.id AS "id!", t.title, t.done AS "done!: bool", t.due_date, t.space_id
+           FROM tasks t
+           WHERE t.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL OR t.space_id = ?2) AND (?3 IS NULL OR t.done = ?3)
            ORDER BY t.done, t.due_date IS NULL, t.due_date, t.created_at
            LIMIT 500"#,
         user.id,
@@ -379,19 +379,19 @@ async fn list_tasks(
         title: t.title,
         done: t.done,
         due_date: t.due_date,
-        space: t.space,
+        space: user.slug_of(t.space_id),
     })
     .collect();
     Ok(Json(tasks))
 }
 
-async fn fetch_task(db: &SqlitePool, user: i64, id: i64) -> ApiResult<TaskOut> {
+async fn fetch_task(db: &SqlitePool, user: &ApiUser, id: i64) -> ApiResult<TaskOut> {
     let task = sqlx::query!(
-        r#"SELECT t.id AS "id!", t.title, t.done AS "done!: bool", t.due_date, s.slug AS "space!"
-           FROM tasks t JOIN spaces s ON s.id = t.space_id
-           WHERE t.id = ? AND t.user_id = ?"#,
+        r#"SELECT t.id AS "id!", t.title, t.done AS "done!: bool", t.due_date, t.space_id
+           FROM tasks t
+           WHERE t.id = ? AND t.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
-        user
+        user.id
     )
     .fetch_optional(db)
     .await?
@@ -401,7 +401,7 @@ async fn fetch_task(db: &SqlitePool, user: i64, id: i64) -> ApiResult<TaskOut> {
         title: task.title,
         done: task.done,
         due_date: task.due_date,
-        space: task.space,
+        space: user.slug_of(task.space_id),
     })
 }
 
@@ -411,7 +411,7 @@ async fn get_task(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<TaskOut>> {
-    Ok(Json(fetch_task(&state.db, user.id, id).await?))
+    Ok(Json(fetch_task(&state.db, &user, id).await?))
 }
 
 #[derive(Deserialize)]
@@ -455,7 +455,7 @@ async fn create_task(
     .last_insert_rowid();
     Ok((
         StatusCode::CREATED,
-        Json(fetch_task(&state.db, user.id, id).await?),
+        Json(fetch_task(&state.db, &user, id).await?),
     ))
 }
 
@@ -498,7 +498,7 @@ async fn update_task(
            due_date = COALESCE(?2, due_date),
            done_at = CASE WHEN ?3 IS NULL THEN done_at WHEN ?3 THEN COALESCE(done_at, ?4) ELSE NULL END,
            done = COALESCE(?3, done)
-         WHERE id = ?5 AND user_id = ?6",
+         WHERE id = ?5 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?6)",
         title,
         due,
         changes.done,
@@ -512,7 +512,7 @@ async fn update_task(
     if changed == 0 {
         return Err(ApiError::not_found("tâche"));
     }
-    Ok(Json(fetch_task(&state.db, user.id, id).await?))
+    Ok(Json(fetch_task(&state.db, &user, id).await?))
 }
 
 /// `DELETE /api/v1/tasks/{id}`
@@ -522,7 +522,7 @@ async fn delete_task(
     Path(id): Path<i64>,
 ) -> ApiResult<StatusCode> {
     let deleted = sqlx::query!(
-        "DELETE FROM tasks WHERE id = ? AND user_id = ?",
+        "DELETE FROM tasks WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
         user.id
     )
@@ -595,7 +595,7 @@ async fn list_notes(
                       snippet(notes_fts, 1, '', '', '…', 24) AS "excerpt!: String"
                FROM notes_fts
                JOIN notes n ON n.id = notes_fts.rowid
-               WHERE notes_fts MATCH ?1 AND n.user_id = ?2 AND (?3 IS NULL OR n.space_id = ?3)
+               WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2) AND (?3 IS NULL OR n.space_id = ?3)
                  AND (?4 IS NULL OR EXISTS (
                        SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                        WHERE nt.note_id = n.id AND t.name = ?4))
@@ -625,7 +625,7 @@ async fn list_notes(
                       n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
                       substr(n.body_md, 1, 600) AS "head!: String"
                FROM notes n
-               WHERE n.user_id = ?1 AND (?2 IS NULL OR n.space_id = ?2)
+               WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL OR n.space_id = ?2)
                  AND (?3 IS NULL OR EXISTS (
                        SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                        WHERE nt.note_id = n.id AND t.name = ?3))
@@ -655,8 +655,10 @@ async fn list_notes(
     let mut tags: HashMap<i64, Vec<String>> = HashMap::new();
     for row in sqlx::query!(
         r#"SELECT nt.note_id AS "note_id!", t.name AS "name!"
-           FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
-           WHERE t.user_id = ?
+           FROM note_tags nt
+           JOIN tags t ON t.id = nt.tag_id
+           JOIN notes n ON n.id = nt.note_id
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)
            ORDER BY t.name"#,
         user.id
     )
@@ -674,7 +676,7 @@ async fn list_notes(
 async fn fetch_note(db: &SqlitePool, user: &ApiUser, id: i64) -> ApiResult<NoteOut> {
     let note = sqlx::query!(
         r#"SELECT id AS "id!", title, body_md, space_id, pinned AS "pinned!: bool", created_at, updated_at
-           FROM notes WHERE id = ? AND user_id = ?"#,
+           FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
         user.id
     )
@@ -801,7 +803,7 @@ async fn update_note(
     };
 
     let current = sqlx::query!(
-        "SELECT title, body_md FROM notes WHERE id = ? AND user_id = ?",
+        "SELECT title, body_md FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
         user.id
     )
@@ -831,7 +833,8 @@ async fn update_note(
     if title != current.title || body != current.body_md {
         let now = time::now();
         sqlx::query!(
-            "UPDATE notes SET title = ?, body_md = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            "UPDATE notes SET title = ?, body_md = ?, updated_at = ?, revision = revision + 1
+             WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
             title,
             body,
             now,
@@ -843,7 +846,7 @@ async fn update_note(
     }
     if let Some(pinned) = changes.pinned {
         sqlx::query!(
-            "UPDATE notes SET pinned = ? WHERE id = ? AND user_id = ?",
+            "UPDATE notes SET pinned = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
             pinned,
             id,
             user.id
@@ -856,7 +859,7 @@ async fn update_note(
         // à la racine du nouveau (SPEC, « Dossiers »).
         sqlx::query!(
             "UPDATE notes SET folder_id = CASE WHEN space_id = ?1 THEN folder_id END, space_id = ?1
-             WHERE id = ?2 AND user_id = ?3",
+             WHERE id = ?2 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?3)",
             space.id,
             id,
             user.id
