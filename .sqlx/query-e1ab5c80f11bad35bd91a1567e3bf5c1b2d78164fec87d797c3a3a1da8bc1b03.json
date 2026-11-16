@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT slug AS \"slug!\" FROM spaces WHERE user_id = ?1\n           UNION SELECT slug FROM space_members WHERE user_id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "slug!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e1ab5c80f11bad35bd91a1567e3bf5c1b2d78164fec87d797c3a3a1da8bc1b03"
+}

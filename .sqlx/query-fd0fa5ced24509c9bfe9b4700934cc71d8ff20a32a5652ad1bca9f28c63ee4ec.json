@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT count(*) FROM notes WHERE user_id = ? AND space_id = ?",
+  "query": "SELECT count(*) FROM tasks WHERE space_id = ?",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,11 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       false
     ]
   },
-  "hash": "86a2097a3f098151d52d313bafb1643c2e7e950a768a17a909df00907830a7c0"
+  "hash": "fd0fa5ced24509c9bfe9b4700934cc71d8ff20a32a5652ad1bca9f28c63ee4ec"
 }

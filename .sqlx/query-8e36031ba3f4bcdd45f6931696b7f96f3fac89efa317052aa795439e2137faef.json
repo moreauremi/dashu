@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", space_id, parent_id, name FROM folders\n                   WHERE space_id = ? OR space_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "parent_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8e36031ba3f4bcdd45f6931696b7f96f3fac89efa317052aa795439e2137faef"
+}

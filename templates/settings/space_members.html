@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block title %}Membres de {{ space.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Membres de « {{ space.name }} »</h1>
+</header>
+
+<section class="card space-delete" data-accent="{{ space.color }}">
+  <div class="card-body stack">
+    <ul class="space-list" role="list">
+      <li class="space-archived-row">
+        <span class="space-name">{{ owner.name }}</span>
+        <span class="muted">{{ owner.email }}</span>
+        <span class="space-tag">propriétaire</span>
+      </li>
+      {% for member in members %}
+      <li class="space-archived-row">
+        <span class="space-name">{{ member.name }}</span>
+        <span class="muted">{{ member.email }}</span>
+        {% if space.mine %}
+        <form method="post" action="/settings/spaces/{{ space.id }}/members/{{ member.id }}/remove" hx-confirm="Retirer {{ member.name }} de « {{ space.name }} » ? Son accès est coupé, ce qu'il a créé reste dans l'espace.">
+          <button class="btn btn-danger-outline" type="submit">Retirer</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+
+    {% if space.mine %}
+    {% if !pending.is_empty() %}
+    <h3 class="space-archived-title">Invitations en attente</h3>
+    <ul class="space-list space-archived" role="list">
+      {% for (inv, person) in pending %}
+      <li class="space-archived-row">
+        <span class="space-name">{{ person.name }}</span>
+        <span class="muted">{{ person.email }}</span>
+        <form method="post" action="/settings/spaces/{{ space.id }}/invitations/{{ inv }}/cancel">
+          <button class="btn" type="submit">Annuler</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form class="stack form-narrow" method="post" action="/settings/spaces/{{ space.id }}/invitations">
+      <label class="field">
+        <span class="field-label">Inviter quelqu'un</span>
+        <input type="email" name="email" required autocomplete="off" spellcheck="false" placeholder="adresse@exemple.fr" aria-describedby="invite-hint">
+        <span id="invite-hint" class="hint">La personne doit déjà s'être connectée une fois. Elle accepte l'invitation depuis ses réglages.</span>
+      </label>
+      <div><button class="btn btn-primary" type="submit">Inviter</button></div>
+    </form>
+    {% else %}
+    <form method="post" action="/settings/spaces/{{ space.id }}/leave" hx-confirm="Quitter « {{ space.name }} » ? Tu n'y auras plus accès ; ce que tu y as créé reste dans l'espace.">
+      <button class="btn btn-danger-outline" type="submit">Quitter l'espace</button>
+    </form>
+    {% endif %}
+
+    <div class="space-actions"><a class="btn" href="/settings#espaces">Retour aux réglages</a></div>
+  </div>
+</section>
+{% endblock %}

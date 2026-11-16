@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO space_invitations (space_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "7f80ceef34fbe20385f9c117f3217e0466052cb6e61253b51cff079d8f15ca71"
+}

@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT count(*) FROM tasks WHERE user_id = ? AND space_id = ?",
+  "query": "SELECT user_id AS \"user_id!: i64\" FROM space_members WHERE space_id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "count(*)",
+        "name": "user_id!: i64",
         "ordinal": 0,
         "type_info": "Integer"
       }
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "30fa2eab90957b35259d6169acaa6d7ae660bd7db2cf0ca631f5843b36d6c16a"
+  "hash": "deff7819948c355cb6d0db89547035c94aded40c7702e1c55cf4c87d222f7619"
 }

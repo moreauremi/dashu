@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT storage_key FROM files WHERE space_id = ? AND user_id = ?",
+  "query": "SELECT storage_key FROM files WHERE space_id = ?",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,11 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       false
     ]
   },
-  "hash": "71b2d7ec25105c55ecd7c639f429326f3fa831c186fe2b1f93f2657eca41a827"
+  "hash": "9adf3432107adab3fb681001b470960ef9c04c821e3a85c27b0ae45f19c3cb36"
 }

@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT i.id AS \"id!\", s.name AS space_name, s.color, s.icon,\n                  u.email, u.first_name, u.last_name\n           FROM space_invitations i\n           JOIN spaces s ON s.id = i.space_id\n           JOIN users u ON u.id = i.invited_by\n           WHERE i.user_id = ? ORDER BY i.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "color",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "icon",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "email",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "first_name",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_name",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2eaffef50220755ff3f5776cee2a94f3b52e696b5d7857fad065014d6ec49a55"
+}
