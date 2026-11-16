@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# Comptes autorisés à se connecter à dashu (ALLOWED_EMAILS), en root dans le
+# conteneur :
+#
+#   dashu-compte liste                   les adresses autorisées
+#   dashu-compte ajouter <email>         autorise une adresse
+#   dashu-compte retirer <email>         coupe l'accès de ce compte
+#   dashu-compte mot-de-passe <email>    crée le compte ou change son mot de passe
+#
+# Ajouter ou retirer réécrit la ligne ALLOWED_EMAILS de /etc/dashu/dashu.env
+# (le reste du fichier, ses droits et son propriétaire ne changent pas), puis
+# redémarre dashu. Si dashu ne repart pas, l'ancien fichier est remis.
+#
+# Une adresse ajoutée ne crée pas encore le compte : il naît à la première
+# connexion Google, ou par « mot-de-passe ». Tant que le projet Google de
+# dashu est en mode Test, l'adresse doit aussi figurer dans ses utilisateurs
+# tests (README, « Comptes et connexion »).
+#
+# Retirer une adresse garde les données du compte dans la base. L'adresse de
+# l'API (API_USER_EMAIL) ne se retire pas : dashu ne démarrerait plus. La
+# dernière adresse non plus : plus personne ne pourrait se connecter.
+#
+# Hermès n'y a pas accès : dashu-admin garde ses six actions.
+# Le fichier, le redémarrage et le contrôle se changent par l'environnement
+# (tests de la CI, tests/deploy/comptes.sh).
+set -euo pipefail
+
+ENV_FILE="${DASHU_ENV_FILE:-/etc/dashu/dashu.env}"
+RESTART="${DASHU_RESTART:-systemctl restart dashu}"
+CHECK="${DASHU_CHECK:-}"
+
+usage() {
+  cat >&2 <<'TEXTE'
+Usage :
+  dashu-compte liste
+  dashu-compte ajouter <email>
+  dashu-compte retirer <email>
+  dashu-compte mot-de-passe <email>
+TEXTE
+  exit 2
+}
+
+lower() { tr '[:upper:]' '[:lower:]'; }
+
+# Une adresse simple : lettres, chiffres et . _ % + - avant l'arobase.
+valid_email() { [[ "$1" =~ ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$ ]]; }
+
+# Valeur d'une variable du fichier, sans guillemets autour. Comme systemd,
+# la dernière ligne l'emporte.
+value() {
+  local line
+  line="$(grep "^$1=" "$ENV_FILE" | tail -1 || true)"
+  line="${line#"$1"=}"
+  line="${line#\"}"
+  line="${line%\"}"
+  line="${line#\'}"
+  line="${line%\'}"
+  printf '%s' "$line"
+}
+
+# Les adresses autorisées, une par ligne, en minuscules (comme dashu les lit).
+emails() {
+  value ALLOWED_EMAILS | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | lower | grep -v '^$' || true
+}
+
+# (Pas de tube vers grep -q : il s'arrête au premier résultat, et pipefail
+# compterait alors l'écrivain interrompu comme un échec.)
+allowed() { grep -qxF "$1" <<<"$(emails)"; }
+
+api_email() { value API_USER_EMAIL | tr -d '[:space:]' | lower; }
+
+# dashu répond-il après le redémarrage ?
+healthy() {
+  if [ -n "$CHECK" ]; then
+    bash -c "$CHECK"
+    return
+  fi
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Écrit la nouvelle liste (arguments) à la place de l'ancienne, redémarre
+# dashu et vérifie qu'il répond ; sinon, remet l'ancien fichier. Écriture
+# dans un fichier voisin, copié avec ses droits, puis renommage.
+apply() {
+  local dir backup tmp joined
+  dir="$(dirname "$ENV_FILE")"
+  joined="$(IFS=,; echo "$*")"
+  backup="$(mktemp "$dir/.dashu.env.avant.XXXXXX")"
+  tmp="$(mktemp "$dir/.dashu.env.XXXXXX")"
+  cp -p "$ENV_FILE" "$backup"
+  cp -p "$ENV_FILE" "$tmp"
+  awk -v list="$joined" '
+    /^ALLOWED_EMAILS=/ { if (!done) print "ALLOWED_EMAILS=" list; done = 1; next }
+    { print }
+    END { if (!done) print "ALLOWED_EMAILS=" list }
+  ' "$ENV_FILE" > "$tmp"
+  mv -f "$tmp" "$ENV_FILE"
+
+  bash -c "$RESTART"
+  if healthy; then
+    rm -f "$backup"
+    return 0
+  fi
+  echo "dashu ne repart pas : l'ancienne liste est remise (journalctl -u dashu -n 30)." >&2
+  mv -f "$backup" "$ENV_FILE"
+  bash -c "$RESTART" || true
+  exit 3
+}
+
+need_write() {
+  [ -w "$ENV_FILE" ] || {
+    echo "Impossible de modifier $ENV_FILE : à lancer en root dans le conteneur." >&2
+    exit 1
+  }
+}
+
+# Adresse donnée en argument, vérifiée, en minuscules.
+email_arg() {
+  [ -n "${1:-}" ] || usage
+  local email
+  email="$(printf '%s' "$1" | tr -d '[:space:]' | lower)"
+  valid_email "$email" || {
+    echo "« $1 » n'est pas une adresse email valable." >&2
+    exit 2
+  }
+  printf '%s' "$email"
+}
+
+[ -r "$ENV_FILE" ] || {
+  echo "Impossible de lire $ENV_FILE : à lancer en root dans le conteneur." >&2
+  exit 1
+}
+
+case "${1:-}" in
+  liste)
+    api="$(api_email)"
+    found=0
+    while IFS= read -r email; do
+      found=1
+      if [ "$email" = "$api" ]; then echo "$email (compte de l'API, Hermès)"; else echo "$email"; fi
+    done < <(emails)
+    [ "$found" = 1 ] || echo "Aucune adresse autorisée : personne ne peut se connecter."
+    ;;
+
+  ajouter)
+    email="$(email_arg "${2:-}")"
+    if allowed "$email"; then
+      echo "$email est déjà autorisée."
+      exit 0
+    fi
+    need_write
+    list=()
+    while IFS= read -r e; do list+=("$e"); done < <(emails)
+    apply ${list[@]+"${list[@]}"} "$email"
+    base="$(value BASE_URL)"
+    echo "$email est autorisée, dashu a redémarré."
+    echo "Son compte se crée à sa première connexion :"
+    echo "  - par Google, sur ${base:-https://app.dashu.dev} : d'abord ajouter l'adresse aux"
+    echo "    utilisateurs tests du projet Google de dashu (Google Auth Platform > Audience) ;"
+    echo "  - ou par mot de passe : dashu-compte mot-de-passe $email"
+    ;;
+
+  retirer)
+    email="$(email_arg "${2:-}")"
+    if ! allowed "$email"; then
+      echo "$email n'est pas autorisée : rien à faire."
+      exit 0
+    fi
+    if [ "$email" = "$(api_email)" ]; then
+      echo "$email est le compte de l'API (API_USER_EMAIL, Hermès) : dashu ne démarrerait plus sans elle." >&2
+      exit 2
+    fi
+    rest=()
+    while IFS= read -r e; do [ "$e" = "$email" ] || rest+=("$e"); done < <(emails)
+    if [ "${#rest[@]}" -eq 0 ]; then
+      echo "$email est la seule adresse autorisée : plus personne ne pourrait se connecter." >&2
+      exit 2
+    fi
+    need_write
+    apply "${rest[@]}"
+    echo "Accès coupé pour $email, dashu a redémarré. Ses données restent dans la base."
+    ;;
+
+  mot-de-passe)
+    email="$(email_arg "${2:-}")"
+    if ! allowed "$email"; then
+      echo "$email n'est pas autorisée : d'abord dashu-compte ajouter $email" >&2
+      exit 2
+    fi
+    # Comme le README (« Installation ») : la commande de dashu, sous son
+    # utilisateur, avec sa configuration. Elle demande le mot de passe.
+    exec runuser -u dashu -- sh -c 'set -a; . "$1"; exec dashu set-password "$0"' "$email" "$ENV_FILE"
+    ;;
+
+  *) usage ;;
+esac

@@ -41,6 +41,10 @@ jobs:
       # incrémentaux, purge, restauration d'un fichier supprimé.
       - name: Sauvegarde des fichiers (script du serveur)
         run: bash tests/deploy/sauvegarde-fichiers.sh
+      # Script du serveur (deploy/lxc/dashu-compte) : ajouter, lister, retirer
+      # une adresse autorisée, les refus, le retour si dashu ne repart pas.
+      - name: Comptes autorisés (script du serveur)
+        run: bash tests/deploy/comptes.sh
       # Le service dashu du serveur tourne dans un bac à sable systemd
       # (deploy/lxc/hardening.conf) que ni Windows ni « cargo test » n'ont :
       # bit setgid refusé, un point de montage par ReadWritePaths. La

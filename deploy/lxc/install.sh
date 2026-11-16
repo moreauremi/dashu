@@ -95,7 +95,7 @@ say "Services et scripts"
 install -m 644 deploy/lxc/dashu.service deploy/lxc/dashu-backup.service deploy/lxc/dashu-backup.timer deploy/lxc/dashu-worker.service /etc/systemd/system/
 install -d /etc/systemd/system/dashu.service.d
 install -m 644 deploy/lxc/hardening.conf /etc/systemd/system/dashu.service.d/
-for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin; do
+for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin dashu-compte; do
   install -m 755 "deploy/lxc/$script" /usr/local/sbin/
 done
 systemctl daemon-reload
