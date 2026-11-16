@@ -388,7 +388,7 @@ async fn assert_departed(app: &TestApp, space: i64, link: i64, bob: &mut Client)
         .fetch_one(&app.state.db)
         .await
         .unwrap();
-    assert_eq!(files, 1, "ce qu'il a créé reste");
+    assert_eq!(files, 1, "ce que le membre a créé reste");
 }
 
 #[tokio::test]

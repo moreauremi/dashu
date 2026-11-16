@@ -236,7 +236,12 @@ function initEditor() {
       if (status) status.dataset.state = "saved";
     } else if (status) {
       status.dataset.state = "error";
-      status.textContent = "Échec de l'enregistrement";
+      // 409 : la note a été modifiée ailleurs (espace partagé, autre onglet).
+      // Le serveur n'a rien écrit et sa réponse, déjà affichée, dit quoi
+      // faire : on la garde.
+      if (e.detail.xhr?.status !== 409) {
+        status.textContent = "Échec de l'enregistrement";
+      }
     }
   });
 

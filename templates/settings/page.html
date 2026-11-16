@@ -183,6 +183,9 @@
             <button class="btn" type="submit">{{ crate::assets::icon("unarchive")|safe }}Restaurer</button>
           </form>
           <a class="btn btn-danger-outline" href="/settings/spaces/{{ space.id }}/delete" aria-label="Supprimer {{ space.name }}">{{ crate::assets::icon("trash")|safe }}</a>
+          {% else %}
+          {#- Espace rejoint, archivé par son propriétaire : on peut encore le quitter. -#}
+          <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
           {% endif %}
         </li>
         {% endfor %}

@@ -408,6 +408,40 @@ async fn un_membre_voit_et_revoque_un_lien_d_alice() {
 }
 
 #[tokio::test]
+async fn un_lien_ne_sert_plus_un_fichier_sorti_de_l_espace_partage() {
+    // Bob partage un fichier de l'espace commun, puis Alice le range dans son
+    // espace privé : le lien de Bob ne doit pas continuer à le servir.
+    let (app, mut alice, mut bob, ecole, _slug) = setup().await;
+    upload_in(&mut alice, ecole, "prive.pdf", b"%PDF prive").await;
+    let id = file_id(&app, "prive.pdf").await;
+    let created = bob
+        .post(&format!("/files/{id}/share"), &[("duree", "1j")])
+        .await;
+    assert_eq!(created.status, StatusCode::OK, "{}", created.body);
+    let at = created.body.find("/s/").unwrap() + 3;
+    let token: String = created.body[at..].chars().take(64).collect();
+
+    let mut stranger = app.client();
+    assert_eq!(
+        stranger.get(&format!("/s/{token}")).await.status,
+        StatusCode::OK
+    );
+
+    let taff = app.space_id(ALICE, "taff").await;
+    let moved = alice
+        .post(
+            &format!("/files/{id}/move"),
+            &[("space_id", &taff.to_string())],
+        )
+        .await;
+    assert_eq!(moved.status, StatusCode::SEE_OTHER, "{}", moved.body);
+    assert_eq!(
+        stranger.get(&format!("/s/{token}")).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
 async fn deux_tags_de_meme_nom_n_en_font_qu_un() {
     let (app, mut alice, mut bob, ecole, slug) = setup().await;
     upload_in(&mut alice, ecole, "cours.pdf", b"%PDF cours").await;

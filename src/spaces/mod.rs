@@ -847,8 +847,9 @@ pub async fn delete(
 // Membres et invitations (SPEC, « Espaces partagés »)
 // ---------------------------------------------------------------------
 
-/// « Prénom Nom », ou l'adresse tant que le profil est vide.
-fn person_name(first_name: &str, last_name: &str, email: &str) -> String {
+/// « Prénom Nom », ou l'adresse tant que le profil est vide. Aussi utilisée
+/// par les réglages (invitations reçues, « Partagé par … »).
+pub(crate) fn person_name(first_name: &str, last_name: &str, email: &str) -> String {
     let name = format!("{first_name} {last_name}");
     match name.trim() {
         "" => email.to_string(),
@@ -1149,7 +1150,7 @@ pub async fn remove(
         return Err(AppError::NotFound);
     }
     remove_member(&state.db, id, user).await?;
-    ctx.flash_ok("Membre retiré : il n'a plus accès à l'espace")
+    ctx.flash_ok("Membre retiré : plus d'accès à l'espace")
         .await?;
     Ok(see_other(&members_url(id)))
 }

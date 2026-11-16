@@ -214,10 +214,14 @@ async fn lookup(db: &SqlitePool, token: &str) -> AppResult<Option<Shared>> {
     }
     let token_hash = hash(token);
     let now = time::now();
+    // Le créateur du lien doit encore avoir accès à l'espace du fichier : un
+    // fichier sorti d'un espace partagé vers l'espace privé d'un autre membre,
+    // ou un membre parti, ne laisse pas de lien ouvert derrière lui.
     Ok(sqlx::query!(
         r#"SELECT f.name, f.size, f.storage_key, l.expires_at
            FROM share_links l JOIN files f ON f.id = l.file_id
-           WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND f.expires_at IS NULL"#,
+           WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND f.expires_at IS NULL
+             AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = l.user_id)"#,
         token_hash,
         now
     )

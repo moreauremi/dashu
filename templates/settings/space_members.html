@@ -10,15 +10,15 @@
     <ul class="space-list" role="list">
       <li class="space-archived-row">
         <span class="space-name">{{ owner.name }}</span>
-        <span class="muted">{{ owner.email }}</span>
+        {% if owner.name != owner.email %}<span class="muted">{{ owner.email }}</span>{% endif %}
         <span class="space-tag">propriétaire</span>
       </li>
       {% for member in members %}
       <li class="space-archived-row">
         <span class="space-name">{{ member.name }}</span>
-        <span class="muted">{{ member.email }}</span>
+        {% if member.name != member.email %}<span class="muted">{{ member.email }}</span>{% endif %}
         {% if space.mine %}
-        <form method="post" action="/settings/spaces/{{ space.id }}/members/{{ member.id }}/remove" hx-confirm="Retirer {{ member.name }} de « {{ space.name }} » ? Son accès est coupé, ce qu'il a créé reste dans l'espace.">
+        <form method="post" action="/settings/spaces/{{ space.id }}/members/{{ member.id }}/remove" hx-confirm="Retirer {{ member.name }} de « {{ space.name }} » ? Son accès est coupé ; ce que cette personne a créé reste dans l'espace.">
           <button class="btn btn-danger-outline" type="submit">Retirer</button>
         </form>
         {% endif %}
@@ -33,7 +33,7 @@
       {% for (inv, person) in pending %}
       <li class="space-archived-row">
         <span class="space-name">{{ person.name }}</span>
-        <span class="muted">{{ person.email }}</span>
+        {% if person.name != person.email %}<span class="muted">{{ person.email }}</span>{% endif %}
         <form method="post" action="/settings/spaces/{{ space.id }}/invitations/{{ inv }}/cancel">
           <button class="btn" type="submit">Annuler</button>
         </form>

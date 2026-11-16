@@ -209,6 +209,25 @@ Demandé par Rémi le 13 novembre 2026, cahier des charges dans `SPEC.md` (« Do
 - [x] Essayé sur le serveur, depuis l'iPhone et l'ordinateur (Rémi, 15 novembre 2026). Au doigt, le glisser-déposer de Safari n'est pas visé : la fenêtre « Ranger » fait la même chose.
 - Migration 0013 (`folders`, `folder_id` sur `notes`, `files` et `uploads`). Les tests existants ont été adaptés là où Perso montrait la liste des fichiers (`/files?dossier=espace`).
 
+## Espaces partagés : avancement
+
+Demandé par Rémi le 16 novembre 2026, cahier des charges dans `SPEC.md` (« Espaces partagés »). Tout est vérifié par les tests d'intégration (29 tests dans `tests/espaces_partages_membres.rs`, `_notes.rs`, `_taches.rs` et `_fichiers.rs`). La partie visible a été essayée dans le navigateur, sur une instance locale avec deux comptes : invitation, acceptation, page Membres, note commune et garde-fou de version, en taille ordinateur et téléphone, sans erreur bloquée par la CSP. **Pas encore sur le serveur.**
+
+- [x] Le propriétaire invite un compte existant ; une adresse sans compte ou non autorisée, soi-même, un membre, un doublon, Perso et un espace archivé sont refusés, sans rien créer. Tests `inviter_puis_accepter`, `refus_d_invitation_sans_rien_creer`.
+- [x] L'invité voit l'invitation en haut de Réglages ; accepter ajoute l'espace à son île (« Partagé par … »), refuser la fait disparaître, le propriétaire peut l'annuler ; l'invitation d'un autre compte répond 404. Tests `inviter_puis_accepter`, `refuser_et_annuler_une_invitation`, `invitation_d_un_autre_compte`. Vu dans le navigateur.
+- [x] Accepter au-delà de 8 espaces est refusé. Test `limite_de_huit_espaces`.
+- [x] Un membre voit, crée, modifie, range et supprime les notes, fichiers, dossiers et tâches de l'espace ; un espace non partagé répond 404. Tests `le_membre_lit_modifie_epingle_et_deplace`, `les_membres_partagent_les_taches`, `un_membre_voit_telecharge_et_previsualise`, `un_membre_renomme_range_et_supprime`, `un_membre_envoie_dans_l_espace_partage`, `les_dossiers_sont_communs`, `un_espace_non_partage_repond_404`, `un_dossier_non_partage_est_refuse`.
+- [x] Les tags sont communs ; deux tags de même nom ne s'affichent qu'une fois, sur une note comme sur un fichier. Tests `tags_de_meme_nom_communs`, `deux_tags_de_meme_nom_n_en_font_qu_un`.
+- [x] Les agendas et Temporaire d'un membre restent invisibles aux autres. Tests `un_agenda_de_bob_reste_invisible_a_alice`, `le_temporaire_reste_a_son_auteur`.
+- [x] Un membre ne renomme, n'archive, ne supprime l'espace ni n'invite (403). Test `un_membre_ne_gere_pas_l_espace`. La suppression ne transfère le contenu que vers un espace du propriétaire. Test `le_transfert_n_accepte_que_les_espaces_du_proprietaire`.
+- [x] Quitter ou être retiré coupe l'accès à la requête suivante, laisse le contenu, ramène ses agendas dans son Perso, révoque ses liens de partage et remet son espace « moment » au défaut. Tests `quitter_un_espace`, `retirer_un_membre`, et pour la suppression `supprimer_un_espace_partage_en_gardant_le_contenu`, `supprimer_un_espace_partage_avec_son_contenu`.
+- [x] Un membre qui a déjà un espace du même identifiant ouvre le partagé à sa propre adresse (`/e/ecole-2/`). Test `inviter_puis_accepter`.
+- [x] Le Perso d'un membre réunit le contenu de l'espace partagé ; l'API et `/open` le trouvent aussi ; le tableau de bord d'un espace partagé est commun. Tests `le_membre_lit_modifie_epingle_et_deplace`, `open_trouve_les_notes_des_espaces_partages`, `l_api_voit_les_espaces_partages`, `un_membre_modifie_le_tableau_de_bord_partage`.
+- [x] Un enregistrement de note sur une version dépassée est refusé (409) sans rien écraser ; l'indicateur d'état le dit. Test `numero_de_version_contre_les_ecrasements`. Vu dans le navigateur : la base garde le texte de l'autre, l'indicateur affiche « Modifiée ailleurs entre-temps ». Il a fallu corriger l'éditeur, qui remplaçait ce message par « Échec de l'enregistrement ».
+- [x] Liens de partage : tout membre voit et révoque ceux de l'espace ; un lien ne sert plus un fichier dont l'espace n'est plus accessible à son créateur (fichier rangé dans l'espace privé d'un autre membre). Tests `un_membre_voit_et_revoque_un_lien_d_alice`, `un_lien_ne_sert_plus_un_fichier_sorti_de_l_espace_partage`.
+- [ ] Essayé sur le serveur, avec un second compte réel.
+- Migration 0016 (`space_members`, `space_invitations`, vue `space_access`, `notes.revision`). La colonne `user_id` des contenus garde l'auteur ; l'accès passe par l'espace. Une centaine de requêtes ont changé de filtre ; restent par compte les agendas, Temporaire, les envois en cours et les conversions.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

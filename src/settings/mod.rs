@@ -14,7 +14,7 @@ use crate::AppState;
 use crate::auth::password;
 use crate::auth::session::{Ctx, Shell};
 use crate::calendar::sync;
-use crate::spaces;
+use crate::spaces::{self, person_name};
 use crate::tabbar::{self, Tab};
 use crate::time;
 use crate::web::{self, AppError, AppResult, local_path, see_other};
@@ -68,14 +68,6 @@ struct InvitationRow {
     space_icon: String,
     /// Qui invite.
     from: String,
-}
-
-/// « Prénom Nom », ou l'adresse tant que le profil est vide.
-fn person_name(first_name: &str, last_name: &str, email: &str) -> String {
-    match format!("{first_name} {last_name}").trim() {
-        "" => email.to_string(),
-        name => name.to_string(),
-    }
 }
 
 /// `GET /settings`

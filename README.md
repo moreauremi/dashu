@@ -132,7 +132,7 @@ Pourquoi : un formulaire d'inscription sans vérification d'email laisserait qui
 
 Les deux méthodes mènent au même compte : Google est rattaché par l'email vérifié qu'il renvoie.
 
-**Ajouter quelqu'un.** Chaque adresse autorisée a son propre compte, ses espaces, ses notes, ses fichiers et son agenda ; il ne voit rien des autres (isolement testé). Il partage en revanche le disque (pas de quota par compte) et les sauvegardes. Sur le serveur, en root dans le conteneur, [`dashu-compte`](deploy/lxc/dashu-compte) tient la liste à jour sans ouvrir `/etc/dashu/dashu.env` :
+**Ajouter quelqu'un.** Chaque adresse autorisée a son propre compte, ses espaces, ses notes, ses fichiers et son agenda ; il ne voit rien des autres (isolement testé), sauf les espaces qu'on partage avec lui (voir plus bas). Il partage en revanche le disque (pas de quota par compte) et les sauvegardes. Sur le serveur, en root dans le conteneur, [`dashu-compte`](deploy/lxc/dashu-compte) tient la liste à jour sans ouvrir `/etc/dashu/dashu.env` :
 
 ```bash
 dashu-compte ajouter quelqu.un@gmail.com
@@ -147,6 +147,10 @@ dashu-compte mot-de-passe quelqu.un@gmail.com
 `dashu-compte liste` montre les adresses autorisées ; `dashu-compte retirer <email>` coupe l'accès (les données restent dans la base). Le script refuse une adresse mal formée, le retrait de l'adresse de l'API (dashu ne démarrerait plus) et celui de la dernière adresse. Si dashu ne repart pas après le changement, l'ancien fichier est remis. Hermès n'y a pas accès.
 
 La mise à jour qui apporte `dashu-compte` ne l'installe pas encore (c'est l'ancien `dashu-update` qui tourne) : une fois, après elle, `install -m 755 /opt/dashu/src/deploy/lxc/dashu-compte /usr/local/sbin/`. Les suivantes le tiennent à jour.
+
+**Partager un espace.** Tout espace sauf Perso se partage avec d'autres comptes, depuis Réglages › Espaces › **Membres** : on invite une adresse, qui doit déjà avoir un compte (une première connexion suffit). L'invité accepte ou refuse en haut de ses Réglages. Une fois membre, il voit et modifie tout le contenu de l'espace (notes, fichiers, dossiers, tâches, tags) ; les agendas, Temporaire et les envois en cours restent à chacun. Seul le propriétaire renomme, archive ou supprime l'espace et gère les membres ; un membre peut partir quand il veut. Le détail est dans [SPEC.md](SPEC.md) (« Espaces partagés »).
+
+Deux personnes sur la même note ne s'écrasent pas : chaque note a un numéro de version, et un enregistrement fait sur une version dépassée est refusé (l'indicateur d'état le dit). Il n'y a pas d'édition à plusieurs en direct : il faut recharger la note pour voir les changements de l'autre.
 
 ## Créer les identifiants Google
 
@@ -169,7 +173,7 @@ Chaque requête porte l'en-tête `Authorization: Bearer <API_TOKEN>`. Il n'y a n
 
 | Méthode et route | Rôle |
 | --- | --- |
-| `GET /api/v1/spaces` | Les espaces du compte : slug, nom, couleur. Le slug (`perso`, `ecole`, `taff`, ou tiré du nom à la création) ne change pas quand on renomme un espace. |
+| `GET /api/v1/spaces` | Les espaces du compte, espaces partagés rejoints compris : slug, nom, couleur. Le slug (`perso`, `ecole`, `taff`, ou tiré du nom à la création) ne change pas quand on renomme un espace. |
 | `GET /api/v1/tasks?space=ecole&status=open` | Tâches (`status` : `open` par défaut, `done` ou `all`). |
 | `POST /api/v1/tasks` | Crée une tâche : `{"title", "space", "due_date"?}` (date `AAAA-MM-JJ`, aujourd'hui par défaut). |
 | `GET`, `PATCH`, `DELETE /api/v1/tasks/{id}` | Lit, modifie (`title`, `done`, `due_date`) ou supprime une tâche. |
@@ -557,7 +561,7 @@ Le même exercice avec un fichier : `systemctl start dashu-backup`, supprimer un
 - **Anti-bruteforce** : 5 tentatives de connexion par minute et par adresse IP. Derrière le tunnel, l'adresse est lue dans `CF-Connecting-IP`, que Cloudflare écrit lui-même.
 - **Content-Security-Policy stricte** : ni script ni style en ligne, pas d'`eval`. Même si une balise `<script>` survivait dans une note, le navigateur ne l'exécuterait pas.
 - **Notes** : le HTML issu du Markdown passe toujours par ammonia (liste blanche de balises et d'attributs).
-- **Isolation** : toutes les requêtes SQL filtrent sur l'utilisateur connecté. Des tests vérifient qu'un second compte ne peut ni lire ni modifier les données du premier.
+- **Isolation** : toutes les requêtes SQL filtrent sur les espaces auxquels le compte connecté a accès (les siens et les espaces partagés qu'il a rejoints, vue `space_access`) ; agendas, Temporaire et envois en cours, sur le compte lui-même. Des tests vérifient qu'un second compte ne peut ni lire ni modifier les données du premier hors d'un espace partagé, et qu'un membre retiré perd l'accès à la requête suivante.
 - **Flux iCal** : l'URL Pronote contient un jeton d'accès. Elle n'est jamais réaffichée en entier ni écrite dans les logs. Seules les URL `https` publiques sont acceptées.
 - **API** : désactivée tant que `API_TOKEN` est vide. Le jeton (32 caractères minimum) est comparé en temps constant et n'apparaît jamais dans les logs. L'API n'agit que sur le compte `API_USER_EMAIL` et ne peut ni supprimer une note, ni toucher aux réglages, au mot de passe ou aux sources iCal.
 - **Service** : utilisateur système sans shell, écoute sur `127.0.0.1` seulement, système en lecture seule sauf `/var/lib/dashu`, aucune capacité Linux (`deploy/lxc/hardening.conf`). Configuration lisible par root et le groupe `dashu` seulement.
