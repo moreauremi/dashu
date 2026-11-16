@@ -28,7 +28,7 @@ healthy() {
 # place un script en cours d'exécution (celui-ci compris).
 install_scripts() {
   local script
-  for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin; do
+  for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin dashu-compte; do
     [ -f "deploy/lxc/$script" ] || continue
     install -m 755 "deploy/lxc/$script" "/usr/local/sbin/.$script.new"
     mv -f "/usr/local/sbin/.$script.new" "/usr/local/sbin/$script"

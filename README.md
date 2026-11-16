@@ -106,7 +106,7 @@ En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu
 | Variable | Obligatoire | Rôle |
 | --- | --- | --- |
 | `SESSION_SECRET` | oui | Clé de signature du cookie de session, 64 caractères minimum. La changer déconnecte tout le monde. |
-| `ALLOWED_EMAILS` | oui | Emails autorisés, séparés par des virgules. Retirer un email coupe l'accès de ce compte immédiatement. |
+| `ALLOWED_EMAILS` | oui | Emails autorisés, séparés par des virgules. Retirer un email coupe l'accès de ce compte immédiatement. Sur le serveur, `dashu-compte` l'ajoute ou le retire sans ouvrir le fichier (voir « Comptes et connexion »). |
 | `BASE_URL` | oui | URL publique, sans barre finale (`https://app.dashu.dev`). Sert aussi d'adresse de retour à Google. En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
 | `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; en production `sqlite:///var/lib/dashu/dashu.db` (Docker : `sqlite:///data/dashu.db`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
@@ -131,6 +131,22 @@ Il n'y a volontairement **pas de page d'inscription**. Un compte se crée de deu
 Pourquoi : un formulaire d'inscription sans vérification d'email laisserait quiconque connaît une adresse autorisée créer le compte avant son propriétaire. Google prouve que l'adresse appartient au visiteur ; la ligne de commande prouve qu'on a la main sur le serveur.
 
 Les deux méthodes mènent au même compte : Google est rattaché par l'email vérifié qu'il renvoie.
+
+**Ajouter quelqu'un.** Chaque adresse autorisée a son propre compte, ses espaces, ses notes, ses fichiers et son agenda ; il ne voit rien des autres (isolement testé). Il partage en revanche le disque (pas de quota par compte) et les sauvegardes. Sur le serveur, en root dans le conteneur, [`dashu-compte`](deploy/lxc/dashu-compte) tient la liste à jour sans ouvrir `/etc/dashu/dashu.env` :
+
+```bash
+dashu-compte ajouter quelqu.un@gmail.com
+```
+
+Il autorise l'adresse, redémarre dashu et rappelle les deux façons de créer le compte. Par Google : tant que le projet Google de dashu est en mode Test, ajouter aussi l'adresse dans **Google Auth Platform > Audience > Utilisateurs tests**. Par mot de passe, que tu tapes et transmets (la personne le change ensuite dans Réglages) :
+
+```bash
+dashu-compte mot-de-passe quelqu.un@gmail.com
+```
+
+`dashu-compte liste` montre les adresses autorisées ; `dashu-compte retirer <email>` coupe l'accès (les données restent dans la base). Le script refuse une adresse mal formée, le retrait de l'adresse de l'API (dashu ne démarrerait plus) et celui de la dernière adresse. Si dashu ne repart pas après le changement, l'ancien fichier est remis. Hermès n'y a pas accès.
+
+La mise à jour qui apporte `dashu-compte` ne l'installe pas encore (c'est l'ancien `dashu-update` qui tourne) : une fois, après elle, `install -m 755 /opt/dashu/src/deploy/lxc/dashu-compte /usr/local/sbin/`. Les suivantes le tiennent à jour.
 
 ## Créer les identifiants Google
 
@@ -267,7 +283,7 @@ Ce qui est installé :
 | `/var/lib/dashu/dashu.db` | La base SQLite. |
 | `dashu.service` | Le service, sous l'utilisateur `dashu`, 256 Mo de mémoire au plus, durci (`deploy/lxc/hardening.conf` : système en lecture seule sauf `/var/lib/dashu`, aucune capacité). |
 | `dashu-backup.timer` | La sauvegarde, chaque nuit à 3 h 30. |
-| `dashu-update`, `dashu-backup`, `dashu-restore`, `dashu-admin` | Les scripts d'exploitation, dans `/usr/local/sbin`. |
+| `dashu-update`, `dashu-backup`, `dashu-restore`, `dashu-admin`, `dashu-compte` | Les scripts d'exploitation, dans `/usr/local/sbin`. |
 
 Après une modification de `/etc/dashu/dashu.env` : `systemctl restart dashu`.
 
