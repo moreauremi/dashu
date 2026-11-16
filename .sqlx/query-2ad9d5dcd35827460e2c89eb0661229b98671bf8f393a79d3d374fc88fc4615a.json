@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\" FROM notes WHERE id = ? AND user_id = ?",
+  "query": "SELECT id AS \"id!\" FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "8d4486e614c1c339d1342a1fddabfc41e0acfc4122bc2726d1dccf998b068d29"
+  "hash": "2ad9d5dcd35827460e2c89eb0661229b98671bf8f393a79d3d374fc88fc4615a"
 }
