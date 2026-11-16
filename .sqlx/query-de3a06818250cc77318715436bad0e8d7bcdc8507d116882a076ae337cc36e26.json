@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM tasks WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "de3a06818250cc77318715436bad0e8d7bcdc8507d116882a076ae337cc36e26"
+}

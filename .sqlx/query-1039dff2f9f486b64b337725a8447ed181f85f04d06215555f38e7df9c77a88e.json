@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", title, space_id, substr(body_md, 1, 200) AS \"head!: String\"\n               FROM notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT 5",
+  "query": "SELECT id AS \"id!\", title, space_id, substr(body_md, 1, 200) AS \"head!: String\"\n               FROM notes WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) ORDER BY updated_at DESC LIMIT 5",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       null
     ]
   },
-  "hash": "b077e85d91430cf79a2c944196d64bee5653915591e1bf236b2864c5a48a7d4d"
+  "hash": "1039dff2f9f486b64b337725a8447ed181f85f04d06215555f38e7df9c77a88e"
 }

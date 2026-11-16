@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET title = ?, body_md = ?, updated_at = ?, revision = revision + 1\n             WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "33b3e83d6b0b0cae809364cfd1aa764005b95b158d5689c8f7c53e216afef72c"
+}

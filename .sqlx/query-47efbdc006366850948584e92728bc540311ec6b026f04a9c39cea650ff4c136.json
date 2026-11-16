@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET pinned = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "47efbdc006366850948584e92728bc540311ec6b026f04a9c39cea650ff4c136"
+}

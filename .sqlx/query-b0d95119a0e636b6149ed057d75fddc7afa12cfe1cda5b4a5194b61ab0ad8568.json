@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\", n.space_id AS \"space_id!\",\n                  snippet(notes_fts, 1, '', '', '…', 10) AS \"snippet!: String\"\n           FROM notes_fts\n           JOIN notes n ON n.id = notes_fts.rowid\n           WHERE notes_fts MATCH ?1 AND n.user_id = ?2\n           ORDER BY bm25(notes_fts, 5.0, 1.0)\n           LIMIT 6",
+  "query": "SELECT n.id AS \"id!\", n.title AS \"title!\", n.space_id AS \"space_id!\",\n                  snippet(notes_fts, 1, '', '', '…', 10) AS \"snippet!: String\"\n           FROM notes_fts\n           JOIN notes n ON n.id = notes_fts.rowid\n           WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2)\n           ORDER BY bm25(notes_fts, 5.0, 1.0)\n           LIMIT 6",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       null
     ]
   },
-  "hash": "32c3c7ab45ee535620472d8e0c2a411b30d016d7feea5c3260de324bb5d63d36"
+  "hash": "b0d95119a0e636b6149ed057d75fddc7afa12cfe1cda5b4a5194b61ab0ad8568"
 }
