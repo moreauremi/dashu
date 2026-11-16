@@ -37,6 +37,11 @@ pub struct Space {
     pub auto_mp4: bool,
     /// Règle : une photo HEIC qui arrive est doublée d'un JPEG.
     pub auto_heic_jpeg: bool,
+    /// Compte propriétaire de l'espace (`spaces.user_id`).
+    pub owner_id: i64,
+    /// Vrai si le compte connecté en est le propriétaire ; faux pour un
+    /// espace partagé qu'il a rejoint (voir SPEC, « Espaces partagés »).
+    pub mine: bool,
 }
 
 /// Slug de Perso, l'espace « vue d'ensemble » : son agenda (page Agenda,
@@ -138,13 +143,29 @@ pub async fn ensure_defaults(db: &SqlitePool, user_id: i64) -> AppResult<()> {
     Ok(())
 }
 
+/// Espaces auxquels un compte a accès, dans l'ordre de son île : les siens,
+/// puis les espaces partagés qu'il a rejoints, sous le slug et à la place
+/// qu'ils ont chez lui (`space_members`).
 pub async fn list(db: &SqlitePool, user_id: i64) -> AppResult<Vec<Space>> {
     let spaces = sqlx::query_as!(
         Space,
-        r#"SELECT id AS "id!", slug, name, color, icon,
-                  archived_at IS NOT NULL AS "archived!: bool",
-                  auto_mp4 AS "auto_mp4!: bool", auto_heic_jpeg AS "auto_heic_jpeg!: bool"
-           FROM spaces WHERE user_id = ? ORDER BY position, id"#,
+        r#"SELECT id AS "id!", slug AS "slug!", name AS "name!", color AS "color!",
+                  icon AS "icon!", archived AS "archived!: bool",
+                  auto_mp4 AS "auto_mp4!: bool", auto_heic_jpeg AS "auto_heic_jpeg!: bool",
+                  owner_id AS "owner_id!: i64", mine AS "mine!: bool"
+           FROM (
+               SELECT s.id, s.slug, s.name, s.color, s.icon,
+                      s.archived_at IS NOT NULL AS archived, s.auto_mp4, s.auto_heic_jpeg,
+                      s.user_id AS owner_id, 1 AS mine, s.position AS place
+               FROM spaces s WHERE s.user_id = ?1
+               UNION ALL
+               SELECT s.id, m.slug, s.name, s.color, s.icon,
+                      s.archived_at IS NOT NULL, s.auto_mp4, s.auto_heic_jpeg,
+                      s.user_id, 0, m.position
+               FROM space_members m JOIN spaces s ON s.id = m.space_id
+               WHERE m.user_id = ?1
+           )
+           ORDER BY place, id"#,
         user_id
     )
     .fetch_all(db)

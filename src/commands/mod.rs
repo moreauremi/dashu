@@ -939,6 +939,8 @@ mod tests {
             archived: false,
             auto_mp4: false,
             auto_heic_jpeg: false,
+            owner_id: 1,
+            mine: true,
         }
     }
 
