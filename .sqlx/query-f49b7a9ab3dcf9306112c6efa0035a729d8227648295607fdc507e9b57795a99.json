@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", title, body_md, space_id, pinned AS \"pinned!: bool\", created_at, updated_at\n           FROM notes WHERE id = ? AND user_id = ?",
+  "query": "SELECT id AS \"id!\", title, body_md, space_id, pinned AS \"pinned!: bool\", created_at, updated_at\n           FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
   "describe": {
     "columns": [
       {
@@ -52,5 +52,5 @@
       false
     ]
   },
-  "hash": "e9456c002bdcd9bcab3fbeb32b9341c6ffa6b184cf19ca9b61c176d2b9c515a3"
+  "hash": "f49b7a9ab3dcf9306112c6efa0035a729d8227648295607fdc507e9b57795a99"
 }

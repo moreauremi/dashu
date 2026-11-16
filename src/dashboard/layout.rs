@@ -158,7 +158,7 @@ pub async fn save(
 ) -> AppResult<()> {
     let text = widgets.map(encode);
     sqlx::query!(
-        "UPDATE spaces SET dashboard = ? WHERE id = ? AND user_id = ?",
+        "UPDATE spaces SET dashboard = ? WHERE id = ? AND id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         text,
         space_id,
         user_id

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tasks SET done = ?, done_at = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND done <> ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "a3ef5a55c760896f7c3034cff2024d95ba3582f6c201848668eab035fc11adf2"
+}

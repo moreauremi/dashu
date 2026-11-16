@@ -326,7 +326,7 @@ pub(crate) async fn day_tasks(db: &SqlitePool, ctx: &Ctx) -> AppResult<Vec<DayTa
         DayTask,
         r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
-           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
              AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))
                OR (done = 1 AND done_at >= ?4))
            ORDER BY done, due_date, created_at"#,
@@ -444,7 +444,7 @@ pub async fn move_task(
 ) -> AppResult<Response> {
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let moved = sqlx::query!(
-        "UPDATE tasks SET space_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE tasks SET space_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         target.id,
         id,
         ctx.user.id
@@ -470,7 +470,7 @@ pub async fn toggle_task(
     // coche reçoit l'heure courante, une tâche qu'on décoche la perd.
     let changed = sqlx::query!(
         "UPDATE tasks SET done_at = CASE WHEN done THEN NULL ELSE ? END, done = NOT done
-         WHERE id = ? AND user_id = ?",
+         WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         now,
         id,
         ctx.user.id
@@ -498,7 +498,7 @@ pub async fn delete_task(
 
 /// Supprime une tâche de l'utilisateur ; `false` si elle n'existe pas.
 pub(crate) async fn remove_task(db: &SqlitePool, user: i64, id: i64) -> AppResult<bool> {
-    let deleted = sqlx::query!("DELETE FROM tasks WHERE id = ? AND user_id = ?", id, user)
+    let deleted = sqlx::query!("DELETE FROM tasks WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)", id, user)
         .execute(db)
         .await?
         .rows_affected();
@@ -515,7 +515,7 @@ pub(crate) async fn set_task_done(
 ) -> AppResult<bool> {
     let at = done.then(time::now);
     let changed = sqlx::query!(
-        "UPDATE tasks SET done = ?, done_at = ? WHERE id = ? AND user_id = ? AND done <> ?",
+        "UPDATE tasks SET done = ?, done_at = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND done <> ?",
         done,
         at,
         id,
@@ -561,7 +561,7 @@ pub async fn recent_notes(
     let rows = sqlx::query!(
         r#"SELECT id AS "id!", space_id, title, pinned AS "pinned!: bool", updated_at
            FROM notes
-           WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
            ORDER BY pinned DESC, updated_at DESC
            LIMIT 40"#,
         ctx.user.id,
@@ -635,7 +635,7 @@ pub async fn recent_files(
     let scope = ctx.scope(false);
     let items = sqlx::query!(
         r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
-           FROM files WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
+           FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC
            LIMIT ?3"#,
         ctx.user.id,
@@ -660,7 +660,7 @@ pub async fn recent_files(
     })
     .collect();
     let total = sqlx::query_scalar!(
-        "SELECT count(*) FROM files WHERE user_id = ?1 AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL",
+        "SELECT count(*) FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL",
         ctx.user.id,
         scope
     )
@@ -725,7 +725,9 @@ pub async fn quick_settings(
     let storage = if state.config.files.is_some() {
         let used = sqlx::query!(
             r#"SELECT count(*) AS "n!: i64", coalesce(sum(size), 0) AS "bytes!: i64"
-               FROM files WHERE user_id = ?"#,
+               FROM files
+               WHERE (expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+                  OR (expires_at IS NOT NULL AND user_id = ?1)"#,
             ctx.user.id
         )
         .fetch_one(&state.db)

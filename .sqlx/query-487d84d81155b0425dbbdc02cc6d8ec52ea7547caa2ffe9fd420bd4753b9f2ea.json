@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT t.id AS \"id!\", t.title, t.done AS \"done!: bool\", t.due_date, s.slug AS \"space!\"\n           FROM tasks t JOIN spaces s ON s.id = t.space_id\n           WHERE t.id = ? AND t.user_id = ?",
+  "query": "SELECT t.id AS \"id!\", t.title, t.done AS \"done!: bool\", t.due_date, t.space_id\n           FROM tasks t\n           WHERE t.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL OR t.space_id = ?2) AND (?3 IS NULL OR t.done = ?3)\n           ORDER BY t.done, t.due_date IS NULL, t.due_date, t.created_at\n           LIMIT 500",
   "describe": {
     "columns": [
       {
@@ -24,21 +24,21 @@
         "type_info": "Text"
       },
       {
-        "name": "space!",
+        "name": "space_id",
         "ordinal": 4,
-        "type_info": "Text"
+        "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 3
     },
     "nullable": [
-      false,
+      true,
       false,
       false,
       true,
       false
     ]
   },
-  "hash": "da661a00d797b0c35530354ae7a61c80033cb18e2768393834f777c873acf807"
+  "hash": "487d84d81155b0425dbbdc02cc6d8ec52ea7547caa2ffe9fd420bd4753b9f2ea"
 }

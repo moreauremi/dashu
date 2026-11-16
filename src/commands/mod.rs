@@ -714,7 +714,7 @@ pub async fn hits(ctx: &Ctx, state: &AppState, q: &str) -> AppResult<Vec<Hit>> {
     let Some(fts) = notes::fts_query(q) else {
         let rows = sqlx::query!(
             r#"SELECT id AS "id!", title, space_id, substr(body_md, 1, 200) AS "head!: String"
-               FROM notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT 5"#,
+               FROM notes WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) ORDER BY updated_at DESC LIMIT 5"#,
             ctx.user.id
         )
         .fetch_all(&state.db)
@@ -737,7 +737,7 @@ pub async fn hits(ctx: &Ctx, state: &AppState, q: &str) -> AppResult<Vec<Hit>> {
                   snippet(notes_fts, 1, '', '', '…', 10) AS "snippet!: String"
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
-           WHERE notes_fts MATCH ?1 AND n.user_id = ?2
+           WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2)
            ORDER BY bm25(notes_fts, 5.0, 1.0)
            LIMIT 6"#,
         fts,
@@ -762,7 +762,7 @@ pub async fn hits(ctx: &Ctx, state: &AppState, q: &str) -> AppResult<Vec<Hit>> {
     let words: Vec<String> = fold(q).split_whitespace().map(str::to_string).collect();
     let files = sqlx::query!(
         r#"SELECT id AS "id!", name, space_id FROM files
-           WHERE user_id = ? AND expires_at IS NULL
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND expires_at IS NULL
            ORDER BY updated_at DESC LIMIT 1000"#,
         ctx.user.id
     )
