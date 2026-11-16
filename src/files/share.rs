@@ -58,9 +58,11 @@ impl ShareFragment {
     pub(crate) async fn load(db: &SqlitePool, user: i64, id: i64) -> AppResult<Self> {
         let now = time::now();
         let links = sqlx::query!(
-            r#"SELECT id AS "id!", expires_at, created_at FROM share_links
-               WHERE user_id = ? AND file_id = ? AND revoked_at IS NULL AND expires_at > ?
-               ORDER BY created_at DESC, id DESC"#,
+            r#"SELECT l.id AS "id!", l.expires_at, l.created_at FROM share_links l
+               JOIN files f ON f.id = l.file_id
+               WHERE l.file_id = ?2 AND l.revoked_at IS NULL AND l.expires_at > ?3
+                 AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
+               ORDER BY l.created_at DESC, l.id DESC"#,
             user,
             id,
             now
@@ -95,7 +97,8 @@ fn hash(token: &str) -> String {
 /// 404 si le fichier n'est pas au compte, ou pas encore rangé (onglet Outils).
 async fn ensure_shareable(db: &SqlitePool, user: i64, id: i64) -> AppResult<()> {
     sqlx::query_scalar!(
-        r#"SELECT id AS "id!" FROM files WHERE id = ? AND user_id = ? AND expires_at IS NULL"#,
+        r#"SELECT id AS "id!" FROM files WHERE id = ? AND expires_at IS NULL
+           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         id,
         user
     )
@@ -157,7 +160,9 @@ pub async fn revoke(
     let user = ctx.user.id;
     let now = time::now();
     let revoked = sqlx::query!(
-        "UPDATE share_links SET revoked_at = ? WHERE id = ? AND file_id = ? AND user_id = ? AND revoked_at IS NULL",
+        "UPDATE share_links SET revoked_at = ?1 WHERE id = ?2 AND file_id = ?3 AND revoked_at IS NULL
+           AND file_id IN (SELECT id FROM files WHERE expires_at IS NULL
+                           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?4))",
         now,
         link,
         id,
@@ -172,12 +177,14 @@ pub async fn revoke(
     Ok(web::html(ShareFragment::load(&state.db, user, id).await?))
 }
 
-/// Les fichiers d'un compte qui ont un lien valable (repère dans la liste).
+/// Les fichiers accessibles au compte (les siens et ceux de ses espaces) qui ont un lien valable (repère dans la liste).
 pub(crate) async fn shared_files(db: &SqlitePool, user: i64) -> AppResult<HashSet<i64>> {
     let now = time::now();
     Ok(sqlx::query_scalar!(
-        r#"SELECT DISTINCT file_id AS "file_id!" FROM share_links
-           WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?"#,
+        r#"SELECT DISTINCT l.file_id AS "file_id!" FROM share_links l
+           JOIN files f ON f.id = l.file_id
+           WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
+             AND l.revoked_at IS NULL AND l.expires_at > ?2"#,
         user,
         now
     )
@@ -209,7 +216,7 @@ async fn lookup(db: &SqlitePool, token: &str) -> AppResult<Option<Shared>> {
     let now = time::now();
     Ok(sqlx::query!(
         r#"SELECT f.name, f.size, f.storage_key, l.expires_at
-           FROM share_links l JOIN files f ON f.id = l.file_id AND f.user_id = l.user_id
+           FROM share_links l JOIN files f ON f.id = l.file_id
            WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND f.expires_at IS NULL"#,
         token_hash,
         now

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT l.file_id AS \"file_id!\" FROM share_links l\n           JOIN files f ON f.id = l.file_id\n           WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n             AND l.revoked_at IS NULL AND l.expires_at > ?2",
+  "describe": {
+    "columns": [
+      {
+        "name": "file_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "73d9fd266970eb294f8183c8579b27a2f43138eddb6e82dc5e59ebccab1e7170"
+}

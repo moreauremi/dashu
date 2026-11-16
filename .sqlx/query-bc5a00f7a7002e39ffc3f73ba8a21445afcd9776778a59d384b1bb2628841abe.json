@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, count(*) AS \"n!: i64\" FROM files\n           WHERE expires_at IS NULL\n             AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)\n           GROUP BY space_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bc5a00f7a7002e39ffc3f73ba8a21445afcd9776778a59d384b1bb2628841abe"
+}

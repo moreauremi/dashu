@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, name, mime, size, storage_key FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n                OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "mime",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "storage_key",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "02d00371ae5547a435add945e7820eb028763fd1c75be5059ca0012afa75c192"
+}

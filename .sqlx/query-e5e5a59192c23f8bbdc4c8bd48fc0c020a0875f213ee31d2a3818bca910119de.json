@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT src.id AS \"source!: i64\", src.name AS source_name, src.storage_key AS source_key,\n                  src.space_id AS source_space, src.folder_id AS source_folder,\n                  src.expires_at AS source_expires,\n                  res.id AS \"result!: i64\", res.name AS result_name\n           FROM jobs j\n           JOIN files src ON src.id = j.file_id\n           JOIN files res ON res.id = j.result_file_id\n           WHERE j.id = ?1 AND j.user_id = ?2 AND j.status = 'done'\n             AND ((src.expires_at IS NULL\n                   AND src.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2))\n                  OR (src.expires_at IS NOT NULL AND src.user_id = ?2))",
+  "describe": {
+    "columns": [
+      {
+        "name": "source!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_space",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_folder",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_expires",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result!: i64",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "result_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e5e5a59192c23f8bbdc4c8bd48fc0c020a0875f213ee31d2a3818bca910119de"
+}

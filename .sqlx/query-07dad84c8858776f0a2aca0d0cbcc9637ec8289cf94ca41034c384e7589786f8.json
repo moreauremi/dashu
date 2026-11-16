@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT f.name, f.size, f.storage_key, l.expires_at\n           FROM share_links l JOIN files f ON f.id = l.file_id\n           WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND f.expires_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "storage_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "07dad84c8858776f0a2aca0d0cbcc9637ec8289cf94ca41034c384e7589786f8"
+}

@@ -8,7 +8,8 @@
 //! * L'envoi arrive par morceaux de 50 Mo au plus (limite de Cloudflare),
 //!   chacun écrit sur le disque au fil de l'eau : la mémoire de dashu ne
 //!   dépend pas de la taille du fichier.
-//! * Toutes les requêtes filtrent sur `user_id`, comme les notes.
+//! * L'accès se décide par l'espace (vue `space_access`), sauf pour Temporaire,
+//!   qui reste à son auteur (`user_id`).
 
 pub mod share;
 pub mod tags;
@@ -330,7 +331,8 @@ pub async fn list(
     let notes = match inside {
         Some(folder) => sqlx::query!(
             r#"SELECT id AS "id!", title, pinned AS "pinned!: bool", updated_at
-               FROM notes WHERE user_id = ?1 AND space_id = ?2 AND folder_id IS ?3
+               FROM notes WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
+                 AND space_id = ?2 AND folder_id IS ?3
                ORDER BY pinned DESC, updated_at DESC, id DESC"#,
             user,
             space.id,
@@ -389,7 +391,8 @@ pub async fn list(
     } else {
         sqlx::query!(
             r#"SELECT id AS "id!", space_id, folder_id, name, mime, size, updated_at, thumb
-               FROM files WHERE user_id = ? AND expires_at IS NULL
+               FROM files WHERE expires_at IS NULL
+                 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)
                ORDER BY updated_at DESC, id DESC"#,
             user
         )
@@ -472,9 +475,9 @@ pub async fn list(
         sqlx::query!(
             r#"SELECT id AS "id!", name, mime, size, updated_at, thumb, expires_at
                FROM files
-               WHERE user_id = ?1
-                 AND CASE WHEN ?2 THEN expires_at IS NOT NULL
-                          ELSE expires_at IS NULL AND space_id = ?3 AND folder_id IS ?4 END
+               WHERE CASE WHEN ?2 THEN expires_at IS NOT NULL AND user_id = ?1
+                          ELSE expires_at IS NULL AND space_id = ?3 AND folder_id IS ?4
+                               AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) END
                ORDER BY updated_at DESC, id DESC"#,
             user,
             temp,
@@ -593,7 +596,8 @@ async fn root_rows(
     let user = ctx.user.id;
     let mut counts: std::collections::HashMap<i64, Contents> = std::collections::HashMap::new();
     for row in sqlx::query!(
-        r#"SELECT space_id, count(*) AS "n!: i64" FROM notes WHERE user_id = ? GROUP BY space_id"#,
+        r#"SELECT space_id, count(*) AS "n!: i64" FROM notes
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) GROUP BY space_id"#,
         user
     )
     .fetch_all(db)
@@ -603,7 +607,9 @@ async fn root_rows(
     }
     for row in sqlx::query!(
         r#"SELECT space_id, count(*) AS "n!: i64" FROM files
-           WHERE user_id = ? AND expires_at IS NULL GROUP BY space_id"#,
+           WHERE expires_at IS NULL
+             AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)
+           GROUP BY space_id"#,
         user
     )
     .fetch_all(db)
@@ -756,9 +762,11 @@ pub async fn rename(
     axum::Form(form): axum::Form<RenameForm>,
 ) -> AppResult<Response> {
     let old = sqlx::query_scalar!(
-        "SELECT name FROM files WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
+        "SELECT name FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -772,10 +780,12 @@ pub async fn rename(
         return Ok(see_other(&back));
     };
     sqlx::query!(
-        "UPDATE files SET name = ? WHERE id = ? AND user_id = ?",
+        "UPDATE files SET name = ?2 WHERE id = ?3
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
         name,
-        id,
-        ctx.user.id
+        id
     )
     .execute(&state.db)
     .await?;
@@ -803,16 +813,18 @@ pub async fn move_to_space(
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<MoveForm>,
 ) -> AppResult<Response> {
-    // L'espace cible doit appartenir à l'utilisateur, le dossier à cet espace.
+    // L'espace cible doit être accessible à l'utilisateur, le dossier à cet espace.
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
     let folder = crate::folders::target(&state.db, ctx.user.id, target.id, folder).await?;
     let moved = sqlx::query!(
-        "UPDATE files SET space_id = ?, folder_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE files SET space_id = ?2, folder_id = ?3 WHERE id = ?4
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
         target.id,
         folder,
-        id,
-        ctx.user.id
+        id
     )
     .execute(&state.db)
     .await?
@@ -915,7 +927,7 @@ pub async fn start_upload(
     Query(query): Query<StartQuery>,
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
-    // L'espace et le dossier choisis doivent appartenir à l'utilisateur, et
+    // L'espace et le dossier choisis doivent être accessibles à l'utilisateur, et
     // le dossier à cet espace. Un fichier de l'onglet Outils n'a pas de dossier.
     let (space_id, folder_id) = match query.folder.filter(|_| query.tools != 1) {
         Some(id) => {
@@ -1058,6 +1070,23 @@ pub async fn upload_chunk(
             .into_response());
     }
 
+    // L'espace (ou le dossier) a pu être quitté, supprimé ou retiré depuis le
+    // début de l'envoi : on ne range que dans ce qui reste accessible.
+    let still_there = match upload.folder_id {
+        Some(folder) => {
+            crate::folders::target(&state.db, ctx.user.id, upload.space_id, Some(folder))
+                .await
+                .is_ok()
+        }
+        None => ctx.space_by_id(upload.space_id).is_some(),
+    };
+    if !still_there {
+        let _ = tokio::fs::remove_file(&part).await;
+        sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
+            .execute(&state.db)
+            .await?;
+        return Err(AppError::NotFound);
+    }
     let file_id = finish(
         &state,
         files,
@@ -1321,9 +1350,11 @@ pub async fn download(
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT name, size, storage_key FROM files WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
+        "SELECT name, size, storage_key FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -1378,9 +1409,11 @@ pub async fn delete(
     axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
     let key = sqlx::query_scalar!(
-        r#"DELETE FROM files WHERE id = ? AND user_id = ? RETURNING storage_key AS "storage_key!""#,
-        id,
-        ctx.user.id
+        r#"DELETE FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1)) RETURNING storage_key AS "storage_key!""#,
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -1573,9 +1606,10 @@ async fn origin_label(
                 .and_then(|n| n.parse::<i64>().ok());
             let title = match (note, file) {
                 (Some(id), _) => sqlx::query_scalar!(
-                    "SELECT title FROM notes WHERE id = ? AND user_id = ?",
-                    id,
-                    ctx.user.id
+                    "SELECT title FROM notes WHERE id = ?2
+                       AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+                    ctx.user.id,
+                    id
                 )
                 .fetch_optional(db)
                 .await?
@@ -1588,9 +1622,11 @@ async fn origin_label(
                 }),
                 (None, Some(id)) => {
                     sqlx::query_scalar!(
-                        "SELECT name FROM files WHERE id = ? AND user_id = ?",
-                        id,
-                        ctx.user.id
+                        "SELECT name FROM files WHERE id = ?2
+                           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+                        ctx.user.id,
+                        id
                     )
                     .fetch_optional(db)
                     .await?
@@ -1616,9 +1652,11 @@ pub async fn view(
     let depuis = valid_origin(query.depuis.as_deref());
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
+        "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -1767,9 +1805,11 @@ pub async fn raw(
 ) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT name, mime, size, storage_key FROM files WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
+        "SELECT name, mime, size, storage_key FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -1906,9 +1946,11 @@ pub async fn preview(
 async fn derived_image(ctx: &Ctx, state: &AppState, id: i64, big: bool) -> AppResult<Response> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT storage_key, thumb, preview FROM files WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
+        "SELECT storage_key, thumb, preview FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        ctx.user.id,
+        id
     )
     .fetch_optional(&state.db)
     .await?

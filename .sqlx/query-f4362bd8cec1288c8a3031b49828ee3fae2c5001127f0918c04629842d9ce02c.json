@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1)) RETURNING storage_key AS \"storage_key!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f4362bd8cec1288c8a3031b49828ee3fae2c5001127f0918c04629842d9ce02c"
+}
