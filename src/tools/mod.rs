@@ -387,9 +387,10 @@ pub async fn apply_rules(state: &AppState, user_id: i64, file_id: i64) -> AppRes
     let Some(row) = sqlx::query!(
         r#"SELECT f.mime, s.auto_mp4 AS "auto_mp4!: bool", s.auto_heic_jpeg AS "auto_heic_jpeg!: bool"
            FROM files f JOIN spaces s ON s.id = f.space_id
-           WHERE f.id = ? AND f.user_id = ? AND f.expires_at IS NULL"#,
-        file_id,
-        user_id
+           WHERE f.id = ?2 AND f.expires_at IS NULL
+             AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)"#,
+        user_id,
+        file_id
     )
     .fetch_optional(&state.db)
     .await?
@@ -409,7 +410,8 @@ pub async fn apply_rules(state: &AppState, user_id: i64, file_id: i64) -> AppRes
     Ok(())
 }
 
-/// Met en file la conversion `to` d'un fichier de `user_id`.
+/// Met en file la conversion `to` d'un fichier accessible à `user_id` (dans un
+/// de ses espaces, ou son Temporaire).
 async fn queue(
     state: &AppState,
     user_id: i64,
@@ -421,9 +423,11 @@ async fn queue(
         return Err(AppError::NotFound);
     };
     let file = sqlx::query!(
-        "SELECT space_id, name, mime, size, storage_key FROM files WHERE id = ? AND user_id = ?",
-        id,
-        user_id
+        "SELECT space_id, name, mime, size, storage_key FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+                OR (expires_at IS NOT NULL AND user_id = ?1))",
+        user_id,
+        id
     )
     .fetch_optional(&state.db)
     .await?
@@ -1142,9 +1146,12 @@ pub async fn replace_original(
                   src.expires_at AS source_expires,
                   res.id AS "result!: i64", res.name AS result_name
            FROM jobs j
-           JOIN files src ON src.id = j.file_id AND src.user_id = j.user_id
-           JOIN files res ON res.id = j.result_file_id AND res.user_id = j.user_id
-           WHERE j.id = ? AND j.user_id = ? AND j.status = 'done'"#,
+           JOIN files src ON src.id = j.file_id
+           JOIN files res ON res.id = j.result_file_id
+           WHERE j.id = ?1 AND j.user_id = ?2 AND j.status = 'done'
+             AND ((src.expires_at IS NULL
+                   AND src.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2))
+                  OR (src.expires_at IS NOT NULL AND src.user_id = ?2))"#,
         id,
         ctx.user.id
     )
@@ -1162,24 +1169,19 @@ pub async fn replace_original(
     let now = time::now();
     let mut tx = state.db.begin().await?;
     // La tâche part avec l'original (ON DELETE CASCADE) : le bouton disparaît.
-    sqlx::query!(
-        "DELETE FROM files WHERE id = ? AND user_id = ?",
-        row.source,
-        ctx.user.id
-    )
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query!("DELETE FROM files WHERE id = ?", row.source)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query!(
         "UPDATE files SET name = ?, mime = ?, space_id = ?, folder_id = ?, expires_at = ?, updated_at = ?
-         WHERE id = ? AND user_id = ?",
+         WHERE id = ?",
         name,
         mime,
         row.source_space,
         row.source_folder,
         row.source_expires,
         now,
-        row.result,
-        ctx.user.id
+        row.result
     )
     .execute(&mut *tx)
     .await?;

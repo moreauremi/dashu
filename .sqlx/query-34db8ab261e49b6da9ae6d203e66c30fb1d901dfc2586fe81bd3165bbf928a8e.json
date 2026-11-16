@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT storage_key, thumb, preview FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "thumb",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "preview",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "34db8ab261e49b6da9ae6d203e66c30fb1d901dfc2586fe81bd3165bbf928a8e"
+}

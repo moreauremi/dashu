@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", space_id, parent_id, name FROM folders\n           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "parent_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6455794752b2395e60ca08491e1052317faf8e5e9261a42a007f67958e24497e"
+}

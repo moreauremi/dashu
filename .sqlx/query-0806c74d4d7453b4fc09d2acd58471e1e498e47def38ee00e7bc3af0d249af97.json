@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\" FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n                OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0806c74d4d7453b4fc09d2acd58471e1e498e47def38ee00e7bc3af0d249af97"
+}

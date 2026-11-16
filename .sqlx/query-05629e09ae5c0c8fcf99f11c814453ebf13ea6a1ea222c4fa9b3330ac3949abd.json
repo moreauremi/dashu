@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "mime",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "storage_key",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "thumb",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "preview",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 9,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "05629e09ae5c0c8fcf99f11c814453ebf13ea6a1ea222c4fa9b3330ac3949abd"
+}

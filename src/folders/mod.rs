@@ -7,7 +7,8 @@
 //!   garde son nom aléatoire, quel que soit son dossier (voir `files`).
 //! * Un élément et son dossier sont toujours dans le même espace : toute
 //!   écriture d'un dossier passe par [`target`], qui le vérifie.
-//! * Toutes les requêtes filtrent sur `user_id`, comme les notes.
+//! * L'accès se décide par l'espace (vue `space_access`) : les membres d'un
+//!   espace partagé voient et modifient les mêmes dossiers.
 
 use std::collections::HashMap;
 
@@ -43,11 +44,12 @@ impl Folder {
     }
 }
 
-/// Tous les dossiers d'un compte, triés par nom. Ils sont peu nombreux : on
+/// Tous les dossiers des espaces d'un compte, triés par nom. Ils sont peu nombreux : on
 /// les lit en une fois plutôt que dossier par dossier.
 pub async fn all(db: &SqlitePool, user: i64) -> AppResult<Vec<Folder>> {
     let mut folders: Vec<Folder> = sqlx::query!(
-        r#"SELECT id AS "id!", space_id, parent_id, name FROM folders WHERE user_id = ?"#,
+        r#"SELECT id AS "id!", space_id, parent_id, name FROM folders
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
         user
     )
     .fetch_all(db)
@@ -64,12 +66,14 @@ pub async fn all(db: &SqlitePool, user: i64) -> AppResult<Vec<Folder>> {
     Ok(folders)
 }
 
-/// Un dossier du compte, ou rien (y compris s'il est à un autre compte).
+/// Un dossier d'un espace du compte, ou rien (y compris s'il est dans un espace
+/// où le compte n'est pas).
 pub async fn find(db: &SqlitePool, user: i64, id: i64) -> AppResult<Option<Folder>> {
     Ok(sqlx::query!(
-        "SELECT space_id, parent_id, name FROM folders WHERE id = ? AND user_id = ?",
-        id,
-        user
+        "SELECT space_id, parent_id, name FROM folders WHERE id = ?2
+           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+        user,
+        id
     )
     .fetch_optional(db)
     .await?
@@ -82,7 +86,7 @@ pub async fn find(db: &SqlitePool, user: i64, id: i64) -> AppResult<Option<Folde
 }
 
 /// Dossier de destination d'un élément rangé dans l'espace `space` : `None`
-/// pour la racine de l'espace. Un dossier d'un autre compte, ou d'un autre
+/// pour la racine de l'espace. Un dossier d'un espace inaccessible, ou d'un autre
 /// espace que celui demandé, répond 404.
 pub async fn target(
     db: &SqlitePool,
@@ -249,7 +253,8 @@ pub async fn contents(
     let mut map: HashMap<i64, Contents> = HashMap::new();
     for row in sqlx::query!(
         r#"SELECT folder_id AS "folder_id!", count(*) AS "n!: i64"
-           FROM notes WHERE user_id = ? AND folder_id IS NOT NULL GROUP BY folder_id"#,
+           FROM notes
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND folder_id IS NOT NULL GROUP BY folder_id"#,
         user
     )
     .fetch_all(db)
@@ -259,7 +264,8 @@ pub async fn contents(
     }
     for row in sqlx::query!(
         r#"SELECT folder_id AS "folder_id!", count(*) AS "n!: i64"
-           FROM files WHERE user_id = ? AND folder_id IS NOT NULL AND expires_at IS NULL GROUP BY folder_id"#,
+           FROM files
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND folder_id IS NOT NULL AND expires_at IS NULL GROUP BY folder_id"#,
         user
     )
     .fetch_all(db)
@@ -384,10 +390,11 @@ pub async fn rename(
         return Ok(see_other(&back));
     }
     sqlx::query!(
-        "UPDATE folders SET name = ? WHERE id = ? AND user_id = ?",
+        "UPDATE folders SET name = ?2 WHERE id = ?3
+           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+        user,
         name,
-        id,
-        user
+        id
     )
     .execute(&state.db)
     .await?;
@@ -443,45 +450,37 @@ pub async fn delete(
         for folder_id in std::iter::once(id).chain(subs.iter().map(|f| f.id)) {
             keys.extend(
                 sqlx::query_scalar!(
-                    r#"DELETE FROM files WHERE user_id = ? AND folder_id = ? RETURNING storage_key AS "storage_key!""#,
-                    user,
+                    r#"DELETE FROM files WHERE folder_id = ? RETURNING storage_key AS "storage_key!""#,
                     folder_id
                 )
                 .fetch_all(&mut *tx)
                 .await?,
             );
-            sqlx::query!(
-                "DELETE FROM notes WHERE user_id = ? AND folder_id = ?",
-                user,
-                folder_id
-            )
-            .execute(&mut *tx)
-            .await?;
+            sqlx::query!("DELETE FROM notes WHERE folder_id = ?", folder_id)
+                .execute(&mut *tx)
+                .await?;
         }
     } else {
         // Le contenu va dans le dossier du dessus (la racine de l'espace pour
         // un dossier du premier niveau), envois en cours compris.
         let parent = folder.parent_id;
         sqlx::query!(
-            "UPDATE notes SET folder_id = ? WHERE user_id = ? AND folder_id = ?",
+            "UPDATE notes SET folder_id = ? WHERE folder_id = ?",
             parent,
-            user,
             id
         )
         .execute(&mut *tx)
         .await?;
         sqlx::query!(
-            "UPDATE files SET folder_id = ? WHERE user_id = ? AND folder_id = ?",
+            "UPDATE files SET folder_id = ? WHERE folder_id = ?",
             parent,
-            user,
             id
         )
         .execute(&mut *tx)
         .await?;
         sqlx::query!(
-            "UPDATE uploads SET folder_id = ? WHERE user_id = ? AND folder_id = ?",
+            "UPDATE uploads SET folder_id = ? WHERE folder_id = ?",
             parent,
-            user,
             id
         )
         .execute(&mut *tx)
@@ -491,22 +490,16 @@ pub async fn delete(
             // leurs nouveaux voisins. Le dossier supprimé quitte d'abord son
             // nom : un sous-dossier homonyme peut le reprendre.
             let placeholder = format!("\u{1}{id}");
-            sqlx::query!(
-                "UPDATE folders SET name = ? WHERE id = ? AND user_id = ?",
-                placeholder,
-                id,
-                user
-            )
-            .execute(&mut *tx)
-            .await?;
+            sqlx::query!("UPDATE folders SET name = ? WHERE id = ?", placeholder, id)
+                .execute(&mut *tx)
+                .await?;
             let mut taken = neighbours(&folders, folder.space_id, None, Some(id));
             for sub in &subs {
                 let name = free_name(&taken, &sub.name);
                 sqlx::query!(
-                    "UPDATE folders SET parent_id = NULL, name = ? WHERE id = ? AND user_id = ?",
+                    "UPDATE folders SET parent_id = NULL, name = ? WHERE id = ?",
                     name,
-                    sub.id,
-                    user
+                    sub.id
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -514,7 +507,7 @@ pub async fn delete(
             }
         }
     }
-    sqlx::query!("DELETE FROM folders WHERE id = ? AND user_id = ?", id, user)
+    sqlx::query!("DELETE FROM folders WHERE id = ?", id)
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
@@ -567,7 +560,7 @@ pub async fn move_folder(
         .iter()
         .find(|f| f.id == id)
         .ok_or(AppError::NotFound)?;
-    // L'espace et le dossier de destination doivent être au compte, et le
+    // L'espace et le dossier de destination doivent être accessibles, et le
     // dossier dans cet espace.
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let parent = match parse_id(form.folder_id.as_deref())? {
@@ -622,11 +615,10 @@ pub async fn move_folder(
 
     let mut tx = state.db.begin().await?;
     sqlx::query!(
-        "UPDATE folders SET space_id = ?, parent_id = ? WHERE id = ? AND user_id = ?",
+        "UPDATE folders SET space_id = ?, parent_id = ? WHERE id = ?",
         target.id,
         parent_id,
-        id,
-        user
+        id
     )
     .execute(&mut *tx)
     .await?;
@@ -636,42 +628,37 @@ pub async fn move_folder(
     if target.id != folder.space_id {
         for folder_id in std::iter::once(id).chain(subs.iter().copied()) {
             sqlx::query!(
-                "UPDATE folders SET space_id = ? WHERE id = ? AND user_id = ?",
+                "UPDATE folders SET space_id = ? WHERE id = ?",
                 target.id,
-                folder_id,
-                user
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE notes SET space_id = ? WHERE user_id = ? AND folder_id = ?",
-                target.id,
-                user,
                 folder_id
             )
             .execute(&mut *tx)
             .await?;
             sqlx::query!(
-                "UPDATE jobs SET space_id = ?1 WHERE user_id = ?2
-                   AND file_id IN (SELECT id FROM files WHERE user_id = ?2 AND folder_id = ?3)",
+                "UPDATE notes SET space_id = ? WHERE folder_id = ?",
                 target.id,
-                user,
                 folder_id
             )
             .execute(&mut *tx)
             .await?;
             sqlx::query!(
-                "UPDATE files SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+                "UPDATE jobs SET space_id = ?1
+                   WHERE file_id IN (SELECT id FROM files WHERE folder_id = ?2)",
                 target.id,
-                user,
                 folder_id
             )
             .execute(&mut *tx)
             .await?;
             sqlx::query!(
-                "UPDATE uploads SET space_id = ? WHERE user_id = ? AND folder_id = ?",
+                "UPDATE files SET space_id = ? WHERE folder_id = ?",
                 target.id,
-                user,
+                folder_id
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(
+                "UPDATE uploads SET space_id = ? WHERE folder_id = ?",
+                target.id,
                 folder_id
             )
             .execute(&mut *tx)
@@ -793,9 +780,10 @@ pub async fn picker(
     let (title, action, reach, next) = match (query.note, query.fichier, query.dossier) {
         (Some(id), _, _) => {
             let note = sqlx::query!(
-                "SELECT space_id, folder_id, title FROM notes WHERE id = ? AND user_id = ?",
-                id,
-                user
+                "SELECT space_id, folder_id, title FROM notes WHERE id = ?2
+                   AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+                user,
+                id
             )
             .fetch_optional(&state.db)
             .await?
@@ -824,9 +812,11 @@ pub async fn picker(
         }
         (None, Some(id), _) => {
             let file = sqlx::query!(
-                "SELECT space_id, folder_id, name, expires_at FROM files WHERE id = ? AND user_id = ?",
-                id,
-                user
+                "SELECT space_id, folder_id, name, expires_at FROM files WHERE id = ?2
+                   AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+                   OR (expires_at IS NOT NULL AND user_id = ?1))",
+                user,
+                id
             )
             .fetch_optional(&state.db)
             .await?

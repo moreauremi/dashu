@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE folders SET name = ?2 WHERE id = ?3\n           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "300b5cd85ae457368404e654d846003a23b5729c9e146b5cccf1f1dc34832ce9"
+}

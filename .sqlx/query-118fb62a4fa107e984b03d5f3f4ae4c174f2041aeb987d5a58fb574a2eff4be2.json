@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT count(*) AS \"n!: i64\" FROM file_tags ft JOIN tags t ON t.id = ft.tag_id\n           WHERE ft.file_id = ? AND t.name = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "118fb62a4fa107e984b03d5f3f4ae4c174f2041aeb987d5a58fb574a2eff4be2"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT folder_id AS \"folder_id!\", count(*) AS \"n!: i64\"\n           FROM notes\n           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?) AND folder_id IS NOT NULL GROUP BY folder_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "folder_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "n!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "37041c1fbd50c6a9ec24df3f91732cd37fa0f1b174253f63fa3fd61ee0dac602"
+}
