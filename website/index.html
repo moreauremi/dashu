@@ -29,6 +29,7 @@
   <symbol id="cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
   <symbol id="pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.9 2.9L7 18.8l-4 1 1-4Z"/></symbol>
   <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
   <symbol id="todo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
 </svg>
 
@@ -47,16 +48,123 @@
 </header>
 
 <main>
-  <section class="wrap hero">
-    <p class="eyebrow">Open source · auto-hébergé · v2 en cours</p>
-    <h1>École, entreprise, perso <span class="spaces">Chacun son tableau de bord</span></h1>
-    <p class="lead">Hermes Dashboard range l'emploi du temps Pronote, les tâches, les notes et les fichiers par espace : École, Entreprise, Perso, ou ceux qu'on crée, avec des dossiers à l'intérieur. Seul ou à plusieurs : un espace se partage sur invitation, et une note s'écrit à deux en direct. Un seul binaire Rust, hébergé à la maison.</p>
-    <div class="cta">
-      <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
-      <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
+  <section class="hero-ciel">
+    <div class="wrap ciel-texte">
+      <p class="eyebrow">Open source · auto-hébergé · v2 en cours</p>
+      <h1>Un tableau de bord pour chaque partie de sa vie.</h1>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
+        <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
+      </div>
     </div>
+    <figure class="horizon">
+      <video muted loop playsinline preload="none" poster="horizon/attente.webp" width="1600" height="800" aria-label="La Terre filmée depuis la Station spatiale internationale : aurores, désert, océan, nuit, ouragan. Les plans changent toutes les 0,8 s ; le bord de la planète reste toujours sur la même courbe.">
+        <source src="horizon/horizon.webm" type="video/webm">
+        <source src="horizon/horizon.mp4" type="video/mp4">
+      </video>
+      <button class="pause" type="button" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#pause"/></svg><span>Pause</span></button>
+    </figure>
+  </section>
+  <div class="wrap">
+    <p class="credit">Images : NASA, filmées depuis la Station spatiale internationale (domaine public, <a href="https://images.nasa.gov">images.nasa.gov</a>).</p>
+  </div>
 
-    <figure class="shot" aria-label="Aperçu d'Hermes Dashboard, avec des données d'exemple" style="margin-inline:0">
+  <section class="block nouveautes" aria-labelledby="titre-nouveautes">
+    <div class="wrap">
+      <div class="tete">
+        <h2 id="titre-nouveautes">Nouveautés</h2>
+        <a class="fleche" href="#feuille-de-route">Toute la feuille de route <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
+      </div>
+      <ul class="cartes">
+        <li class="carte">
+          <img src="captures/notes-a-plusieurs.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="Une note ouverte par deux personnes, avec le curseur et le prénom de l'autre">
+          <p class="date">16 novembre 2026</p>
+          <h3>Une note écrite à plusieurs</h3>
+          <p>Comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
+        </li>
+        <li class="carte">
+          <img src="captures/membres.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="Les membres d'un espace partagé : Léa est membre, Sam n'a pas encore répondu à l'invitation">
+          <p class="date">16 novembre 2026</p>
+          <h3>Des espaces partagés</h3>
+          <p>Sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
+        </li>
+        <li class="carte">
+          <img src="captures/apercu-partage.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="L'aperçu d'une image dans les fichiers, avec ses actions : télécharger, renommer, partager par un lien qui expire">
+          <p class="date">15 novembre 2026</p>
+          <h3>Un fichier partagé par lien</h3>
+          <p>Valable une heure, un jour ou sept jours, révocable. La page du lien ne montre que le nom et la taille.</p>
+        </li>
+        <li class="carte">
+          <img src="captures/barre-de-commandes.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="La barre de commandes ouverte par « / »">
+          <p class="date">13 novembre 2026</p>
+          <h3>Tout au clavier</h3>
+          <p>« / » ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="fonctions">
+    <div class="wrap">
+      <p class="kicker">Ce qui tourne aujourd'hui</p>
+      <h2>Tout ce qui sert au quotidien, sans rien de plus</h2>
+      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, ou d'un balayage sur téléphone, et le dashboard, les notes, les fichiers et l'agenda suivent.</p>
+      <ul class="grid">
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
+          <h3>Espaces à la carte</h3>
+          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso montre tout : le dashboard, les notes et l'agenda de tous les espaces. Un espace s'archive en fin d'année ; le supprimer propose d'abord d'en transférer le contenu.</p>
+          <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Entreprise</span></div>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#grid"/></svg></div>
+          <h3>Dashboard modulaire</h3>
+          <p>Une grille bento propre à chaque espace : calendrier, prochains cours, tâches, notes, fichiers, réglages rapides. Chaque widget se déplace et s'agrandit, à la souris comme au doigt.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
+          <h3>Fichiers et dossiers</h3>
+          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes, avec des tags et une recherche. Un fichier se renomme sans changer de type. On range en glissant, ou par une fenêtre qui montre tout. Un fichier se partage par un lien qui expire. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversions (photos, vidéos, PDF, documents Markdown) dans un service isolé, sans réseau.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
+          <h3>Notes façon Notion</h3>
+          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte. À plusieurs, comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
+          <h3>Emploi du temps</h3>
+          <p>Le flux iCal de Pronote importé par son lien et resynchronisé toutes les heures. En vue jour ou semaine, et en calendrier sur le dashboard.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#phone"/></svg></div>
+          <h3>Comme une app sur iPhone</h3>
+          <p>Installée sur l'écran d'accueil : barre de raccourcis en bas, changement d'espace d'un balayage, pas de zoom intempestif.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#sliders"/></svg></div>
+          <h3>Au clavier, à sa main</h3>
+          <p>«&nbsp;/&nbsp;» ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace, sans quitter le clavier. Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée, profil avec photo.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#users"/></svg></div>
+          <h3>Seul ou à plusieurs</h3>
+          <p>Chacun son compte, par mot de passe ou Google ; pas d'inscription publique, seuls les emails autorisés entrent. Un espace se partage sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
+        </li>
+        <li class="feat">
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></div>
+          <h3>API pour un assistant</h3>
+          <p>Une API JSON protégée par une clé, désactivée par défaut, pour qu'un assistant gère les tâches et les notes et lise l'agenda.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block apercu">
+    <div class="wrap">
+      <p class="kicker">Le dashboard</p>
+      <h2>Une grille par espace, à sa main</h2>
+      <figure class="shot" aria-label="Aperçu d'Hermes Dashboard, avec des données d'exemple" style="margin-inline:0">
       <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span><em>app.dashu.dev</em></div>
       <div class="app" aria-hidden="true">
         <div class="side">
@@ -121,61 +229,6 @@
       </div>
     </figure>
     <p class="shot-cap">Aperçu avec des données d'exemple. Chaque widget se déplace et s'agrandit ; thème clair ou sombre selon le système. <a href="captures.html">Voir les captures de l'application</a></p>
-  </section>
-
-  <section class="block" id="fonctions">
-    <div class="wrap">
-      <p class="kicker">Ce qui tourne aujourd'hui</p>
-      <h2>Tout ce qui sert au quotidien, sans rien de plus</h2>
-      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, ou d'un balayage sur téléphone, et le dashboard, les notes, les fichiers et l'agenda suivent.</p>
-      <ul class="grid">
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
-          <h3>Espaces à la carte</h3>
-          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso montre tout : le dashboard, les notes et l'agenda de tous les espaces. Un espace s'archive en fin d'année ; le supprimer propose d'abord d'en transférer le contenu.</p>
-          <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Entreprise</span></div>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#grid"/></svg></div>
-          <h3>Dashboard modulaire</h3>
-          <p>Une grille bento propre à chaque espace : calendrier, prochains cours, tâches, notes, fichiers, réglages rapides. Chaque widget se déplace et s'agrandit, à la souris comme au doigt.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
-          <h3>Fichiers et dossiers</h3>
-          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes, avec des tags et une recherche. Un fichier se renomme sans changer de type. On range en glissant, ou par une fenêtre qui montre tout. Un fichier se partage par un lien qui expire. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversions (photos, vidéos, PDF, documents Markdown) dans un service isolé, sans réseau.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
-          <h3>Notes façon Notion</h3>
-          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte. À plusieurs, comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
-          <h3>Emploi du temps</h3>
-          <p>Le flux iCal de Pronote importé par son lien et resynchronisé toutes les heures. En vue jour ou semaine, et en calendrier sur le dashboard.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#phone"/></svg></div>
-          <h3>Comme une app sur iPhone</h3>
-          <p>Installée sur l'écran d'accueil : barre de raccourcis en bas, changement d'espace d'un balayage, pas de zoom intempestif.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#sliders"/></svg></div>
-          <h3>Au clavier, à sa main</h3>
-          <p>«&nbsp;/&nbsp;» ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace, sans quitter le clavier. Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée, profil avec photo.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#users"/></svg></div>
-          <h3>Seul ou à plusieurs</h3>
-          <p>Chacun son compte, par mot de passe ou Google ; pas d'inscription publique, seuls les emails autorisés entrent. Un espace se partage sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></div>
-          <h3>API pour un assistant</h3>
-          <p>Une API JSON protégée par une clé, désactivée par défaut, pour qu'un assistant gère les tâches et les notes et lise l'agenda.</p>
-        </li>
-      </ul>
     </div>
   </section>
 
@@ -262,5 +315,6 @@ docker compose exec dashu /dashu set-password toi@example.com</pre>
   </div>
 </footer>
 <script src="site.js"></script>
+<script src="horizon.js"></script>
 </body>
 </html>

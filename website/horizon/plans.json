@@ -1,0 +1,98 @@
+[
+ {
+  "plan": "aurore-a",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 1235,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "nuages-a",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 485,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "aurore-b",
+  "source": "Earth in 4K – Space Station Expedition 67-68 Edition (NASA, JSC, 2023)",
+  "page": "https://images.nasa.gov/details/jsc2023m000111_Earth_in_4K_Space_Station_Expedition_67_68_Edition",
+  "debut_s": 1960,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "desert-a",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 1460,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "nuit-b",
+  "source": "Earth in 4K – Space Station Expedition 67-68 Edition (NASA, JSC, 2023)",
+  "page": "https://images.nasa.gov/details/jsc2023m000111_Earth_in_4K_Space_Station_Expedition_67_68_Edition",
+  "debut_s": 1185,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "ocean-a",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 1535,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "aurore-c",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 2435,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "nuages-f",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 1435,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "aurore-e",
+  "source": "Earth in 4K – Space Station Expedition 67-68 Edition (NASA, JSC, 2023)",
+  "page": "https://images.nasa.gov/details/jsc2023m000111_Earth_in_4K_Space_Station_Expedition_67_68_Edition",
+  "debut_s": 535,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "ouragan-a",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 2085,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "nuages-j",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 2385,
+  "duree_s": 0.8,
+  "retourne_180": true
+ },
+ {
+  "plan": "nuages-c",
+  "source": "Earth from Space in 4K – Expedition 65 Edition (NASA, JSC, 2022)",
+  "page": "https://images.nasa.gov/details/jsc2022m000172_Earth_in_4K_Expedition_65_Edition",
+  "debut_s": 1610,
+  "duree_s": 0.8,
+  "retourne_180": true
+ }
+]
