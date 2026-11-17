@@ -297,16 +297,22 @@ mark {
   --zoom: 1.12;
 }
 
-/* La barre latérale occupe la colonne de gauche ; l'île et le contenu
-   partagent celle de droite (l'île flotte par-dessus, voir .island). */
+/* La barre latérale occupe la colonne de gauche, le contenu celle de droite.
+   L'île flotte par-dessus (voir .island) et s'étend sur les deux colonnes :
+   elle se centre ainsi sur toute la fenêtre, au même endroit que la barre
+   soit fixée, flottante ou, sur téléphone, cachée. */
 .app > .sidebar {
   grid-column: 1;
   grid-row: 1;
 }
 
-.app > .island,
 .app > .main {
   grid-column: 2;
+  grid-row: 1;
+}
+
+.app > .island {
+  grid-column: 1 / -1;
   grid-row: 1;
 }
 
