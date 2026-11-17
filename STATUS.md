@@ -245,6 +245,19 @@ Demandé par Rémi le 16 novembre 2026, cahier des charges dans `SPEC.md` (« No
 - [ ] Essayé sur le serveur, à travers le tunnel Cloudflare et Tailscale, avec deux comptes réels et sur l'iPhone. À vérifier en particulier : que Tailscale transmet l'hôte d'origine (sinon l'origine est refusée et l'éditeur reste en enregistrement classique, sans rien perdre).
 - Dépendances : `prosemirror-collab` 1.3.1 côté éditeur (justifié dans le README), fonction `ws` d'axum côté serveur ; `tokio-tungstenite` et `futures-util` pour les tests seulement. Aucune migration : les étapes ne vivent qu'en mémoire.
 
+## Événements et Google Agenda : avancement
+
+Demandé par Rémi le 17 novembre 2026, cahier des charges dans `SPEC.md` (« Événements et Google Agenda »). Vérifié par les tests (`tests/agenda_evenements.rs`, 7 tests, dont 4 contre un faux Google local qui imite l'échange du code, l'adresse du compte et l'API Agenda ; 2 tests unitaires dans `src/calendar/google.rs`) et dans le navigateur sur une instance locale, sans le vrai Google. **Pas encore sur le serveur, ni avec le vrai Google.**
+
+- [x] Créer, modifier, supprimer un événement depuis l'Agenda (« Nouvel événement »), en heures ou sur la journée entière ; titre vide, date invalide, fin avant le début, heure manquante, espace d'un autre compte refusés (422, ce qui a été tapé reste). Tests `creer_modifier_supprimer_un_evenement`, `un_formulaire_invalide_est_refuse`. Vu dans le navigateur.
+- [x] L'événement apparaît dans l'Agenda (cliquable), les widgets Calendrier et Prochains cours, Perso, la barre de commandes et l'API ; il reste à son auteur, même dans un espace partagé (404 pour les autres) ; il revient dans le Perso d'un membre qui quitte l'espace. Test `un_evenement_reste_a_son_auteur`. Tout l'agenda lit une vue `agenda_items` (flux iCal et événements de dashu).
+- [x] Relier Google Agenda : `state` vérifié, PKCE, permission « agenda » exigée (décochée chez Google : refusé), jeton chiffré en base, adresse affichée ; déconnecter retire la permission chez Google. Test `relier_google_agenda`.
+- [x] Un événement coché arrive dans Google Agenda (heures avec le fuseau de Paris), suit ses modifications et sa suppression. Test `un_evenement_suit_dans_google_agenda`.
+- [x] Google indisponible : l'événement est marqué en attente (formulaire et Réglages le disent), et part au passage suivant (toutes les cinq minutes). Une modification faite pendant un envoi n'est pas perdue (compteur de changements). Test `google_indisponible_puis_reprise`.
+- [x] Pas de doublon quand l'agenda Google est aussi importé en iCal (UID `<id>@google.com`). Test `un_evenement_suit_dans_google_agenda`.
+- [ ] Essai réel sur le serveur avec le vrai Google, après avoir activé **Google Calendar API** dans le projet Google de dashu (README, « Créer les identifiants Google », étape 5).
+- Migration 0017 (`events`, `google_accounts`, `google_deletions`, vue `agenda_items`). Dépendances : `ring` et `base64` en direct (déjà tirées par rustls et axum), fonction `json` de reqwest. Le champ de date et d'heure suivent maintenant le style des autres champs (16 px sur écran tactile, sinon iOS zoome).
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

@@ -188,6 +188,19 @@ pub async fn callback(
     let Some(google) = &state.google else {
         return Err(AppError::NotFound);
     };
+    // Même adresse de retour pour relier Google Agenda (déjà déclarée chez
+    // Google) : si le `state` est celui d'une connexion de l'agenda, elle
+    // s'en occupe.
+    if let Some(response) = crate::calendar::google::finish_link(
+        &state,
+        &session,
+        query.code.as_deref(),
+        query.state.as_deref(),
+    )
+    .await?
+    {
+        return Ok(response);
+    }
     // Le flux est à usage unique : on le retire de la session quoi qu'il arrive.
     let flow = session.remove::<Flow>(FLOW_KEY).await?;
     let (Some(flow), Some(code), Some(returned_state)) = (flow, query.code, query.state) else {

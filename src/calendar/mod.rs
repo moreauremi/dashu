@@ -1,5 +1,7 @@
 //! Emploi du temps : vues jour et semaine des événements importés par iCal.
 
+pub mod events;
+pub mod google;
 pub mod ical;
 pub mod sync;
 pub mod view;
@@ -57,6 +59,10 @@ struct CalendarPage {
     /// URL de la page courante, pour y revenir après « Rafraîchir ».
     self_href: String,
     has_sources: bool,
+    /// Un agenda iCal ou au moins un événement de dashu dans l'espace.
+    has_items: bool,
+    /// « Nouvel événement », sur le jour affiché.
+    new_href: String,
     /// « Synchronisé il y a 12 min »
     sync_label: String,
     issues: Vec<SourceIssue>,
@@ -122,6 +128,17 @@ pub async fn page(
     .fetch_all(&state.db)
     .await?;
 
+    let has_events = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!: i64" FROM events
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+        user,
+        space,
+        overview
+    )
+    .fetch_one(&state.db)
+    .await?
+        > 0;
+
     let last_sync = sources.iter().filter_map(|s| s.last_fetched_at).min();
     let sync_label = match last_sync {
         Some(ts) => format!("Synchronisé {}", time::ago(ts, now)),
@@ -158,6 +175,8 @@ pub async fn page(
         day_href: href("day", date),
         self_href: href(view_name, date),
         has_sources: !sources.is_empty(),
+        has_items: has_events || !sources.is_empty(),
+        new_href: format!("/calendar/events/new?date={}", date.format("%Y-%m-%d")),
         sync_label,
         issues,
         shell: ctx.shell("calendar").await?,
@@ -166,7 +185,8 @@ pub async fn page(
 }
 
 /// Événements qui touchent la période [first, last] (jours inclus) : ceux de
-/// l'espace, ou ceux de tous les espaces si `overview`. Un événement venu d'un
+/// l'espace, ou ceux de tous les espaces si `overview` ; cours des flux iCal
+/// et événements de dashu (vue `agenda_items`). Un événement venu d'un
 /// autre espace porte le nom et la couleur de cet espace.
 async fn events_between(
     db: &SqlitePool,
@@ -180,13 +200,14 @@ async fn events_between(
     let to = time::day_start(last + Duration::days(1));
     let events = sqlx::query_as!(
         EventRow,
-        r#"SELECT e.title, e.location, e.starts_at, e.ends_at, e.all_day AS "all_day!: bool",
-                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.name END AS "tag!: String",
-                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
-           FROM calendar_events e
-           JOIN calendar_sources s ON s.id = e.source_id
-           JOIN spaces sp ON sp.id = s.space_id
-           WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
+        r#"SELECT e.title AS "title!: String", e.location AS "location!: String",
+                  e.starts_at AS "starts_at!: i64", e.ends_at AS "ends_at!: i64",
+                  e.all_day AS "all_day!: bool", e.event_id AS "event_id: i64",
+                  CASE WHEN e.space_id = ?2 THEN '' ELSE sp.name END AS "tag!: String",
+                  CASE WHEN e.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
+           FROM agenda_items e
+           JOIN spaces sp ON sp.id = e.space_id
+           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
            ORDER BY e.starts_at, e.ends_at"#,
         user,
         space,
@@ -233,8 +254,12 @@ pub async fn widget_grid(
         }
     };
     let has_sources = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "n!: i64" FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+        // Un agenda iCal ou un événement de dashu : il y a quelque chose à montrer.
+        r#"SELECT count(*) AS "n!: i64" FROM (
+               SELECT space_id FROM calendar_sources WHERE user_id = ?1
+               UNION ALL SELECT space_id FROM events WHERE user_id = ?1
+           )
+           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space.id,
         overview

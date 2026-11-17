@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO google_deletions (user_id, google_event_id) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "aea4721c7a2242c4288bd850edcfe47d003b10f0a5bd295d164730c0d2a1f968"
+}

@@ -8,6 +8,7 @@
   </div>
 
   <div class="toolbar">
+    <a class="btn btn-primary" href="{{ new_href }}">{{ crate::assets::icon("plus")|safe }}<span>Nouvel événement</span></a>
     <div class="btn-group" role="group" aria-label="Période affichée">
       <a class="icon-btn" href="{{ prev_href }}" aria-label="{% if is_week %}Semaine précédente{% else %}Jour précédent{% endif %}">{{ crate::assets::icon("chevron-left")|safe }}</a>
       <a class="btn" href="{{ today_href }}">Aujourd'hui</a>
@@ -34,10 +35,13 @@
 </p>
 {% endfor %}
 
-{% if !has_sources %}
+{% if !has_items %}
 <div class="empty-state">
   <p>Aucun agenda dans l'espace {{ shell.active.name }}</p>
-  <a class="btn btn-primary" href="/settings#agendas">Ajouter un flux iCal</a>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="{{ new_href }}">Ajouter un événement</a>
+    <a class="btn" href="/settings#agendas">Ajouter un flux iCal</a>
+  </div>
 </div>
 {% else %}
 {% include "calendar/_grid.html" %}

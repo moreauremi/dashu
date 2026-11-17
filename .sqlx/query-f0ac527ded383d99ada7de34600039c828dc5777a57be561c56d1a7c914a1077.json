@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT e.space_id AS \"space_id!: i64\"\n           FROM agenda_items e\n           JOIN spaces sp ON sp.id = e.space_id\n           WHERE e.user_id = ? AND sp.archived_at IS NULL AND e.all_day = 0\n             AND e.ends_at > ? AND e.starts_at < ?\n           ORDER BY e.starts_at\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f0ac527ded383d99ada7de34600039c828dc5777a57be561c56d1a7c914a1077"
+}

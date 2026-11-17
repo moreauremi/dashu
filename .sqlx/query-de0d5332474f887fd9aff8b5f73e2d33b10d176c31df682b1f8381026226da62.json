@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE google_accounts SET last_error = NULL WHERE user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "de0d5332474f887fd9aff8b5f73e2d33b10d176c31df682b1f8381026226da62"
+}

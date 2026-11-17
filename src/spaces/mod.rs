@@ -738,6 +738,15 @@ pub async fn delete(
             )
             .execute(&mut *tx)
             .await?;
+            // Événements de dashu : ceux des membres sont déjà revenus dans
+            // leur Perso (remove_member) ; ceux du propriétaire suivent.
+            sqlx::query!(
+                "UPDATE events SET space_id = ? WHERE space_id = ?",
+                target.id,
+                id
+            )
+            .execute(&mut *tx)
+            .await?;
             sqlx::query!(
                 "UPDATE files SET space_id = ? WHERE space_id = ?",
                 target.id,
@@ -799,6 +808,19 @@ pub async fn delete(
             )
             .execute(&mut *tx)
             .await?;
+            // Les copies dans Google Agenda partent avec eux (au prochain
+            // envoi à Google, voir src/calendar/google.rs).
+            sqlx::query!(
+                "INSERT OR IGNORE INTO google_deletions (user_id, google_event_id)
+                 SELECT user_id, google_event_id FROM events
+                 WHERE space_id = ? AND google_event_id IS NOT NULL",
+                id
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!("DELETE FROM events WHERE space_id = ?", id)
+                .execute(&mut *tx)
+                .await?;
             sqlx::query!("DELETE FROM files WHERE space_id = ?", id)
                 .execute(&mut *tx)
                 .await?;
@@ -869,7 +891,7 @@ pub struct Person {
 ///
 /// * sa ligne `space_members` disparaît (l'accès se coupe à la requête
 ///   suivante) ;
-/// * ses agendas rattachés à l'espace rentrent dans son Perso ;
+/// * ses agendas et ses événements rattachés à l'espace rentrent dans son Perso ;
 /// * les liens de partage qu'il a créés vers des fichiers de l'espace sont
 ///   révoqués ;
 /// * si l'espace était son espace « moment », ce réglage revient au défaut.
@@ -887,6 +909,17 @@ pub(crate) async fn remove_member(db: &SqlitePool, space_id: i64, user_id: i64) 
     .await?;
     sqlx::query!(
         "UPDATE calendar_sources
+         SET space_id = (SELECT id FROM spaces WHERE user_id = ?1 AND slug = 'perso')
+         WHERE user_id = ?1 AND space_id = ?2
+           AND EXISTS (SELECT 1 FROM spaces WHERE user_id = ?1 AND slug = 'perso')",
+        user_id,
+        space_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Ses événements de dashu aussi : ils sont à lui, comme ses agendas.
+    sqlx::query!(
+        "UPDATE events
          SET space_id = (SELECT id FROM spaces WHERE user_id = ?1 AND slug = 'perso')
          WHERE user_id = ?1 AND space_id = ?2
            AND EXISTS (SELECT 1 FROM spaces WHERE user_id = ?1 AND slug = 'perso')",

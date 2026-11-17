@@ -35,7 +35,7 @@ syntect = { version = "5.3.0", default-features = false, features = ["default-sy
 # reqwest reste en 0.12 : c'est la version qu'utilise openidconnect 4, on
 # partage ainsi un seul client HTTP (rustls + ring, sans dépendance système).
 icalendar = { version = "0.17.17", default-features = false, features = ["parser"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std", "serde"] }
 chrono-tz = "0.10.4"
 
@@ -45,6 +45,10 @@ chrono-tz = "0.10.4"
 http-body-util = "0.1.5"
 tokio-util = { version = "0.7.20", default-features = false, features = ["io"] }
 sha2 = "0.10.9"
+# Déjà tirées par rustls et axum : chiffrement du jeton Google Agenda
+# (ChaCha20-Poly1305, HKDF) et PKCE de sa connexion (src/calendar/google.rs).
+ring = "0.17.14"
+base64 = "0.22.1"
 
 # Compression des photos, dans le service de conversion (src/tools/worker.rs) :
 # lecture en Rust, sans mémoire non vérifiée, orientation EXIF comprise.

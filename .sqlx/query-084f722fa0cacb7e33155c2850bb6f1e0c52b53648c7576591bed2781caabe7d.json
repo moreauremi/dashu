@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT count(*) AS \"n!: i64\" FROM (\n               SELECT space_id FROM calendar_sources WHERE user_id = ?1\n               UNION ALL SELECT space_id FROM events WHERE user_id = ?1\n           )\n           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "084f722fa0cacb7e33155c2850bb6f1e0c52b53648c7576591bed2781caabe7d"
+}

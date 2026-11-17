@@ -346,5 +346,31 @@
       <p class="hint">Les agendas sont resynchronisés toutes les heures. L'URL est un secret : elle n'est jamais réaffichée.</p>
     </div>
   </section>
+
+  {#- Google Agenda : les événements créés dans dashu y sont copiés (un seul
+      sens). Seulement si Google est configuré sur ce serveur. -#}
+  {% if google_enabled %}
+  <section class="card" id="google-agenda" aria-labelledby="s-google-agenda">
+    <header class="card-head"><h2 id="s-google-agenda">Google Agenda</h2></header>
+    <div class="card-body">
+      {% if let Some(account) = google_calendar %}
+      <p>Relié au compte Google <strong>{{ account.email }}</strong>. Les événements que tu ajoutes dans l'Agenda de dashu y sont copiés, puis modifiés et supprimés avec eux. Ce que tu changes directement dans Google ne revient pas dans dashu.</p>
+      {% if let Some(error) = account.last_error %}
+      <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+      {% endif %}
+      {% if google_pending > 0 %}
+      <p class="hint">{{ google_pending }} événement{% if google_pending > 1 %}s{% endif %} pas encore dans Google Agenda : dashu réessaie toutes les cinq minutes.</p>
+      {% endif %}
+      <form method="post" action="/settings/google-calendar/disconnect" hx-confirm="Déconnecter Google Agenda ? Les événements déjà copiés y restent.">
+        <button class="btn" type="submit">Déconnecter Google Agenda</button>
+      </form>
+      {% else %}
+      <p>Relie ton agenda Google pour que les événements ajoutés dans dashu y arrivent aussi. Google te demandera la permission de gérer les événements de ton agenda.</p>
+      <div><a class="btn btn-primary" href="/settings/google-calendar/connect" hx-boost="false">Connecter Google Agenda</a></div>
+      <p class="hint">Tant que Google n'a pas vérifié l'application, sa page affiche « Google n'a pas validé cette application » : passe par « Paramètres avancés ».</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

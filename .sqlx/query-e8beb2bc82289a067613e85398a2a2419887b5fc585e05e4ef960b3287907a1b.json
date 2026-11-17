@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!: i64\", title, location, starts_at, ends_at,\n                  all_day AS \"all_day!: bool\", google AS \"google!: bool\", google_event_id,\n                  google_dirty\n           FROM events WHERE user_id = ? AND google_dirty > 0",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "location",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "starts_at",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "ends_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "all_day!: bool",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "google!: bool",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "google_event_id",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "google_dirty",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e8beb2bc82289a067613e85398a2a2419887b5fc585e05e4ef960b3287907a1b"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE events SET space_id = ?, title = ?, location = ?, starts_at = ?, ends_at = ?,\n                           all_day = ?, google = ?, google_dirty = google_dirty + ?,\n                           google_error = NULL, updated_at = ?\n         WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "ea9c15674b9b2ac255cbadac4aeef6024fef793acb94f5a24de2fb850737a079"
+}

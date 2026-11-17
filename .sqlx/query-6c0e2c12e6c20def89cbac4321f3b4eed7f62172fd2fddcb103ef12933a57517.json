@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT google_event_id FROM google_deletions WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "google_event_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6c0e2c12e6c20def89cbac4321f3b4eed7f62172fd2fddcb103ef12933a57517"
+}

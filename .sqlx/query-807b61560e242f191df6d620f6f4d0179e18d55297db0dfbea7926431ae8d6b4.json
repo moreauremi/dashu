@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE events SET google_event_id = ?, google_error = NULL,\n                       google_dirty = max(0, google_dirty - ?)\n                     WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "807b61560e242f191df6d620f6f4d0179e18d55297db0dfbea7926431ae8d6b4"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM google_deletions WHERE user_id = ? AND google_event_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "ef3dfb4d47c8d0341b227ddac3b264105bcd2a6abe23509e611e9d1eea1c8203"
+}

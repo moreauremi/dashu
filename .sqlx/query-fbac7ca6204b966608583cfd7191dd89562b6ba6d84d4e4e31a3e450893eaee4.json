@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE events\n         SET space_id = (SELECT id FROM spaces WHERE user_id = ?1 AND slug = 'perso')\n         WHERE user_id = ?1 AND space_id = ?2\n           AND EXISTS (SELECT 1 FROM spaces WHERE user_id = ?1 AND slug = 'perso')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "fbac7ca6204b966608583cfd7191dd89562b6ba6d84d4e4e31a3e450893eaee4"
+}

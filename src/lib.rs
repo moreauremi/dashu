@@ -55,6 +55,9 @@ pub struct AppState {
     pub uploads_busy: files::Busy,
     /// Sessions des notes ouvertes en direct (voir `notes::live`).
     pub live: Arc<notes::live::Live>,
+    /// Un envoi à Google Agenda à la fois : deux envois simultanés créeraient
+    /// deux fois le même événement (voir `calendar::google`).
+    pub google_push: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -75,6 +78,7 @@ impl AppState {
             google,
             uploads_busy: Default::default(),
             live: Arc::default(),
+            google_push: Arc::default(),
         })
     }
 }
@@ -217,6 +221,25 @@ pub fn build_router(state: AppState) -> Router {
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))
+        // Événements créés dans dashu, copiés dans Google Agenda si relié.
+        .route("/calendar/events/new", get(calendar::events::new_page))
+        .route("/calendar/events", post(calendar::events::create))
+        .route(
+            "/calendar/events/{id}",
+            get(calendar::events::edit_page).post(calendar::events::update),
+        )
+        .route(
+            "/calendar/events/{id}/delete",
+            post(calendar::events::delete),
+        )
+        .route(
+            "/settings/google-calendar/connect",
+            get(calendar::google::connect),
+        )
+        .route(
+            "/settings/google-calendar/disconnect",
+            post(calendar::google::disconnect),
+        )
         // Barre de commandes « / »
         .route("/cmd", post(commands::run))
         .route("/cmd/catalogue", get(commands::catalogue))
