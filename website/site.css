@@ -195,4 +195,19 @@ footer a{color:var(--text-2);text-underline-offset:3px}
 .phones{margin-top:40px;display:grid;grid-template-columns:repeat(2,minmax(0,320px));gap:40px;justify-content:start}
 @media (max-width:599px){.phones{grid-template-columns:minmax(0,1fr)}.caps{gap:40px}}
 .phones .cap img{border-radius:28px}
+/* Apparition au défilement, sans JavaScript : l'animation suit la position de
+   l'élément dans l'écran (animation-timeline: view()). Une capture monte et se
+   redresse, comme posée sur la page ; les cartes et les étapes de l'accueil
+   arrivent en fondu. Sans cette fonction (anciens navigateurs) ou si le
+   système demande moins d'animations, tout s'affiche simplement. */
+@keyframes rise{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+@keyframes land{from{transform:perspective(1400px) rotateX(10deg) scale(.94)}to{transform:none}}
+@keyframes fade{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:no-preference){
+  @supports (animation-timeline:view()){
+    .cap{animation:rise linear both;animation-timeline:view();animation-range:entry 0% cover 28%}
+    .cap img{transform-origin:50% 100%;animation:land linear both;animation-timeline:view();animation-range:entry 0% cover 35%}
+    .feat,.step,.fact,section.block h2,section.block .intro{animation:fade linear both;animation-timeline:view();animation-range:entry 0% cover 22%}
+  }
+}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.logo use{animation:none!important;transition:none!important}}
