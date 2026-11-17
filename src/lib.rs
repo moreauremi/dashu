@@ -183,6 +183,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/notes/{id}/move", post(notes::move_to_space))
         .route("/notes/{id}/folder", post(notes::set_folder))
         .route("/notes/{id}/delete", post(notes::delete))
+        .route("/notes/{id}/download.md", get(notes::export::markdown))
+        .route("/notes/{id}/download.pdf", get(notes::export::pdf))
         .route("/notes/{id}/tags", post(notes::add_tag))
         .route("/notes/{id}/tags/{tag_id}", delete(notes::remove_tag))
         // Fichiers (un envoi lit le corps en continu, sans la limite de 2 Mo)

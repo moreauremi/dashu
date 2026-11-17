@@ -144,12 +144,25 @@ fn job_dirs(jobs: &Path) -> Vec<PathBuf> {
     dirs.into_iter().map(|(_, path)| path).collect()
 }
 
-/// Dossiers prêts et pas encore pris, les plus anciens d'abord.
+/// Dossiers prêts et pas encore pris, les plus anciens d'abord, sauf les PDF
+/// demandés au téléchargement d'une note, en tête : quelqu'un les attend
+/// devant son écran (voir [`super::EXPORT_BASE`]).
 fn ready_jobs(jobs: &Path) -> Vec<PathBuf> {
-    job_dirs(jobs)
+    let mut ready: Vec<PathBuf> = job_dirs(jobs)
         .into_iter()
         .filter(|dir| dir.join("job.json").exists() && !dir.join("started").exists())
-        .collect()
+        .collect();
+    // Tri stable : chaque groupe garde son ordre.
+    ready.sort_by_key(|dir| !is_export(dir));
+    ready
+}
+
+/// Dossier d'un PDF fait à la demande, d'après son numéro.
+fn is_export(dir: &Path) -> bool {
+    dir.file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.parse::<i64>().ok())
+        .is_some_and(|id| id >= super::EXPORT_BASE)
 }
 
 /// Prend une tâche : `started` créé de façon exclusive.
@@ -988,9 +1001,33 @@ mod tests {
             let out = fs::read(dir.join(&spec.output)).unwrap();
             assert!(out.starts_with(magic), "{to:?}");
         }
-        // La CI garde le PDF pour qu'on puisse regarder la mise en page.
+        // Le PDF d'une note (bouton « Télécharger ») : le même document,
+        // sous un en-tête YAML qui porte un titre plein de ponctuation.
+        let note = crate::notes::export::pdf_source(
+            "*Brouillon* d'été : TCP/IP #1 (v2) $5 @moi",
+            include_str!("../../tests/fixtures/document.md"),
+            "17 novembre 2026",
+        );
+        fs::write(dir.join("note.md"), note).unwrap();
+        let spec = JobSpec {
+            task: Task::Convert,
+            media: Media::Document,
+            input: "note.md".into(),
+            output: "note.pdf".into(),
+            preview: None,
+            to: Some(Conversion::Pdf),
+            pages: None,
+        };
+        tools
+            .convert(&spec, dir, &|_| {})
+            .unwrap_or_else(|e| panic!("note : {e}"));
+        assert!(fs::read(dir.join("note.pdf")).unwrap().starts_with(b"%PDF"));
+
+        // La CI garde les PDF pour qu'on puisse regarder la mise en page.
         if let Ok(keep) = std::env::var("DOCUMENT_PDF") {
-            fs::copy(dir.join("output.pdf"), keep).unwrap();
+            fs::copy(dir.join("output.pdf"), &keep).unwrap();
+            let note = Path::new(&keep).with_file_name("note.pdf");
+            fs::copy(dir.join("note.pdf"), note).unwrap();
         }
         fs::remove_dir_all(dir).unwrap();
     }
@@ -1020,6 +1057,31 @@ mod tests {
         assert_eq!(ready_jobs(&jobs), vec![dir.clone()]);
         assert!(claim(&dir));
         assert!(!claim(&dir), "une tâche ne se prend qu'une fois");
+        let _ = fs::remove_dir_all(&jobs);
+    }
+
+    #[test]
+    fn pdf_d_une_note_en_premier() {
+        let jobs = std::env::temp_dir().join(format!("dashu-priorite-{}", std::process::id()));
+        let export = super::super::EXPORT_BASE + 12;
+        let dirs: Vec<PathBuf> = ["3", "12", &export.to_string(), "40"]
+            .iter()
+            .map(|name| jobs.join(name))
+            .collect();
+        for dir in &dirs {
+            fs::create_dir_all(dir).unwrap();
+            fs::write(dir.join("job.json"), "{}").unwrap();
+        }
+        // Le PDF attendu passe devant ; les autres gardent leur ordre.
+        assert_eq!(
+            ready_jobs(&jobs),
+            vec![
+                dirs[2].clone(),
+                dirs[0].clone(),
+                dirs[1].clone(),
+                dirs[3].clone()
+            ]
+        );
         let _ = fs::remove_dir_all(&jobs);
     }
 }

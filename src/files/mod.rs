@@ -44,7 +44,7 @@ const INCOMING: &str = ".envois";
 const NAME_MAX_CHARS: usize = 200;
 /// CSP d'un fichier servi : rien ne s'exécute, même si le navigateur
 /// décidait d'afficher le fichier au lieu de le télécharger.
-const FILE_CSP: &str = "default-src 'none'; sandbox";
+pub(crate) const FILE_CSP: &str = "default-src 'none'; sandbox";
 
 // ---------------------------------------------------------------------
 // Liste
@@ -2165,7 +2165,7 @@ pub fn human_size(bytes: i64) -> String {
 }
 
 /// En-tête `Content-Disposition` d'un téléchargement.
-fn attachment(name: &str) -> HeaderValue {
+pub(crate) fn attachment(name: &str) -> HeaderValue {
     disposition("attachment", name)
 }
 

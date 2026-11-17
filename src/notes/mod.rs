@@ -8,6 +8,7 @@
 //! Les tags sont rangés par compte mais communs à l'affichage : deux tags de
 //! même nom (un par compte) n'en font qu'un sur une note ou dans les pastilles.
 
+pub mod export;
 pub mod live;
 pub mod markdown;
 
@@ -511,6 +512,8 @@ struct EditPage {
     suggestions: Vec<String>,
     /// Le sélecteur « Dossier », à côté des tags.
     folder: NoteFolder,
+    /// « Télécharger › PDF » : seulement avec le service de conversion.
+    pdf: bool,
 }
 
 /// `GET /notes/{id}`
@@ -554,6 +557,7 @@ pub async fn edit_page(
         tags: tags_of(&state.db, ctx.user.id, id).await?,
         suggestions: all_tag_names(&state.db, ctx.user.id).await?,
         folder: note_folder(&ctx, &state.db, note.space_id, note.folder_id).await?,
+        pdf: state.config.work_dir.is_some(),
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))

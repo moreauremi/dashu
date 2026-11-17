@@ -72,8 +72,9 @@ jobs:
       # seule, seul /srv/dashu/tmp inscriptible, pas de réseau. Le PDF y
       # échouait sur le serveur alors que tous les tests passaient. pandoc
       # 3.1.11.1 est celui de Debian 13 ; Typst, la version de install.sh ;
-      # la police Inter, comme sur le serveur. Le PDF produit est gardé
-      # (artefact « document-pdf ») pour juger la mise en page.
+      # la police Inter, comme sur le serveur. Les PDF produits (un document,
+      # et le PDF d'une note avec son titre et sa date) sont gardés (artefact
+      # « document-pdf ») pour juger la mise en page.
       - name: Documents dans le bac à sable du service de conversion
         run: |
           sudo apt-get install -y -q fonts-inter
@@ -104,7 +105,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: document-pdf
-          path: /srv/dashu/tmp/document.pdf
+          path: |
+            /srv/dashu/tmp/document.pdf
+            /srv/dashu/tmp/note.pdf
           retention-days: 14
 
   docker:

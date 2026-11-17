@@ -508,13 +508,148 @@ async fn prepare_job(
     tokio::fs::copy(source, &input)
         .await
         .context("copie du fichier à traiter")?;
+    publish_job(&dir, &input, spec).await
+}
 
+/// Dernière étape de la préparation d'une tâche, le fichier d'entrée déjà
+/// dans son dossier : les droits du service, puis `job.json`.
+async fn publish_job(dir: &FsPath, input: &FsPath, spec: &JobSpec) -> anyhow::Result<()> {
     let tmp = dir.join(".job.json");
     tokio::fs::write(&tmp, serde_json::to_vec_pretty(spec)?).await?;
-    share_with_worker(&dir, &[&input, &tmp]).context("droits du dossier de travail")?;
+    share_with_worker(dir, &[input, &tmp]).context("droits du dossier de travail")?;
     // En dernier : le service ne prend la tâche qu'une fois `job.json` là.
     tokio::fs::rename(&tmp, dir.join("job.json")).await?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------
+// PDF à la demande (téléchargement d'une note)
+// ---------------------------------------------------------------------
+
+/// Numéro du premier dossier des PDF faits à la demande. Ces tâches n'ont pas
+/// de ligne dans `jobs` (rien à montrer ni à ranger : dashu attend le
+/// résultat et l'envoie) ; leur numéro, tiré au hasard au-dessus de ce seuil,
+/// ne croise jamais ceux de la table. Le service de conversion les prend
+/// avant les autres ([`worker`]), et le ménage des dossiers orphelins efface
+/// ceux qu'une coupure aurait laissés.
+pub const EXPORT_BASE: i64 = 1 << 50;
+/// Le service doit avoir pris la tâche dans ce délai : il passe toutes les
+/// 2 secondes, mais peut finir deux autres conversions avant.
+const EXPORT_START: std::time::Duration = std::time::Duration::from_secs(30);
+/// Durée maximale d'attente du PDF, au total.
+const EXPORT_TOTAL: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Fin de l'attente d'un résultat, quand ce n'est pas le fichier attendu.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NoResult {
+    /// Le service a échoué ; son message, lisible.
+    Failed(String),
+    /// Le service n'a pas pris la tâche à temps (arrêté, ou occupé).
+    NotStarted,
+    /// Prise, mais pas finie à temps.
+    TooLong,
+}
+
+/// Fabrique le PDF d'un document Markdown avec le service de conversion
+/// (pandoc et Typst, comme « Convertir › En PDF ») et renvoie son contenu.
+/// Le dossier de la tâche est effacé dans tous les cas, même si la personne
+/// a quitté la page entre-temps : l'attente tourne dans sa propre tâche.
+pub async fn export_pdf(state: &AppState, markdown: String) -> AppResult<Vec<u8>> {
+    let work_dir = state.config.work_dir.clone().ok_or(AppError::NotFound)?;
+    let dir = new_export_dir(&work_dir).await?;
+    let spec = JobSpec {
+        task: Task::Convert,
+        media: Media::Document,
+        input: "input.md".into(),
+        output: "output.pdf".into(),
+        preview: None,
+        to: Some(Conversion::Pdf),
+        pages: None,
+    };
+    let prepared = async {
+        let input = dir.join(&spec.input);
+        tokio::fs::write(&input, markdown).await?;
+        publish_job(&dir, &input, &spec).await
+    }
+    .await;
+    if let Err(error) = prepared {
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+        return Err(error.into());
+    }
+
+    let waited = tokio::spawn(async move {
+        let result = wait_for_output(&dir, &spec.output, EXPORT_START, EXPORT_TOTAL).await;
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+        result
+    })
+    .await
+    .context("attente du PDF")?;
+    waited.map_err(|reason| {
+        AppError::Unavailable(match reason {
+            NoResult::Failed(message) => format!("Le PDF n'a pas pu être préparé. {message}"),
+            NoResult::NotStarted => "Le service de conversion ne répond pas : il est occupé ou \
+                                     arrêté. Réessaie dans un moment ; le Markdown, lui, se \
+                                     télécharge toujours."
+                .into(),
+            NoResult::TooLong => {
+                "Le PDF prend trop de temps à préparer. Réessaie dans un moment.".into()
+            }
+        })
+    })
+}
+
+/// Crée le dossier d'une tâche faite à la demande, sous un numéro libre.
+async fn new_export_dir(work_dir: &FsPath) -> anyhow::Result<PathBuf> {
+    let jobs = work_dir.join("jobs");
+    tokio::fs::create_dir_all(&jobs)
+        .await
+        .with_context(|| format!("dossier de travail {}", jobs.display()))?;
+    loop {
+        let dir = job_dir(work_dir, EXPORT_BASE + i64::from(rand::random::<u32>()));
+        match tokio::fs::create_dir(&dir).await {
+            Ok(()) => return Ok(dir),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("dossier de travail {}", dir.display()));
+            }
+        }
+    }
+}
+
+/// Attend la fin d'une tâche et lit son résultat `output`. `start` : délai
+/// pour que le service la prenne ; `total` : délai pour qu'il la finisse.
+pub async fn wait_for_output(
+    dir: &FsPath,
+    output: &str,
+    start: std::time::Duration,
+    total: std::time::Duration,
+) -> Result<Vec<u8>, NoResult> {
+    let begin = tokio::time::Instant::now();
+    loop {
+        if let Some(message) = read_small(&dir.join("error")).await {
+            return Err(NoResult::Failed(message));
+        }
+        if tokio::fs::try_exists(dir.join("done"))
+            .await
+            .unwrap_or(false)
+        {
+            return tokio::fs::read(dir.join(output))
+                .await
+                .map_err(|_| NoResult::Failed("Le résultat est introuvable.".into()));
+        }
+        let waited = begin.elapsed();
+        if waited >= total {
+            return Err(NoResult::TooLong);
+        }
+        if waited >= start
+            && !tokio::fs::try_exists(dir.join("started"))
+                .await
+                .unwrap_or(false)
+        {
+            return Err(NoResult::NotStarted);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 }
 
 /// Demande la vignette d'un fichier (à son arrivée). Sans outils, ou pour un
@@ -1642,5 +1777,51 @@ mod tests {
         move_file(&dir.join("output.mp4"), &dest).await.unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), b"plus leger");
         assert!(!dir.join("output.mp4").exists());
+    }
+
+    /// PDF à la demande : les quatre fins possibles de l'attente.
+    #[tokio::test]
+    async fn attente_d_un_pdf() {
+        use std::time::Duration;
+        let ms = Duration::from_millis;
+
+        // Personne ne prend la tâche : on n'attend pas le délai total.
+        let dir = scratch("attente-arrete");
+        let begin = std::time::Instant::now();
+        let waited = wait_for_output(&dir, "output.pdf", ms(300), Duration::from_secs(60)).await;
+        assert_eq!(waited, Err(NoResult::NotStarted));
+        assert!(begin.elapsed() < Duration::from_secs(5));
+
+        // Prise, mais jamais finie.
+        let dir = scratch("attente-long");
+        std::fs::write(dir.join("started"), "").unwrap();
+        let waited = wait_for_output(&dir, "output.pdf", ms(100), ms(500)).await;
+        assert_eq!(waited, Err(NoResult::TooLong));
+
+        // Échec : le message du service.
+        let dir = scratch("attente-echec");
+        std::fs::write(dir.join("started"), "").unwrap();
+        std::fs::write(dir.join("error"), "La conversion a échoué.\n").unwrap();
+        let waited = wait_for_output(&dir, "output.pdf", ms(100), ms(500)).await;
+        assert_eq!(
+            waited,
+            Err(NoResult::Failed("La conversion a échoué.".into()))
+        );
+
+        // Fini : le contenu du résultat.
+        let dir = scratch("attente-fini");
+        std::fs::write(dir.join("output.pdf"), b"%PDF-1.7").unwrap();
+        std::fs::write(dir.join("done"), "").unwrap();
+        let waited = wait_for_output(&dir, "output.pdf", ms(100), ms(500)).await;
+        assert_eq!(waited, Ok(b"%PDF-1.7".to_vec()));
+
+        for name in [
+            "attente-arrete",
+            "attente-long",
+            "attente-echec",
+            "attente-fini",
+        ] {
+            let _ = std::fs::remove_dir_all(scratch(name));
+        }
     }
 }
