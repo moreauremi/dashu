@@ -140,8 +140,7 @@ h1 .spaces{display:block;color:var(--text-3)}
 .horizon::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,5,7,.62) 0%,rgba(5,5,7,.38) 30%,rgba(5,5,7,0) 50%);pointer-events:none}
 .ciel-texte{padding-block:clamp(36px,9svh,104px) 0}
 .ciel-texte .eyebrow{color:rgba(244,242,238,.62)}
-.ciel-texte h1{margin-top:18px;max-width:34ch;font-size:clamp(25px,3.4vw,44px);line-height:1.14;letter-spacing:-.025em;font-weight:400;color:rgba(244,242,238,.74);text-shadow:0 1px 18px rgba(0,0,0,.35)}
-.ciel-texte h1 strong{font-weight:600;color:#fff}
+.ciel-texte h1{margin-top:16px;max-width:16ch;font-size:clamp(36px,5.6vw,76px);line-height:1.02;letter-spacing:-.035em;font-weight:600;color:#fff;text-wrap:balance;text-shadow:0 1px 24px rgba(0,0,0,.35)}
 .ciel-texte .cta{margin-top:28px}
 .ciel-texte .btn{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .ciel-texte .btn:hover{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.14)}
