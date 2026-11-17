@@ -12,9 +12,8 @@
 # redémarre dashu. Si dashu ne repart pas, l'ancien fichier est remis.
 #
 # Une adresse ajoutée ne crée pas encore le compte : il naît à la première
-# connexion Google, ou par « mot-de-passe ». Tant que le projet Google de
-# dashu est en mode Test, l'adresse doit aussi figurer dans ses utilisateurs
-# tests (README, « Comptes et connexion »).
+# connexion Google, ou par « mot-de-passe ». Le projet Google de dashu est
+# publié : rien à faire côté Google (README, « Comptes et connexion »).
 #
 # Retirer une adresse garde les données du compte dans la base. L'adresse de
 # l'API (API_USER_EMAIL) ne se retire pas : dashu ne démarrerait plus. La
@@ -159,8 +158,7 @@ case "${1:-}" in
     base="$(value BASE_URL)"
     echo "$email est autorisée, dashu a redémarré."
     echo "Son compte se crée à sa première connexion :"
-    echo "  - par Google, sur ${base:-https://app.dashu.dev} : d'abord ajouter l'adresse aux"
-    echo "    utilisateurs tests du projet Google de dashu (Google Auth Platform > Audience) ;"
+    echo "  - par Google, sur ${base:-https://app.dashu.dev} ;"
     echo "  - ou par mot de passe : dashu-compte mot-de-passe $email"
     ;;
 

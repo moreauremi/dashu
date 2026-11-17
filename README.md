@@ -138,7 +138,7 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 dashu-compte ajouter quelqu.un@gmail.com
 ```
 
-Il autorise l'adresse, redémarre dashu et rappelle les deux façons de créer le compte. Par Google : tant que le projet Google de dashu est en mode Test, ajouter aussi l'adresse dans **Google Auth Platform > Audience > Utilisateurs tests**. Par mot de passe, que tu tapes et transmets (la personne le change ensuite dans Réglages) :
+Il autorise l'adresse, redémarre dashu et rappelle les deux façons de créer le compte. Par Google : le projet Google de dashu est publié (en production depuis le 17 novembre 2026), rien à faire côté Google ; un projet resté en mode Test demanderait d'ajouter aussi l'adresse dans **Google Auth Platform > Audience > Utilisateurs tests**. Par mot de passe, que tu tapes et transmets (la personne le change ensuite dans Réglages) :
 
 ```bash
 dashu-compte mot-de-passe quelqu.un@gmail.com
@@ -159,7 +159,7 @@ Quand le direct n'est pas possible (coupure de plus d'une minute, redémarrage d
 Gratuit, à faire une fois dans la [Google Cloud Console](https://console.cloud.google.com/).
 
 1. Créer un projet (par exemple « dashu »).
-2. Menu **Google Auth Platform** (ou **API et services > Écran de consentement OAuth**) : nom de l'application, adresse d'assistance, audience **Externe**. L'application peut rester en mode **Test** : dashu ne demande que l'identité, aucune vérification par Google n'est nécessaire. En mode Test, seules les adresses listées dans **Audience > Utilisateurs tests** peuvent passer l'écran de Google : y mettre ton adresse, et une seconde adresse Google absente de `ALLOWED_EMAILS` pour vérifier que dashu la refuse.
+2. Menu **Google Auth Platform** (ou **API et services > Écran de consentement OAuth**) : nom de l'application, adresse d'assistance, audience **Externe**. En mode **Test**, seules les adresses listées dans **Audience > Utilisateurs tests** passent l'écran de Google : y mettre ton adresse, et une seconde adresse Google absente de `ALLOWED_EMAILS` pour vérifier que dashu la refuse. Pour t'en passer, **Audience > Publier l'application** : dashu ne demande que l'identité, la publication est donc immédiate, sans vérification par Google (sans logo dans **Image de marque**, sinon Google vérifie d'abord la marque). Publiée, l'application laisse passer n'importe quel compte Google jusqu'à dashu, qui refuse toujours les adresses absentes de `ALLOWED_EMAILS`. C'est le cas de app.dashu.dev depuis le 17 novembre 2026.
 3. **Clients > Créer un client**, type **Application Web**. Dans **URI de redirection autorisés**, ajouter exactement :
    - `https://app.dashu.dev/auth/google/callback`
    - `http://localhost:3000/auth/google/callback` (pour tester en local)
