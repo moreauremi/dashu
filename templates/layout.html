@@ -17,7 +17,8 @@
 {% endif %}
 {#- #app porte tout ce qui dépend de la session. htmx (hx-boost) remplace le
     contenu de <body> à chaque navigation, donc ces attributs suivent :
-      data-accent  couleur de l'espace actif
+      data-accent  couleur de l'espace actif ; « neutral » dans Réglages,
+                   communs à tous les espaces (texte : blanc ou noir)
       data-theme   thème choisi (recopié sur <html> par app.js)
       hx-headers   jeton CSRF joint à toutes les requêtes htmx
       hx-swap      les changements de page passent par une View Transition
@@ -25,7 +26,7 @@
                    les fragments (widgets, recherche…) gardent leur propre hx-swap -#}
 {#- data-size : taille de l'interface (zoom de toute l'app) ; data-sidebar :
     barre latérale détachée, cachée à gauche (voir .sidebar-edge). -#}
-<div id="app" class="app" data-accent="{{ shell.active.color }}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}","X-Espace":"{{ shell.active.slug }}"}'>
+<div id="app" class="app" data-accent="{% if shell.is_settings() %}neutral{% else %}{{ shell.active.color }}{% endif %}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}","X-Espace":"{{ shell.active.slug }}"}'>
   <a class="skip-link" href="#main">Aller au contenu</a>
 
   <header class="topbar">
@@ -36,6 +37,9 @@
   {#- L'« île » : sélecteur d'espace flottant en haut de l'écran. L'espace actif
       s'élargit et affiche son nom ; les autres ne montrent que leur icône.
       On change aussi d'espace en balayant de côté (app.js, « Balayage »). -#}
+  {#- Pas d'île dans Réglages : ils valent pour tous les espaces. Sans île,
+      le balayage entre espaces est coupé aussi (app.js, swipeAllowed). -#}
+  {% if !shell.is_settings() %}
   <div class="island" role="group" aria-label="Espace actif" data-island>
     {% for space in shell.spaces %}
     <form method="post" action="/space">
@@ -48,6 +52,7 @@
     </form>
     {% endfor %}
   </div>
+  {% endif %}
 
   {#- Barre détachée : survoler ce liseré, au bord gauche de l'écran, la fait
       glisser par-dessus la page (comme le mode compact du navigateur Zen). -#}
