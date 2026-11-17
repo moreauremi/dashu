@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Captures · Hermes Dashboard</title>
+<meta name="description" content="Captures d'écran de Hermes Dashboard sur ordinateur et sur iPhone : dashboard, agenda, notes écrites à plusieurs en direct, espaces partagés, fichiers et outils de conversion.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="Captures · Hermes Dashboard">
+<meta property="og:description" content="L'application telle qu'elle tourne, sur ordinateur et sur iPhone.">
+<link rel="icon" href="favicon.svg?v=hermes" type="image/svg+xml">
+<link rel="preload" href="fonts/rethink-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  <symbol id="image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+</svg>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <a class="wordmark" href="./" aria-label="Hermes Dashboard, accueil"><svg class="logo logo-anim" viewBox="127 54 972 186" aria-hidden="true"><use href="logo.svg#h"/><use class="logo-ermes" href="logo.svg#ermes"/><use class="logo-slash" href="logo.svg#slash"/></svg></a>
+    <nav class="nav" aria-label="Navigation principale">
+      <a class="link" href="./#fonctions">Fonctionnalités</a>
+      <a class="link shots" href="captures.html" aria-current="page" aria-label="Captures d'écran"><svg class="i" aria-hidden="true"><use href="#image"/></svg><span class="link-label">Captures</span></a>
+      <a class="link" href="./#feuille-de-route">Feuille de route</a>
+      <a class="link" href="./#installer">Installer</a>
+      <a class="link gh" href="https://github.com/moreauremi/dashu" aria-label="Code source sur GitHub"><svg class="i" aria-hidden="true"><use href="#gh"/></svg><span class="link-label">GitHub</span></a>
+      <a class="btn btn-primary" href="https://app.dashu.dev">Ouvrir l'app</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="wrap hero hero-small">
+    <p class="eyebrow">Captures · instance de démonstration</p>
+    <h1>L'application, telle qu'elle tourne</h1>
+    <p class="lead">Dix captures de la vraie application, sur ordinateur et sur iPhone, prises le 17 novembre 2026. Les données sont fictives : Alex, en BTS, et Léa, avec qui il partage un espace. Un clic ouvre une capture en grand.</p>
+  </section>
+
+  <section class="block" id="quotidien">
+    <div class="wrap">
+      <p class="kicker">Au quotidien</p>
+      <h2>Un espace, et tout suit</h2>
+      <p class="intro">Chaque espace a son dashboard, son agenda et ses notes. Ici, l'espace École d'Alex, un mardi matin.</p>
+      <div class="caps">
+        <figure class="cap" id="dashboard">
+          <a href="captures/dashboard.webp"><img src="captures/dashboard.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Dashboard de l'espace École : calendrier sur trois jours, prochain cours, tâches du jour, notes et fichiers récents, en thème sombre."></a>
+          <figcaption><h3>Dashboard</h3><p>L'emploi du temps sur trois jours, avec le cours en cours, les tâches du jour, la note épinglée et les fichiers récents. Chaque widget se déplace et s'agrandit.</p></figcaption>
+        </figure>
+        <figure class="cap" id="agenda">
+          <a href="captures/agenda.webp"><img src="captures/agenda.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Agenda en vue semaine, du lundi 16 au vendredi 20 novembre, avec les cours de BTS et leurs salles."></a>
+          <figcaption><h3>Agenda</h3><p>L'emploi du temps Pronote en vue semaine, importé par son lien iCal et resynchronisé toutes les heures.</p></figcaption>
+        </figure>
+        <figure class="cap" id="barre-de-commandes">
+          <a href="captures/barre-de-commandes.webp"><img src="captures/barre-de-commandes.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Barre de commandes ouverte sur le dashboard, avec la commande /open vlan et deux résultats : une note et un PDF."></a>
+          <figcaption><h3>Barre de commandes</h3><p>« / » ouvre la barre de commandes : <code>/open vlan</code> trouve la note du cours et le PDF du même nom, sans quitter le clavier.</p></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+  <section class="block">
+    <div class="wrap">
+      <p class="kicker">À plusieurs</p>
+      <h2>Un espace partagé, une note écrite à deux</h2>
+      <p class="intro">Alex partage l'espace « Projet BTS » avec Léa. Les notes, les fichiers, les dossiers et les tâches y sont communs ; l'agenda reste à chacun.</p>
+      <div class="caps">
+        <figure class="cap" id="notes-a-plusieurs">
+          <a href="captures/notes-a-plusieurs.webp"><img src="captures/notes-a-plusieurs.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Éditeur de notes en thème clair : la note « Cahier des charges : PrêtMat », avec le curseur rose de Léa à la fin d'une ligne qu'elle vient d'écrire."></a>
+          <figcaption><h3>Une note, deux personnes, en direct</h3><p>Vue par Alex pendant que Léa écrit : son texte arrive au fil de la frappe, avec son curseur et son prénom, et son avatar s'affiche en haut de la note. Ici en thème clair.</p></figcaption>
+        </figure>
+        <figure class="cap" id="membres">
+          <a href="captures/membres.webp"><img src="captures/membres.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Page Membres de l'espace Projet BTS : Alex propriétaire, Léa membre avec un bouton Retirer, et une invitation en attente pour Sam."></a>
+          <figcaption><h3>Membres de l'espace</h3><p>Le propriétaire invite par adresse e-mail ; l'invité accepte depuis ses réglages. Léa est membre, Sam n'a pas encore répondu.</p></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+  <section class="block">
+    <div class="wrap">
+      <p class="kicker">Fichiers et outils</p>
+      <h2>Ranger, partager, convertir</h2>
+      <p class="intro">Des dossiers pour les fichiers comme pour les notes, un aperçu, un lien qui expire, et des conversions qui tournent à part.</p>
+      <div class="caps">
+        <figure class="cap" id="fichiers">
+          <a href="captures/fichiers.webp"><img src="captures/fichiers.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Onglet Fichiers, dossier Réseaux : un sous-dossier TP, deux notes, une image avec sa vignette et un PDF."></a>
+          <figcaption><h3>Dossiers</h3><p>Le dossier Réseaux de l'espace École : un sous-dossier, des notes et des fichiers côte à côte, avec leur vignette. L'icône de lien signale un fichier partagé.</p></figcaption>
+        </figure>
+        <figure class="cap" id="apercu-partage">
+          <a href="captures/apercu-partage.webp"><img src="captures/apercu-partage.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Aperçu de l'image schema-reseau.png, un schéma de réseau avec trois VLAN, et la rangée d'actions au-dessus."></a>
+          <figcaption><h3>Aperçu</h3><p>L'aperçu d'une image, et ce qu'on peut en faire : télécharger, renommer, partager par un lien qui expire, ranger ailleurs, convertir.</p></figcaption>
+        </figure>
+        <figure class="cap" id="outils">
+          <a href="captures/outils.webp"><img src="captures/outils.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Onglet Outils avec une image déposée et son menu Convertir ouvert : Compresser, En JPEG, En WebP."></a>
+          <figcaption><h3>Outils</h3><p>Un fichier déposé dans Outils y reste 24 heures, le temps de le compresser ou de le convertir, puis de le garder dans un espace ou de le télécharger.</p></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+  <section class="block">
+    <div class="wrap">
+      <p class="kicker">Sur iPhone</p>
+      <h2>Comme une app</h2>
+      <p class="intro">Installée sur l'écran d'accueil : l'île des espaces en haut, quatre raccourcis en bas, et l'éditeur de notes au doigt.</p>
+      <div class="phones">
+        <figure class="cap" id="iphone-dashboard">
+          <a href="captures/iphone-dashboard.webp"><img src="captures/iphone-dashboard.webp" width="390" height="844" loading="lazy" decoding="async" alt="Dashboard sur iPhone en thème sombre, avec l'île des espaces en haut et la barre de raccourcis en bas."></a>
+          <figcaption><h3>Dashboard</h3><p>Thème sombre, l'agenda en colonnes et les prochains cours.</p></figcaption>
+        </figure>
+        <figure class="cap" id="iphone-note">
+          <a href="captures/iphone-note.webp"><img src="captures/iphone-note.webp" width="390" height="844" loading="lazy" decoding="async" alt="Note « Cours réseau : VLAN » sur iPhone en thème clair, avec ses tags et un bloc de configuration Cisco."></a>
+          <figcaption><h3>Note de cours</h3><p>La note sur les VLAN, en thème clair.</p></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Hermes Dashboard (nom de code dashu) · open source, en développement</span>
+    <span><a href="https://github.com/moreauremi/dashu">GitHub</a> · <a href="https://app.dashu.dev">app.dashu.dev</a></span>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>
