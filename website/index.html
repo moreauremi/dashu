@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hermes Dashboard · tableau de bord, notes, fichiers et emploi du temps auto-hébergés</title>
-<meta name="description" content="Hermes Dashboard réunit un tableau de bord modulaire, des notes Markdown, des fichiers et l'emploi du temps Pronote, rangés par espaces (Perso, École, Entreprise…). Open source, un seul binaire Rust, hébergé chez soi.">
+<meta name="description" content="Hermes Dashboard réunit un tableau de bord modulaire, des notes Markdown, des fichiers et l'emploi du temps Pronote, rangés par espaces (Perso, École, Entreprise…), seul ou à plusieurs. Open source, un seul binaire Rust, hébergé chez soi.">
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="Hermes Dashboard">
 <meta property="og:description" content="Dashboard modulaire, notes Markdown, fichiers et emploi du temps, rangés par espaces. Open source et auto-hébergé.">
@@ -203,7 +203,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
   <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
   <symbol id="note" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
   <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
-  <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M2 13v3M22 13v3"/></symbol>
   <symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
   <symbol id="phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
@@ -231,7 +231,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
   <section class="wrap hero">
     <p class="eyebrow">Open source · auto-hébergé · v2 en cours</p>
     <h1>École, entreprise, perso <span class="spaces">Chacun son tableau de bord</span></h1>
-    <p class="lead">Hermes Dashboard range l'emploi du temps Pronote, les tâches, les notes et les fichiers par espace : École, Entreprise, Perso, ou ceux qu'on crée, avec des dossiers à l'intérieur. Une seule connexion, un seul binaire Rust, hébergé à la maison.</p>
+    <p class="lead">Hermes Dashboard range l'emploi du temps Pronote, les tâches, les notes et les fichiers par espace : École, Entreprise, Perso, ou ceux qu'on crée, avec des dossiers à l'intérieur. Seul ou à plusieurs : un espace se partage sur invitation, et une note s'écrit à deux en direct. Un seul binaire Rust, hébergé à la maison.</p>
     <div class="cta">
       <a class="btn btn-primary btn-lg" href="https://app.dashu.dev">Ouvrir l'app <svg class="i" aria-hidden="true"><use href="#arrow"/></svg></a>
       <a class="btn btn-lg" href="https://github.com/moreauremi/dashu"><svg class="i" aria-hidden="true"><use href="#gh"/></svg>Voir le code sur GitHub</a>
@@ -329,7 +329,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
           <h3>Notes façon Notion</h3>
-          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte.</p>
+          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte. À plusieurs, comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
@@ -347,9 +347,9 @@ footer a{color:var(--text-2);text-underline-offset:3px}
           <p>«&nbsp;/&nbsp;» ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace, sans quitter le clavier. Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée, profil avec photo.</p>
         </li>
         <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#lock"/></svg></div>
-          <h3>Une seule connexion</h3>
-          <p>Mot de passe ou Google sur le même compte. Pas d'inscription publique : seuls les emails autorisés entrent.</p>
+          <div class="ic"><svg class="i" aria-hidden="true"><use href="#users"/></svg></div>
+          <h3>Seul ou à plusieurs</h3>
+          <p>Chacun son compte, par mot de passe ou Google ; pas d'inscription publique, seuls les emails autorisés entrent. Un espace se partage sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
         </li>
         <li class="feat">
           <div class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></div>
@@ -364,7 +364,7 @@ footer a{color:var(--text-2);text-underline-offset:3px}
     <div class="wrap">
       <p class="kicker">Sous le capot</p>
       <h2>Léger, rapide, et rien à exposer</h2>
-      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité. La base est un fichier SQLite, sauvegardée à chaud chaque nuit sur un second disque, et les fichiers sont copiés chaque nuit sur l'autre : chaque donnée existe sur deux disques. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
+      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité, et une WebSocket relaie l'écriture à plusieurs. La base est un fichier SQLite, sauvegardée à chaud chaque nuit sur un second disque, et les fichiers sont copiés chaque nuit sur l'autre : chaque donnée existe sur deux disques. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
       <div class="facts">
         <div class="fact"><strong>1</strong><span>binaire Rust : l'application et son service de conversion</span></div>
         <div class="fact"><strong>0,5 ms</strong><span>de temps de réponse du serveur</span></div>
@@ -396,6 +396,8 @@ footer a{color:var(--text-2);text-underline-offset:3px}
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Images collées et liens vers les fichiers dans les notes</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Widget Fichiers sur le dashboard</span></li>
             <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Renommer un fichier</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Espaces partagés entre comptes, sur invitation</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Notes écrites à plusieurs en direct, avec le curseur de chacun</span></li>
             <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Les fichiers dans l'API de l'assistant</span></li>
           </ul>
         </div>
