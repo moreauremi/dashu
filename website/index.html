@@ -58,12 +58,15 @@
       </div>
     </div>
     <figure class="horizon">
-      <img class="vue" src="horizon/01.webp" width="1600" height="800" fetchpriority="high" alt="La Terre vue depuis l'orbite : le bord de la planète dessine une courbe. D'autres vues suivent toutes les 400 ms (aurores, lever de soleil, nuages, lumières des villes), avec la courbe toujours au même endroit.">
+      <video muted loop playsinline preload="none" poster="horizon/attente.webp" width="1600" height="800" aria-label="La Terre filmée depuis la Station spatiale internationale : aurores, désert, océan, nuit, ouragan. Les plans changent toutes les 0,8 s ; le bord de la planète reste toujours sur la même courbe.">
+        <source src="horizon/horizon.webm" type="video/webm">
+        <source src="horizon/horizon.mp4" type="video/mp4">
+      </video>
       <button class="pause" type="button" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#pause"/></svg><span>Pause</span></button>
     </figure>
   </section>
   <div class="wrap">
-    <p class="credit">Photos : NASA, prises depuis la Station spatiale internationale et la navette (domaine public, <a href="https://images.nasa.gov">images.nasa.gov</a>).</p>
+    <p class="credit">Images : NASA, filmées depuis la Station spatiale internationale (domaine public, <a href="https://images.nasa.gov">images.nasa.gov</a>).</p>
   </div>
 
   <section class="block nouveautes" aria-labelledby="titre-nouveautes">
