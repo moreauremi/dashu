@@ -58,9 +58,11 @@ async fn creer_puis_modifier_un_espace() {
     assert_eq!(created.location(), "/settings#espaces");
     let page = alice.follow(created).await;
     assert!(page.body.contains("Espace « Vie de famille » créé"));
-    // Il devient l'espace actif, et l'île le montre avec sa couleur et son icône.
-    assert!(page.body.contains("class=\"app\" data-accent=\"violet\""));
-    assert!(page.body.contains("#heart\""));
+    // Il devient l'espace actif, et l'île le montre avec sa couleur et son
+    // icône (sur le dashboard : Réglages, communs à tous, ont un accent neutre).
+    let home = alice.get("/").await;
+    assert!(home.body.contains("class=\"app\" data-accent=\"violet\""));
+    assert!(home.body.contains("#heart\""));
     assert_eq!(
         spaces_of(&app, ALICE).await.last().unwrap(),
         &row("vie-de-famille", "Vie de famille", "violet", "heart")
@@ -198,7 +200,8 @@ async fn supprimer_un_espace_en_transferant_son_contenu() {
             .contains("son contenu est maintenant dans « École »")
     );
     // École reçoit tout et devient l'espace actif ; le fichier reste sur le disque.
-    assert!(page.body.contains("class=\"app\" data-accent=\"blue\""));
+    let home = alice.get("/").await;
+    assert!(home.body.contains("class=\"app\" data-accent=\"blue\""));
     let slugs: Vec<String> = spaces_of(&app, ALICE)
         .await
         .into_iter()
@@ -249,7 +252,8 @@ async fn supprimer_un_espace_avec_son_contenu() {
             .contains("Espace « Taff » supprimé avec son contenu")
     );
     // L'espace actif a disparu : retour au premier.
-    assert!(page.body.contains("class=\"app\" data-accent=\"orange\""));
+    let home = alice.get("/").await;
+    assert!(home.body.contains("class=\"app\" data-accent=\"orange\""));
     assert!(app.stored_files().is_empty(), "le fichier quitte le disque");
     for table in ["notes", "tasks", "files"] {
         assert_eq!(count_in(&app, table, taff).await, 0, "{table}");

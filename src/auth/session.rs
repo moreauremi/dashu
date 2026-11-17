@@ -153,9 +153,22 @@ pub struct Shell {
     pub jobs_tools: bool,
 }
 
+impl Shell {
+    /// Page de Réglages : les réglages sont communs à tous les espaces, donc
+    /// pas d'île pour changer d'espace (ni de balayage, que l'île porte), et
+    /// un accent neutre (le texte : blanc ou noir selon le thème) au lieu de
+    /// la couleur de l'espace actif.
+    pub fn is_settings(&self) -> bool {
+        self.nav == "settings"
+    }
+}
+
 impl Ctx {
     /// Prépare l'habillage d'une page entière. Consomme le message flash en
     /// attente : à n'appeler que pour une page, pas pour un fragment.
+    /// Construit le gabarit commun des pages. `nav` : l'entrée de la barre
+    /// latérale mise en avant (`"settings"` pour toutes les pages de Réglages,
+    /// voir [`Shell::is_settings`]).
     pub async fn shell(&self, nav: &'static str) -> AppResult<Shell> {
         let flash = self.session.remove::<Flash>(FLASH).await?;
         Ok(Shell {

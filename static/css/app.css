@@ -99,6 +99,9 @@
 [data-accent="violet"] { --accent: var(--violet); }
 [data-accent="rose"] { --accent: var(--rose); }
 [data-accent="teal"] { --accent: var(--teal); }
+/* Réglages, communs à tous les espaces : l'accent est le texte lui-même,
+   noir en thème clair, blanc en thème sombre (--on-accent suit à l'inverse). */
+[data-accent="neutral"] { --accent: var(--text); }
 
 /* Jetons dérivés de l'accent. Ils sont redéclarés sur chaque élément qui change
    d'accent : une variable qui en cite une autre est figée là où elle est écrite. */
