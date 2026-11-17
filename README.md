@@ -30,6 +30,8 @@ Le détail, critère par critère, est dans [STATUS.md](https://github.com/morea
 
 ## Ce que ça fait
 
+Des captures de l'application, sur ordinateur et sur iPhone, sont sur [dashu.dev/captures.html](https://dashu.dev/captures.html) (données fictives).
+
 | Module | Contenu |
 | --- | --- |
 | Espaces | Le contenu est rangé par espaces (par exemple Perso, École, Entreprise), chacun avec sa couleur et son icône, jusqu'à 8 en tout. On passe de l'un à l'autre en un clic, ou par balayage sur téléphone. Perso sert de vue d'ensemble : son dashboard, ses notes et son agenda réunissent ceux de tous les espaces, et il ne se supprime pas. Un espace s'archive (fin d'année, fin de stage) et se restaure. Avant de supprimer un autre espace, l'application montre ce qu'il contient et propose de tout transférer ailleurs. |

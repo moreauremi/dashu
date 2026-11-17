@@ -1,0 +1,198 @@
+/* dashu.dev : page d'accueil (index.html) et captures (captures.html). Mêmes jetons que l'application (static/css/app.css) :
+   une couleur = light-dark(clair, sombre), un accent par espace. Aucune ressource externe. */
+@font-face{font-family:"Rethink Sans";src:url(fonts/rethink-sans.woff2) format("woff2");font-weight:400 800;font-display:swap}
+:root{
+  color-scheme:light dark;
+  --bg:light-dark(#f6f6f3,#0f0f0e);
+  --surface:light-dark(#ffffff,#181817);
+  --surface-2:light-dark(#eeeeea,#232321);
+  --border:light-dark(#e2e2dd,#2c2c29);
+  --border-strong:light-dark(#c9c9c3,#42423e);
+  --text:light-dark(#141413,#edede9);
+  --text-2:light-dark(#4b4b46,#b5b5ae);
+  --text-3:light-dark(#6a6a64,#8f8f88);
+  --orange:light-dark(#b04a0c,#f2935c);
+  --blue:light-dark(#1e56c4,#7daaf8);
+  --green:light-dark(#126b40,#5fcb99);
+  --violet:light-dark(#6d3fc0,#b69cf6);
+  --rose:light-dark(#b0245e,#f28cb6);
+  --on-text:light-dark(#ffffff,#10100f);
+  --font:"Rethink Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --gutter:16px;
+}
+@media (min-width:760px){:root{--gutter:32px}}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ul,ol{margin:0}
+ul{padding:0;list-style:none}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:max(var(--gutter),env(safe-area-inset-left,0px))}
+
+/* Boutons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:500 15px/1 var(--font);text-decoration:none;white-space:nowrap;transition:background-color 120ms var(--ease),border-color 120ms var(--ease)}
+.btn:hover{border-color:var(--border-strong)}
+.btn-primary{background:var(--text);border-color:var(--text);color:var(--on-text)}
+.btn-primary:hover{background:color-mix(in oklab,var(--text) 85%,var(--bg));border-color:transparent}
+.btn-lg{height:44px;padding:0 20px}
+
+/* Barre */
+.bar{position:sticky;top:0;z-index:10;background:color-mix(in oklab,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.bar-in{height:60px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+/* Logo Hermes (logo.svg, le même que dans l'application) : couleur du texte,
+   --logo-h fixe la hauteur, la largeur suit le viewBox (972 × 186). */
+.logo{--logo-h:20px;display:block;width:calc(var(--logo-h)*972/186);height:var(--logo-h);fill:currentColor;fill-rule:evenodd}
+.wordmark{display:flex;align-items:center;color:var(--text);text-decoration:none}
+/* Logo de l'en-tête. Au chargement, il se déplie une fois de l'icône H/ au mot
+   Hermes/. Dès qu'on fait défiler la page, il se replie en H/ : « ermes »
+   s'efface puis la barre rejoint le H (classe .compact, posée par le script en
+   bas de page). Revenu en haut, il se déplie dans l'autre sens. */
+.bar .logo-slash{transition:transform .8s cubic-bezier(.7,0,.2,1)}
+.bar .logo-ermes{transition:opacity .45s cubic-bezier(.7,0,.2,1) .5s}
+.bar.compact .logo-slash{transform:translateX(-728px);transition-delay:.2s}
+.bar.compact .logo-ermes{opacity:0;transition-delay:0s}
+.logo-anim .logo-slash{animation:logo-slash 1s cubic-bezier(.7,0,.2,1) .3s backwards}
+.logo-anim .logo-ermes{animation:logo-ermes .6s ease-out .8s backwards}
+@keyframes logo-slash{from{transform:translateX(-728px)}}
+@keyframes logo-ermes{from{opacity:0}}
+.nav{display:flex;align-items:center;gap:4px}
+.nav a.link{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--text-2);font-size:15px}
+.nav a.link:hover{color:var(--text);background:var(--surface-2)}
+/* Sur téléphone : seuls GitHub et Captures restent, en icône sous 520 px. */
+@media (max-width:719px){.nav .link:not(.gh):not(.shots){display:none}}
+@media (max-width:519px){.link-label{display:none}}
+
+/* Hero */
+.hero{padding-block:72px 40px}
+.eyebrow{font-size:14px;color:var(--text-3)}
+h1{margin-top:16px;max-width:24ch;font-size:clamp(40px,7vw,72px);line-height:1.02;letter-spacing:-.035em;font-weight:500;text-wrap:balance}
+h1 .spaces{display:block;color:var(--text-3)}
+.lead{margin-top:24px;max-width:600px;font-size:clamp(17px,2vw,19px);color:var(--text-2)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+
+/* Aperçu de l'application (données d'exemple, dessiné en HTML) */
+.shot{margin-top:56px;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:0 1px 0 var(--border),0 24px 60px -32px color-mix(in oklab,var(--text) 35%,transparent);overflow:hidden}
+.shot-bar{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.shot-bar span{width:10px;height:10px;border-radius:50%;background:var(--border-strong)}
+.shot-bar em{margin-left:12px;font:400 12px/1 var(--mono);font-style:normal;color:var(--text-3)}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:440px}
+.side{border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.side .logo{--logo-h:14px;margin:4px 8px 14px}
+.side svg.i{width:16px;height:16px;color:var(--text-3)}
+.side .sp,.side .nv{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+.side .sp i{width:8px;height:8px;border-radius:50%}
+.side .sp.on{background:color-mix(in oklab,var(--blue) 13%,var(--surface));color:var(--blue);font-weight:500}
+.side hr{border:0;border-top:1px solid var(--border);margin:10px 4px}
+.side .nv.on{background:var(--surface-2);color:var(--text);font-weight:500}
+.side .nv.on svg.i{color:var(--text)}
+.side .foot{margin-top:auto;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.side .me{display:flex;align-items:center;gap:10px;height:40px;padding:0 8px;color:var(--text)}
+/* Photo de profil par défaut : les initiales sur une couleur tirée au hasard. */
+.av{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--violet);color:var(--on-text);font-size:11px;font-weight:600;letter-spacing:.02em}
+.main{padding:24px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.main-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.main-head h3{font-size:22px;font-weight:500;letter-spacing:-.01em}
+.main-head p{font-size:14px;color:var(--text-3)}
+.edit{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-2);white-space:nowrap}
+.edit svg.i{width:14px;height:14px}
+/* Grille bento, comme le dashboard de l'app : 4 colonnes, 2 sur téléphone. */
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:156px;gap:14px}
+.w{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface);font-size:14px}
+.w.wide{grid-column:span 2}
+.w.tall{grid-row:span 2}
+.w h4{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--text-2)}
+.row{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--border);min-width:0}
+.row:first-of-type{border-top:0}
+.row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;color:var(--text-3);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.box{flex:none;width:16px;height:16px;margin-top:2px;border:1.5px solid var(--border-strong);border-radius:4px}
+.box.done{background:var(--blue);border-color:var(--blue)}
+.row.done span{color:var(--text-3);text-decoration:line-through}
+.thumb{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:6px;background:var(--surface-2);color:var(--text-3);font:600 9px/1 var(--font);letter-spacing:.03em}
+.thumb.photo{background:linear-gradient(135deg,color-mix(in oklab,var(--blue) 45%,var(--surface)),color-mix(in oklab,var(--green) 40%,var(--surface)))}
+/* Widget Calendrier : trois jours de 8 h à 12 h 30, une ligne par demi-heure. */
+.cal{flex:1;min-height:0;display:grid;grid-template-columns:30px repeat(3,minmax(0,1fr));grid-template-rows:20px repeat(9,minmax(0,1fr));column-gap:4px;font-size:11px}
+.cal .d{grid-row:1;text-align:center;font-size:12px;color:var(--text-3)}
+.cal .d.today{color:var(--text);font-weight:600}
+.cal .hr{grid-column:1;align-self:start;transform:translateY(-50%);color:var(--text-3);font-variant-numeric:tabular-nums}
+.cal .ln{grid-column:2/-1;align-self:start;border-top:1px solid var(--border)}
+.ev{margin:1px 0;min-height:0;overflow:hidden;padding:3px 6px;border-radius:6px;border-left:3px solid var(--c);background:color-mix(in oklab,var(--c) 14%,var(--surface));line-height:1.25;font-size:11.5px;hyphens:auto;overflow-wrap:anywhere}
+.ev small{display:block;color:var(--text-3);font-size:10.5px}
+.cal .now{grid-column:2;grid-row:2;align-self:center;z-index:1;height:2px;border-radius:1px;background:var(--rose)}
+.shot-cap{margin-top:12px;font-size:13px;color:var(--text-3)}
+@media (max-width:899px){.bento{grid-template-columns:1fr 1fr}}
+@media (max-width:719px){.app{grid-template-columns:1fr}.side{display:none}.main{padding:16px}.main-head h3{font-size:19px}.bento{grid-auto-rows:150px;gap:12px}}
+
+/* Sections */
+section.block{padding-block:72px;border-top:1px solid var(--border)}
+.kicker{font-size:14px;color:var(--text-3);margin-bottom:12px}
+h2{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.025em;font-weight:500;max-width:22ch;text-wrap:balance}
+.intro{margin-top:16px;max-width:620px;color:var(--text-2)}
+.grid{margin-top:48px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px 32px}
+@media (max-width:899px){.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:599px){.grid{grid-template-columns:1fr;gap:32px}}
+.feat{padding-top:20px;border-top:1px solid var(--border)}
+.feat .ic{display:flex;margin-bottom:12px;color:var(--text-3)}
+.feat h3{font-size:17px;font-weight:500;margin-bottom:8px}
+.feat p{font-size:15px;color:var(--text-2)}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:13px;background:var(--surface-2);color:var(--text-2)}
+.tag i{width:7px;height:7px;border-radius:50%}
+
+.facts{margin-top:40px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.fact{padding:20px;border-left:1px solid var(--border)}
+.fact:first-child{border-left:0}
+.fact strong{display:block;font-size:28px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.fact span{font-size:14px;color:var(--text-2)}
+@media (max-width:899px){.facts{grid-template-columns:1fr 1fr}.fact:nth-child(3){border-left:0}.fact:nth-child(n+3){border-top:1px solid var(--border)}}
+.stack{margin-top:16px;font-size:14px;color:var(--text-3)}
+
+.road{margin-top:40px;display:grid;gap:0;border-left:1px solid var(--border-strong);margin-left:6px}
+.step{position:relative;padding:0 0 28px 28px}
+.step:last-child{padding-bottom:0}
+.step::before{content:"";position:absolute;left:-7px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--bg);border:2px solid var(--border-strong)}
+.step.done::before{background:var(--green);border-color:var(--green)}
+.step.now::before{border-color:var(--green);box-shadow:0 0 0 4px color-mix(in oklab,var(--green) 22%,transparent)}
+.step h3{font-size:17px;font-weight:500}
+.step h3 small{font-size:13px;font-weight:400;color:var(--text-3);margin-left:8px}
+.step.now h3 small{color:var(--green)}
+.step p{font-size:15px;color:var(--text-2);margin-top:2px}
+/* Avancement de la version en cours : coché = en service sur le serveur. */
+.todo{margin-top:10px;display:grid;gap:6px;font-size:15px;color:var(--text-3)}
+.todo li{display:flex;gap:10px;align-items:flex-start}
+.todo svg.i{width:16px;height:16px;margin-top:4px}
+.todo li.ok{color:var(--text)}
+.todo li.ok svg.i{color:var(--green)}
+
+pre{margin:32px 0 0;padding:20px;border-radius:12px;background:var(--surface);border:1px solid var(--border);overflow-x:auto;font:400 14px/1.7 var(--mono)}
+pre .c{color:var(--text-3)}
+.after{margin-top:16px;color:var(--text-2);max-width:620px}
+.after a{text-underline-offset:3px}
+
+.final{padding-block:80px;border-top:1px solid var(--border);text-align:center}
+.final h2{margin-inline:auto}
+.final .cta{justify-content:center}
+footer{border-top:1px solid var(--border);padding-block:28px;font-size:14px;color:var(--text-3)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+footer a{color:var(--text-2);text-underline-offset:3px}
+/* Page des captures (captures.html) */
+.nav a.link[aria-current="page"]{color:var(--text);background:var(--surface-2)}
+.shot-cap a{color:var(--text-2);text-underline-offset:3px}
+.hero-small{padding-block:56px 8px}
+.hero-small h1{font-size:clamp(36px,6vw,56px)}
+.caps{margin-top:40px;display:grid;gap:56px}
+.cap{margin:0}
+.cap a{display:block;border-radius:14px}
+.cap img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 1px 0 var(--border),0 24px 60px -32px color-mix(in oklab,var(--text) 35%,transparent)}
+.cap figcaption{margin-top:16px;max-width:680px}
+.cap h3{font-size:17px;font-weight:500;margin-bottom:4px}
+.cap p{font-size:15px;color:var(--text-2)}
+.phones{margin-top:40px;display:grid;grid-template-columns:repeat(2,minmax(0,320px));gap:40px;justify-content:start}
+@media (max-width:599px){.phones{grid-template-columns:minmax(0,1fr)}.caps{gap:40px}}
+.phones .cap img{border-radius:28px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.logo use{animation:none!important;transition:none!important}}
