@@ -40,9 +40,11 @@ $endif$
 )
 
 // A4, numéro de page en bas à droite, seulement s'il y a plusieurs pages.
+// Les marges servent aussi à `titre-garde`, plus bas.
+#let marges = (x: 2.3cm, haut: 2.2cm, bas: 2.4cm)
 #set page(
   paper: "a4",
-  margin: (x: 2.3cm, top: 2.2cm, bottom: 2.4cm),
+  margin: (x: marges.x, top: marges.haut, bottom: marges.bas),
   footer: context {
     if counter(page).final().first() > 1 {
       set text(size: 8pt, fill: discret)
@@ -52,9 +54,12 @@ $endif$
   },
 )
 
+// Taille du texte : 10,5 pt, multipliée par le zoom choisi au
+// téléchargement d'une note (métadonnée « zoom », 0.8 à 1.5). Titres,
+// code et marges internes sont en em : tout suit.
 #set text(
   font: ("Inter", "DejaVu Sans"),
-  size: 10.5pt,
+  size: 10.5pt$if(zoom)$ * $zoom$$endif$,
   fill: encre,
   lang: "$if(lang)$$lang$$else$fr$endif$",
 $if(region)$
@@ -123,6 +128,35 @@ $endif$
   if it.body.func() == align { it.body.body } else { it.body }
   if it.caption != none { it.caption }
 })
+
+// Un titre ne reste pas seul en bas d'une page (option du PDF d'une note,
+// métadonnée « garder-titres ») : le filtre images.lua passe chaque titre,
+// ou suite de titres, et le bloc qui le suit à cette fonction.
+//   * Ensemble, ils tiennent sur une page : ils forment un bloc insécable,
+//     qui part en haut de la page suivante s'il ne tient pas dans celle-ci.
+//   * Le bloc est plus long qu'une page (il sera coupé de toute façon) : le
+//     titre part seulement s'il n'a pas la place de trois lignes sous lui.
+// Rien ne dépend de la position sur la page (pas de here()) : Typst décide
+// en une passe, quel que soit le nombre de titres. Typst 0.11, celui du
+// serveur, n'a pas encore les blocs « sticky », qui feraient la même chose.
+#let titre-garde(titre, suite) = context {
+  let largeur = 210mm - 2 * marges.x
+  let utile = 297mm - marges.haut - marges.bas
+  let hauteur(corps) = measure(block(width: largeur, corps)).height
+  // L'espace qu'il y aurait au-dessus du titre sans ce bloc.
+  let au-dessus = hauteur([x] + titre) - hauteur([x]) - hauteur(titre)
+  if hauteur(titre + suite) <= utile {
+    block(breakable: false, above: au-dessus, titre + suite)
+  } else {
+    // Une réserve invisible de la hauteur du titre et de trois lignes : si
+    // elle ne tient pas, elle passe à la page suivante et le titre la suit.
+    let reserve = hauteur(titre + [x \ x \ x])
+    block(breakable: false, above: au-dessus, below: 0pt, height: reserve)
+    v(-reserve - au-dessus)
+    titre
+    suite
+  }
+}
 
 // Notes de bas de page : un court filet, un texte plus petit.
 #set footnote.entry(separator: line(length: 30%, stroke: 0.6pt + filet))

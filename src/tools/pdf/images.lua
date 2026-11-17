@@ -68,3 +68,63 @@ function BulletList(list)
     pandoc.RawBlock("typst", "]"),
   }
 end
+
+-- Titres gardés avec leur texte (option du PDF d'une note, métadonnée
+-- « garder-titres ») : chaque titre, ou suite de titres, et le bloc qui le
+-- suit passent ensemble à la fonction `titre-garde` du gabarit, qui décide
+-- s'ils partent en haut de la page suivante.
+local function typst(code)
+  return pandoc.RawBlock("typst", code)
+end
+
+local function keep_headings(blocks)
+  local out, i = pandoc.Blocks({}), 1
+  while i <= #blocks do
+    if blocks[i].t ~= "Header" then
+      out:insert(blocks[i])
+      i = i + 1
+    else
+      local titres = pandoc.Blocks({})
+      while i <= #blocks and blocks[i].t == "Header" do
+        titres:insert(blocks[i])
+        i = i + 1
+      end
+      if i > #blocks then
+        -- Titre(s) en toute fin : rien à garder avec eux.
+        out:extend(titres)
+      else
+        out:insert(typst("#titre-garde["))
+        out:extend(titres)
+        out:insert(typst("]["))
+        out:insert(blocks[i])
+        out:insert(typst("]"))
+        i = i + 1
+      end
+    end
+  end
+  return out
+end
+
+-- Taille du texte (métadonnée « zoom ») : seulement les valeurs du
+-- formulaire, `ZOOMS` dans src/notes/export.rs (100 % n'est pas écrit). Le
+-- gabarit la place dans du code Typst ; une note qui porte son propre
+-- en-tête YAML (pandoc garde le dernier) ne peut pas y mettre autre chose.
+local ZOOMS = { ["0.80"] = true, ["0.90"] = true, ["1.10"] = true, ["1.25"] = true, ["1.50"] = true }
+
+local function note_options(doc)
+  if doc.meta.zoom ~= nil and not ZOOMS[pandoc.utils.stringify(doc.meta.zoom)] then
+    doc.meta.zoom = nil
+  end
+  if doc.meta["garder-titres"] then
+    doc.blocks = keep_headings(doc.blocks)
+  end
+  return doc
+end
+
+-- Les options d'abord, puis le reste, dans cet ordre : une liste de cases à
+-- cocher, remplacée ensuite par trois blocs, reste ainsi entière dans le
+-- bloc de son titre.
+return {
+  { Pandoc = note_options },
+  { Image = Image, Figure = Figure, BulletList = BulletList },
+}

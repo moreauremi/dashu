@@ -80,13 +80,26 @@ async fn l_editeur_propose_markdown_et_pdf() {
     let mut alice = app.logged_in(ALICE).await;
     let page = alice.get(&format!("/notes/{id}")).await.body;
     let menu = between(&page, r#"id="pm-note-download""#, "</div>").unwrap();
-    // Des liens ordinaires (hors htmx), repérés par app.js.
+    // Un lien ordinaire (hors htmx), repéré par app.js.
     assert!(menu.contains(&format!(
         r#"href="/notes/{id}/download.md" hx-boost="false" data-note-export>"#
     )));
-    assert!(menu.contains(&format!(
-        r#"href="/notes/{id}/download.pdf" hx-boost="false" data-note-export="pdf">"#
+    // « PDF… » ouvre ses options.
+    assert!(menu.contains(r#"popovertarget="pm-note-pdf">"#));
+    let options = between(&page, r#"id="pm-note-pdf""#, "</div>").unwrap();
+    assert!(options.contains(&format!(
+        r#"method="get" action="/notes/{id}/download.pdf" hx-boost="false" data-note-export="pdf">"#
     )));
+    // Taille du texte : les tailles acceptées par le serveur, 100 % d'abord.
+    for zoom in dashu::notes::export::ZOOMS {
+        assert!(
+            options.contains(&format!(r#"<option value="{zoom}""#)),
+            "{zoom}"
+        );
+    }
+    assert!(options.contains(r#"<option value="100" selected>100 %</option>"#));
+    // Titres gardés avec leur texte : coché par défaut.
+    assert!(options.contains(r#"<input type="checkbox" name="titres" value="1" checked>"#));
 }
 
 #[tokio::test]
@@ -152,8 +165,9 @@ async fn le_pdf_passe_par_le_service_de_conversion() {
     let (worker, seen) = fake_worker(app.work_dir.clone(), fake_pdf);
     let mut alice = app.logged_in(ALICE).await;
 
-    let pdf = alice.get(&format!("/notes/{id}/download.pdf")).await;
-    worker.abort();
+    let pdf = alice
+        .get(&format!("/notes/{id}/download.pdf?zoom=125&titres=1"))
+        .await;
     assert_eq!(pdf.status, StatusCode::OK, "{}", pdf.body);
     assert_eq!(pdf.header("content-type"), "application/pdf");
     assert!(
@@ -170,9 +184,10 @@ async fn le_pdf_passe_par_le_service_de_conversion() {
 
     // Une conversion de document en PDF, comme « Convertir › En PDF », avec
     // le titre (lu tel quel) et la date en en-tête.
-    let seen = seen.lock().unwrap().clone();
-    assert_eq!(seen.len(), 1);
-    let (spec, input) = &seen[0];
+    // Les options arrivent dans l'en-tête : texte à 125 %, titres gardés.
+    let seen_first = seen.lock().unwrap().clone();
+    assert_eq!(seen_first.len(), 1);
+    let (spec, input) = &seen_first[0];
     assert_eq!(spec.task, Task::Convert);
     assert_eq!(spec.media, Media::Document);
     assert_eq!(spec.to, Some(Conversion::Pdf));
@@ -180,7 +195,22 @@ async fn le_pdf_passe_par_le_service_de_conversion() {
         input.starts_with("---\ntitle: '\\*Brouillon\\* d\\''été'\ndate: 'Modifiée le "),
         "{input}"
     );
-    assert!(input.ends_with("---\n\n# Partie 1\n\nTexte.\n"), "{input}");
+    assert!(
+        input.ends_with("\nzoom: '1.25'\ngarder-titres: true\n---\n\n# Partie 1\n\nTexte.\n"),
+        "{input}"
+    );
+
+    // Sans option (case décochée, 100 %) : ni zoom ni titres gardés.
+    let plain = alice
+        .get(&format!("/notes/{id}/download.pdf?zoom=100"))
+        .await;
+    worker.abort();
+    assert_eq!(plain.status, StatusCode::OK);
+    let input = seen.lock().unwrap()[1].1.clone();
+    assert!(
+        !input.contains("zoom:") && !input.contains("garder-titres"),
+        "{input}"
+    );
 
     // Rien ne reste : ni dossier de travail, ni tâche affichée, ni fichier
     // rangé dans l'espace.
@@ -194,6 +224,20 @@ async fn le_pdf_passe_par_le_service_de_conversion() {
         .await
         .unwrap();
     assert_eq!((jobs, files), (0, 0));
+}
+
+#[tokio::test]
+async fn une_taille_de_texte_inconnue_est_refusee() {
+    let app = TestApp::new().await;
+    let id = note(&app, "Cours", "Texte").await;
+    let mut alice = app.logged_in(ALICE).await;
+    let refused = alice
+        .get(&format!("/notes/{id}/download.pdf?zoom=105"))
+        .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    assert!(refused.body.contains("Taille du texte inconnue"));
+    // Refusée avant toute tâche.
+    assert_eq!(leftovers(&app), 0);
 }
 
 #[tokio::test]
