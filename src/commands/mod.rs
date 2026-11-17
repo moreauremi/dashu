@@ -568,9 +568,8 @@ impl Vars {
         let now = time::now();
         let overview = ctx.active.is_overview();
         let title = sqlx::query_scalar!(
-            r#"SELECT e.title FROM calendar_events e
-               JOIN calendar_sources s ON s.id = e.source_id
-               WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2)
+            r#"SELECT e.title AS "title!: String" FROM agenda_items e
+               WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2)
                  AND e.all_day = 0 AND e.starts_at <= ?4 AND e.ends_at > ?4
                ORDER BY e.starts_at
                LIMIT 1"#,

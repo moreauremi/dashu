@@ -39,6 +39,10 @@ struct SettingsPage {
     has_password: bool,
     google_linked: bool,
     google_enabled: bool,
+    /// Google Agenda relié : l'adresse du compte, et la dernière erreur.
+    google_calendar: Option<crate::calendar::google::Linked>,
+    /// Événements pas encore arrivés dans Google Agenda.
+    google_pending: i64,
     sources: Vec<SourceRow>,
     min_password: usize,
     /// Toutes les entrées possibles de la barre du téléphone, et si elles y sont.
@@ -176,6 +180,13 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),
+        google_calendar: crate::calendar::google::linked(&state, ctx.user.id).await?,
+        google_pending: sqlx::query_scalar!(
+            r#"SELECT count(*) AS "n!: i64" FROM events WHERE user_id = ? AND google = 1 AND google_dirty > 0"#,
+            ctx.user.id
+        )
+        .fetch_one(&state.db)
+        .await?,
         sources,
         min_password: password::MIN_LENGTH,
         shell: ctx.shell("settings").await?,

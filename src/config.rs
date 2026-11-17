@@ -71,6 +71,50 @@ impl std::fmt::Debug for ApiConfig {
 pub struct GoogleConfig {
     pub client_id: String,
     pub client_secret: String,
+    /// Adresses de Google pour l'agenda (src/calendar/google.rs). Les vraies
+    /// par défaut ; les tests les font pointer vers un faux Google local.
+    pub endpoints: GoogleEndpoints,
+}
+
+/// Adresses des services de Google utilisés pour l'agenda.
+#[derive(Debug, Clone)]
+pub struct GoogleEndpoints {
+    /// Page de consentement (OAuth 2.0).
+    pub auth: String,
+    /// Échange du code, et renouvellement du jeton d'accès.
+    pub token: String,
+    /// Retrait de la permission.
+    pub revoke: String,
+    /// Adresse e-mail du compte (OpenID Connect « userinfo »).
+    pub userinfo: String,
+    /// API Google Agenda (v3), sans la barre finale.
+    pub calendar: String,
+}
+
+impl Default for GoogleEndpoints {
+    fn default() -> Self {
+        Self {
+            auth: "https://accounts.google.com/o/oauth2/v2/auth".into(),
+            token: "https://oauth2.googleapis.com/token".into(),
+            revoke: "https://oauth2.googleapis.com/revoke".into(),
+            userinfo: "https://openidconnect.googleapis.com/v1/userinfo".into(),
+            calendar: "https://www.googleapis.com/calendar/v3".into(),
+        }
+    }
+}
+
+impl GoogleEndpoints {
+    /// Toutes les adresses sous une même racine (faux Google des tests).
+    pub fn at(base: &str) -> Self {
+        let base = base.trim_end_matches('/');
+        Self {
+            auth: format!("{base}/auth"),
+            token: format!("{base}/token"),
+            revoke: format!("{base}/revoke"),
+            userinfo: format!("{base}/userinfo"),
+            calendar: format!("{base}/calendar/v3"),
+        }
+    }
 }
 
 impl Config {
@@ -105,6 +149,7 @@ impl Config {
             (Some(client_id), Some(client_secret)) => Some(GoogleConfig {
                 client_id,
                 client_secret,
+                endpoints: GoogleEndpoints::default(),
             }),
             _ => None,
         };

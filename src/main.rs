@@ -51,6 +51,8 @@ async fn serve() -> anyhow::Result<()> {
     // Tâches de fond, toutes les heures : synchro des agendas, purge des
     // sessions expirées et des envois de fichiers abandonnés.
     calendar::sync::spawn_hourly(state.clone());
+    // Envois à Google Agenda qui n'ont pas pu partir (Google indisponible).
+    calendar::google::spawn_retry(state.clone());
     files::spawn_cleanup(state.clone());
     tools::spawn_collector(state.clone());
     tokio::spawn(db::session_store(&pool).continuously_delete_expired(Duration::from_secs(3600)));

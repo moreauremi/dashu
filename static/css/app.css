@@ -1166,6 +1166,8 @@ input[type="email"],
 input[type="password"],
 input[type="url"],
 input[type="search"],
+input[type="date"],
+input[type="time"],
 select {
   width: 100%;
   height: var(--control);
@@ -1344,6 +1346,64 @@ select:focus-visible {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
   text-align: center;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Événement de dashu dans la grille de l'agenda : toute la case est un lien
+   vers son formulaire (les cours des flux iCal ne s'ouvrent pas). */
+.ev-link {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.ev:has(.ev-link):hover {
+  filter: brightness(1.08);
+}
+
+.ev-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Formulaire d'un événement. */
+.form-card {
+  max-width: 640px;
+}
+
+.form-card > .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* « Journée entière » cochée : les heures ne servent plus. */
+.event-form:has(input[name="all_day"]:checked) .event-times {
+  display: none;
+}
+
+.event-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.event-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.event-sync[data-state="error"] {
+  color: var(--danger);
 }
 
 .menu {
@@ -4243,6 +4303,16 @@ input.note-title::placeholder {
   white-space: nowrap;
 }
 
+/* Événement de dashu sur la journée entière : un lien vers son formulaire. */
+a.cal-allday.is-own {
+  text-decoration: none;
+}
+
+a.cal-allday.is-own:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
 /* Grille horaire : les rangées viennent des classes .tgh… générées par build.rs. */
 .tg {
   display: grid;
@@ -4294,6 +4364,7 @@ input.note-title::placeholder {
 }
 
 .ev {
+  position: relative;
   display: flex;
   flex-direction: column;
   grid-column: 1 / -1;
@@ -5250,6 +5321,8 @@ input.note-title::placeholder {
   input[type="password"],
   input[type="url"],
   input[type="search"],
+  input[type="date"],
+  input[type="time"],
   select {
     /* 16 px : en dessous, iOS zoome sur le champ quand on le touche. */
     font-size: 16px;

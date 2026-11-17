@@ -38,6 +38,23 @@ pub struct EventRow {
     pub tag: String,
     /// Couleur de cet espace (`blue`, `green`…), vide avec `tag`.
     pub tag_color: String,
+    /// Événement créé dans dashu (modifiable), `None` pour un cours iCal.
+    pub event_id: Option<i64>,
+}
+
+/// Élément du bandeau « journée entière ».
+#[derive(Debug, PartialEq)]
+pub struct AllDayItem {
+    pub label: String,
+    /// Formulaire de l'événement s'il vient de dashu, vide sinon.
+    pub href: String,
+}
+
+/// Adresse du formulaire d'un événement de dashu, vide pour un cours iCal.
+fn href_of(row: &EventRow) -> String {
+    row.event_id
+        .map(|id| format!("/calendar/events/{id}"))
+        .unwrap_or_default()
 }
 
 pub struct Grid {
@@ -63,7 +80,7 @@ pub struct DayColumn {
     pub label: String,
     pub is_today: bool,
     /// Événements sur la journée entière (vacances, férié…).
-    pub all_day: Vec<String>,
+    pub all_day: Vec<AllDayItem>,
     pub events: Vec<EventBox>,
     /// Rangée de la ligne « maintenant », pour la colonne d'aujourd'hui.
     pub now_slot: Option<u32>,
@@ -90,6 +107,8 @@ pub struct EventBox {
     /// Espace d'origine dans la vue d'ensemble (voir [`EventRow::tag`]).
     pub tag: String,
     pub tag_color: String,
+    /// Formulaire de l'événement s'il vient de dashu : la case est un lien.
+    pub href: String,
 }
 
 /// Événement d'une journée, en minutes depuis minuit (heure de Paris).
@@ -103,7 +122,7 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
     let today = time::paris_date(now);
 
     // 1. Répartition des événements par jour.
-    let mut per_day: Vec<(NaiveDate, Vec<Placed>, Vec<String>)> = Vec::new();
+    let mut per_day: Vec<(NaiveDate, Vec<Placed>, Vec<AllDayItem>)> = Vec::new();
     for &date in dates {
         let day_start = time::day_start(date);
         let day_end = time::day_start(date + Duration::days(1));
@@ -116,10 +135,13 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
         {
             if row.all_day || row.ends_at - row.starts_at >= LONG_EVENT_SECONDS {
                 // Dans la vue d'ensemble, on garde l'espace d'origine en tête.
-                all_day.push(if row.tag.is_empty() {
-                    row.title.clone()
-                } else {
-                    format!("{} · {}", row.tag, row.title)
+                all_day.push(AllDayItem {
+                    label: if row.tag.is_empty() {
+                        row.title.clone()
+                    } else {
+                        format!("{} · {}", row.tag, row.title)
+                    },
+                    href: href_of(row),
                 });
                 continue;
             }
@@ -176,9 +198,20 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
                 .map(|p| {
                     let start_slot = to_slot(p.start_min).min(total_slots - MIN_SLOTS);
                     let end_slot = to_slot(p.end_min).clamp(start_slot + MIN_SLOTS, total_slots);
+                    // Un titre de Pronote se découpe (matière, puis détails) ;
+                    // celui d'un événement de dashu s'affiche tel quel.
+                    let own = p.row.event_id.is_some();
                     EventBox {
-                        subject: ical::subject(&p.row.title).to_string(),
-                        details: ical::details(&p.row.title),
+                        subject: if own {
+                            p.row.title.clone()
+                        } else {
+                            ical::subject(&p.row.title).to_string()
+                        },
+                        details: if own {
+                            String::new()
+                        } else {
+                            ical::details(&p.row.title)
+                        },
                         location: p.row.location.clone(),
                         time: format!(
                             "{} – {}",
@@ -198,6 +231,7 @@ pub fn build(dates: &[NaiveDate], events: &[EventRow], now: i64) -> Grid {
                         past: p.row.ends_at <= now,
                         tag: p.row.tag.clone(),
                         tag_color: p.row.tag_color.clone(),
+                        href: href_of(p.row),
                     }
                 })
                 .collect();
@@ -312,6 +346,7 @@ mod tests {
             all_day: false,
             tag: String::new(),
             tag_color: String::new(),
+            event_id: None,
         }
     }
 
@@ -392,9 +427,16 @@ mod tests {
             all_day: true,
             tag: String::new(),
             tag_color: String::new(),
+            event_id: None,
         }];
         let grid = build(&[date], &events, 0);
-        assert_eq!(grid.days[0].all_day, vec!["Férié".to_string()]);
+        assert_eq!(
+            grid.days[0].all_day,
+            vec![AllDayItem {
+                label: "Férié".into(),
+                href: String::new()
+            }]
+        );
         assert!(grid.days[0].events.is_empty());
         assert!(!grid.is_empty);
     }
@@ -418,7 +460,7 @@ mod tests {
 
         // Le bandeau de chaque jour, étiqueté avec l'espace d'origine.
         for day in &grid.days {
-            assert_eq!(day.all_day, vec!["Taff · Ecole".to_string()]);
+            assert_eq!(day.all_day[0].label, "Taff · Ecole");
         }
         // Dans la grille, seul le cours reste, en pleine largeur.
         assert!(grid.days[0].events.is_empty());

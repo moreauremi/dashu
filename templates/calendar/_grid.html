@@ -10,7 +10,7 @@
         <a href="/calendar?view=day&amp;date={{ day.iso }}" aria-label="{{ day.label }}">
           <span class="cal-wd">{{ day.weekday }}</span><span class="cal-dn">{{ day.day }}</span>
         </a>
-        {% for name in day.all_day %}<span class="cal-allday" title="{{ name }}">{{ name }}</span>{% endfor %}
+        {% for item in day.all_day %}{% if item.href.is_empty() %}<span class="cal-allday" title="{{ item.label }}">{{ item.label }}</span>{% else %}<a class="cal-allday is-own" href="{{ item.href }}" title="{{ item.label }} · modifier">{{ item.label }}</a>{% endif %}{% endfor %}
       </div>
       {% endfor %}
     </div>
@@ -27,6 +27,8 @@
           <strong>{{ ev.subject }}</strong>
           <span class="ev-time">{% if !ev.tag.is_empty() %}<b class="ev-space" data-accent="{{ ev.tag_color }}">{{ ev.tag }}</b> · {% endif %}{{ ev.time }}{% if !ev.location.is_empty() %} · {{ ev.location }}{% endif %}</span>
           {% if !ev.details.is_empty() %}<span class="ev-details">{{ ev.details }}</span>{% endif %}
+          {#- Événement créé dans dashu : toute la case ouvre son formulaire. -#}
+          {% if !ev.href.is_empty() %}<a class="ev-link" href="{{ ev.href }}" aria-label="Modifier « {{ ev.subject }} »"></a>{% endif %}
         </article>
         {% endfor %}
         {% if let Some(slot) = day.now_slot %}<div class="nowline gs{{ slot }}" data-nowline aria-hidden="true"></div>{% endif %}

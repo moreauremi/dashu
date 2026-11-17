@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO google_accounts (user_id, email, refresh_token, connected_at, last_error)\n             VALUES (?, ?, ?, ?, NULL)\n             ON CONFLICT (user_id) DO UPDATE SET email = excluded.email,\n               refresh_token = excluded.refresh_token, connected_at = excluded.connected_at,\n               last_error = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "2e3dfb8467cb105a74ccb6077080da7be757913c5a5aa4d020433e563387d478"
+}

@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use dashu::config::{ApiConfig, Config, FilesConfig};
+use dashu::config::{ApiConfig, Config, FilesConfig, GoogleConfig, GoogleEndpoints};
 use dashu::{AppState, auth, build_router, db};
 use tower::ServiceExt;
 
@@ -73,6 +73,7 @@ impl TestApp {
                 user_email: ALICE.into(),
             }),
             false,
+            None,
         )
         .await;
         app.add_user(ALICE).await;
@@ -81,10 +82,32 @@ impl TestApp {
     }
 
     async fn with_api(api: Option<ApiConfig>) -> Self {
-        Self::build(api, true).await
+        Self::build(api, true, None).await
     }
 
-    async fn build(api: Option<ApiConfig>, files: bool) -> Self {
+    /// Comme [`TestApp::new`], avec Google configuré et ses adresses sous
+    /// `base` : un faux Google local (Google Agenda, voir
+    /// tests/agenda_evenements.rs).
+    pub async fn with_google(base: &str) -> Self {
+        let app = Self::build(
+            Some(ApiConfig {
+                token: API_TOKEN.into(),
+                user_email: ALICE.into(),
+            }),
+            true,
+            Some(GoogleConfig {
+                client_id: "client-de-test".into(),
+                client_secret: "secret-de-test".into(),
+                endpoints: GoogleEndpoints::at(base),
+            }),
+        )
+        .await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
+    async fn build(api: Option<ApiConfig>, files: bool, google: Option<GoogleConfig>) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let db_path =
             std::env::temp_dir().join(format!("dashu-test-{}-{n}.db", std::process::id()));
@@ -102,7 +125,7 @@ impl TestApp {
             bind_addr: "127.0.0.1:0".parse().unwrap(),
             allowed_emails: vec![ALICE.into(), BOB.into()],
             session_secret: "0123456789abcdef".repeat(4),
-            google: None,
+            google,
             log_json: false,
             api,
             files: files.then(|| FilesConfig {

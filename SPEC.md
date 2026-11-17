@@ -963,3 +963,70 @@ Par défaut, pour avancer :
 - **Pas d'édition hors ligne** fusionnée plus tard : au-delà d'une minute de coupure, on retombe sur le garde-fou de version.
 - **Le serveur ne garde pas les étapes sur le disque** : seulement en mémoire, le temps de la session. Le Markdown enregistré reste la seule vérité.
 - **Les tags et le dossier** ne suivent pas en direct (ils se voient au rechargement).
+
+# dashu — Événements et Google Agenda
+
+Nov 17, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 17 novembre 2026 : ajouter des événements depuis l'Agenda de dashu, et qu'ils arrivent aussi dans Google Agenda quand le compte Google est connecté. Jusqu'ici, l'agenda ne faisait que lire des flux iCal (Pronote), et la connexion Google ne demandait que l'identité. Le projet Google de dashu est passé en production le même jour, ce qui est le préalable : en mode Test, un accès à l'agenda expire au bout de 7 jours.
+
+## Fonctionnement
+
+**Les événements de dashu.**
+
+- Un bouton **Nouvel événement** dans l'Agenda ouvre un formulaire : titre, jour, heure de début et de fin (ou « journée entière »), lieu, espace. L'espace proposé est l'espace actif.
+- L'événement apparaît dans l'Agenda, dans les widgets Calendrier et Prochains cours, dans la barre de commandes et dans l'API, comme un cours de Pronote. Perso le réunit avec ceux des autres espaces.
+- Un clic sur un événement de dashu ouvre le même formulaire, pour le modifier ou le supprimer. Les événements des flux iCal restent en lecture seule.
+- Comme les agendas, un événement est **à son auteur**, même dans un espace partagé : les autres membres ne le voient pas. Un membre qui quitte un espace partagé retrouve ses événements dans son Perso.
+
+**Google Agenda.**
+
+- Dans Réglages, une carte **Google Agenda** : « Connecter Google Agenda » envoie chez Google, qui demande la permission de gérer les événements de l'agenda. Au retour, la carte dit à quelle adresse Google l'agenda est relié. « Déconnecter » retire la permission chez Google et oublie le jeton.
+- Une fois connecté, le formulaire d'un événement propose **« Aussi dans Google Agenda »**, coché par défaut. L'événement est alors créé dans l'agenda principal du compte Google, puis modifié ou supprimé là-bas quand on le modifie ou le supprime dans dashu.
+- L'envoi part tout de suite après l'enregistrement. Si Google ne répond pas, l'événement est marqué « pas encore dans Google Agenda » et dashu réessaie toutes les cinq minutes. Le formulaire montre l'état : dans Google Agenda, en attente, ou l'erreur.
+- **Un seul sens** : ce qu'on modifie directement dans Google ne revient pas dans dashu. Si l'agenda Google est aussi importé dans dashu par son lien iCal, un événement envoyé par dashu n'y apparaît pas en double.
+- Sans connexion Google, ou si Google n'est pas configuré (`GOOGLE_CLIENT_ID` vide), tout le reste marche : les événements restent dans dashu.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `events` | id, user\_id, space\_id, title, location, starts\_at, ends\_at, all\_day, google, google\_event\_id, google\_dirty, google\_error, created\_at, updated\_at | `google` : à envoyer à Google ; `google_dirty` : changement pas encore envoyé |
+| `google_accounts` | user\_id, email, refresh\_token, connected\_at, last\_error | `refresh_token` chiffré |
+| `google_deletions` | user\_id, google\_event\_id | Suppressions à faire chez Google, gardées si Google ne répond pas |
+| vue `agenda_items` | user\_id, space\_id, title, location, starts\_at, ends\_at, all\_day, event\_id | Les cours des flux iCal et les événements de dashu, sans les doublons |
+
+## Sécurité
+
+- **Permission minimale** : `calendar.events` (créer, modifier, supprimer des événements), plus l'adresse e-mail pour l'afficher. Pas de lecture des autres agendas.
+- **Le jeton Google est chiffré** en base (ChaCha20-Poly1305), avec une clé dérivée de `SESSION_SECRET`. Une copie de la base ou d'une sauvegarde ne suffit donc pas à écrire dans l'agenda. Changer `SESSION_SECRET` oblige à reconnecter Google Agenda.
+- La connexion à Google suit le même chemin que la connexion par Google : `state` vérifié, PKCE, adresse de retour déjà déclarée (`/auth/google/callback`). Seul un compte connecté à dashu peut relier un agenda, et seulement le sien.
+- Un événement ne s'ouvre, ne se modifie et ne se supprime que par son auteur (404 sinon). L'espace choisi doit être accessible.
+- Le titre et le lieu sont échappés à l'affichage, et envoyés à Google comme données JSON.
+
+## Critères d'acceptation
+
+- [ ] Créer, modifier et supprimer un événement depuis l'Agenda, en heures ou sur la journée entière ; titre vide, fin avant le début, date invalide sont refusés
+- [ ] L'événement apparaît dans l'Agenda, les widgets, Perso et l'API ; un autre compte, même membre de l'espace, ne le voit pas et reçoit 404
+- [ ] Connecter Google Agenda : retour de Google vérifié, jeton chiffré en base, adresse affichée ; déconnecter retire la permission
+- [ ] Un événement coché arrive dans Google Agenda à sa création, suit ses modifications et sa suppression
+- [ ] Google indisponible : rien n'est perdu, l'événement est marqué en attente et part au passage suivant
+- [ ] Un événement envoyé par dashu n'apparaît pas en double quand l'agenda Google est aussi importé en iCal
+- [ ] Chaque point a ses tests d'intégration (Google simulé par un faux serveur local) ; essai réel sur le serveur avec le vrai Google ; STATUS et README à jour
+
+## Décisions
+
+Prises avec Rémi le 17 novembre 2026 :
+
+- **Écriture directe dans Google Agenda (option B)**, plutôt qu'un flux iCal abonné dans Google (lent et en lecture seule).
+- **Projet Google publié** (en production) : pas d'expiration toutes les semaines. Tant que Google n'a pas vérifié l'application, sa page de consentement affiche « application non vérifiée » (passer par « Paramètres avancés »).
+
+Par défaut, pour avancer :
+
+- **Agenda principal** du compte Google, pas un agenda « dashu » à part.
+- **Un seul sens**, de dashu vers Google.
+- **Événements à leur auteur**, comme les agendas iCal, même dans un espace partagé.
+- **Clé de chiffrement dérivée de `SESSION_SECRET`** : rien de nouveau à configurer sur le serveur.
+- **Pas d'action API** pour créer un événement : Hermès a déjà son propre accès à Google Agenda.

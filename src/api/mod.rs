@@ -935,11 +935,11 @@ async fn calendar(
     let to = time::day_start(last + Duration::days(1));
 
     let events = sqlx::query!(
-        r#"SELECT e.title, e.location, e.starts_at, e.ends_at, e.all_day AS "all_day!: bool",
-                  c.space_id AS "space_id!: i64"
-           FROM calendar_events e
-           JOIN calendar_sources c ON c.id = e.source_id
-           WHERE c.user_id = ?1 AND (?2 IS NULL OR c.space_id = ?2)
+        r#"SELECT e.title AS "title!: String", e.location AS "location!: String",
+                  e.starts_at AS "starts_at!: i64", e.ends_at AS "ends_at!: i64",
+                  e.all_day AS "all_day!: bool", e.space_id AS "space_id!: i64"
+           FROM agenda_items e
+           WHERE e.user_id = ?1 AND (?2 IS NULL OR e.space_id = ?2)
              AND e.ends_at > ?3 AND e.starts_at < ?4
            ORDER BY e.starts_at, e.ends_at
            LIMIT 1000"#,

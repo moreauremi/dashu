@@ -63,11 +63,10 @@ async fn moment_space(db: &SqlitePool, ctx: &Ctx, fallback: i64) -> AppResult<i6
     let now = time::now();
     let tomorrow = time::day_start(time::paris_date(now) + chrono::Days::new(1));
     let current = sqlx::query_scalar!(
-        r#"SELECT s.space_id AS "space_id!: i64"
-           FROM calendar_events e
-           JOIN calendar_sources s ON s.id = e.source_id
-           JOIN spaces sp ON sp.id = s.space_id
-           WHERE s.user_id = ? AND sp.archived_at IS NULL AND e.all_day = 0
+        r#"SELECT e.space_id AS "space_id!: i64"
+           FROM agenda_items e
+           JOIN spaces sp ON sp.id = e.space_id
+           WHERE e.user_id = ? AND sp.archived_at IS NULL AND e.all_day = 0
              AND e.ends_at > ? AND e.starts_at < ?
            ORDER BY e.starts_at
            LIMIT 1"#,
@@ -221,13 +220,13 @@ pub async fn courses(
     let limit = size.items([1, 4, 7, 10], 3);
 
     let items = sqlx::query!(
-        r#"SELECT e.title, e.location, e.starts_at, e.ends_at,
-                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.name END AS "tag!: String",
-                  CASE WHEN s.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
-           FROM calendar_events e
-           JOIN calendar_sources s ON s.id = e.source_id
-           JOIN spaces sp ON sp.id = s.space_id
-           WHERE s.user_id = ?1 AND (?3 AND s.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR s.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
+        r#"SELECT e.title AS "title!: String", e.location AS "location!: String",
+                  e.starts_at AS "starts_at!: i64", e.ends_at AS "ends_at!: i64",
+                  CASE WHEN e.space_id = ?2 THEN '' ELSE sp.name END AS "tag!: String",
+                  CASE WHEN e.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
+           FROM agenda_items e
+           JOIN spaces sp ON sp.id = e.space_id
+           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
            ORDER BY e.starts_at
            LIMIT ?5"#,
         user,
@@ -253,8 +252,12 @@ pub async fn courses(
     .collect();
 
     let has_sources = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "n!: i64" FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+        // Un agenda iCal ou un événement de dashu : il y a quelque chose à montrer.
+        r#"SELECT COUNT(*) AS "n!: i64" FROM (
+               SELECT space_id FROM calendar_sources WHERE user_id = ?1
+               UNION ALL SELECT space_id FROM events WHERE user_id = ?1
+           )
+           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space,
         overview

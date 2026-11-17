@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block title %}{% if id.is_some() %}Modifier l'événement{% else %}Nouvel événement{% endif %} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{% if id.is_some() %}Modifier l'événement{% else %}Nouvel événement{% endif %}</h1>
+  </div>
+</header>
+
+<section class="card form-card">
+  <div class="card-body">
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+
+    {#- « Journée entière » cochée : les heures se cachent (CSS, :has). -#}
+    <form class="stack event-form" method="post" action="{% if let Some(id) = id %}/calendar/events/{{ id }}{% else %}/calendar/events{% endif %}">
+      <label class="field">
+        <span class="field-label">Titre</span>
+        <input type="text" name="title" value="{{ title }}" maxlength="200" required autocomplete="off"{% if id.is_none() %} autofocus{% endif %}>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Jour</span>
+        <input type="date" name="date" value="{{ date }}" required>
+      </label>
+
+      <label class="check-row">
+        <input type="checkbox" name="all_day"{% if all_day %} checked{% endif %}>
+        <span>Journée entière</span>
+      </label>
+
+      <div class="event-times">
+        <label class="field">
+          <span class="field-label">Début</span>
+          <input type="time" name="start" value="{{ start }}" step="300">
+        </label>
+        <label class="field">
+          <span class="field-label">Fin</span>
+          <input type="time" name="end" value="{{ end }}" step="300">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Lieu</span>
+        <input type="text" name="location" value="{{ location }}" maxlength="200" autocomplete="off" placeholder="Facultatif">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Espace</span>
+        <select name="space_id">
+          {% for space in shell.spaces %}
+          <option value="{{ space.id }}"{% if space.id == space_id %} selected{% endif %}>{{ space.name }}</option>
+          {% endfor %}
+        </select>
+        <span class="hint">L'événement n'est visible que par toi, même dans un espace partagé.</span>
+      </label>
+
+      {% if let Some(email) = google_email %}
+      <label class="check-row">
+        <input type="checkbox" name="google"{% if google %} checked{% endif %}>
+        <span>Aussi dans Google Agenda ({{ email }})</span>
+      </label>
+      {% if let Some((state, text)) = sync %}
+      <p class="event-sync" data-state="{{ state }}">{{ text }}</p>
+      {% endif %}
+      {% else if google_available %}
+      <p class="hint">Pour l'ajouter aussi à Google Agenda, <a href="/settings#google-agenda">connecte Google Agenda dans Réglages</a>.</p>
+      {% endif %}
+
+      <div class="space-actions">
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+        <a class="btn" href="{{ back }}">Annuler</a>
+      </div>
+    </form>
+
+    {% if let Some(id) = id %}
+    <form method="post" action="/calendar/events/{{ id }}/delete" hx-confirm="Supprimer « {{ title }} » ?{% if google %} Sa copie dans Google Agenda part aussi.{% endif %}">
+      <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer l'événement</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
