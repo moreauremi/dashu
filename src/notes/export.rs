@@ -6,15 +6,19 @@
 //! * PDF : la note passe par le service de conversion, comme un fichier `.md`
 //!   converti « En PDF » (pandoc et Typst, mise en page façon Notion). dashu
 //!   attend le résultat et l'envoie aussitôt, sans le ranger dans les fichiers
-//!   de l'espace (voir [`crate::tools::export_pdf`]).
+//!   de l'espace (voir [`crate::tools::export_pdf`]). Deux options :
+//!   la taille du texte (zoom de 80 à 150 %) et les titres gardés avec leur
+//!   texte (un titre qui serait coupé de son paragraphe en bas d'une page
+//!   passe en haut de la suivante, voir `src/tools/pdf/gabarit.typst`).
 //!
 //! On télécharge la version enregistrée : la page envoie d'abord les
 //! modifications en attente (`static/js/app.js`, « Télécharger une note »).
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use chrono::Datelike;
+use serde::Deserialize;
 
 use crate::AppState;
 use crate::auth::session::Ctx;
@@ -25,6 +29,52 @@ use crate::web::{AppError, AppResult};
 
 /// Longueur gardée du titre dans le nom du fichier téléchargé.
 const NAME_MAX_CHARS: usize = 120;
+
+/// Tailles du texte proposées pour le PDF, en pourcentage. Le serveur
+/// refuse toute autre valeur : elle part telle quelle dans le gabarit Typst.
+pub const ZOOMS: [u16; 6] = [80, 90, 100, 110, 125, 150];
+
+/// Options du PDF, telles qu'envoyées par le formulaire de l'éditeur.
+#[derive(Deserialize)]
+pub struct PdfQuery {
+    /// Taille du texte, une valeur de [`ZOOMS`] ; 100 sans précision.
+    zoom: Option<u16>,
+    /// Case « Garder les titres avec leur texte » : présente si cochée.
+    titres: Option<String>,
+}
+
+/// Options du PDF, vérifiées.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PdfOptions {
+    /// Taille du texte, en pourcentage (une valeur de [`ZOOMS`]).
+    pub zoom: u16,
+    /// Un titre ne reste pas seul en bas d'une page.
+    pub keep_headings: bool,
+}
+
+impl Default for PdfOptions {
+    fn default() -> Self {
+        Self {
+            zoom: 100,
+            keep_headings: false,
+        }
+    }
+}
+
+impl PdfQuery {
+    fn check(self) -> AppResult<PdfOptions> {
+        let zoom = self.zoom.unwrap_or(100);
+        if !ZOOMS.contains(&zoom) {
+            return Err(AppError::BadRequest(
+                "Taille du texte inconnue : choisis-en une dans la liste.".into(),
+            ));
+        }
+        Ok(PdfOptions {
+            zoom,
+            keep_headings: self.titres.is_some(),
+        })
+    }
+}
 
 struct Note {
     title: String,
@@ -64,22 +114,26 @@ pub async fn markdown(
     ))
 }
 
-/// `GET /notes/{id}/download.pdf`. Sans service de conversion (`WORK_DIR`
-/// absent), la page n'existe pas et l'éditeur ne propose que le Markdown.
+/// `GET /notes/{id}/download.pdf?zoom=125&titres=1`. Sans service de
+/// conversion (`WORK_DIR` absent), la page n'existe pas et l'éditeur ne
+/// propose que le Markdown.
 pub async fn pdf(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(query): Query<PdfQuery>,
 ) -> AppResult<Response> {
     if state.config.work_dir.is_none() {
         return Err(AppError::NotFound);
     }
+    let options = query.check()?;
     let note = load(&state, ctx.user.id, id).await?;
     let date = time::paris_date(note.updated_at);
     let source = pdf_source(
         &note.title,
         &note.body_md,
         &format!("{} {}", time::day_month(date), date.year()),
+        options,
     );
     let bytes = tools::export_pdf(&state, source).await?;
     Ok(download(
@@ -145,21 +199,36 @@ pub fn markdown_file(title: &str, body: &str) -> String {
     out
 }
 
-/// Markdown confié au service de conversion pour le PDF : un en-tête YAML
-/// (titre et date de modification, que le gabarit met en haut de la première
-/// page), puis le texte de la note.
-pub fn pdf_source(title: &str, body: &str, modified: &str) -> String {
+/// Markdown confié au service de conversion pour le PDF : un en-tête YAML,
+/// lu par le gabarit (`src/tools/pdf/gabarit.typst`) et le filtre
+/// (`images.lua`), puis le texte de la note. L'en-tête porte le titre et la
+/// date de modification (en haut de la première page), le zoom s'il n'est
+/// pas de 100 % (« 1.25 » : un nombre écrit par le serveur, jamais un texte
+/// reçu) et `garder-titres`. Sans rien de tout cela, pas d'en-tête.
+pub fn pdf_source(title: &str, body: &str, modified: &str, options: PdfOptions) -> String {
     let title = clean_title(title);
     let title = title.trim();
-    let mut out = String::from("---\n");
+    let mut fields = String::new();
     if !title.is_empty() {
-        out.push_str(&format!("title: {}\n", yaml_text(title)));
-        out.push_str(&format!(
+        fields.push_str(&format!("title: {}\n", yaml_text(title)));
+        fields.push_str(&format!(
             "date: {}\n",
             yaml_text(&format!("Modifiée le {modified}"))
         ));
     }
-    out.push_str("---\n\n");
+    if options.zoom != 100 {
+        let zoom = options.zoom;
+        fields.push_str(&format!("zoom: '{}.{:02}'\n", zoom / 100, zoom % 100));
+    }
+    if options.keep_headings {
+        fields.push_str("garder-titres: true\n");
+    }
+    let mut out = String::new();
+    if !fields.is_empty() {
+        out.push_str("---\n");
+        out.push_str(&fields);
+        out.push_str("---\n\n");
+    }
     out.push_str(body);
     if !out.ends_with('\n') {
         out.push('\n');
@@ -221,16 +290,64 @@ mod tests {
 
     #[test]
     fn source_du_pdf() {
-        let source = pdf_source("Cours", "# Partie 1\n", "17 novembre 2026");
+        let simple = PdfOptions::default();
+        let source = pdf_source("Cours", "# Partie 1\n", "17 novembre 2026", simple);
         assert_eq!(
             source,
             "---\ntitle: 'Cours'\ndate: 'Modifiée le 17 novembre 2026'\n---\n\n# Partie 1\n"
         );
-        // Sans titre : pas de titre ni de date en tête du PDF.
+        // Sans titre ni option : pas d'en-tête du tout.
+        assert_eq!(pdf_source("", "Texte", "1 janvier 2026", simple), "Texte\n");
+
+        // Le zoom, écrit par le serveur, et les titres gardés.
+        let options = |zoom, keep_headings| PdfOptions {
+            zoom,
+            keep_headings,
+        };
         assert_eq!(
-            pdf_source("", "Texte", "1 janvier 2026"),
-            "---\n---\n\nTexte\n"
+            pdf_source("", "Texte", "", options(125, true)),
+            "---\nzoom: '1.25'\ngarder-titres: true\n---\n\nTexte\n"
         );
+        assert_eq!(
+            pdf_source("", "Texte", "", options(80, false)),
+            "---\nzoom: '0.80'\n---\n\nTexte\n"
+        );
+        assert!(pdf_source("C", "T", "1 mai", options(150, false)).contains("zoom: '1.50'\n"));
+    }
+
+    /// Le filtre du PDF ne laisse passer que les zooms qu'il connaît : il
+    /// doit connaître tous ceux du formulaire.
+    #[test]
+    fn le_filtre_connait_chaque_zoom() {
+        let filter = include_str!("../tools/pdf/images.lua");
+        for zoom in ZOOMS.into_iter().filter(|z| *z != 100) {
+            let value = format!("[\"{}.{:02}\"] = true", zoom / 100, zoom % 100);
+            assert!(filter.contains(&value), "{value} absent de images.lua");
+        }
+    }
+
+    #[test]
+    fn options_du_pdf() {
+        let query = |zoom: Option<u16>, titres: Option<&str>| PdfQuery {
+            zoom,
+            titres: titres.map(String::from),
+        };
+        // Sans rien : 100 %, titres libres.
+        assert_eq!(query(None, None).check().unwrap(), PdfOptions::default());
+        assert_eq!(
+            query(Some(125), Some("1")).check().unwrap(),
+            PdfOptions {
+                zoom: 125,
+                keep_headings: true
+            }
+        );
+        for zoom in ZOOMS {
+            assert!(query(Some(zoom), None).check().is_ok(), "{zoom}");
+        }
+        // Une valeur hors de la liste est refusée.
+        for zoom in [0, 79, 101, 1000] {
+            assert!(query(Some(zoom), None).check().is_err(), "{zoom}");
+        }
     }
 
     #[test]

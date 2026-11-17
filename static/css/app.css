@@ -1178,6 +1178,33 @@ select {
   color: var(--text);
 }
 
+/* Liste déroulante : la flèche du navigateur ne suit pas le padding et colle
+   au bord droit. On dessine la nôtre (le chevron des icônes Lucide), à 12 px
+   du bord, dans le gris de --text-2 de chaque thème (une image ne peut pas
+   lire une variable CSS : la couleur est écrite dans l'image). */
+select {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234b4b46' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b5b5ae' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+}
+
+[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234b4b46' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b5b5ae' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
 input::placeholder {
   color: var(--text-3);
   opacity: 1;
@@ -2073,6 +2100,36 @@ ul.note-links {
 .pop-pages input {
   width: 120px;
   height: 36px;
+}
+
+/* Options du PDF d'une note : taille du texte, titres gardés avec leur texte. */
+.pop-options {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+  max-width: 100%;
+  padding: 4px 8px 8px;
+}
+
+.pop-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.pop-options .check-row {
+  align-items: flex-start;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pop-options .check-row input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
 }
 
 /* Choix d'un espace : toutes les options sur une ligne, des pastilles. */

@@ -514,6 +514,8 @@ struct EditPage {
     folder: NoteFolder,
     /// « Télécharger › PDF » : seulement avec le service de conversion.
     pdf: bool,
+    /// Tailles du texte proposées pour le PDF.
+    zooms: &'static [u16],
 }
 
 /// `GET /notes/{id}`
@@ -558,6 +560,7 @@ pub async fn edit_page(
         suggestions: all_tag_names(&state.db, ctx.user.id).await?,
         folder: note_folder(&ctx, &state.db, note.space_id, note.folder_id).await?,
         pdf: state.config.work_dir.is_some(),
+        zooms: &export::ZOOMS,
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))

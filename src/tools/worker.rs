@@ -1002,11 +1002,16 @@ mod tests {
             assert!(out.starts_with(magic), "{to:?}");
         }
         // Le PDF d'une note (bouton « Télécharger ») : le même document,
-        // sous un en-tête YAML qui porte un titre plein de ponctuation.
+        // sous un en-tête YAML qui porte un titre plein de ponctuation, avec
+        // les deux options (texte à 125 %, titres gardés avec leur texte).
         let note = crate::notes::export::pdf_source(
             "*Brouillon* d'été : TCP/IP #1 (v2) $5 @moi",
             include_str!("../../tests/fixtures/document.md"),
             "17 novembre 2026",
+            crate::notes::export::PdfOptions {
+                zoom: 125,
+                keep_headings: true,
+            },
         );
         fs::write(dir.join("note.md"), note).unwrap();
         let spec = JobSpec {

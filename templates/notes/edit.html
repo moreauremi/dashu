@@ -23,9 +23,28 @@
         <p class="pop-title">Télécharger</p>
         <a href="/notes/{{ id }}/download.md" hx-boost="false" data-note-export>{{ crate::assets::icon("file-code")|safe }}Markdown (.md)</a>
         {% if pdf %}
-        <a href="/notes/{{ id }}/download.pdf" hx-boost="false" data-note-export="pdf">{{ crate::assets::icon("file")|safe }}PDF</a>
+        <button type="button" popovertarget="pm-note-pdf">{{ crate::assets::icon("file")|safe }}PDF…</button>
         {% endif %}
       </div>
+      {% if pdf %}
+      {#- Options du PDF, ouvertes à la place du menu, sous le même bouton
+          (app.js, « Menus »). Le serveur n'accepte que ces tailles. -#}
+      <div id="pm-note-pdf" class="pop-menu" popover aria-label="Télécharger la note en PDF">
+        <p class="pop-title">Télécharger en PDF</p>
+        <form class="pop-options" method="get" action="/notes/{{ id }}/download.pdf" hx-boost="false" data-note-export="pdf">
+          <label class="pop-field">
+            <span>Taille du texte</span>
+            <select name="zoom">
+              {%- for zoom in zooms %}
+              <option value="{{ zoom }}"{% if *zoom == 100 %} selected{% endif %}>{{ zoom }} %</option>
+              {%- endfor %}
+            </select>
+          </label>
+          <label class="check-row"><input type="checkbox" name="titres" value="1" checked><span>Garder les titres avec leur texte : un titre coupé de son paragraphe passe en haut de la page suivante</span></label>
+          <button class="btn btn-primary" type="submit">{{ crate::assets::icon("download")|safe }}<span>Télécharger</span></button>
+        </form>
+      </div>
+      {% endif %}
 
       <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Supprimer définitivement cette note ?">
         <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer la note" title="Supprimer la note">{{ crate::assets::icon("trash")|safe }}</button>

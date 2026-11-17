@@ -1149,7 +1149,7 @@
       if (menu.getBoundingClientRect().bottom > innerHeight - 8) placeMenu(menu, true);
       // Au clavier, le premier choix (ou le champ à remplir) prend le focus ;
       // un nom à changer est sélectionné, prêt à être retapé.
-      const first = menu.querySelector('button:not([disabled]), a[href], input:not([type="hidden"])');
+      const first = menu.querySelector('button:not([disabled]), a[href], input:not([type="hidden"]), select');
       first?.focus({ preventScroll: true });
       if (first instanceof HTMLInputElement && first.type === "text") first.select();
     },
@@ -1171,14 +1171,27 @@
   // src/notes/export.rs). Des modifications pas encore parties ? On les
   // envoie (Ctrl+S du mode classique ; en direct, elles partent seules en une
   // seconde) et on attend « Enregistré », 4 secondes au plus, avant de
-  // télécharger. Le PDF prend quelques secondes : un message le dit.
+  // télécharger. Le Markdown est un lien ; le PDF, un formulaire (taille du
+  // texte, titres gardés avec leur texte), qui prend quelques secondes : un
+  // message le dit.
   document.addEventListener("click", (event) => {
     const link = event.target instanceof Element && event.target.closest("a[data-note-export]");
     if (!link || event.defaultPrevented || event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    link.closest(".pop-menu")?.hidePopover();
+    exportNote(link.href, link);
+  });
 
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.matches("form[data-note-export]")) return;
+    event.preventDefault();
+    const query = new URLSearchParams(new FormData(form)).toString();
+    exportNote(`${form.action}?${query}`, form);
+  });
+
+  function exportNote(url, from) {
+    from.closest(".pop-menu")?.hidePopover();
     const status = $("#save-status");
     const form = $("#note-form");
     const pending = () => ["dirty", "saving"].includes(status?.dataset.state);
@@ -1189,13 +1202,13 @@
         setTimeout(go, 150);
         return;
       }
-      if (link.dataset.noteExport === "pdf") {
+      if (from.dataset.noteExport === "pdf") {
         showToast("PDF en préparation : le téléchargement démarre dans quelques secondes");
       }
-      window.location.assign(link.href);
+      window.location.assign(url);
     };
     go();
-  });
+  }
 
   /** Message passager, comme le message flash d'après une redirection. */
   function showToast(text) {
