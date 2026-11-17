@@ -14,6 +14,19 @@
       {#- Fenêtre « Ranger » (layout.html) : un autre espace, un dossier. -#}
       <button class="icon-btn" type="button" popovertarget="picker" hx-get="/destinations?note={{ id }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker aria-label="Ranger la note dans un autre dossier ou espace" title="Ranger dans un autre dossier ou espace">{{ crate::assets::icon("move")|safe }}</button>
 
+      {#- Télécharger la note (src/notes/export.rs). Des liens ordinaires, hors
+          htmx : la réponse est un fichier, et une erreur (service de
+          conversion arrêté) s'affiche comme une page. app.js envoie d'abord
+          les modifications en attente (data-note-export). -#}
+      <button class="icon-btn" type="button" popovertarget="pm-note-download" aria-label="Télécharger la note" title="Télécharger">{{ crate::assets::icon("download")|safe }}</button>
+      <div id="pm-note-download" class="pop-menu" popover aria-label="Télécharger la note">
+        <p class="pop-title">Télécharger</p>
+        <a href="/notes/{{ id }}/download.md" hx-boost="false" data-note-export>{{ crate::assets::icon("file-code")|safe }}Markdown (.md)</a>
+        {% if pdf %}
+        <a href="/notes/{{ id }}/download.pdf" hx-boost="false" data-note-export="pdf">{{ crate::assets::icon("file")|safe }}PDF</a>
+        {% endif %}
+      </div>
+
       <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Supprimer définitivement cette note ?">
         <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer la note" title="Supprimer la note">{{ crate::assets::icon("trash")|safe }}</button>
       </form>

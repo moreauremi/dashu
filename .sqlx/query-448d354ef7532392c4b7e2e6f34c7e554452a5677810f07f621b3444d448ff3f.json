@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT title, body_md, updated_at FROM notes\n         WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "title",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "body_md",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "448d354ef7532392c4b7e2e6f34c7e554452a5677810f07f621b3444d448ff3f"
+}

@@ -1165,6 +1165,49 @@
     if (menu && opener.getAttribute("popovertarget") !== menu.id) menu.hidePopover();
   });
 
+  // ------------------------------------------------ Télécharger une note
+  //
+  // Le serveur exporte la version enregistrée de la note (Markdown ou PDF,
+  // src/notes/export.rs). Des modifications pas encore parties ? On les
+  // envoie (Ctrl+S du mode classique ; en direct, elles partent seules en une
+  // seconde) et on attend « Enregistré », 4 secondes au plus, avant de
+  // télécharger. Le PDF prend quelques secondes : un message le dit.
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element && event.target.closest("a[data-note-export]");
+    if (!link || event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    link.closest(".pop-menu")?.hidePopover();
+
+    const status = $("#save-status");
+    const form = $("#note-form");
+    const pending = () => ["dirty", "saving"].includes(status?.dataset.state);
+    if (status?.dataset.state === "dirty" && form && window.htmx) window.htmx.trigger(form, "flush");
+    const asked = Date.now();
+    const go = () => {
+      if (pending() && Date.now() - asked < 4000) {
+        setTimeout(go, 150);
+        return;
+      }
+      if (link.dataset.noteExport === "pdf") {
+        showToast("PDF en préparation : le téléchargement démarre dans quelques secondes");
+      }
+      window.location.assign(link.href);
+    };
+    go();
+  });
+
+  /** Message passager, comme le message flash d'après une redirection. */
+  function showToast(text) {
+    const toast = document.createElement("p");
+    toast.className = "toast toast-ok";
+    toast.setAttribute("role", "status");
+    toast.textContent = text;
+    ($("#main") || document.body).append(toast);
+    setTimeout(() => toast.classList.add("is-leaving"), 4000);
+    setTimeout(() => toast.remove(), 4300);
+  }
+
   // ------------------------------------------------ Retour à la bonne place
   //
   // La page d'un fichier revient là où on l'a ouverte (un dossier, une

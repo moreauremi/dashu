@@ -19,6 +19,9 @@ pub enum AppError {
     BadRequest(String),
     /// Envoi plus gros que la limite (413), avec le message à afficher.
     TooLarge(String),
+    /// Service dont dépend la page indisponible pour l'instant (503), avec le
+    /// message à afficher : le service de conversion pour le PDF d'une note.
+    Unavailable(String),
     Internal(anyhow::Error),
 }
 
@@ -51,6 +54,7 @@ impl IntoResponse for AppError {
             ),
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             Self::TooLarge(message) => (StatusCode::PAYLOAD_TOO_LARGE, message),
+            Self::Unavailable(message) => (StatusCode::SERVICE_UNAVAILABLE, message),
             Self::Internal(error) => {
                 // Le détail part dans les logs, jamais dans la page.
                 tracing::error!(error = format!("{error:#}"), "erreur interne");
@@ -120,6 +124,7 @@ pub async fn error_pages(request: Request, next: Next) -> Response {
         StatusCode::BAD_REQUEST => "Requête invalide",
         StatusCode::TOO_MANY_REQUESTS => "Trop de tentatives",
         StatusCode::PAYLOAD_TOO_LARGE => "Trop volumineux",
+        StatusCode::SERVICE_UNAVAILABLE => "Indisponible pour l'instant",
         _ => "Erreur",
     };
     let page = ErrorPage {
