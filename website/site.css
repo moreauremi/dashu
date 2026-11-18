@@ -170,6 +170,17 @@ h1 .spaces{display:block;color:var(--text-3)}
 .carte p:last-child{margin-top:6px;font-size:15px;color:var(--text-2)}
 .apercu .shot{margin-top:40px}
 
+/* Fonctionnalités : trois colonnes ; une capture d'iPhone tient entière dans sa carte. */
+.cartes-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:899px){.cartes-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:539px){.cartes-3{grid-template-columns:1fr}}
+.carte.tel img{object-fit:contain;object-position:50% 0;padding:14px 0 0;background:var(--surface-2)}
+.carte img + h3{margin-top:16px}
+/* Feuille de route en trois lignes. */
+.road-court{padding:0;list-style:none}
+.road-court .step{padding-bottom:20px}
+.road-court .step h3 small{display:block;margin:2px 0 0}
+
 /* Sections */
 section.block{padding-block:72px;border-top:1px solid var(--border)}
 .kicker{font-size:14px;color:var(--text-3);margin-bottom:12px}

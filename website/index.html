@@ -8,6 +8,13 @@
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="Hermes Dashboard">
 <meta property="og:description" content="Dashboard modulaire, notes Markdown, fichiers et emploi du temps, rangés par espaces. Open source et auto-hébergé.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dashu.dev/">
+<meta property="og:image" content="https://dashu.dev/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hermes Dashboard : « Un tableau de bord pour chaque partie de sa vie. », sur une aurore vue depuis l'orbite">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg?v=hermes" type="image/svg+xml">
 <link rel="preload" href="fonts/rethink-sans.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="site.css">
@@ -77,25 +84,25 @@
       </div>
       <ul class="cartes">
         <li class="carte">
-          <img src="captures/notes-a-plusieurs.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="Une note ouverte par deux personnes, avec le curseur et le prénom de l'autre">
+          <img src="cartes/notes-a-plusieurs.webp" width="960" height="600" loading="lazy" decoding="async" alt="Une note ouverte par deux personnes, avec le curseur et le prénom de l'autre">
           <p class="date">16 novembre 2026</p>
           <h3>Une note écrite à plusieurs</h3>
           <p>Comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
         </li>
         <li class="carte">
-          <img src="captures/membres.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="Les membres d'un espace partagé : Léa est membre, Sam n'a pas encore répondu à l'invitation">
+          <img src="cartes/membres.webp" width="960" height="600" loading="lazy" decoding="async" alt="Les membres d'un espace partagé : Léa est membre, Sam n'a pas encore répondu à l'invitation">
           <p class="date">16 novembre 2026</p>
           <h3>Des espaces partagés</h3>
           <p>Sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
         </li>
         <li class="carte">
-          <img src="captures/apercu-partage.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="L'aperçu d'une image dans les fichiers, avec ses actions : télécharger, renommer, partager par un lien qui expire">
+          <img src="cartes/apercu-partage.webp" width="960" height="600" loading="lazy" decoding="async" alt="L'aperçu d'une image dans les fichiers, avec ses actions : télécharger, renommer, partager par un lien qui expire">
           <p class="date">15 novembre 2026</p>
           <h3>Un fichier partagé par lien</h3>
           <p>Valable une heure, un jour ou sept jours, révocable. La page du lien ne montre que le nom et la taille.</p>
         </li>
         <li class="carte">
-          <img src="captures/barre-de-commandes.webp" width="2880" height="1800" loading="lazy" decoding="async" alt="La barre de commandes ouverte par « / »">
+          <img src="cartes/barre-de-commandes.webp" width="960" height="600" loading="lazy" decoding="async" alt="La barre de commandes ouverte par « / »">
           <p class="date">13 novembre 2026</p>
           <h3>Tout au clavier</h3>
           <p>« / » ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace.</p>
@@ -106,184 +113,70 @@
 
   <section class="block" id="fonctions">
     <div class="wrap">
-      <p class="kicker">Ce qui tourne aujourd'hui</p>
-      <h2>Tout ce qui sert au quotidien, sans rien de plus</h2>
-      <p class="intro">Chaque contenu appartient à un espace. On passe de l'un à l'autre en un clic, ou d'un balayage sur téléphone, et le dashboard, les notes, les fichiers et l'agenda suivent.</p>
-      <ul class="grid">
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#layers"/></svg></div>
-          <h3>Espaces à la carte</h3>
-          <p>Perso, École et Entreprise au départ, jusqu'à huit, chacun avec sa couleur et son icône. Perso montre tout : le dashboard, les notes et l'agenda de tous les espaces. Un espace s'archive en fin d'année ; le supprimer propose d'abord d'en transférer le contenu.</p>
-          <div class="tags"><span class="tag"><i style="background:var(--orange)"></i>Perso</span><span class="tag"><i style="background:var(--blue)"></i>École</span><span class="tag"><i style="background:var(--green)"></i>Entreprise</span></div>
+      <h2>Tout ce qui sert au quotidien, rangé par espace</h2>
+      <ul class="cartes cartes-3">
+        <li class="carte">
+          <img src="cartes/dashboard.webp" width="960" height="600" loading="lazy" decoding="async" alt="Le dashboard de l'espace École : emploi du temps sur trois jours, tâches du jour, note épinglée et fichiers récents">
+          <h3>Un dashboard par espace</h3>
+          <p>École, Entreprise, Perso ou ceux qu'on crée : chacun sa grille de widgets, qu'on déplace et agrandit.</p>
         </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#grid"/></svg></div>
-          <h3>Dashboard modulaire</h3>
-          <p>Une grille bento propre à chaque espace : calendrier, prochains cours, tâches, notes, fichiers, réglages rapides. Chaque widget se déplace et s'agrandit, à la souris comme au doigt.</p>
+        <li class="carte">
+          <img src="cartes/agenda.webp" width="960" height="600" loading="lazy" decoding="async" alt="L'emploi du temps Pronote en vue semaine">
+          <h3>L'emploi du temps Pronote</h3>
+          <p>Importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine.</p>
         </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#folder"/></svg></div>
+        <li class="carte tel">
+          <img src="cartes/iphone-note.webp" width="480" height="1039" loading="lazy" decoding="async" alt="Une note de cours sur iPhone, en thème clair">
+          <h3>Des notes façon Notion</h3>
+          <p>Le texte se met en forme pendant qu'on écrit, et « / » ouvre les blocs. Le Markdown reste le format enregistré.</p>
+        </li>
+        <li class="carte">
+          <img src="cartes/fichiers.webp" width="960" height="600" loading="lazy" decoding="async" alt="Le dossier Réseaux de l'espace École : un sous-dossier, des notes et des fichiers avec leur vignette">
           <h3>Fichiers et dossiers</h3>
-          <p>Des dossiers et sous-dossiers dans chaque espace, pour les fichiers comme pour les notes, avec des tags et une recherche. Un fichier se renomme sans changer de type. On range en glissant, ou par une fenêtre qui montre tout. Un fichier se partage par un lien qui expire. Gros fichiers envoyés par morceaux, aperçu des photos, vidéos et PDF, conversions (photos, vidéos, PDF, documents Markdown) dans un service isolé, sans réseau.</p>
+          <p>Tags, recherche, aperçu des photos, vidéos et PDF, partage par un lien qui expire.</p>
         </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#note"/></svg></div>
-          <h3>Notes façon Notion</h3>
-          <p>Le texte se met en forme pendant qu'on écrit ; «&nbsp;/&nbsp;» ouvre le menu des blocs : titres, listes, cases à cocher, tableaux, code, images. Le Markdown reste le format enregistré. Sauvegarde automatique, tags, recherche plein texte. À plusieurs, comme dans un Google Doc : le texte de l'autre arrive pendant qu'il tape, avec son curseur et son prénom.</p>
+        <li class="carte">
+          <img src="cartes/outils.webp" width="960" height="600" loading="lazy" decoding="async" alt="L'onglet Outils, où un fichier déposé attend d'être compressé ou converti">
+          <h3>Des conversions à part</h3>
+          <p>Photos, vidéos, sons, PDF et documents, convertis dans un service isolé, sans réseau.</p>
         </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#cal"/></svg></div>
-          <h3>Emploi du temps</h3>
-          <p>Le flux iCal de Pronote importé par son lien et resynchronisé toutes les heures. En vue jour ou semaine, et en calendrier sur le dashboard.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#phone"/></svg></div>
+        <li class="carte tel">
+          <img src="cartes/iphone-dashboard.webp" width="480" height="1039" loading="lazy" decoding="async" alt="Le dashboard sur iPhone, en thème sombre">
           <h3>Comme une app sur iPhone</h3>
-          <p>Installée sur l'écran d'accueil : barre de raccourcis en bas, changement d'espace d'un balayage, pas de zoom intempestif.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#sliders"/></svg></div>
-          <h3>Au clavier, à sa main</h3>
-          <p>«&nbsp;/&nbsp;» ouvre une barre de commandes : ouvrir une note, ajouter une tâche pour demain, changer d'espace, sans quitter le clavier. Thème clair ou sombre, taille de l'interface, barre latérale ancrée ou cachée, profil avec photo.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#users"/></svg></div>
-          <h3>Seul ou à plusieurs</h3>
-          <p>Chacun son compte, par mot de passe ou Google ; pas d'inscription publique, seuls les emails autorisés entrent. Un espace se partage sur invitation : notes, fichiers, dossiers et tâches deviennent communs, l'agenda reste à chacun.</p>
-        </li>
-        <li class="feat">
-          <div class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></div>
-          <h3>API pour un assistant</h3>
-          <p>Une API JSON protégée par une clé, désactivée par défaut, pour qu'un assistant gère les tâches et les notes et lise l'agenda.</p>
+          <p>Installée sur l'écran d'accueil ; un balayage pour changer d'espace.</p>
         </li>
       </ul>
     </div>
   </section>
 
-  <section class="block apercu">
-    <div class="wrap">
-      <p class="kicker">Le dashboard</p>
-      <h2>Une grille par espace, à sa main</h2>
-      <figure class="shot" aria-label="Aperçu d'Hermes Dashboard, avec des données d'exemple" style="margin-inline:0">
-      <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span><em>app.dashu.dev</em></div>
-      <div class="app" aria-hidden="true">
-        <div class="side">
-          <svg class="logo" viewBox="127 54 972 186"><use href="logo.svg#h"/><use href="logo.svg#ermes"/><use href="logo.svg#slash"/></svg>
-          <div class="sp"><i style="background:var(--orange)"></i>Perso</div>
-          <div class="sp on"><i style="background:var(--blue)"></i>École</div>
-          <div class="sp"><i style="background:var(--green)"></i>Entreprise</div>
-          <hr>
-          <div class="nv on"><svg class="i"><use href="#grid"/></svg>Dashboard</div>
-          <div class="nv"><svg class="i"><use href="#note"/></svg>Notes</div>
-          <div class="nv"><svg class="i"><use href="#folder"/></svg>Fichiers</div>
-          <div class="nv"><svg class="i"><use href="#cal"/></svg>Agenda</div>
-          <div class="foot">
-            <div class="nv"><svg class="i"><use href="#cog"/></svg>Réglages</div>
-            <div class="me"><span class="av">AM</span>Alex Martin</div>
-          </div>
-        </div>
-        <div class="main">
-          <div class="main-head">
-            <div><h3>Lundi 16 novembre</h3><p>Bonjour Alex · École</p></div>
-            <span class="edit"><svg class="i"><use href="#pen"/></svg>Modifier</span>
-          </div>
-          <div class="bento">
-            <div class="w wide tall">
-              <h4>Calendrier</h4>
-              <div class="cal">
-                <span class="d today" style="grid-column:2">Lun. 16</span>
-                <span class="d" style="grid-column:3">Mar. 17</span>
-                <span class="d" style="grid-column:4">Mer. 18</span>
-                <span class="hr" style="grid-row:2">8 h</span><span class="ln" style="grid-row:2"></span>
-                <span class="hr" style="grid-row:4">9 h</span><span class="ln" style="grid-row:4"></span>
-                <span class="hr" style="grid-row:6">10 h</span><span class="ln" style="grid-row:6"></span>
-                <span class="hr" style="grid-row:8">11 h</span><span class="ln" style="grid-row:8"></span>
-                <span class="hr" style="grid-row:10">12 h</span><span class="ln" style="grid-row:10"></span>
-                <div class="ev" style="grid-column:2;grid-row:3/7;--c:var(--blue)">Réseaux<small>08:30 · B204</small></div>
-                <div class="ev" style="grid-column:2;grid-row:7/10;--c:var(--green)">Cyber&shy;sécurité<small>10:30 · B110</small></div>
-                <div class="ev" style="grid-column:3;grid-row:4/8;--c:var(--orange)">Anglais<small>09:00 · A12</small></div>
-                <div class="ev" style="grid-column:3;grid-row:8/11;--c:var(--violet)">Projet tutoré<small>11:00 · C02</small></div>
-                <div class="ev" style="grid-column:4;grid-row:2/6;--c:var(--rose)">Systèmes<small>08:00 · B110</small></div>
-                <div class="ev" style="grid-column:4;grid-row:7/11;--c:var(--blue)">Gestion de projet<small>10:30 · A07</small></div>
-                <span class="now"></span>
-              </div>
-            </div>
-            <div class="w wide">
-              <h4>Tâches du jour</h4>
-              <div class="row done"><i class="box done"></i><span>Relire le cours sur les VLAN</span></div>
-              <div class="row"><i class="box"></i><span>Finir le TP de routage</span></div>
-              <div class="row"><i class="box"></i><span>Préparer l'oral de veille</span></div>
-            </div>
-            <div class="w">
-              <h4>Notes</h4>
-              <div class="row"><span>Cours réseau : VLAN<small>il y a 2 h</small></span></div>
-              <div class="row"><span>Fiche révision : STP<small>hier</small></span></div>
-            </div>
-            <div class="w">
-              <h4>Fichiers</h4>
-              <div class="row"><i class="thumb">PDF</i><span>TP-routage.pdf<small>1,2 Mo</small></span></div>
-              <div class="row"><i class="thumb photo"></i><span>Tableau.heic<small>2,4 Mo</small></span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </figure>
-    <p class="shot-cap">Aperçu avec des données d'exemple. Chaque widget se déplace et s'agrandit ; thème clair ou sombre selon le système. <a href="captures.html">Voir les captures de l'application</a></p>
-    </div>
-  </section>
-
   <section class="block">
     <div class="wrap">
-      <p class="kicker">Sous le capot</p>
       <h2>Léger, rapide, et rien à exposer</h2>
-      <p class="intro">Les pages sont rendues par le serveur, htmx s'occupe de l'interactivité, et une WebSocket relaie l'écriture à plusieurs. La base est un fichier SQLite, sauvegardée à chaud chaque nuit sur un second disque, et les fichiers sont copiés chaque nuit sur l'autre : chaque donnée existe sur deux disques. Un fichier envoyé n'est jamais exécuté dans la page, et les conversions tournent à part, sans accès à la base.</p>
+      <p class="intro">Un seul binaire Rust, une base SQLite sauvegardée chaque nuit sur un second disque, et aucun port ouvert sur la box.</p>
       <div class="facts">
         <div class="fact"><strong>1</strong><span>binaire Rust : l'application et son service de conversion</span></div>
         <div class="fact"><strong>0,5 ms</strong><span>de temps de réponse du serveur</span></div>
         <div class="fact"><strong>7,6 Mo</strong><span>de mémoire au repos</span></div>
         <div class="fact"><strong>98 – 100</strong><span>au score Lighthouse mobile</span></div>
       </div>
-      <p class="stack">Mesures faites sur le serveur réel, via Cloudflare, en 4G simulée. Rust, axum, SQLite, htmx, askama ; ffmpeg, Ghostscript, libheif, pandoc et Typst pour les fichiers. Mots de passe Argon2id, protection CSRF, Content-Security-Policy stricte, anti-bruteforce.</p>
+      <p class="stack">Mesures de l'application sur le serveur réel, via Cloudflare, en 4G simulée. Rust, axum, SQLite, htmx.</p>
     </div>
   </section>
 
   <section class="block" id="feuille-de-route">
     <div class="wrap">
-      <p class="kicker">Feuille de route</p>
-      <h2>Une version à la fois, utilisée avant la suivante</h2>
-      <div class="road">
-        <div class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>terminée, en service</small></h3><p>Espaces, notes Markdown, agenda Pronote, API pour un assistant. Depuis : espaces à la carte, dashboard modulaire, profil et réglages d'affichage, barre de commandes, éditeur de notes façon Notion.</p></div>
-        <div class="step now">
-          <h3>v2 · Fichiers et outils<small>en cours</small></h3>
-          <ul class="todo">
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Fichiers par espace, envoi par glisser-déposer, gros fichiers par morceaux</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Dossiers et sous-dossiers, pour les fichiers et les notes</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Tags et recherche dans les fichiers</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Vignettes et aperçu des photos (HEIC compris), vidéos et PDF</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Partage par lien temporaire et révocable</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Sauvegarde nocturne des fichiers, sur un autre disque que la base</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Compression et conversion des photos, vidéos, sons et PDF, dans un service isolé</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Conversion des documents : Markdown et texte vers PDF, HTML ou DOCX</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Onglet Outils : déposer un fichier, le convertir, puis le garder ou le télécharger</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Images collées et liens vers les fichiers dans les notes</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Widget Fichiers sur le dashboard</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Renommer un fichier</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Espaces partagés entre comptes, sur invitation</span></li>
-            <li class="ok"><svg class="i" aria-hidden="true"><use href="#check"/></svg><span><span class="sr-only">Fait : </span>Notes écrites à plusieurs en direct, avec le curseur de chacun</span></li>
-            <li><svg class="i" aria-hidden="true"><use href="#todo"/></svg><span><span class="sr-only">À venir : </span>Les fichiers dans l'API de l'assistant</span></li>
-          </ul>
-        </div>
-        <div class="step"><h3>v3 · OCR</h3><p>Le texte des images et des PDF scannés.</p></div>
-        <div class="step"><h3>v4 · Médias</h3><p>Retouche et détourage de photos dans le navigateur.</p></div>
-        <div class="step"><h3>v5 · Audio</h3><p>Lecture des notes à voix haute, transcription des vocaux et des cours.</p></div>
-        <div class="step"><h3>v6 · IA</h3><p>Un assistant qui cherche dans les notes et les fichiers.</p></div>
-      </div>
+      <h2>Une version à la fois</h2>
+      <ol class="road road-court">
+        <li class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>en service</small></h3></li>
+        <li class="step now"><h3>v2 · Fichiers, outils, espaces partagés<small>presque finie : reste les fichiers dans l'API de l'assistant</small></h3></li>
+        <li class="step"><h3>Ensuite · OCR, médias, audio, puis un assistant qui cherche dans les notes</h3></li>
+      </ol>
+      <p class="after"><a href="https://github.com/moreauremi/dashu/blob/v1/STATUS.md">Le détail, critère par critère</a></p>
     </div>
   </section>
 
   <section class="block" id="installer">
     <div class="wrap">
-      <p class="kicker">Installer</p>
       <h2>Chez soi, sur un vieux PC ou un mini-serveur</h2>
 <pre><span class="c"># Récupérer le code (branche v1) et le configurer</span>
 git clone -b v1 https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
@@ -292,7 +185,7 @@ cp .env.example .env
 <span class="c"># Lancer (Docker) puis créer son compte</span>
 docker compose up -d --build
 docker compose exec dashu /dashu set-password toi@example.com</pre>
-      <p class="after">Le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a> détaille les variables, l'installation sans Docker telle qu'elle tourne en vrai (conteneur LXC, systemd, service de conversion des fichiers), le tunnel Cloudflare (aucun port à ouvrir), les sauvegardes et la connexion Google.</p>
+      <p class="after">Variables, installation sans Docker, tunnel Cloudflare et sauvegardes : tout est dans le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a>.</p>
     </div>
   </section>
 
