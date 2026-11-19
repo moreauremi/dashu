@@ -388,7 +388,7 @@ Un fichier envoyé est une donnée, jamais une page. Toute réponse qui sert un 
 | Type | Aperçu |
 | --- | --- |
 | PNG, JPEG, WebP, GIF | Image dans la page |
-| PDF | Lecteur du navigateur. Si l'en-tête `sandbox` l'empêche (cas connu de Chrome), le PDF est servi depuis un sous-domaine séparé ou proposé en téléchargement : à trancher dans la PR de l'aperçu |
+| PDF | Lu en entier dans la page par pdf.js (Mozilla) : pages dessinées au fil du défilement, zoom, texte sélectionnable. Le PDF arrive comme une donnée (`application/octet-stream`, `attachment`, `sandbox`) : le navigateur ne l'affiche jamais lui-même (revu le 18 novembre 2026, voir « Reste à trancher ») |
 | Texte, Markdown, code | Rendu par le serveur dans un bloc échappé (le Markdown passe par ammonia, comme les notes) |
 | HTML, SVG, tout le reste | Pas d'aperçu : téléchargement (`Content-Disposition: attachment`) |
 
@@ -523,7 +523,7 @@ Prises le 11 novembre 2026 :
 Reste à trancher, dans la PR concernée :
 
 - *(tranché le 15 novembre)* **Taille du volume de sauvegarde des fichiers** sur le premier disque (étape 6) : 50 Go par défaut (`mp2`, `local-lvm`), moins si `pvesm status` montre trop peu de place. Instantanés incrémentaux par liens durs (`rsync --link-dest`), 14 jours ; une restauration de la base remet aussi les fichiers absents de la même nuit.
-- *(tranché le 11 novembre)* **Aperçu des PDF** : la première page, rendue en image par le service de conversion, et le bouton Télécharger. Le PDF n'est jamais servi pour être affiché par le navigateur.
+- *(tranché le 11 novembre, revu le 18 novembre 2026)* **Aperçu des PDF** : d'abord la première page, rendue en image par le service de conversion, et le bouton Télécharger. Rémi a demandé le 18 novembre de lire tout le PDF dans dashu. Retenu : pdf.js, la bibliothèque de Mozilla, embarquée dans dashu et chargée seulement sur la page d'un PDF ; même rendu sur ordinateur et sur iPhone en mode app, texte sélectionnable, zoom. Le PDF n'est toujours jamais servi pour être affiché par le navigateur : pdf.js le reçoit comme une donnée et le dessine. Écartés : le lecteur du navigateur dans un cadre (il faut retirer l'en-tête `sandbox`, et Safari sur iPhone n'y montre souvent que la première page) et toutes les pages en images par le service de conversion (texte non sélectionnable, pas de zoom en mode app). Justification de la dépendance dans le README (« Écarts »).
 
 # dashu — Espaces et outils (v2, suite)
 

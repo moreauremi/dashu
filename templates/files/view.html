@@ -74,6 +74,27 @@
   <img src="/files/{{ id }}/raw" alt="{{ name }}">
   {%- else if show == "picture" %}
   <img src="/files/{{ id }}/preview" alt="Aperçu de {{ name }}">
+  {%- else if show == "pdf" %}
+  {#- Lecteur de PDF (frontend/pdf.js, chargé par app.js à la première page
+      de PDF) : le PDF arrive comme une simple donnée par /raw, pdf.js en
+      dessine les pages. En attendant, ou sans JavaScript, la première page
+      en image si le service de conversion l'a déjà faite. Les décodeurs des
+      PDF scannés sont demandés par pdf.js sous leur nom exact, sans
+      empreinte : d'où le dossier en clair. -#}
+  <div class="pdf-viewer" data-pdf="/files/{{ id }}/raw" data-script="{{ crate::assets::url("js/pdf.js") }}" data-worker="{{ crate::assets::url("js/pdf-worker.js") }}" data-decoders="/static/js/pdfjs/">
+    <div class="pdf-bar" role="toolbar" aria-label="Lecture du PDF" hidden>
+      <span class="pdf-count" data-pdf-count></span>
+      <button class="btn pdf-step" type="button" data-pdf-step="-1" title="Réduire" aria-label="Réduire">{{ crate::assets::icon("zoom-out")|safe }}</button>
+      <button class="btn pdf-fit" type="button" data-pdf-fit title="Ajuster à la largeur" aria-label="Zoom, ajuster à la largeur">100 %</button>
+      <button class="btn pdf-step" type="button" data-pdf-step="1" title="Agrandir" aria-label="Agrandir">{{ crate::assets::icon("zoom-in")|safe }}</button>
+    </div>
+    <div class="pdf-pages">
+      {%- if poster %}
+      <img class="pdf-first" src="/files/{{ id }}/preview" alt="Première page de {{ name }}">
+      {%- endif %}
+    </div>
+    <p class="pdf-status muted" role="status">Chargement du PDF…</p>
+  </div>
   {%- else if show == "video" %}
   <video controls playsinline preload="metadata" src="/files/{{ id }}/raw"{% if poster %} poster="/files/{{ id }}/preview"{% endif %}>
     <p>Ce navigateur ne lit pas cette vidéo : télécharge-la, ou compresse-la en MP4.</p>

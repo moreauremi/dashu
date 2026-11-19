@@ -81,6 +81,28 @@
     $$("[data-tab-picker]").forEach(limitTabs);
     updateClock();
     updateNowLine();
+    pdfViewer();
+  }
+
+  // Lecteur de PDF (static/js/pdf.js, source dans frontend/pdf.js) : chargé
+  // à la première page de PDF ouverte, puis gardé pour les suivantes. À
+  // chaque page, il se branche sur le nouveau lecteur, ou se ferme et rend
+  // sa mémoire s'il n'y en a pas.
+  let pdfModule = null;
+  function pdfViewer() {
+    const el = $("[data-pdf]");
+    if (!pdfModule) {
+      if (!el) return;
+      pdfModule = import(el.dataset.script);
+    }
+    pdfModule.then(
+      (module) => module.mount($("[data-pdf]")),
+      () => {
+        pdfModule = null;
+        const status = $("[data-pdf] .pdf-status");
+        if (status) status.textContent = "Le lecteur de PDF ne s'est pas chargé : recharge la page, ou télécharge le fichier.";
+      },
+    );
   }
 
   // Réglages : quatre raccourcis au plus. Une fois le maximum atteint, les

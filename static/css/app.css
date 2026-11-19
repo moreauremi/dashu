@@ -3932,6 +3932,178 @@ input.note-title::placeholder {
   color: var(--text-3);
 }
 
+/* Lecteur de PDF (frontend/pdf.js) : les pages l'une sous l'autre, sur le
+   défilement de la page ; une barre de zoom reste visible sous l'île. */
+.file-preview.is-pdf {
+  display: block;
+  /* Sinon le lecteur, centré, se réduirait à sa largeur minimale (les
+     navigateurs récents appliquent justify-items aux blocs aussi). */
+  justify-items: normal;
+  padding: 0;
+  overflow: clip;
+  background: var(--bg);
+}
+
+.pdf-bar {
+  position: sticky;
+  top: 68px; /* sous l'île (16 + 44 px) */
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pdf-bar[hidden] {
+  display: none;
+}
+
+.pdf-count {
+  margin-right: auto;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-bar .btn {
+  height: 32px;
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-fit {
+  min-width: 68px;
+}
+
+.pdf-pages {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+/* Zoomé plus large que la colonne : on défile de côté depuis le bord gauche
+   (centrer couperait le début de la page). */
+.pdf-viewer.is-ready .pdf-pages {
+  justify-items: start;
+}
+
+.pdf-page {
+  position: relative;
+  margin-inline: auto;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 6px 20px -12px rgb(0 0 0 / 0.4);
+  --scale-factor: 1;
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+
+.pdf-first {
+  max-width: 100%;
+  max-height: 75vh;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.pdf-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pdf-status {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.pdf-status[hidden] {
+  display: none;
+}
+
+/* Couche de texte de pdf.js : du texte transparent posé sur le dessin, pour
+   le sélectionner et le copier. Reprise de web/pdf_viewer.css (pdfjs-dist). */
+.pdf-text {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  color-scheme: only light;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.pdf-text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.pdf-text > :not(.markedContent),
+.pdf-text .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-text .markedContent {
+  display: contents;
+}
+
+.pdf-text ::selection {
+  background: rgb(30 86 196 / 0.3);
+}
+
+.pdf-text br::selection {
+  background: transparent;
+}
+
+.pdf-text[data-main-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+}
+
+.pdf-text[data-main-rotation="180"] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.pdf-text[data-main-rotation="270"] {
+  transform: rotate(270deg) translateX(-100%);
+}
+
+@media (max-width: 860px) {
+  .pdf-bar {
+    top: calc(56px + env(safe-area-inset-top, 0px)); /* sous la barre du haut */
+  }
+
+  .pdf-pages {
+    gap: 8px;
+    padding: 8px;
+  }
+}
+
 /* Suivi des compressions, au-dessus de la liste. */
 .job-list {
   display: grid;
