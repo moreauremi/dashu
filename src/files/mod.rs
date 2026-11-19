@@ -1483,10 +1483,11 @@ struct ViewPage {
     /// tâche, pour « Remplacer l'original ».
     replace_job: Option<i64>,
     /// Ce que la page montre : `image` (le fichier), `picture` (le grand
-    /// aperçu), `video`, `audio`, `text`, `markdown`, `pending` (aperçu en
-    /// préparation) ou `none`.
+    /// aperçu), `pdf` (le lecteur de PDF), `video`, `audio`, `text`,
+    /// `markdown`, `pending` (aperçu en préparation) ou `none`.
     show: &'static str,
-    /// Vidéo : image affichée avant la lecture.
+    /// Vidéo : image affichée avant la lecture. PDF : la première page en
+    /// image, montrée le temps que le lecteur se charge.
     poster: bool,
     /// Vidéo .mov d'iPhone (HEVC) : tous les navigateurs ne la lisent pas.
     quicktime: bool,
@@ -1504,6 +1505,22 @@ fn inline_safe(mime: &str) -> bool {
         "image/jpeg" | "image/png" | "image/gif" | "image/webp"
     ) || mime.starts_with("video/")
         || mime.starts_with("audio/")
+}
+
+/// Comment `/files/{id}/raw` sert un type : `Content-Type` et
+/// `Content-Disposition`. Les types sans code s'affichent dans la page
+/// (`<img>`, `<video>`, `<audio>`). Un PDF part comme une simple donnée,
+/// lue par le lecteur de PDF (pdf.js, `frontend/pdf.js`) : type générique et
+/// `attachment`, le navigateur ne l'affiche jamais lui-même, même ouvert à
+/// la main. Le reste n'est pas servi.
+fn raw_kind(mime: &str) -> Option<(&str, &'static str)> {
+    if inline_safe(mime) {
+        Some((mime, "inline"))
+    } else if mime == "application/pdf" {
+        Some(("application/octet-stream", "attachment"))
+    } else {
+        None
+    }
 }
 
 /// Types montrés comme du texte (échappé : un HTML ou un SVG s'y lit, sans
@@ -1687,7 +1704,10 @@ pub async fn view(
         m if inline_safe(m) && m.starts_with("image/") => "image",
         m if m.starts_with("video/") => "video",
         m if m.starts_with("audio/") => "audio",
-        "image/heic" | "image/heif" | "application/pdf" => match (row.preview, row.thumb) {
+        // Le lecteur de PDF dessine toutes les pages dans le navigateur : il
+        // ne dépend pas du service de conversion.
+        "application/pdf" => "pdf",
+        "image/heic" | "image/heif" => match (row.preview, row.thumb) {
             (1, _) => "picture",
             (_, 0) if tools => "pending",
             _ => "none",
@@ -1794,9 +1814,11 @@ async fn read_start(path: &FsPath, max: u64) -> AppResult<String> {
 }
 
 /// `GET /files/{id}/raw` : le fichier tel quel, pour `<img>`, `<video>` et
-/// `<audio>` (types sans code seulement). Accepte les demandes partielles
+/// `<audio>` (types sans code seulement), et le PDF pour le lecteur de PDF,
+/// en simple donnée (voir [`raw_kind`]). Accepte les demandes partielles
 /// (`Range`) : sans elles, Safari ne lit pas une vidéo, et on ne peut pas
-/// avancer dedans.
+/// avancer dedans ; pdf.js s'en sert pour montrer les premières pages d'un
+/// gros PDF avant la fin du téléchargement.
 pub async fn raw(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -1814,9 +1836,7 @@ pub async fn raw(
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
-    if !inline_safe(&row.mime) {
-        return Err(AppError::NotFound);
-    }
+    let (content_type, disposition_kind) = raw_kind(&row.mime).ok_or(AppError::NotFound)?;
     let total = row.size as u64;
     let wanted = parse_range(
         headers.get(header::RANGE).and_then(|v| v.to_str().ok()),
@@ -1837,7 +1857,7 @@ pub async fn raw(
     let path = stored_path(&files.dir, &row.storage_key);
     let mut response = (status, file_body(&path, start, len).await?).into_response();
     let h = response.headers_mut();
-    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&row.mime)?);
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(content_type)?);
     h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
     h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     if status == StatusCode::PARTIAL_CONTENT {
@@ -1846,7 +1866,7 @@ pub async fn raw(
     }
     h.insert(
         header::CONTENT_DISPOSITION,
-        disposition("inline", &row.name),
+        disposition(disposition_kind, &row.name),
     );
     h.insert(
         header::CONTENT_SECURITY_POLICY,

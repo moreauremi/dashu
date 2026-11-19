@@ -202,13 +202,76 @@ async fn un_long_texte_est_coupe() {
 }
 
 #[tokio::test]
-async fn un_pdf_attend_son_apercu() {
+async fn un_pdf_se_lit_dans_la_page() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
-    let id = upload(&mut alice, "cours.pdf", b"%PDF-1.4").await;
+    let mut content = b"%PDF-1.4\n".to_vec();
+    content.extend((0..1000u32).map(|i| (i % 256) as u8));
+    let id = upload(&mut alice, "cours.pdf", &content).await;
+
+    // Le lecteur, tout de suite : il ne dépend pas du service de conversion.
+    let page = alice.get(&format!("/files/{id}")).await.body;
+    assert!(
+        page.contains(&format!("data-pdf=\"/files/{id}/raw\"")),
+        "{page}"
+    );
+    assert!(!page.contains("Aperçu en préparation"));
+    assert!(page.contains("data-decoders=\"/static/js/pdfjs/\""));
+
+    // pdf.js et son worker sont servis, avec leur empreinte ; les décodeurs
+    // des PDF scannés sous leur nom exact (pdf.js les demande ainsi).
+    for asset in ["js/pdf.js", "js/pdf-worker.js"] {
+        let url = dashu::assets::url(asset);
+        assert!(page.contains(url), "{asset} absent de la page");
+        let served = alice.get(url).await;
+        assert_eq!(served.status, StatusCode::OK, "{url}");
+        assert!(served.header("content-type").starts_with("text/javascript"));
+    }
+    for decoder in ["jbig2_nowasm_fallback.js", "openjpeg_nowasm_fallback.js"] {
+        let served = alice.get(&format!("/static/js/pdfjs/{decoder}")).await;
+        assert_eq!(served.status, StatusCode::OK, "{decoder}");
+        assert!(served.header("content-type").starts_with("text/javascript"));
+    }
+
+    // Le PDF part comme une simple donnée, que lit pdf.js : le navigateur ne
+    // l'affiche jamais lui-même, même ouvert à la main.
+    let raw = alice.get(&format!("/files/{id}/raw")).await;
+    assert_eq!(raw.status, StatusCode::OK);
+    assert_eq!(raw.bytes, content);
+    assert_eq!(raw.header("content-type"), "application/octet-stream");
+    assert!(raw.header("content-disposition").starts_with("attachment;"));
+    assert_eq!(
+        raw.header("content-security-policy"),
+        "default-src 'none'; sandbox"
+    );
+    assert_eq!(raw.header("x-content-type-options"), "nosniff");
+    assert_eq!(raw.header("accept-ranges"), "bytes");
+
+    // Par morceaux : pdf.js lit d'abord la fin d'un gros PDF (sa table des
+    // objets), puis les pages qu'il montre.
+    let tail = alice
+        .get_range(&format!("/files/{id}/raw"), "bytes=-100")
+        .await;
+    assert_eq!(tail.status, StatusCode::PARTIAL_CONTENT);
+    assert_eq!(tail.bytes, content[content.len() - 100..]);
+    assert_eq!(tail.header("content-type"), "application/octet-stream");
+
+    // Un autre compte n'y a pas accès.
+    let mut bob = app.logged_in(BOB).await;
+    assert_eq!(
+        bob.get(&format!("/files/{id}/raw")).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn une_photo_heic_attend_son_apercu() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let id = upload(&mut alice, "IMG_0001.heic", b"\0\0\0\x18ftypheic").await;
     let page = alice.get(&format!("/files/{id}")).await.body;
     assert!(page.contains("Aperçu en préparation"));
-    // Le PDF lui-même n'est jamais servi pour être affiché.
+    // Le HEIC n'est montré que par son grand aperçu en JPEG.
     assert_eq!(
         alice.get(&format!("/files/{id}/raw")).await.status,
         StatusCode::NOT_FOUND

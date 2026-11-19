@@ -1,6 +1,7 @@
 // Produit les fichiers statiques tiers de dashu dans static/ :
 //   - static/js/htmx.js        htmx minifié, copié tel quel depuis npm
 //   - static/js/editor.js      ProseMirror + notre code d'éditeur, bundle esbuild
+//   - static/js/pdf.js, pdf-worker.js, pdfjs/   lecteur de PDF (pdf.js de Mozilla)
 //   - static/icons.svg         sprite SVG unique, icônes Lucide (licence ISC)
 //   - static/fonts/*.woff2     Rethink Sans et JetBrains Mono (licence OFL), sous-ensemble latin
 //
@@ -40,6 +41,32 @@ await build({
     "linkify-it": join(root, "frontend", "stub-linkify.js"),
   },
 });
+
+// --- Lecteur de PDF (pdf.js de Mozilla) -------------------------------
+// Version « legacy » : la version moderne demande les tout derniers
+// navigateurs (Map.getOrInsertComputed, Promise.try…), la legacy apporte ce
+// qui manque. Chargé seulement sur la page d'un PDF (app.js, `pdfViewer`).
+//   - static/js/pdf.js             pdf.js + notre lecteur (frontend/pdf.js)
+//   - static/js/pdf-worker.js      le worker de pdf.js, qui lit le PDF hors du fil principal
+//   - static/js/pdfjs/*.js         décodeurs d'images JBIG2 et JPEG 2000 (PDF scannés),
+//                                  en JavaScript : la CSP refuse WebAssembly. pdf.js
+//                                  les demande sous leur nom exact, sans empreinte.
+await build({
+  entryPoints: [join(root, "frontend", "pdf.js")],
+  outfile: out("js", "pdf.js"),
+  bundle: true,
+  minify: true,
+  format: "esm",
+  target: ["es2022"],
+  legalComments: "none",
+  banner: { js: "/* pdf.js (Mozilla, https://github.com/mozilla/pdf.js), licence Apache-2.0. */" },
+  logLevel: "info",
+});
+await copyFile(nm("pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"), out("js", "pdf-worker.js"));
+await mkdir(out("js", "pdfjs"), { recursive: true });
+for (const decoder of ["jbig2_nowasm_fallback.js", "openjpeg_nowasm_fallback.js"]) {
+  await copyFile(nm("pdfjs-dist", "wasm", decoder), out("js", "pdfjs", decoder));
+}
 
 // --- Polices ----------------------------------------------------------
 await copyFile(
@@ -148,6 +175,9 @@ const icons = {
   "col-del": "table-columns-split",
   // Menu « … » des lignes de l'onglet Fichiers.
   more: "ellipsis",
+  // Lecteur de PDF : zoom.
+  "zoom-in": "zoom-in",
+  "zoom-out": "zoom-out",
 };
 
 let sprite =
