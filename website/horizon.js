@@ -1,6 +1,6 @@
 /* Horizon : la vidéo du haut de la page d'accueil.
    12 plans de la Terre filmés depuis la Station spatiale internationale (NASA, domaine
-   public), de 0,8 s chacun, recadrés pour que le bord de la planète tombe toujours sur
+   public), de 2 s chacun (24 s en boucle), recadrés pour que le bord de la planète tombe toujours sur
    la même courbe : le monde change, la courbe reste (liste des plans dans
    horizon/plans.json). La vidéo ne se charge qu'une fois la page affichée ; en attendant,
    on voit sa première image. Elle s'arrête hors de l'écran, quand l'onglet est caché,
