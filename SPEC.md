@@ -1030,3 +1030,290 @@ Par défaut, pour avancer :
 - **Événements à leur auteur**, comme les agendas iCal, même dans un espace partagé.
 - **Clé de chiffrement dérivée de `SESSION_SECRET`** : rien de nouveau à configurer sur le serveur.
 - **Pas d'action API** pour créer un événement : Hermès a déjà son propre accès à Google Agenda.
+
+# dashu — Connecteur Claude (MCP)
+
+Nov 20, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 20 novembre 2026 : piloter dashu depuis Claude (claude.ai, l'app iPhone, Claude Desktop, Claude Code). Pas seulement Rémi : chaque compte de dashu, celui d'un collègue par exemple, doit pouvoir brancher son propre Claude sur son propre compte.
+
+**MCP** (Model Context Protocol) est le protocole par lequel Claude découvre les outils d'une application et les appelle. Un **connecteur** est un serveur MCP ajouté à Claude.
+
+Aujourd'hui, seule l'API `/api/v1` ouvre dashu à un programme. Elle agit au nom d'un seul compte (`API_USER_EMAIL`, celui de Rémi, pour Hermès), avec un jeton fixe. Un collègue ne peut donc pas s'en servir pour son compte. Et claude.ai n'accepte pas de jeton fixe : pour un connecteur perso, il demande **OAuth**, le protocole standard où l'on autorise une application depuis la page de connexion du service, sans jamais lui donner son mot de passe.
+
+Le travail se fait en trois étapes, une PR chacune. Chaque étape sert dès qu'elle est fusionnée. En parallèle, l'API s'étend à tout ce que fait le site (section suivante, « API complète et corbeille ») : le connecteur et Hermès en profitent à chaque lot.
+
+## Fonctionnement
+
+### Étape 1 : un jeton par compte
+
+- Réglages a une nouvelle carte **Connexions**. Elle liste les accès du compte : les jetons créés à la main et les autorisations données à Claude (étape 3), avec leur nom, leur date de création, leur dernière utilisation et leur date de fin.
+- **Nouveau jeton** : on lui donne un nom (« Claude Code du Mac ») et une durée (30 jours, 90 jours ou 1 an ; 90 jours par défaut). Le jeton s'affiche **une seule fois**, avec un bouton Copier et la commande prête à coller pour Claude Code. dashu n'en garde qu'une empreinte.
+- **Révoquer** coupe un accès à la requête suivante. **Tout révoquer** coupe d'un coup tous les accès du compte.
+- 20 jetons créés à la main au plus par compte. Un jeton expiré est refusé ; il reste affiché comme « expiré » jusqu'à ce qu'on le supprime.
+- Un jeton agit au nom de son compte, avec exactement ses droits sur le site : ses espaces, et les espaces partagés qu'il a rejoints.
+- L'API `/api/v1` accepte ces jetons. `API_TOKEN` et `API_USER_EMAIL` continuent de marcher pour Hermès, sans changement.
+
+### Étape 2 : la route `/mcp`
+
+dashu parle MCP lui-même, à l'adresse `https://app.dashu.dev/mcp` (ou par l'adresse Tailscale). Le transport est celui que MCP appelle « Streamable HTTP » : Claude envoie un message JSON-RPC (un appel de fonction écrit en JSON) par `POST /mcp`, et dashu répond en JSON. dashu n'envoie jamais de message de lui-même, donc pas de flux ouvert : `GET /mcp` répond 405. Pas de session MCP non plus : chaque requête porte son jeton.
+
+Dès cette étape, Claude Code se branche avec un jeton personnel :
+
+```
+claude mcp add --transport http dashu https://app.dashu.dev/mcp --header "Authorization: Bearer dashu_…"
+```
+
+Dans Claude, le connecteur porte le nom affiché de l'application, « Hermes Dashboard » (`assets::APP_NAME`).
+
+**Les outils** font ce que fait l'API, ni plus ni moins. Ils appellent les mêmes fonctions que les routes de l'API, avec les mêmes règles et les mêmes limites (titre de tâche de 200 caractères, note de 200 000, 20 tags par requête) : un seul code à entretenir. Chaque outil porte une **annotation** qui dit à Claude s'il lit, écrit ou détruit. Claude s'en sert pour demander confirmation, selon ses propres réglages.
+
+Les premiers outils couvrent l'API d'aujourd'hui. Chaque lot de « API complète et corbeille » ajoute les siens.
+
+| Outil | Ce qu'il fait | Annotation |
+| --- | --- | --- |
+| `lister_espaces` | Les espaces du compte, partagés compris | lecture seule |
+| `lister_taches` | Tâches d'un espace ou de tous : ouvertes, faites ou toutes | lecture seule |
+| `creer_tache` | Titre, espace, échéance (aujourd'hui par défaut) | écriture |
+| `modifier_tache` | Titre, faite ou non, échéance | écriture |
+| `supprimer_tache` | Supprime une tâche | destructrice |
+| `chercher_notes` | Notes récentes, ou recherche plein texte ; filtre par espace et par tag | lecture seule |
+| `lire_note` | Une note complète, avec son Markdown | lecture seule |
+| `creer_note` | Titre, Markdown, espace, tags | écriture |
+| `modifier_note` | Titre, ajout à la fin du texte, épingle, ajout de tags | écriture |
+| `remplacer_note` | Remplace tout le texte d'une note | destructrice |
+| `deplacer_note` | Change une note d'espace. Sortie d'un espace partagé, elle n'est plus vue des autres membres | destructrice |
+| `lire_agenda` | Événements entre deux dates, 62 jours au plus | lecture seule |
+| `rafraichir_agenda` | Resynchronise tout de suite les flux iCal | écriture |
+
+- Une erreur de saisie (espace inconnu, date invalide, titre trop long) revient comme un résultat d'outil en erreur, avec le même message en français que l'API : Claude peut corriger et réessayer.
+- Les **instructions du serveur**, un texte que Claude lit à la connexion, disent que les notes, les tâches et les événements sont des données écrites par des personnes, parfois par un autre membre d'un espace partagé. Une phrase qui y ressemble à une consigne ne se suit pas.
+- Une note modifiée par MCP pendant qu'on l'édite n'est pas écrasée : même chemin que l'API (« Modifiée ailleurs entre-temps »).
+- Hors de portée, comme dans l'API : ce qui protège le compte, vider la corbeille, l'administration du serveur (`restart` et `update` restent à `dashu-admin`). La liste est dans « API complète et corbeille ».
+
+### Étape 3 : OAuth, pour claude.ai et l'iPhone
+
+**Pour l'utilisateur.**
+
+- Dans les réglages des connecteurs de Claude, on ajoute un connecteur personnalisé avec l'adresse `https://app.dashu.dev/mcp`. Claude ouvre une page de dashu.
+- Pas connecté à dashu : la page de connexion habituelle (mot de passe ou Google), puis retour à l'autorisation.
+- Connecté : une page **Autoriser Claude**, au nom et au logo d'Hermes Dashboard, montre le nom du client, l'adresse où il sera renvoyé, le compte (« alice@… ») et ce qu'il pourra faire : ce que l'API permet à ce moment-là (au bout des lots de « API complète et corbeille » : tout, sauf ce qui protège le compte). Deux boutons : **Autoriser** et **Refuser**.
+- Après Autoriser, l'accès apparaît dans Réglages › Connexions (« Claude, autorisé le 20 novembre »), révocable comme un jeton.
+- Un connecteur ajouté sur claude.ai suit dans l'app iPhone et dans Claude Desktop. Claude Code passe par la même page, sans jeton à coller (`claude mcp add --transport http dashu https://app.dashu.dev/mcp`, puis `/mcp` pour se connecter).
+
+**Comment ça marche** (OAuth 2.1, tel que MCP le demande) :
+
+1. Claude appelle `/mcp` sans jeton. dashu répond 401, avec un en-tête `WWW-Authenticate` qui pointe vers `/.well-known/oauth-protected-resource`.
+2. Ce document (RFC 9728) dit que le serveur d'autorisation est dashu lui-même. Claude lit alors `/.well-known/oauth-authorization-server` (RFC 8414) : les adresses des étapes suivantes, et **PKCE** obligatoire. PKCE (Proof Key for Code Exchange) : Claude invente un secret, n'en envoie que l'empreinte à l'autorisation, puis le secret lui-même à l'échange. Un code intercepté ne sert donc à rien.
+3. **Enregistrement** (`POST /oauth/register`, RFC 7591) : Claude déclare son nom et ses adresses de retour ; dashu lui attribue un identifiant de client. C'est un client public, sans secret.
+4. **Autorisation** (`GET /oauth/authorize`) : la page décrite plus haut. Le consentement est un formulaire avec jeton CSRF. Après Autoriser, dashu renvoie le navigateur vers l'adresse de retour avec un **code d'autorisation** et le `state` reçu.
+5. **Échange** (`POST /oauth/token`) : Claude échange le code et le secret PKCE contre un **jeton d'accès** (1 heure) et un **jeton de renouvellement** (90 jours), qui sert à obtenir un nouveau jeton d'accès sans repasser par la page.
+
+- La connexion, par mot de passe ou par Google, sait revenir à l'autorisation en cours. Aujourd'hui, elle mène toujours à `/`. L'autorisation en attente est gardée dans la session, pas dans l'adresse.
+- `POST /oauth/revoke` (RFC 7009) révoque un jeton, si Claude l'appelle en se déconnectant.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `access_tokens` | id, user\_id, grant\_id, name, token\_hash, created\_at, expires\_at, last\_used\_at | Jetons créés à la main (`grant_id` vide) et jetons d'accès OAuth. `last_used_at` écrit au plus une fois par minute. Un jeton d'accès OAuth expiré est effacé |
+| `oauth_clients` | client\_id, name, redirect\_uris, created\_at | Clients enregistrés. Un client jamais autorisé est effacé au bout de 24 heures |
+| `oauth_codes` | code\_hash, client\_id, user\_id, redirect\_uri, code\_challenge, expires\_at | Codes d'autorisation : 60 secondes, effacés à l'usage |
+| `oauth_grants` | id, user\_id, client\_id, refresh\_hash, previous\_refresh\_hash, created\_at, last\_used\_at, expires\_at | Une autorisation donnée à Claude. La supprimer supprime ses jetons d'accès |
+
+Jetons, codes et jetons de renouvellement font 32 octets aléatoires, préfixés `dashu_` pour qu'un jeton oublié dans un fichier se repère d'un coup d'œil ou d'un `grep`. La base n'en garde que l'empreinte SHA-256 : un jeton aléatoire de 256 bits n'a pas besoin d'Argon2, qui sert à ralentir la recherche d'un mot de passe facile à deviner.
+
+## Sécurité
+
+- **Un accès, un compte.** Chaque jeton agit au nom de son compte, avec ses droits sur le site et jamais plus : l'accès passe par `space_access`, et un élément hors de ses espaces répond 404. Le compte et ses espaces sont relus à chaque requête.
+- **Retirer un compte coupe ses accès.** Un compte retiré de `ALLOWED_EMAILS` reçoit 401 à la requête suivante, comme sa session.
+- **Les jetons ne se lisent nulle part** : ni en base (empreinte seulement), ni dans les logs, ni dans une adresse. Les logs gardent le compte et le nom de l'outil, pas le contenu.
+- **Le contenu est de la donnée.** Les instructions du serveur et les annotations le disent à Claude, mais ce ne sont que des indications : c'est Claude qui décide de demander confirmation. Les vrais garde-fous sont côté dashu : une suppression part dans la corbeille, et ni ce qui protège le compte ni l'administration ne sont accessibles.
+- **Origine.** `/mcp` accepte une requête sans en-tête `Origin`, ou venant de dashu ou de Claude ; il refuse les autres (403). Une page web ouverte dans le navigateur ne peut donc pas l'appeler. MCP l'exige.
+- **Adresses de retour : Claude seulement.** L'enregistrement est ouvert à tous, c'est ce qu'attend Claude. Mais il n'accepte que les adresses de retour de Claude : `https://claude.ai/api/mcp/auth_callback` et `https://claude.com/api/mcp/auth_callback` (à vérifier au moment de la PR), et l'adresse locale de Claude Code (`http://localhost` ou `http://127.0.0.1`, n'importe quel port). Sans cette règle, n'importe quel site pourrait s'enregistrer, montrer la page Autoriser sous un faux nom et repartir avec un accès.
+- **Autorisation stricte.** PKCE en S256 obligatoire. Adresse de retour comparée en entier à celle enregistrée. Le paramètre `resource` envoyé par Claude doit désigner `/mcp` sous `BASE_URL`. Code à usage unique, valable 60 secondes, lié au client, à l'adresse de retour et au compte. Consentement demandé à chaque nouvelle autorisation. La page ne s'affiche pas dans un cadre (`frame-ancestors 'none'`, comme tout le site) : pas de clic piégé.
+- **Jeton de renouvellement à usage unique.** Chaque renouvellement en donne un nouveau. Si un ancien jeton revient, c'est qu'il a été copié : toute l'autorisation est révoquée.
+- **Chaque jeton à sa place.** Les jetons OAuth ne valent que pour `/mcp`. Les jetons créés à la main valent pour `/mcp` et `/api/v1`. `API_TOKEN` (Hermès) ne vaut que pour `/api/v1`.
+- **Limites.** `/oauth/register` et `/oauth/token` ont leur propre limiteur par adresse IP, large comme celui des liens de partage (20 d'un coup, puis une requête toutes les 3 secondes), parce que tous les appels de claude.ai partent des mêmes adresses. `/mcp` : 60 appels d'un coup par jeton, puis un par seconde. 15 Mo par requête, de quoi envoyer un fichier de 10 Mo en base64. Pas de requêtes par lots : un tableau de messages JSON-RPC est refusé.
+- **Aucun cookie** sur `/mcp` ni sur `/oauth/token` : pas de CSRF à prévoir. À l'inverse, une session ouverte n'ouvre pas `/mcp`.
+
+## Prérequis
+
+- Rien de nouveau à configurer : l'adresse publique est `BASE_URL`.
+- claude.ai appelle dashu depuis les serveurs d'Anthropic. L'étape 3 ne marche donc que par `https://app.dashu.dev`, pas par l'adresse Tailscale. Vérifier que Cloudflare ne pose pas de défi anti-robot (Bot Fight Mode) sur `/mcp`, `/.well-known/` et `/oauth/`.
+
+## Critères d'acceptation
+
+Étape 1 :
+
+- [ ] Réglages › Connexions crée un jeton, l'affiche une fois et n'en garde que l'empreinte ; un nom vide ou un 21e jeton sont refusés
+- [ ] Un jeton agit sur `/api/v1` au nom de son compte : il voit ses espaces et les espaces partagés rejoints, et reçoit 404 ailleurs
+- [ ] Jeton révoqué, expiré, « Tout révoquer » ou compte retiré de `ALLOWED_EMAILS` : 401 à la requête suivante
+- [ ] `API_TOKEN` d'Hermès marche comme avant
+
+Étape 2 :
+
+- [ ] Claude Code se branche avec un jeton personnel, liste les outils et les appelle
+- [ ] Chaque outil suit les règles et les limites de l'API, testé sur les mêmes cas ; une erreur de saisie revient en résultat d'erreur lisible
+- [ ] Sans jeton : 401 et `WWW-Authenticate` ; `Origin` étranger : 403 ; lot JSON-RPC ou méthode inconnue : erreur JSON-RPC propre ; `GET /mcp` : 405
+- [ ] Les annotations et les instructions du serveur sont présentes
+- [ ] Une note modifiée par MCP pendant qu'on l'édite n'est pas écrasée
+
+Étape 3 :
+
+- [ ] Les deux documents `/.well-known/` sont servis et pointent vers `BASE_URL`
+- [ ] Depuis claude.ai : ajout du connecteur, connexion, autorisation, puis outils utilisables dans claude.ai et dans l'app iPhone ; Claude Code se connecte sans jeton collé
+- [ ] Un second compte branche son propre Claude et ne voit que ses espaces et les espaces partagés rejoints
+- [ ] Refusés : adresse de retour hors de Claude ou différente de celle enregistrée, PKCE absent ou faux, code réutilisé ou expiré, jeton OAuth présenté à `/api/v1`
+- [ ] Un jeton de renouvellement réutilisé révoque toute l'autorisation
+- [ ] Révoquer dans Réglages coupe Claude à la requête suivante
+- [ ] Chaque point a ses tests d'intégration (flux OAuth complet joué dans `tests/`) ; essai réel depuis claude.ai et l'iPhone, avec deux comptes ; STATUS et README à jour
+
+## Décisions
+
+Prises avec Rémi le 20 novembre 2026 :
+
+- **Chaque compte branche son propre Claude**, sur son propre compte : pas d'accès partagé au nom de Rémi.
+- **OAuth, pour que claude.ai et l'iPhone marchent**, en trois étapes : jetons par compte, route `/mcp`, OAuth. Un serveur MCP local sur le Mac a été écarté : il ne servirait qu'à Rémi, et ni à claude.ai ni à l'iPhone.
+
+Par défaut, pour avancer :
+
+- **Protocole écrit à la main** (JSON-RPC avec serde), sans SDK : la partie utile (`initialize`, `tools/list`, `tools/call`, `ping`) est petite. Le SDK Rust officiel (`rmcp`) reste possible si le protocole grossit.
+- **Durées** : 90 jours par défaut pour un jeton créé à la main ; 1 heure pour un jeton d'accès OAuth ; 90 jours pour un jeton de renouvellement.
+- **Un seul niveau d'accès** (lecture et écriture). Un accès en lecture seule viendra si le besoin se présente.
+- **Adresses de retour de Claude seulement**, en liste fixe dans le code. Un autre client demanderait une variable.
+- **Hermès garde `API_TOKEN`** ; il pourra passer à un jeton personnel plus tard.
+- **Les outils suivent l'API**, lot par lot : un outil par action. Si Claude s'y perd quand ils seront nombreux (une cinquantaine), on les regroupera par domaine.
+- **Noms d'outils en français, sans accent** : un nom d'outil n'accepte ni accent ni espace.
+
+# dashu — API complète et corbeille
+
+Nov 20, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 20 novembre 2026, avec le connecteur Claude : l'API doit permettre de tout faire dans dashu.
+
+Elle date de la PR #1 (11 novembre) et ne couvre que les espaces en lecture, les tâches, les notes sans suppression et l'agenda en lecture. Depuis, le site a gagné les fichiers, les dossiers, les conversions, les événements, les espaces libres et partagés, les membres et de nombreux réglages. Hermès, avec sa commande `dashu` (`deploy/hermes/`), et le connecteur Claude passent tous deux par l'API : ils ne font que ce qu'elle couvre.
+
+dashu n'a pas de corbeille : une suppression est définitive, et seule la restauration de toute la base (sauvegarde de la nuit) la rattrape. Ouvrir les suppressions à un assistant demande donc d'abord une corbeille. Une erreur de l'assistant, ou une consigne glissée dans une note partagée ou dans un mail lu par Hermès, doit pouvoir se rattraper.
+
+## Corbeille
+
+- Supprimer une note, un fichier, un dossier ou un espace, depuis le site comme depuis l'API, le met dans la **corbeille** au lieu de l'effacer. Un dossier y part avec son contenu, un espace avec tout le sien.
+- Ce qui est dans la corbeille disparaît partout : listes, recherche, barre de commandes, Perso, widgets, API. Les liens de partage d'un fichier supprimé sont révoqués. Une note ouverte à plusieurs se ferme chez tout le monde (« Cette note a été supprimée »).
+- Une page **Corbeille**, dans Réglages, liste ce qui a été supprimé, du plus récent au plus ancien : le nom, l'espace d'origine, qui l'a supprimé, quand, et par où (le site, ou le nom du jeton ou de l'autorisation : « Hermès », « Claude Code du Mac »…).
+- **Restaurer** remet l'élément à sa place, dans son espace et son dossier. Si le dossier n'existe plus, il revient à la racine de l'espace ; si l'espace n'est plus accessible, à la racine de Perso de celui qui restaure.
+- **Supprimer définitivement** un élément, ou **Vider la corbeille** : sur le site seulement, avec une confirmation. Jamais par l'API.
+- Au bout de **30 jours**, dashu efface l'élément pour de bon, tout seul, fichiers sur le disque compris.
+- Dans un espace partagé, la corbeille de l'espace est commune : tout membre voit ce qui y a été supprimé et peut le restaurer, comme il pouvait le supprimer. Un espace supprimé ne se restaure que par son propriétaire.
+- Les tâches et les événements ne passent pas par la corbeille : leur suppression reste définitive, comme aujourd'hui. Ils sont petits et se recréent vite.
+- Ce qui est dans la corbeille compte toujours dans la place occupée sur le disque.
+
+## L'API couvre tout le site
+
+Chaque action du site a son équivalent dans l'API, sauf la courte liste « Hors de l'API » plus bas. Le site, l'API et le connecteur appellent les mêmes fonctions : une règle (droits, limites, actions réservées au propriétaire) s'écrit une fois et vaut partout.
+
+| Domaine | Ce que l'API ajoute |
+| --- | --- |
+| Tâches | Changer une tâche d'espace |
+| Notes | Ranger dans un dossier, retirer un tag, supprimer (corbeille), télécharger en Markdown ou en PDF |
+| Fichiers | Lister et chercher (espace, tag, dossier), lire les informations, télécharger, envoyer, renommer, changer d'espace ou de dossier, garder un fichier de Temporaire, poser et retirer des tags, supprimer (corbeille) |
+| Liens de partage | Créer (1 heure, 1 jour ou 7 jours), lister, révoquer |
+| Dossiers | Lister l'arborescence, créer, renommer, déplacer, supprimer (corbeille, avec le contenu) |
+| Outils | Formats possibles pour un fichier, convertir, compresser, suivre une conversion, remplacer l'original par le résultat (l'original part dans la corbeille) |
+| Agenda | Créer, modifier et supprimer un événement, et sa copie dans Google Agenda si l'agenda est relié ; lister, ajouter et retirer une source iCal |
+| Espaces | Créer, renommer, changer la couleur, l'icône et les règles automatiques, archiver, désarchiver, supprimer (corbeille, ou en transférant le contenu), choisir l'espace « moment » |
+| Membres | Voir les membres et les invitations d'un espace, inviter, annuler une invitation, retirer un membre, quitter ; voir, accepter et refuser les invitations reçues |
+| Corbeille | Lister, restaurer |
+| Réglages | Profil (prénom, nom, avatar), thème, taille de l'interface, barre latérale, onglets du téléphone, disposition du tableau de bord de chaque espace |
+
+- Un envoi de fichier par l'API suit le même protocole par morceaux que le site, avec la même taille maximale. Par MCP, un fichier se lit et s'envoie jusqu'à 10 Mo (en base64 à l'envoi) ; au-delà, on passe par l'API ou par le site.
+- Un fichier téléchargé par l'API est servi comme sur le site : en pièce jointe, jamais exécuté.
+
+## Hors de l'API
+
+Ces actions restent sur le site ou sur le serveur, exprès :
+
+- **Ce qui protège le compte** : mot de passe, liaison avec Google, connexion de Google Agenda (elle passe de toute façon par le navigateur), jetons et autorisations (Réglages › Connexions). Sinon, un jeton volé deviendrait le compte entier, pour toujours : il pourrait changer le mot de passe ou se créer d'autres jetons.
+- **L'effacement définitif** : supprimer définitivement, vider la corbeille.
+- **Les comptes et le serveur** : les adresses autorisées (`dashu-compte`) et l'administration (`dashu-admin`) se font sur le serveur, pas dans dashu. Hermès garde son accès `dashu-admin` à six actions.
+- **L'interface elle-même** : l'espace actif, la barre de commandes, la navigation. Un programme n'en a pas besoin : il désigne l'espace dans chaque requête.
+- **Le téléchargeur de liens** (YouTube, Instagram, TikTok), quand il existera : réservé au site et au compte de Rémi, comme le prévoit la v2.
+
+## Hermès et Claude suivent
+
+- Chaque lot ajoute, dans la même PR : les routes de l'API, les outils MCP (dès que la route `/mcp` existe), les commandes de `deploy/hermes/dashu` et les lignes du skill d'Hermès, les tests et le README.
+- Le skill d'Hermès change de description : il ne parle plus seulement de tâches, de notes et d'emploi du temps. Sa règle « pas de commande pour supprimer une note » devient « une suppression part dans la corbeille ».
+- **Confirmation avant d'agir**, par une règle du skill pour Hermès et par l'annotation « destructrice » pour Claude : toute suppression, remplacer le texte d'une note ou l'original d'un fichier, créer un lien de partage, inviter ou retirer un membre, quitter, archiver ou supprimer un espace.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `notes`, `files`, `folders`, `spaces` | + `deleted_at`, `deleted_by`, `deleted_via`, `trash_op` | Remplies quand l'élément part dans la corbeille. `deleted_via` : le site, ou le nom du jeton ou de l'autorisation |
+| vue `space_access` | | Ne donne plus les espaces qui sont dans la corbeille |
+
+Un dossier supprimé marque tout son contenu avec le même numéro d'opération (`trash_op`) : le restaurer ramène l'ensemble, sans ramener ce qui avait été supprimé à part avant. Un espace supprimé n'a pas besoin de marquer son contenu : `space_access` le cache déjà.
+
+## Sécurité
+
+- **Toute requête de contenu filtre la corbeille.** C'est le risque principal de ce chantier : une liste oubliée montrerait un élément supprimé. Un test par endroit : listes, recherche, barre de commandes, Perso, widgets, API, liens de partage, `/open`.
+- **Mêmes droits partout.** L'API passe par les mêmes fonctions que le site : `space_access`, actions du propriétaire vérifiées par le serveur, mêmes limites (taille d'envoi, 8 espaces, longueur des noms).
+- **Sources iCal** : même validation que le site, adresses publiques seulement. Sinon, un assistant trompé pourrait faire lire à dashu une adresse du réseau local.
+- **Liens de partage** : en créer un rend un fichier public. Hermès et Claude demandent confirmation, et chaque lien apparaît sur la page du fichier, révocable.
+- **Trace.** Chaque suppression note par où elle est passée, et les logs gardent le compte, le jeton et l'action, sans le contenu. On voit ce qu'un assistant a fait.
+- **Restaurer** vérifie l'accès de celui qui restaure, comme toute action.
+
+## Critères d'acceptation
+
+Corbeille :
+
+- [ ] Supprimer une note, un fichier, un dossier (avec son contenu) ou un espace, depuis le site ou l'API, le met dans la corbeille ; il disparaît de partout (un test par endroit)
+- [ ] La page Corbeille montre qui a supprimé, quand et par où ; restaurer remet l'élément à sa place, ou à la racine si sa place n'existe plus
+- [ ] Supprimer définitivement et vider la corbeille : sur le site seulement, avec confirmation ; l'API n'a pas de route pour ça
+- [ ] Après 30 jours, l'élément est effacé, fichier sur le disque compris
+- [ ] Dans un espace partagé, tout membre voit et restaure ce qui y a été supprimé ; un autre compte reçoit 404
+- [ ] Les liens de partage d'un fichier supprimé ne marchent plus ; une note supprimée ferme son canal en direct
+
+API :
+
+- [ ] Chaque ligne du tableau « L'API couvre tout le site » a sa route, avec ses tests : le cas normal, un élément d'un autre compte (404), une action de propriétaire tentée par un membre (refus), une saisie invalide
+- [ ] Les actions « Hors de l'API » n'ont pas de route
+- [ ] Un fichier envoyé par l'API arrive identique ; un fichier téléchargé est servi en pièce jointe
+- [ ] Une source iCal vers une adresse privée est refusée
+- [ ] La commande `dashu` d'Hermès et son skill couvrent chaque nouvelle route, comme les outils MCP quand ils existent
+- [ ] STATUS et README à jour à chaque lot
+
+## Ordre de livraison
+
+Une PR par ligne, avec le connecteur Claude :
+
+1. Jetons par compte (connecteur, étape 1)
+2. Route `/mcp` sur le périmètre actuel (connecteur, étape 2)
+3. OAuth, pour claude.ai et l'iPhone (connecteur, étape 3)
+4. Corbeille, sur le site
+5. API : notes complètes, fichiers, dossiers, liens de partage, corbeille
+6. API : outils de conversion
+7. API : événements et sources iCal
+8. API : espaces, membres et réglages
+
+Les lots 5 à 8 mettent à jour l'API, les outils MCP et la commande d'Hermès en même temps.
+
+## Décisions
+
+Prises avec Rémi le 20 novembre 2026 :
+
+- **L'API fait tout ce que fait le site**, pour Hermès comme pour Claude. Ça remplace « pas de suppression de note par l'API » (PR #1), « pas de suppression ni de partage de fichier par l'API » (v2) et « pas d'action API pour créer un événement » (Événements et Google Agenda).
+- **Corbeille d'abord** : une suppression par l'API passe par une corbeille de 30 jours, restaurable depuis le site.
+
+Par défaut, pour avancer :
+
+- **La corbeille vaut aussi pour le site** : un seul comportement, et un clic malheureux se rattrape aussi.
+- **Tâches et événements hors de la corbeille** : leur suppression reste définitive.
+- **30 jours** avant l'effacement définitif, qui ne se déclenche à la main que depuis le site.
+- **Ce qui protège le compte reste hors de l'API**, comme l'administration du serveur.
+- **Fichiers par MCP jusqu'à 10 Mo** ; au-delà, l'API (envoi par morceaux) ou le site.
+- **Ordre** : le connecteur d'abord, pour que Rémi et son collègue s'en servent vite, puis la corbeille, puis l'API par lots. La corbeille arrive avant la première suppression par l'API.
