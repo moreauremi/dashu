@@ -38,6 +38,8 @@
   <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
   <symbol id="todo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
 </svg>
 
 <header class="bar">
@@ -122,8 +124,8 @@
         </li>
         <li class="carte">
           <img src="cartes/agenda.webp" width="960" height="600" loading="lazy" decoding="async" alt="L'emploi du temps Pronote en vue semaine">
-          <h3>L'emploi du temps Pronote</h3>
-          <p>Importé par son lien, resynchronisé toutes les heures, en vue jour ou semaine.</p>
+          <h3>L'agenda, Pronote et Google</h3>
+          <p>Pronote importé par son lien, ses propres événements, copiés dans Google Agenda si on le relie.</p>
         </li>
         <li class="carte tel">
           <img src="cartes/iphone-note.webp" width="480" height="1039" loading="lazy" decoding="async" alt="Une note de cours sur iPhone, en thème clair">
@@ -149,6 +151,30 @@
     </div>
   </section>
 
+  <section class="block" id="assistant">
+    <div class="wrap">
+      <h2>Pilotable par Claude ou par son propre assistant</h2>
+      <p class="intro">Les actions du site passent aussi par une API et un connecteur Claude, avec les mêmes droits et les mêmes limites. Écrit et testé, en service à la prochaine mise à jour.</p>
+      <div class="grid">
+        <div class="feat">
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#bot"/></svg></span>
+          <h3>Chacun son accès</h3>
+          <p>Un jeton ou une autorisation par compte, révocable à tout moment. L'assistant ne voit que les espaces de ce compte.</p>
+        </div>
+        <div class="feat">
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#trash"/></svg></span>
+          <h3>Une corbeille de 30 jours</h3>
+          <p>Une suppression se rattrape, qu'elle vienne du site ou d'un assistant, et la corbeille dit par où elle est passée.</p>
+        </div>
+        <div class="feat">
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#lock"/></svg></span>
+          <h3>Le compte reste à soi</h3>
+          <p>Mot de passe, connexions, jetons et effacement définitif ne passent jamais par l'API.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="block">
     <div class="wrap">
       <h2>Léger, rapide, et rien à exposer</h2>
@@ -168,8 +194,8 @@
       <h2>Une version à la fois</h2>
       <ol class="road road-court">
         <li class="step done"><h3>v1 · Dashboard, notes, emploi du temps<small>en service</small></h3></li>
-        <li class="step now"><h3>v2 · Fichiers, outils, espaces partagés<small>presque finie : reste les fichiers dans l'API de l'assistant</small></h3></li>
-        <li class="step"><h3>Ensuite · OCR, médias, audio, puis un assistant qui cherche dans les notes</h3></li>
+        <li class="step now"><h3>v2 · Fichiers, outils, espaces partagés, Google Agenda<small>en service ; connecteur Claude, corbeille et API complète à la prochaine mise à jour</small></h3></li>
+        <li class="step"><h3>Ensuite · Installation en une commande, OCR, médias, audio, puis un assistant qui cherche dans les notes</h3></li>
       </ol>
       <p class="after"><a href="https://github.com/moreauremi/dashu/blob/v1/STATUS.md">Le détail, critère par critère</a></p>
     </div>
