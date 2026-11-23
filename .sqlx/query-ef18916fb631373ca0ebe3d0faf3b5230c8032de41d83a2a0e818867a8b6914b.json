@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT e.title AS \"title!: String\", e.location AS \"location!: String\",\n                  e.starts_at AS \"starts_at!: i64\", e.ends_at AS \"ends_at!: i64\",\n                  e.all_day AS \"all_day!: bool\", e.space_id AS \"space_id!: i64\"\n           FROM agenda_items e\n           WHERE e.user_id = ?1 AND (?2 IS NULL OR e.space_id = ?2)\n             AND e.ends_at > ?3 AND e.starts_at < ?4\n           ORDER BY e.starts_at, e.ends_at\n           LIMIT 1000",
+  "query": "SELECT e.title AS \"title!: String\", e.location AS \"location!: String\",\n                  e.starts_at AS \"starts_at!: i64\", e.ends_at AS \"ends_at!: i64\",\n                  e.all_day AS \"all_day!: bool\", e.space_id AS \"space_id!: i64\",\n                  e.event_id AS \"event_id?: i64\"\n           FROM agenda_items e\n           WHERE e.user_id = ?1 AND (?2 IS NULL OR e.space_id = ?2)\n             AND e.ends_at > ?3 AND e.starts_at < ?4\n           ORDER BY e.starts_at, e.ends_at\n           LIMIT 1000",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "name": "space_id!: i64",
         "ordinal": 5,
         "type_info": "Integer"
+      },
+      {
+        "name": "event_id?: i64",
+        "ordinal": 6,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -43,8 +48,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "0b0305526e6ed2b551f1d63fec3bcca3f1c6ce4d37712b6ef11177429db5fafe"
+  "hash": "ef18916fb631373ca0ebe3d0faf3b5230c8032de41d83a2a0e818867a8b6914b"
 }

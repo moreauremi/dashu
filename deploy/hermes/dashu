@@ -404,6 +404,38 @@ def main():
 
     sub.add_parser("agenda-refresh", help="resynchronise les flux iCal")
 
+    s = sub.add_parser("event-add", help="ajoute un événement à l'agenda de dashu")
+    s.add_argument("title")
+    s.add_argument("--date", required=True, help="AAAA-MM-JJ")
+    s.add_argument("--start", help="HH:MM")
+    s.add_argument("--end", help="HH:MM")
+    s.add_argument("--all-day", action="store_true")
+    s.add_argument("--place", help="lieu")
+    s.add_argument("--space", required=True, help=SPACES)
+    s.add_argument("--no-google", action="store_true", help="pas de copie dans Google Agenda")
+
+    s = sub.add_parser("event-edit", help="modifie un événement créé dans dashu")
+    s.add_argument("id", type=int)
+    s.add_argument("--title")
+    s.add_argument("--date")
+    s.add_argument("--start")
+    s.add_argument("--end")
+    s.add_argument("--place")
+    s.add_argument("--space", help=SPACES)
+
+    s = sub.add_parser("event-rm", help="supprime un événement créé dans dashu (et sa copie Google)")
+    s.add_argument("id", type=int)
+
+    reader("sources", "agendas iCal")
+
+    s = sub.add_parser("source-add", help="ajoute un agenda iCal")
+    s.add_argument("name")
+    s.add_argument("--url", required=True, help="lien iCal https:// ou webcal://")
+    s.add_argument("--space", required=True, help=SPACES)
+
+    s = sub.add_parser("source-rm", help="retire un agenda iCal")
+    s.add_argument("id", type=int)
+
     s = sub.add_parser("admin", help="administration du serveur dashu")
     s.add_argument("action", choices=ADMIN_COMMANDS)
     s.add_argument("lines", nargs="?", type=int, default=50, help="pour logs : nombre de lignes")
@@ -590,6 +622,35 @@ def main():
     elif args.cmd == "agenda-refresh":
         r = call("POST", "/calendar/refresh")
         print(f"{r['sources']} agenda(s) resynchronisé(s), {r['failures']} échec(s).")
+    elif args.cmd == "event-add":
+        body = {"title": args.title, "date": args.date, "space": args.space, "google": not args.no_google}
+        if args.all_day:
+            body["all_day"] = True
+        else:
+            body["start"], body["end"] = args.start, args.end
+        if args.place:
+            body["location"] = args.place
+        e = call("POST", "/events", body=body)
+        print(f"Événement #{e['id']} « {e['title']} » le {day_label(e['start'])}" + (" (copié dans Google Agenda)" if e["google"] else ""))
+    elif args.cmd == "event-edit":
+        body = {k: v for k, v in {"title": args.title, "date": args.date, "start": args.start,
+                                  "end": args.end, "location": args.place, "space": args.space}.items() if v}
+        if not body:
+            fail("rien à modifier")
+        e = call("PATCH", f"/events/{args.id}", body=body)
+        print(f"Événement #{e['id']} « {e['title']} » le {day_label(e['start'])} à {e['start'][11:16]}.")
+    elif args.cmd == "event-rm":
+        call("DELETE", f"/events/{args.id}")
+        print(f"Événement #{args.id} supprimé.")
+    elif args.cmd == "sources":
+        show(call("GET", "/calendar/sources"), args,
+             lambda ss: print("\n".join(f"#{s['id']} {s['name']} ({s['space']}, {s['host']})" + (f" : erreur {s['last_error']}" if s.get("last_error") else "") for s in ss) or "Aucun agenda iCal."))
+    elif args.cmd == "source-add":
+        s = call("POST", "/calendar/sources", body={"name": args.name, "url": args.url, "space": args.space})
+        print(f"Agenda #{s['id']} « {s['name']} » ajouté ; première synchronisation en cours.")
+    elif args.cmd == "source-rm":
+        call("DELETE", f"/calendar/sources/{args.id}")
+        print(f"Agenda #{args.id} retiré.")
     elif args.cmd == "admin":
         admin(args)
 

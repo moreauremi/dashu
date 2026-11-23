@@ -437,6 +437,83 @@ const TOOLS: &[Tool] = &[
         required: &[],
     },
     Tool {
+        name: "creer_evenement",
+        title: "Créer un événement",
+        description: "Ajoute un événement à l'agenda de dashu (en heures, à l'heure de Paris, ou sur la journée entière) ; il est copié dans Google Agenda si l'agenda est relié, sauf google: false. Un événement est à son auteur, même dans un espace partagé.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "title": { "type": "string", "description": "Titre" },
+                "date": date_prop("Le jour"),
+                "start": { "type": "string", "description": "Heure de début, HH:MM (sauf all_day)" },
+                "end": { "type": "string", "description": "Heure de fin, HH:MM (sauf all_day)" },
+                "all_day": { "type": "boolean", "description": "Sur la journée entière" },
+                "location": { "type": "string", "description": "Lieu" },
+                "space": space_prop("de l'événement"),
+                "google": { "type": "boolean", "description": "Aussi dans Google Agenda (vrai par défaut)" },
+            })
+        },
+        required: &["title", "date", "space"],
+    },
+    Tool {
+        name: "modifier_evenement",
+        title: "Modifier un événement",
+        description: "Change un événement créé dans dashu (son identifiant est le champ event de lire_agenda) ; les champs absents restent. Sa copie dans Google Agenda suit.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "id": id_prop("l'événement"),
+                "title": { "type": "string" },
+                "date": date_prop("Le jour"),
+                "start": { "type": "string", "description": "HH:MM" },
+                "end": { "type": "string", "description": "HH:MM" },
+                "all_day": { "type": "boolean" },
+                "location": { "type": "string" },
+                "space": space_prop("de l'événement"),
+                "google": { "type": "boolean", "description": "Aussi dans Google Agenda" },
+            })
+        },
+        required: &["id"],
+    },
+    Tool {
+        name: "supprimer_evenement",
+        title: "Supprimer un événement",
+        description: "Supprime pour de bon un événement créé dans dashu, et sa copie dans Google Agenda.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("l'événement") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "lister_sources_agenda",
+        title: "Lister les agendas iCal",
+        description: "Les agendas iCal du compte (Pronote…), avec leur espace, leur domaine et leur dernière synchronisation. L'adresse complète, un secret, n'est jamais redonnée.",
+        kind: Kind::Read,
+        properties: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "ajouter_source_agenda",
+        title: "Ajouter un agenda iCal",
+        description: "Ajoute un agenda par son lien iCal (HTTPS, adresse publique) à un espace ; sa première synchronisation part aussitôt.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "name": { "type": "string", "description": "Nom de l'agenda" },
+                "url": { "type": "string", "description": "Lien iCal, https:// ou webcal://" },
+                "space": space_prop("de l'agenda"),
+            })
+        },
+        required: &["name", "url", "space"],
+    },
+    Tool {
+        name: "retirer_source_agenda",
+        title: "Retirer un agenda iCal",
+        description: "Retire un agenda iCal et les événements qu'il avait importés.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("l'agenda") }),
+        required: &["id"],
+    },
+    Tool {
         name: "rafraichir_agenda",
         title: "Rafraîchir l'agenda",
         description: "Resynchronise tout de suite les flux iCal du compte (Pronote…).",
@@ -773,6 +850,25 @@ async fn run(
         }
         "lire_agenda" => to_value(api::calendar_events(state, user, args(arguments)?).await?),
         "rafraichir_agenda" => to_value(api::calendar_refresh(state, user).await?),
+        "creer_evenement" => to_value(api::event_create(state, user, args(arguments)?).await?),
+        "modifier_evenement" => {
+            let edit: WithId<api::EventBody> = args(arguments)?;
+            to_value(api::event_update(state, user, edit.id, edit.rest).await?)
+        }
+        "supprimer_evenement" => {
+            let ById { id } = args(arguments)?;
+            api::event_delete(state, user, id).await?;
+            Ok(json!({ "supprime": id }))
+        }
+        "lister_sources_agenda" => to_value(api::sources(state, user).await?),
+        "ajouter_source_agenda" => {
+            to_value(api::source_add(state, user, args::<api::NewSource>(arguments)?).await?)
+        }
+        "retirer_source_agenda" => {
+            let ById { id } = args(arguments)?;
+            api::source_remove(state, user, id).await?;
+            Ok(json!({ "retire": id }))
+        }
         _ => Err(ApiError::bad_request(format!("outil inconnu « {name} »"))),
     }
 }

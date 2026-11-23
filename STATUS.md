@@ -326,6 +326,12 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 - [x] Mêmes fonctions que le site : `tools::queue` rend maintenant le numéro de la tâche ; « Remplacer l'original » est devenu `tools::replace_with_result`, partagé (le test du site passe toujours).
 - [x] Connecteur Claude : `formats_possibles`, `convertir`, `lister_conversions`, `suivre_conversion`, `remplacer_original` (destructeur). Test `les_outils_mcp_des_conversions`. Hermès : `formats`, `convert`, `jobs`, `job`, `replace` ; skill 1.2.0.
 
+**Étape 7, API des événements et des sources iCal** (23 novembre 2026). Vérifiée par les tests (`tests/api_agenda.rs`, 3 tests ; ceux du site, `tests/agenda_evenements.rs`, passent toujours, Google compris). **Pas encore sur le serveur.**
+
+- [x] Créer, lire, modifier (les champs absents restent), supprimer un événement ; il apparaît dans `GET /api/v1/calendar` avec son identifiant (`event`). Refus : titre vide, date invalide, fin avant le début, heure manquante, espace inconnu. Un autre compte reçoit 404. Mêmes fonctions que le site (`events::validate_in`, `insert`, `save`, `remove`), donc même copie dans Google Agenda. Test `evenements_creer_lire_modifier_supprimer`.
+- [x] Une source iCal vers une adresse privée, la machine elle-même, un nom local ou en HTTP est refusée ; l'adresse complète n'est jamais redonnée (le domaine seul). Même vérification que Réglages (`settings::add_source`). La première synchronisation part en arrière-plan. Test `sources_ical_adresses_publiques_seulement`.
+- [x] Connecteur Claude : `creer_evenement`, `modifier_evenement`, `supprimer_evenement` (destructeur), `lister_sources_agenda`, `ajouter_source_agenda`, `retirer_source_agenda` (destructeur). Test `les_outils_mcp_de_l_agenda`. Hermès : `event-add`, `event-edit`, `event-rm`, `sources`, `source-add`, `source-rm` ; skill 1.3.0. La décision du 17 novembre « pas d'action API pour créer un événement » est remplacée, comme le dit la spec du 20 novembre.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

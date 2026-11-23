@@ -337,6 +337,44 @@ pub struct CalendarForm {
     pub(crate) space_id: i64,
 }
 
+/// Ajoute une source iCal à un espace (déjà vérifié), après les mêmes
+/// vérifications que Réglages : un nom, une adresse HTTPS publique. Rend
+/// son identifiant, son nom et son adresse, ou le refus à montrer. Aussi
+/// pour l'API.
+pub(crate) async fn add_source(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    space: i64,
+    raw_name: &str,
+    raw_url: &str,
+) -> AppResult<Result<(i64, String, String), String>> {
+    let name: String = raw_name
+        .trim()
+        .chars()
+        .take(SOURCE_NAME_MAX_CHARS)
+        .collect();
+    if name.is_empty() {
+        return Ok(Err("Donne un nom à cet agenda.".into()));
+    }
+    let url = match sync::validate_url(raw_url) {
+        Ok(url) => url,
+        Err(message) => return Ok(Err(message.into())),
+    };
+    let now = time::now();
+    let id = sqlx::query!(
+        "INSERT INTO calendar_sources (user_id, space_id, name, ical_url, created_at) VALUES (?, ?, ?, ?, ?)",
+        user,
+        space,
+        name,
+        url,
+        now
+    )
+    .execute(db)
+    .await?
+    .last_insert_rowid();
+    Ok(Ok((id, name, url)))
+}
+
 /// `POST /settings/calendars` : ajoute une source iCal et la synchronise aussitôt.
 pub async fn add_calendar(
     ctx: Ctx,
@@ -344,40 +382,17 @@ pub async fn add_calendar(
     axum::Form(form): axum::Form<CalendarForm>,
 ) -> AppResult<Response> {
     let back = || see_other("/settings#agendas");
-
-    let name: String = form
-        .name
-        .trim()
-        .chars()
-        .take(SOURCE_NAME_MAX_CHARS)
-        .collect();
-    if name.is_empty() {
-        ctx.flash_error("Donne un nom à cet agenda.").await?;
-        return Ok(back());
-    }
     let Some(space) = ctx.space_by_id(form.space_id) else {
         return Err(AppError::NotFound);
     };
-    let url = match sync::validate_url(&form.url) {
-        Ok(url) => url,
-        Err(message) => {
-            ctx.flash_error(message).await?;
-            return Ok(back());
-        }
-    };
-
-    let now = time::now();
-    let id = sqlx::query!(
-        "INSERT INTO calendar_sources (user_id, space_id, name, ical_url, created_at) VALUES (?, ?, ?, ?, ?)",
-        ctx.user.id,
-        space.id,
-        name,
-        url,
-        now
-    )
-    .execute(&state.db)
-    .await?
-    .last_insert_rowid();
+    let (id, name, url) =
+        match add_source(&state.db, ctx.user.id, space.id, &form.name, &form.url).await? {
+            Ok(added) => added,
+            Err(message) => {
+                ctx.flash_error(message).await?;
+                return Ok(back());
+            }
+        };
 
     match sync::sync_source(&state, id, &url).await {
         Ok(count) => {

@@ -53,27 +53,27 @@ pub struct NewQuery {
 
 #[derive(Deserialize)]
 pub struct EventForm {
-    title: String,
-    date: String,
+    pub(crate) title: String,
+    pub(crate) date: String,
     #[serde(default)]
-    start: String,
+    pub(crate) start: String,
     #[serde(default)]
-    end: String,
-    all_day: Option<String>,
+    pub(crate) end: String,
+    pub(crate) all_day: Option<String>,
     #[serde(default)]
-    location: String,
-    space_id: String,
-    google: Option<String>,
+    pub(crate) location: String,
+    pub(crate) space_id: String,
+    pub(crate) google: Option<String>,
 }
 
 /// Un formulaire valide.
-struct Valid {
-    title: String,
+pub(crate) struct Valid {
+    pub(crate) title: String,
     location: String,
     starts_at: i64,
     ends_at: i64,
     all_day: bool,
-    space_id: i64,
+    pub(crate) space_id: i64,
     date: NaiveDate,
 }
 
@@ -83,6 +83,14 @@ fn parse_time(text: &str) -> Option<NaiveTime> {
 
 /// Vérifie le formulaire ; le message d'erreur s'affiche au-dessus.
 fn validate(ctx: &Ctx, form: &EventForm) -> Result<Valid, String> {
+    validate_in(&ctx.all_spaces(), form)
+}
+
+/// Vérifie un événement, avec les espaces du compte. Aussi pour l'API.
+pub(crate) fn validate_in(
+    spaces: &[crate::spaces::Space],
+    form: &EventForm,
+) -> Result<Valid, String> {
     let title: String = form.title.trim().chars().take(TITLE_MAX_CHARS).collect();
     if title.is_empty() {
         return Err("Donne un titre à l'événement.".into());
@@ -100,8 +108,9 @@ fn validate(ctx: &Ctx, form: &EventForm) -> Result<Valid, String> {
         .trim()
         .parse()
         .map_err(|_| "Choisis un espace.".to_string())?;
-    let space = ctx
-        .space_by_id(space_id)
+    let space = spaces
+        .iter()
+        .find(|s| s.id == space_id)
         .filter(|s| !s.archived)
         .ok_or("Cet espace n'existe pas ou est archivé.")?;
     let all_day = form.all_day.is_some();
@@ -227,15 +236,28 @@ pub async fn create(
         Ok(valid) => valid,
         Err(error) => return invalid(ctx, &state, None, form, error).await,
     };
-    // Vers Google seulement si un agenda est relié.
-    let linked = google::linked(&state, ctx.user.id).await?.is_some();
-    let to_google = linked && form.google.is_some();
+    insert(&state, ctx.user.id, &valid, form.google.is_some()).await?;
+    ctx.flash_ok(format!("Événement « {} » ajouté", valid.title))
+        .await?;
+    Ok(see_other(&calendar_url(&ctx, valid.space_id, valid.date)))
+}
+
+/// Enregistre un événement valide ; il part vers Google Agenda si c'est
+/// demandé et qu'un agenda est relié. Rend son identifiant. Aussi pour l'API.
+pub(crate) async fn insert(
+    state: &AppState,
+    user: i64,
+    valid: &Valid,
+    google_wanted: bool,
+) -> AppResult<i64> {
+    let linked = google::linked(state, user).await?.is_some();
+    let to_google = linked && google_wanted;
     let now = time::now();
-    sqlx::query!(
+    let id = sqlx::query!(
         "INSERT INTO events (user_id, space_id, title, location, starts_at, ends_at, all_day,
                              google, google_dirty, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ctx.user.id,
+        user,
         valid.space_id,
         valid.title,
         valid.location,
@@ -248,31 +270,30 @@ pub async fn create(
         now
     )
     .execute(&state.db)
-    .await?;
+    .await?
+    .last_insert_rowid();
     if to_google {
-        google::push_soon(&state, ctx.user.id);
+        google::push_soon(state, user);
     }
-    ctx.flash_ok(format!("Événement « {} » ajouté", valid.title))
-        .await?;
-    Ok(see_other(&calendar_url(&ctx, valid.space_id, valid.date)))
+    Ok(id)
 }
 
 /// Un événement tel qu'il est en base.
-struct Stored {
-    title: String,
-    location: String,
-    starts_at: i64,
-    ends_at: i64,
-    all_day: bool,
-    space_id: i64,
-    google: bool,
-    google_event_id: Option<String>,
-    google_dirty: i64,
-    google_error: Option<String>,
+pub(crate) struct Stored {
+    pub(crate) title: String,
+    pub(crate) location: String,
+    pub(crate) starts_at: i64,
+    pub(crate) ends_at: i64,
+    pub(crate) all_day: bool,
+    pub(crate) space_id: i64,
+    pub(crate) google: bool,
+    pub(crate) google_event_id: Option<String>,
+    pub(crate) google_dirty: i64,
+    pub(crate) google_error: Option<String>,
 }
 
 /// L'événement de l'utilisateur, ou 404.
-async fn owned(state: &AppState, user: i64, id: i64) -> AppResult<Stored> {
+pub(crate) async fn owned(state: &AppState, user: i64, id: i64) -> AppResult<Stored> {
     sqlx::query_as!(
         Stored,
         r#"SELECT title, location, starts_at, ends_at, all_day AS "all_day!: bool", space_id,
@@ -344,17 +365,32 @@ pub async fn update(
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<EventForm>,
 ) -> AppResult<Response> {
-    let stored = owned(&state, ctx.user.id, id).await?;
+    owned(&state, ctx.user.id, id).await?;
     let valid = match validate(&ctx, &form) {
         Ok(valid) => valid,
         Err(error) => return invalid(ctx, &state, Some(id), form, error).await,
     };
-    // Sans agenda relié, la case n'est pas montrée : on garde le choix d'avant.
-    let linked = google::linked(&state, ctx.user.id).await?.is_some();
-    let to_google = if linked {
-        form.google.is_some()
-    } else {
-        stored.google
+    save(&state, ctx.user.id, id, &valid, Some(form.google.is_some())).await?;
+    ctx.flash_ok(format!("Événement « {} » enregistré", valid.title))
+        .await?;
+    Ok(see_other(&calendar_url(&ctx, valid.space_id, valid.date)))
+}
+
+/// Enregistre les changements d'un événement du compte (404 sinon), et les
+/// fait suivre chez Google. `google_wanted` : `None` garde le choix d'avant
+/// (sans agenda relié, il est toujours gardé). Aussi pour l'API.
+pub(crate) async fn save(
+    state: &AppState,
+    user: i64,
+    id: i64,
+    valid: &Valid,
+    google_wanted: Option<bool>,
+) -> AppResult<()> {
+    let stored = owned(state, user, id).await?;
+    let linked = google::linked(state, user).await?.is_some();
+    let to_google = match google_wanted {
+        Some(wanted) if linked => wanted,
+        _ => stored.google,
     };
     // Une copie à créer, à modifier ou à retirer chez Google.
     let push = to_google || stored.google_event_id.is_some();
@@ -374,16 +410,38 @@ pub async fn update(
         push,
         now,
         id,
-        ctx.user.id
+        user
     )
     .execute(&state.db)
     .await?;
     if push && linked {
-        google::push_soon(&state, ctx.user.id);
+        google::push_soon(state, user);
     }
-    ctx.flash_ok(format!("Événement « {} » enregistré", valid.title))
+    Ok(())
+}
+
+/// Supprime un événement du compte (404 sinon), et sa copie chez Google.
+/// Rend l'événement supprimé. Aussi pour l'API.
+pub(crate) async fn remove(state: &AppState, user: i64, id: i64) -> AppResult<Stored> {
+    let event = owned(state, user, id).await?;
+    let mut tx = state.db.begin().await?;
+    if let Some(google_id) = &event.google_event_id {
+        sqlx::query!(
+            "INSERT OR IGNORE INTO google_deletions (user_id, google_event_id) VALUES (?, ?)",
+            user,
+            google_id
+        )
+        .execute(&mut *tx)
         .await?;
-    Ok(see_other(&calendar_url(&ctx, valid.space_id, valid.date)))
+    }
+    sqlx::query!("DELETE FROM events WHERE id = ? AND user_id = ?", id, user)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    if event.google_event_id.is_some() {
+        google::push_soon(state, user);
+    }
+    Ok(event)
 }
 
 /// `POST /calendar/events/{id}/delete`
@@ -392,28 +450,7 @@ pub async fn delete(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
-    let event = owned(&state, ctx.user.id, id).await?;
-    let mut tx = state.db.begin().await?;
-    if let Some(google_id) = &event.google_event_id {
-        sqlx::query!(
-            "INSERT OR IGNORE INTO google_deletions (user_id, google_event_id) VALUES (?, ?)",
-            ctx.user.id,
-            google_id
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
-    sqlx::query!(
-        "DELETE FROM events WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
-    )
-    .execute(&mut *tx)
-    .await?;
-    tx.commit().await?;
-    if event.google_event_id.is_some() {
-        google::push_soon(&state, ctx.user.id);
-    }
+    let event = remove(&state, ctx.user.id, id).await?;
     ctx.flash_ok(format!("Événement « {} » supprimé", event.title))
         .await?;
     Ok(see_other(&calendar_url(
