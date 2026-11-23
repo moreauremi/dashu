@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM folders WHERE trash_op = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "058b185ec281c7fd4158f2c56203bff00916102ae2583e5119753e4687361025"
+}

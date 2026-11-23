@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT 1 + max(coalesce((SELECT max(trash_op) FROM notes), 0),\n                          coalesce((SELECT max(trash_op) FROM files), 0),\n                          coalesce((SELECT max(trash_op) FROM folders), 0)) AS \"n!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b14a57915cdecd03d13cd9a5fc056bfa1cd1c0eb2483f39f7bc74eeb834c7a5d"
+}

@@ -1317,3 +1317,9 @@ Par défaut, pour avancer :
 - **Ce qui protège le compte reste hors de l'API**, comme l'administration du serveur.
 - **Fichiers par MCP jusqu'à 10 Mo** ; au-delà, l'API (envoi par morceaux) ou le site.
 - **Ordre** : le connecteur d'abord, pour que Rémi et son collègue s'en servent vite, puis la corbeille, puis l'API par lots. La corbeille arrive avant la première suppression par l'API.
+
+Pendant la réalisation (23 novembre 2026) :
+
+- **Comment la corbeille se cache** : une note, un fichier ou un dossier supprimé passe dans l'espace « corbeille » caché de son espace (`spaces.trash_of`), que la vue `space_access` ne donne à personne ; un espace supprimé est marqué `deleted_at`, et la vue le cache avec son contenu. Toutes les requêtes de contenu passaient déjà par `space_access` (espaces partagés) : rien n'a eu à être filtré requête par requête, ce qui était le risque principal noté plus haut. Les colonnes prévues (`deleted_at`, `deleted_by`, `deleted_via`, `trash_op`) sont là ; s'y ajoutent `trash_root` (la ligne que la personne a supprimée), `trash_folder_id` (son dossier d'origine) et, pour un dossier, `trash_name` (les noms de dossiers sont uniques par emplacement).
+- **Un espace supprimé perd ses membres**, comme avant la corbeille : ils sont retirés (leurs agendas rentrent chez eux) et ne reviennent pas s'il est restauré. Son slug est libéré pour un nouvel espace, et repris à la restauration s'il est encore libre.
+- **Supprimer un dossier en transférant son contenu** : le contenu monte d'un niveau, puis le dossier, vide, part dans la corbeille.

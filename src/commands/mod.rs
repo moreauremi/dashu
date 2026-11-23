@@ -569,7 +569,7 @@ impl Vars {
         let overview = ctx.active.is_overview();
         let title = sqlx::query_scalar!(
             r#"SELECT e.title AS "title!: String" FROM agenda_items e
-               WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2)
+               WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR e.space_id = ?2)
                  AND e.all_day = 0 AND e.starts_at <= ?4 AND e.ends_at > ?4
                ORDER BY e.starts_at
                LIMIT 1"#,

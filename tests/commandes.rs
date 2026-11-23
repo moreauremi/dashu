@@ -533,7 +533,11 @@ async fn la_note_au_clavier() {
     );
     let deleted = hx_location(&alice.command("/delete", &note).await);
     assert_eq!(deleted["path"], "/e/perso/notes");
-    assert_eq!(count(&app, "SELECT COUNT(*) FROM notes").await, 0);
+    // Dans la corbeille, plus nulle part ailleurs.
+    assert_eq!(
+        count(&app, "SELECT COUNT(*) FROM notes WHERE deleted_at IS NULL").await,
+        0
+    );
 
     // Ailleurs que sur une note, ces commandes le disent.
     let refused = alice.command("/pin", "/").await;
@@ -557,19 +561,22 @@ async fn le_fichier_au_clavier() {
     );
     let deleted = hx_location(&alice.command("/delete", &page).await);
     assert_eq!(deleted["path"], "/e/perso/files");
-    assert_eq!(count(&app, "SELECT COUNT(*) FROM files").await, 0);
+    assert_eq!(
+        count(&app, "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL").await,
+        0
+    );
 
     // Un fichier de l'onglet Outils : se garde dans un espace, ne se
     // déplace pas avant.
     alice.upload_to_tools("photo.png", b"png").await;
-    let file: i64 = scalar(&app, "SELECT id FROM files").await;
+    let file: i64 = scalar(&app, "SELECT id FROM files WHERE deleted_at IS NULL").await;
     let page = format!("/files/{file}");
     let refused = alice.command("/move ecole", &page).await;
     assert!(refused.body.contains("pas encore rangé"));
     let kept = hx_location(&alice.command("/keep ecole", &page).await);
     assert_eq!(kept["path"], "/tools");
     let (space, expires): (i64, Option<i64>) =
-        sqlx::query_as("SELECT space_id, expires_at FROM files")
+        sqlx::query_as("SELECT space_id, expires_at FROM files WHERE deleted_at IS NULL")
             .fetch_one(&app.state.db)
             .await
             .unwrap();

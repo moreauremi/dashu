@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT space_id AS \"space_id!: i64\" FROM trash_access WHERE user_id = ? AND trash_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "space_id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0d9125dc94e997417d0441b135c8b0d6997da24999d2f3951b7fd319f47ed9c8"
+}

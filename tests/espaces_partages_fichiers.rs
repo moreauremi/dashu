@@ -244,10 +244,12 @@ async fn les_dossiers_sont_communs() {
         )
         .await;
     assert_eq!(deleted.status, StatusCode::SEE_OTHER, "{}", deleted.body);
-    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM files WHERE name = 'tp.pdf'")
-        .fetch_one(&app.state.db)
-        .await
-        .unwrap();
+    let left: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM files WHERE name = 'tp.pdf' AND deleted_at IS NULL",
+    )
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap();
     assert_eq!(left, 0);
 }
 

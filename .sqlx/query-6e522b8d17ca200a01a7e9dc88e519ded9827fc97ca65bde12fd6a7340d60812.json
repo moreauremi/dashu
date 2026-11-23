@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", slug AS \"slug!\", name AS \"name!\", color AS \"color!\",\n                  icon AS \"icon!\", archived AS \"archived!: bool\",\n                  auto_mp4 AS \"auto_mp4!: bool\", auto_heic_jpeg AS \"auto_heic_jpeg!: bool\",\n                  owner_id AS \"owner_id!: i64\", mine AS \"mine!: bool\"\n           FROM (\n               SELECT s.id, s.slug, s.name, s.color, s.icon,\n                      s.archived_at IS NOT NULL AS archived, s.auto_mp4, s.auto_heic_jpeg,\n                      s.user_id AS owner_id, 1 AS mine, s.position AS place\n               FROM spaces s\n               WHERE s.user_id = ?1 AND s.trash_of IS NULL AND s.deleted_at IS NULL\n               UNION ALL\n               SELECT s.id, m.slug, s.name, s.color, s.icon,\n                      s.archived_at IS NOT NULL, s.auto_mp4, s.auto_heic_jpeg,\n                      s.user_id, 0, m.position\n               FROM space_members m JOIN spaces s ON s.id = m.space_id\n               WHERE m.user_id = ?1 AND s.deleted_at IS NULL\n           )\n           ORDER BY place, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "slug!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "color!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "icon!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "archived!: bool",
+        "ordinal": 5,
+        "type_info": "Null"
+      },
+      {
+        "name": "auto_mp4!: bool",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "auto_heic_jpeg!: bool",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "owner_id!: i64",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "mine!: bool",
+        "ordinal": 9,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6e522b8d17ca200a01a7e9dc88e519ded9827fc97ca65bde12fd6a7340d60812"
+}

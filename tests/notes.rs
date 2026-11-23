@@ -147,10 +147,21 @@ async fn cycle_de_vie_d_une_note() {
 
     // --- Suppression ---
     let deleted = alice.post(&format!("{url}/delete"), &[]).await;
-    assert!(alice.follow(deleted).await.body.contains("Note supprimée<"));
+    assert!(
+        alice
+            .follow(deleted)
+            .await
+            .body
+            .contains("Note mise dans la corbeille")
+    );
     assert_eq!(alice.get(&url).await.status, StatusCode::NOT_FOUND);
     assert!(!alice.get("/notes?q=trunk").await.body.contains("<mark>"));
-    // L'index de recherche et les tags orphelins sont nettoyés.
+    // Effacée pour de bon depuis la corbeille : l'index de recherche et les
+    // tags orphelins sont nettoyés.
+    let erased = alice
+        .post(&format!("/settings/trash/note/{id}/erase"), &[])
+        .await;
+    assert_eq!(erased.status, StatusCode::SEE_OTHER);
     let (indexed, tags): (i64, i64) = (
         sqlx::query_scalar("SELECT COUNT(*) FROM notes_fts WHERE notes_fts MATCH 'trunk'")
             .fetch_one(&app.state.db)

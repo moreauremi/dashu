@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM notes WHERE id = ? AND trash_root = 1\n                   AND space_id IN (SELECT trash_id FROM trash_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a8fe07cd7087ac42139fcb11b1b206ab5e458f2ce6e2a8e02d808333d8be926e"
+}

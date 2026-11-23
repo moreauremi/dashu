@@ -66,6 +66,8 @@ struct SettingsPage {
     shared: HashMap<i64, String>,
     /// Carte Connexions, déjà rendue (settings/_connexions.html).
     connexions_html: String,
+    /// Éléments dans la corbeille.
+    trash_count: usize,
 }
 
 struct InvitationRow {
@@ -181,6 +183,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         invitations,
         shared,
         connexions_html: connexions::ConnexionsCard::render_html(&state, ctx.user.id).await?,
+        trash_count: crate::trash::page::count(&state.db, ctx.user.id).await?,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),

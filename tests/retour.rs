@@ -221,7 +221,7 @@ async fn l_origine_survit_aux_actions_de_la_page() {
         .post(&format!("/files/{file}/delete"), &[("next", depuis)])
         .await;
     assert_eq!(deleted.location(), depuis);
-    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM files")
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM files WHERE deleted_at IS NULL")
         .fetch_one(&app.state.db)
         .await
         .unwrap();

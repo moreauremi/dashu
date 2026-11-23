@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE folders SET space_id = ?, trash_folder_id = parent_id, parent_id = NULL,\n           trash_name = ?, name = char(1) || id,\n           deleted_at = ?, deleted_by = ?, deleted_via = ?, trash_op = ?, trash_root = 1\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "7ccb5c12ad586800403f1d8ca9eb52b02ad52ad44e49f4e743ba5dfffc845b21"
+}

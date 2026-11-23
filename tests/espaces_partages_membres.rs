@@ -491,7 +491,15 @@ async fn supprimer_un_espace_partage_avec_son_contenu() {
         )
         .await;
     assert_eq!(response.status, StatusCode::SEE_OTHER);
-    assert_eq!(scalar(&app, "SELECT count(*) FROM files").await, 0);
+    // L'espace et ses fichiers sont dans la corbeille : visibles nulle part.
+    assert_eq!(
+        scalar(
+            &app,
+            "SELECT count(*) FROM files WHERE space_id IN (SELECT space_id FROM space_access)"
+        )
+        .await,
+        0
+    );
     assert_eq!(scalar(&app, "SELECT count(*) FROM space_members").await, 0);
     // L'agenda de Bob a quitté l'espace avant sa suppression.
     assert_eq!(

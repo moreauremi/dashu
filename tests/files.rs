@@ -53,6 +53,13 @@ async fn envoi_liste_telechargement_puis_suppression() {
 
     let deleted = alice.post(&format!("/files/{id}/delete"), &[]).await;
     assert_eq!(deleted.status, StatusCode::SEE_OTHER);
+    // Dans la corbeille : encore sur le disque, effacé pour de bon depuis
+    // la corbeille.
+    assert_eq!(app.stored_files().len(), 1);
+    let erased = alice
+        .post(&format!("/settings/trash/fichier/{id}/erase"), &[])
+        .await;
+    assert_eq!(erased.status, StatusCode::SEE_OTHER);
     assert!(app.stored_files().is_empty(), "le contenu quitte le disque");
     let page = alice.get("/files?dossier=espace").await;
     assert!(!page.body.contains("Cours réseau.pdf"));

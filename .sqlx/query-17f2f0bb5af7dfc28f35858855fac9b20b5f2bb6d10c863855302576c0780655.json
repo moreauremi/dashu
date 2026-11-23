@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM files WHERE trash_op = ? RETURNING storage_key AS \"storage_key!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "17f2f0bb5af7dfc28f35858855fac9b20b5f2bb6d10c863855302576c0780655"
+}

@@ -30,7 +30,8 @@ async fn folder_place(app: &TestApp, id: i64) -> (i64, Option<i64>) {
 }
 
 async fn count_folders(app: &TestApp) -> i64 {
-    sqlx::query_scalar("SELECT count(*) FROM folders")
+    // Ceux de la corbeille ne comptent pas.
+    sqlx::query_scalar("SELECT count(*) FROM folders WHERE deleted_at IS NULL")
         .fetch_one(&app.state.db)
         .await
         .unwrap()
@@ -50,11 +51,14 @@ async fn place_of(app: &TestApp, table: &str, name: &str) -> (i64, Option<i64>) 
 
 async fn exists(app: &TestApp, table: &str, name: &str) -> bool {
     let column = if table == "notes" { "title" } else { "name" };
-    sqlx::query_scalar::<_, i64>(&format!("SELECT count(*) FROM {table} WHERE {column} = ?"))
-        .bind(name)
-        .fetch_one(&app.state.db)
-        .await
-        .unwrap()
+    // Ce qui est dans la corbeille ne compte pas.
+    sqlx::query_scalar::<_, i64>(&format!(
+        "SELECT count(*) FROM {table} WHERE {column} = ? AND deleted_at IS NULL"
+    ))
+    .bind(name)
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap()
         > 0
 }
 
@@ -778,7 +782,7 @@ async fn supprimer_un_dossier_vide_ou_non() {
             .follow(deleted)
             .await
             .body
-            .contains("Dossier « Vide » supprimé")
+            .contains("Dossier « Vide » mis dans la corbeille")
     );
 
     // Un dossier non vide : l'avertissement dit ce qu'il contient et propose
@@ -807,7 +811,7 @@ async fn supprimer_un_dossier_vide_ou_non() {
     let page = alice.follow(moved).await;
     assert!(
         page.body
-            .contains("Dossier « Math » supprimé : son contenu est dans « École »")
+            .contains("Dossier « Math » mis dans la corbeille : son contenu est dans « École »")
     );
     assert_eq!(place_of(&app, "notes", "Cours").await, (ecole, None));
     assert_eq!(place_of(&app, "files", "td.pdf").await, (ecole, None));
@@ -835,8 +839,8 @@ async fn supprimer_un_dossier_vide_ou_non() {
         .await;
     assert_eq!(place_of(&app, "notes", "Leçon").await, (ecole, Some(sub)));
 
-    // Tout supprimer : les notes, les fichiers (disque compris) et les
-    // sous-dossiers partent avec lui.
+    // Tout supprimer : les notes, les fichiers et les sous-dossiers partent
+    // avec lui dans la corbeille ; le disque se vide quand on l'y efface.
     create_in_folder(&mut alice, sub, "Annexe").await;
     let erased = alice
         .post(
@@ -849,12 +853,16 @@ async fn supprimer_un_dossier_vide_ou_non() {
             .follow(erased)
             .await
             .body
-            .contains("Dossier « Exercices (2) » supprimé, avec son contenu")
+            .contains("Dossier « Exercices (2) » mis dans la corbeille, avec son contenu")
     );
     assert!(!exists(&app, "notes", "Exo").await);
     assert!(!exists(&app, "notes", "Leçon").await);
     assert!(!exists(&app, "files", "exo.pdf").await);
     assert!(!exists(&app, "folders", "Annexe").await);
+    assert_eq!(app.stored_files().len(), stored);
+    alice
+        .post(&format!("/settings/trash/dossier/{sub}/erase"), &[])
+        .await;
     assert_eq!(app.stored_files().len(), stored - 1);
     // Le reste d'École est là.
     assert!(exists(&app, "notes", "Cours").await && exists(&app, "files", "td.pdf").await);

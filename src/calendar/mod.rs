@@ -120,7 +120,7 @@ pub async fn page(
 
     let sources = sqlx::query!(
         r#"SELECT name, last_fetched_at, last_error FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) ORDER BY name"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2) ORDER BY name"#,
         user,
         space,
         overview
@@ -130,7 +130,7 @@ pub async fn page(
 
     let has_events = sqlx::query_scalar!(
         r#"SELECT count(*) AS "n!: i64" FROM events
-           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space,
         overview
@@ -207,7 +207,7 @@ async fn events_between(
                   CASE WHEN e.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
            FROM agenda_items e
            JOIN spaces sp ON sp.id = e.space_id
-           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
+           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR e.space_id = ?2) AND e.ends_at > ?4 AND e.starts_at < ?5
            ORDER BY e.starts_at, e.ends_at"#,
         user,
         space,
@@ -259,7 +259,7 @@ pub async fn widget_grid(
                SELECT space_id FROM calendar_sources WHERE user_id = ?1
                UNION ALL SELECT space_id FROM events WHERE user_id = ?1
            )
-           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space.id,
         overview
@@ -286,7 +286,7 @@ pub async fn refresh(
     let overview = is_overview(&ctx.active);
     let sources = sqlx::query!(
         r#"SELECT id AS "id!", ical_url FROM calendar_sources
-           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)"#,
         ctx.user.id,
         ctx.active.id,
         overview

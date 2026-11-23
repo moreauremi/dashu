@@ -226,7 +226,7 @@ pub async fn courses(
                   CASE WHEN e.space_id = ?2 THEN '' ELSE sp.color END AS "tag_color!: String"
            FROM agenda_items e
            JOIN spaces sp ON sp.id = e.space_id
-           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR e.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
+           WHERE e.user_id = ?1 AND (?3 AND e.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR e.space_id = ?2) AND e.all_day = 0 AND e.ends_at > ?4
            ORDER BY e.starts_at
            LIMIT ?5"#,
         user,
@@ -257,7 +257,7 @@ pub async fn courses(
                SELECT space_id FROM calendar_sources WHERE user_id = ?1
                UNION ALL SELECT space_id FROM events WHERE user_id = ?1
            )
-           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)"#,
+           WHERE (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)"#,
         user,
         space,
         overview
@@ -329,7 +329,7 @@ pub(crate) async fn day_tasks(db: &SqlitePool, ctx: &Ctx) -> AppResult<Vec<DayTa
         DayTask,
         r#"SELECT id AS "id!", space_id, title, done AS "done!: bool", due_date
            FROM tasks
-           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)
              AND ((done = 0 AND (due_date IS NULL OR due_date <= ?3))
                OR (done = 1 AND done_at >= ?4))
            ORDER BY done, due_date, created_at"#,
@@ -564,7 +564,7 @@ pub async fn recent_notes(
     let rows = sqlx::query!(
         r#"SELECT id AS "id!", space_id, title, pinned AS "pinned!: bool", updated_at
            FROM notes
-           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2)
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)
            ORDER BY pinned DESC, updated_at DESC
            LIMIT 40"#,
         ctx.user.id,
@@ -638,7 +638,7 @@ pub async fn recent_files(
     let scope = ctx.scope(false);
     let items = sqlx::query!(
         r#"SELECT id AS "id!", space_id, name, mime, size, updated_at, thumb
-           FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
+           FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL
            ORDER BY updated_at DESC, id DESC
            LIMIT ?3"#,
         ctx.user.id,
@@ -663,7 +663,7 @@ pub async fn recent_files(
     })
     .collect();
     let total = sqlx::query_scalar!(
-        "SELECT count(*) FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL",
+        "SELECT count(*) FROM files WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2) AND expires_at IS NULL",
         ctx.user.id,
         scope
     )
