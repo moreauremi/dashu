@@ -49,6 +49,8 @@ pub struct ConnexionsCard {
     pub new_name: String,
     /// Adresse de l'API, pour l'exemple d'appel.
     pub api_url: String,
+    /// Adresse du connecteur Claude, pour la commande de Claude Code.
+    pub mcp_url: String,
     pub error: Option<String>,
     pub durations: [(&'static str, i64, &'static str); 3],
     pub default_duration: &'static str,
@@ -94,6 +96,7 @@ impl ConnexionsCard {
             new_token: None,
             new_name: String::new(),
             api_url: format!("{}/api/v1", state.config.base_url.trim_end_matches('/')),
+            mcp_url: format!("{}/mcp", state.config.base_url.trim_end_matches('/')),
             error: None,
             durations: DURATIONS,
             default_duration: DEFAULT_DURATION,

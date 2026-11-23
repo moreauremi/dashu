@@ -5,7 +5,7 @@
 <section class="card" id="connexions" aria-labelledby="s-connexions">
   <header class="card-head"><h2 id="s-connexions">Connexions</h2></header>
   <div class="card-body">
-    <p class="hint">Un jeton donne à un programme l'accès à ton compte, avec tes droits : tes espaces et les espaces partagés que tu as rejoints. Il passe par l'API, dans l'en-tête <code>Authorization: Bearer …</code>.</p>
+    <p class="hint">Un jeton donne à un programme l'accès à ton compte, avec tes droits : tes espaces et les espaces partagés que tu as rejoints. Claude Code s'en sert pour piloter dashu (le connecteur <code>{{ mcp_url }}</code>) ; un script, pour appeler l'API.</p>
 
     {%- if let Some(token) = new_token %}
     <div class="share-new token-new" role="status">
@@ -14,7 +14,12 @@
         <input id="new-token" type="text" value="{{ token }}" readonly aria-label="Nouveau jeton" spellcheck="false">
         <button class="btn btn-primary" type="button" data-copy="new-token">Copier</button>
       </div>
-      <p class="hint">Exemple : <code>curl -H "Authorization: Bearer …" {{ api_url }}/spaces</code></p>
+      <p>Pour Claude Code, la commande prête à coller dans un terminal :</p>
+      <div class="share-copy">
+        <input id="new-token-claude" type="text" value="claude mcp add --transport http dashu {{ mcp_url }} --header &quot;Authorization: Bearer {{ token }}&quot;" readonly aria-label="Commande pour Claude Code" spellcheck="false">
+        <button class="btn" type="button" data-copy="new-token-claude">Copier</button>
+      </div>
+      <p class="hint">Pour un script : <code>curl -H "Authorization: Bearer …" {{ api_url }}/spaces</code></p>
     </div>
     {%- endif %}
 

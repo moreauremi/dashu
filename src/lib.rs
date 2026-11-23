@@ -13,6 +13,7 @@ pub mod dashboard;
 pub mod db;
 pub mod files;
 pub mod folders;
+pub mod mcp;
 pub mod notes;
 pub mod settings;
 pub mod spaces;
@@ -328,6 +329,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(app)
         .layer(from_fn(web::error::error_pages))
         .merge(api::router())
+        // Connecteur Claude (MCP) : comme l'API, sans session ni CSRF.
+        .merge(mcp::router())
         .layer(from_fn_with_state(
             state.clone(),
             web::headers::security_headers,
