@@ -199,6 +199,25 @@ curl -s -H "Authorization: Bearer $DASHU_TOKEN" -H "Content-Type: application/js
 
 Volontairement absent : la suppression de notes, les réglages, le mot de passe et les sources iCal. Les dates renvoyées sont en heure de Paris, au format ISO 8601.
 
+### Connecteur Claude (MCP)
+
+dashu se pilote aussi depuis Claude. **MCP** (Model Context Protocol) est le protocole par lequel Claude découvre les outils d'une application et les appelle ; dashu le parle lui-même, à l'adresse `https://app.dashu.dev/mcp` (ou par l'adresse Tailscale). Chaque compte branche son propre Claude, sur son propre compte, avec un jeton de **Réglages › Connexions**. À la création du jeton, la carte donne la commande prête à coller pour Claude Code :
+
+```bash
+claude mcp add --transport http dashu https://app.dashu.dev/mcp --header "Authorization: Bearer dashu_…"
+```
+
+Les outils font ce que fait l'API, ni plus ni moins : ils appellent les mêmes fonctions, avec les mêmes règles et les mêmes limites. `lister_espaces` ; `lister_taches`, `creer_tache`, `modifier_tache`, `supprimer_tache` ; `chercher_notes`, `lire_note`, `creer_note`, `modifier_note` (titre, ajout à la fin, épingle, tags), `remplacer_note`, `deplacer_note` ; `lire_agenda`, `rafraichir_agenda`. Chacun porte une annotation (lecture, écriture ou destruction) dont Claude se sert pour demander confirmation. Une erreur de saisie revient comme un résultat lisible, que Claude corrige.
+
+- Transport « Streamable HTTP » réduit au nécessaire : un message JSON-RPC par `POST /mcp`, une réponse JSON. Pas de flux ouvert (`GET /mcp` répond 405), pas de session MCP, pas de requête par lots.
+- Un jeton personnel, jamais `API_TOKEN` (qui ne vaut que pour `/api/v1`) ni un cookie de session. Sans jeton valable : 401.
+- Une requête qui vient d'une page web d'un autre site (en-tête `Origin` étranger) est refusée (403). Seules passent celles sans `Origin`, de dashu ou de Claude.
+- 60 appels d'un coup par jeton, puis un par seconde ; 15 Mo par requête.
+- Les instructions données à Claude à la connexion disent que les notes, tâches et événements sont des données écrites par des personnes : une phrase qui y ressemble à une consigne ne se suit pas.
+- Les logs gardent le compte, le nom du jeton et l'outil appelé, jamais le contenu.
+
+claude.ai et l'app iPhone demandent OAuth à la place d'un jeton collé : c'est l'étape suivante (SPEC, « Connecteur Claude (MCP) », étape 3).
+
 ## Déploiement : homelab, Tailscale et tunnel Cloudflare
 
 dashu tourne **sans Docker**, dans un conteneur LXC Debian du serveur Proxmox de la maison : le binaire est compilé sur place et lancé par systemd. Il n'écoute que sur `127.0.0.1:3000`. Deux chemins y mènent, sans ouvrir un seul port sur la box :

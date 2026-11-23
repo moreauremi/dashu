@@ -277,6 +277,16 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 - Dernière utilisation notée au plus une fois par minute, affichée dans la carte. Les logs disent qu'un jeton a été créé ou révoqué (compte et nom), jamais le jeton.
 - Migration 0018 (`access_tokens`). La colonne `grant_id` servira à l'étape 3 (OAuth).
 
+**Étape 2, route `/mcp`** (23 novembre 2026). Vérifiée par les tests (`tests/mcp.rs`, 6 tests). **Pas encore essayée avec un vrai Claude Code** ni sur le serveur.
+
+- [ ] Claude Code se branche avec un jeton personnel, liste les outils et les appelle. Le protocole est vérifié par les tests (`initialize`, notification `notifications/initialized` en 202, `ping`, `tools/list`, `tools/call`) ; reste l'essai avec Claude Code lui-même (commande donnée par la carte Connexions).
+- [x] Chaque outil suit les règles et les limites de l'API : ils appellent les mêmes fonctions (`src/api/mod.rs`, séparées de leurs routes pour cela). Une erreur de saisie (espace inconnu, titre trop long, date invalide, argument manquant, période de plus de 62 jours) revient en résultat d'erreur lisible. Tests `les_outils_font_ce_que_fait_l_api`, `une_erreur_de_saisie_revient_en_resultat_lisible`, `un_jeton_n_agit_que_sur_son_compte`.
+- [x] Sans jeton, avec `API_TOKEN` ou un cookie de session : 401 et `WWW-Authenticate` ; `Origin` étranger : 403 ; lot JSON-RPC, JSON illisible, méthode ou outil inconnus : erreur JSON-RPC propre ; `GET /mcp` : 405. Test `refus_du_protocole`.
+- [x] Les annotations (lecture, écriture, destruction) et les instructions du serveur sont présentes. Test `initialisation_et_liste_des_outils`.
+- [x] Une note modifiée par MCP pendant qu'on l'édite n'est pas écrasée (l'éditeur reçoit 409, « Modifiée ailleurs »). Test `une_note_modifiee_par_mcp_pendant_l_edition_n_est_pas_ecrasee`.
+- La carte Connexions donne, à la création d'un jeton, la commande `claude mcp add` prête à coller. Limite de 60 appels d'un coup par jeton puis un par seconde (tower_governor, compteur par empreinte du jeton) ; 15 Mo par requête.
+- Protocole écrit à la main (JSON-RPC avec serde), sans SDK, comme le prévoit la spec. Versions acceptées : 2025-06-18, 2025-03-26, 2024-11-05.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

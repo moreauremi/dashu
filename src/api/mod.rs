@@ -83,7 +83,7 @@ impl ApiError {
         }
     }
 
-    fn bad_request(message: impl Into<String>) -> Self {
+    pub(crate) fn bad_request(message: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message)
     }
 
@@ -91,13 +91,20 @@ impl ApiError {
         Self::new(StatusCode::NOT_FOUND, format!("{what} introuvable"))
     }
 
-    fn internal(error: anyhow::Error) -> Self {
+    pub(crate) fn internal(error: anyhow::Error) -> Self {
         // Le détail part dans les logs, jamais dans la réponse.
         tracing::error!(error = format!("{error:#}"), "erreur interne (API)");
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "erreur interne, réessaie dans un instant",
         )
+    }
+}
+
+impl ApiError {
+    /// Message en français, tel qu'il part dans la réponse.
+    pub(crate) fn message(&self) -> &str {
+        &self.message
     }
 }
 
@@ -148,7 +155,7 @@ impl From<QueryRejection> for ApiError {
     }
 }
 
-type ApiResult<T> = Result<T, ApiError>;
+pub(crate) type ApiResult<T> = Result<T, ApiError>;
 
 async fn unknown_route() -> ApiError {
     ApiError::new(StatusCode::NOT_FOUND, "route d'API inconnue")
@@ -255,6 +262,13 @@ impl FromRequestParts<AppState> for ApiUser {
             })?
         };
 
+        Self::load(state, id).await
+    }
+}
+
+impl ApiUser {
+    /// Le compte et ses espaces, relus à chaque requête.
+    pub(crate) async fn load(state: &AppState, id: i64) -> ApiResult<Self> {
         let mut spaces = spaces::list(&state.db, id).await?;
         if spaces.is_empty() {
             // Compte créé en ligne de commande et jamais ouvert dans le navigateur.
@@ -320,22 +334,24 @@ fn check_body(body: &str) -> ApiResult<()> {
 // ---------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct SpaceOut {
+pub(crate) struct SpaceOut {
     slug: String,
     name: String,
 }
 
 /// `GET /api/v1/spaces`
 async fn list_spaces(user: ApiUser) -> Json<Vec<SpaceOut>> {
-    Json(
-        user.spaces
-            .into_iter()
-            .map(|s| SpaceOut {
-                slug: s.slug,
-                name: s.name,
-            })
-            .collect(),
-    )
+    Json(spaces_out(&user))
+}
+
+pub(crate) fn spaces_out(user: &ApiUser) -> Vec<SpaceOut> {
+    user.spaces
+        .iter()
+        .map(|s| SpaceOut {
+            slug: s.slug.clone(),
+            name: s.name.clone(),
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------
@@ -343,7 +359,7 @@ async fn list_spaces(user: ApiUser) -> Json<Vec<SpaceOut>> {
 // ---------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct TaskOut {
+pub(crate) struct TaskOut {
     id: i64,
     title: String,
     done: bool,
@@ -353,7 +369,7 @@ struct TaskOut {
 }
 
 #[derive(Deserialize)]
-struct TaskListQuery {
+pub(crate) struct TaskListQuery {
     space: Option<String>,
     /// `open` (par défaut), `done` ou `all`.
     status: Option<String>,
@@ -366,6 +382,14 @@ async fn list_tasks(
     query: Result<Query<TaskListQuery>, QueryRejection>,
 ) -> ApiResult<Json<Vec<TaskOut>>> {
     let Query(query) = query?;
+    Ok(Json(tasks_list(&state, &user, query).await?))
+}
+
+pub(crate) async fn tasks_list(
+    state: &AppState,
+    user: &ApiUser,
+    query: TaskListQuery,
+) -> ApiResult<Vec<TaskOut>> {
     let space = user.space_filter(query.space.as_deref())?;
     let done: Option<bool> = match query.status.as_deref().unwrap_or("open") {
         "open" => Some(false),
@@ -399,7 +423,7 @@ async fn list_tasks(
         space: user.slug_of(t.space_id),
     })
     .collect();
-    Ok(Json(tasks))
+    Ok(tasks)
 }
 
 async fn fetch_task(db: &SqlitePool, user: &ApiUser, id: i64) -> ApiResult<TaskOut> {
@@ -432,7 +456,7 @@ async fn get_task(
 }
 
 #[derive(Deserialize)]
-struct NewTask {
+pub(crate) struct NewTask {
     title: String,
     space: String,
     /// `AAAA-MM-JJ`. Absent : aujourd'hui, comme depuis le dashboard.
@@ -446,6 +470,17 @@ async fn create_task(
     payload: Result<Json<NewTask>, JsonRejection>,
 ) -> ApiResult<(StatusCode, Json<TaskOut>)> {
     let Json(task) = payload?;
+    Ok((
+        StatusCode::CREATED,
+        Json(task_create(&state, &user, task).await?),
+    ))
+}
+
+pub(crate) async fn task_create(
+    state: &AppState,
+    user: &ApiUser,
+    task: NewTask,
+) -> ApiResult<TaskOut> {
     let title = clean_title(&task.title, TASK_MAX_CHARS, "title")?;
     if title.is_empty() {
         return Err(ApiError::bad_request("title ne peut pas être vide"));
@@ -470,17 +505,14 @@ async fn create_task(
     .execute(&state.db)
     .await?
     .last_insert_rowid();
-    Ok((
-        StatusCode::CREATED,
-        Json(fetch_task(&state.db, &user, id).await?),
-    ))
+    fetch_task(&state.db, user, id).await
 }
 
 #[derive(Deserialize)]
-struct TaskChanges {
-    title: Option<String>,
-    done: Option<bool>,
-    due_date: Option<String>,
+pub(crate) struct TaskChanges {
+    pub(crate) title: Option<String>,
+    pub(crate) done: Option<bool>,
+    pub(crate) due_date: Option<String>,
 }
 
 /// `PATCH /api/v1/tasks/{id}` `{"done": true}` (champs facultatifs : title, done, due_date)
@@ -491,6 +523,15 @@ async fn update_task(
     payload: Result<Json<TaskChanges>, JsonRejection>,
 ) -> ApiResult<Json<TaskOut>> {
     let Json(changes) = payload?;
+    Ok(Json(task_update(&state, &user, id, changes).await?))
+}
+
+pub(crate) async fn task_update(
+    state: &AppState,
+    user: &ApiUser,
+    id: i64,
+    changes: TaskChanges,
+) -> ApiResult<TaskOut> {
     let title = match changes.title.as_deref() {
         Some(t) => {
             let t = clean_title(t, TASK_MAX_CHARS, "title")?;
@@ -529,7 +570,7 @@ async fn update_task(
     if changed == 0 {
         return Err(ApiError::not_found("tâche"));
     }
-    Ok(Json(fetch_task(&state.db, &user, id).await?))
+    fetch_task(&state.db, user, id).await
 }
 
 /// `DELETE /api/v1/tasks/{id}`
@@ -538,6 +579,11 @@ async fn delete_task(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> ApiResult<StatusCode> {
+    task_delete(&state, &user, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn task_delete(state: &AppState, user: &ApiUser, id: i64) -> ApiResult<()> {
     let deleted = sqlx::query!(
         "DELETE FROM tasks WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
@@ -549,7 +595,7 @@ async fn delete_task(
     if deleted == 0 {
         return Err(ApiError::not_found("tâche"));
     }
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 // ---------------------------------------------------------------------
@@ -557,7 +603,7 @@ async fn delete_task(
 // ---------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct NoteSummary {
+pub(crate) struct NoteSummary {
     id: i64,
     title: String,
     space: String,
@@ -569,7 +615,7 @@ struct NoteSummary {
 }
 
 #[derive(Serialize)]
-struct NoteOut {
+pub(crate) struct NoteOut {
     id: i64,
     title: String,
     body_md: String,
@@ -581,7 +627,7 @@ struct NoteOut {
 }
 
 #[derive(Deserialize)]
-struct NoteListQuery {
+pub(crate) struct NoteListQuery {
     /// Recherche plein texte (titre et contenu, accents ignorés).
     q: Option<String>,
     space: Option<String>,
@@ -596,6 +642,14 @@ async fn list_notes(
     query: Result<Query<NoteListQuery>, QueryRejection>,
 ) -> ApiResult<Json<Vec<NoteSummary>>> {
     let Query(query) = query?;
+    Ok(Json(notes_list(&state, &user, query).await?))
+}
+
+pub(crate) async fn notes_list(
+    state: &AppState,
+    user: &ApiUser,
+    query: NoteListQuery,
+) -> ApiResult<Vec<NoteSummary>> {
     let space = user.space_filter(query.space.as_deref())?;
     let tag = query
         .tag
@@ -687,10 +741,10 @@ async fn list_notes(
     for item in &mut items {
         item.tags = tags.remove(&item.id).unwrap_or_default();
     }
-    Ok(Json(items))
+    Ok(items)
 }
 
-async fn fetch_note(db: &SqlitePool, user: &ApiUser, id: i64) -> ApiResult<NoteOut> {
+pub(crate) async fn fetch_note(db: &SqlitePool, user: &ApiUser, id: i64) -> ApiResult<NoteOut> {
     let note = sqlx::query!(
         r#"SELECT id AS "id!", title, body_md, space_id, pinned AS "pinned!: bool", created_at, updated_at
            FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
@@ -727,7 +781,7 @@ async fn get_note(
 }
 
 #[derive(Deserialize)]
-struct NewNote {
+pub(crate) struct NewNote {
     title: String,
     #[serde(default)]
     body_md: String,
@@ -743,6 +797,17 @@ async fn create_note(
     payload: Result<Json<NewNote>, JsonRejection>,
 ) -> ApiResult<(StatusCode, Json<NoteOut>)> {
     let Json(note) = payload?;
+    Ok((
+        StatusCode::CREATED,
+        Json(note_create(&state, &user, note).await?),
+    ))
+}
+
+pub(crate) async fn note_create(
+    state: &AppState,
+    user: &ApiUser,
+    note: NewNote,
+) -> ApiResult<NoteOut> {
     let title = clean_title(&note.title, notes::TITLE_MAX_CHARS, "title")?;
     let body = notes::normalize_newlines(&note.body_md);
     check_body(&body)?;
@@ -774,24 +839,21 @@ async fn create_note(
     for tag in &note.tags {
         notes::attach_tag(&state.db, user.id, id, tag).await?;
     }
-    Ok((
-        StatusCode::CREATED,
-        Json(fetch_note(&state.db, &user, id).await?),
-    ))
+    fetch_note(&state.db, user, id).await
 }
 
-#[derive(Deserialize)]
-struct NoteChanges {
-    title: Option<String>,
+#[derive(Deserialize, Default)]
+pub(crate) struct NoteChanges {
+    pub(crate) title: Option<String>,
     /// Remplace tout le texte.
-    body_md: Option<String>,
+    pub(crate) body_md: Option<String>,
     /// Ajoute ce texte à la fin, après une ligne vide.
-    append: Option<String>,
-    pinned: Option<bool>,
+    pub(crate) append: Option<String>,
+    pub(crate) pinned: Option<bool>,
     /// Déplace la note vers cet espace.
-    space: Option<String>,
+    pub(crate) space: Option<String>,
     #[serde(default)]
-    add_tags: Vec<String>,
+    pub(crate) add_tags: Vec<String>,
 }
 
 /// `PATCH /api/v1/notes/{id}` (champs facultatifs : title, body_md ou append,
@@ -803,6 +865,15 @@ async fn update_note(
     payload: Result<Json<NoteChanges>, JsonRejection>,
 ) -> ApiResult<Json<NoteOut>> {
     let Json(changes) = payload?;
+    Ok(Json(note_update(&state, &user, id, changes).await?))
+}
+
+pub(crate) async fn note_update(
+    state: &AppState,
+    user: &ApiUser,
+    id: i64,
+    changes: NoteChanges,
+) -> ApiResult<NoteOut> {
     if changes.body_md.is_some() && changes.append.is_some() {
         return Err(ApiError::bad_request(
             "body_md et append ne vont pas ensemble : l'un remplace, l'autre ajoute",
@@ -887,7 +958,7 @@ async fn update_note(
     for tag in &changes.add_tags {
         notes::attach_tag(&state.db, user.id, id, tag).await?;
     }
-    Ok(Json(fetch_note(&state.db, &user, id).await?))
+    fetch_note(&state.db, user, id).await
 }
 
 // ---------------------------------------------------------------------
@@ -895,7 +966,7 @@ async fn update_note(
 // ---------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct EventOut {
+pub(crate) struct EventOut {
     /// Titre complet, tel que dans le flux iCal.
     title: String,
     /// Matière (début du titre Pronote, avant le premier « - »).
@@ -910,7 +981,7 @@ struct EventOut {
 }
 
 #[derive(Deserialize)]
-struct CalendarQuery {
+pub(crate) struct CalendarQuery {
     /// Premier jour, `AAAA-MM-JJ` (par défaut : aujourd'hui).
     from: Option<String>,
     /// Dernier jour inclus (par défaut : `from` + 6 jours).
@@ -928,6 +999,14 @@ async fn calendar(
     query: Result<Query<CalendarQuery>, QueryRejection>,
 ) -> ApiResult<Json<Vec<EventOut>>> {
     let Query(query) = query?;
+    Ok(Json(calendar_events(&state, &user, query).await?))
+}
+
+pub(crate) async fn calendar_events(
+    state: &AppState,
+    user: &ApiUser,
+    query: CalendarQuery,
+) -> ApiResult<Vec<EventOut>> {
     let space = match query.space.as_deref() {
         Some(slug) if user.space(slug)?.is_overview() => None,
         other => user.space_filter(other)?,
@@ -979,11 +1058,11 @@ async fn calendar(
         space: user.slug_of(e.space_id),
     })
     .collect();
-    Ok(Json(events))
+    Ok(events)
 }
 
 #[derive(Serialize)]
-struct RefreshOut {
+pub(crate) struct RefreshOut {
     sources: usize,
     failures: usize,
 }
@@ -993,6 +1072,10 @@ async fn refresh_calendar(
     user: ApiUser,
     State(state): State<AppState>,
 ) -> ApiResult<Json<RefreshOut>> {
+    Ok(Json(calendar_refresh(&state, &user).await?))
+}
+
+pub(crate) async fn calendar_refresh(state: &AppState, user: &ApiUser) -> ApiResult<RefreshOut> {
     let sources = sqlx::query!(
         r#"SELECT id AS "id!", ical_url FROM calendar_sources WHERE user_id = ?"#,
         user.id
@@ -1001,17 +1084,17 @@ async fn refresh_calendar(
     .await?;
     let mut failures = 0;
     for source in &sources {
-        if crate::calendar::sync::sync_source(&state, source.id, &source.ical_url)
+        if crate::calendar::sync::sync_source(state, source.id, &source.ical_url)
             .await
             .is_err()
         {
             failures += 1;
         }
     }
-    Ok(Json(RefreshOut {
+    Ok(RefreshOut {
         sources: sources.len(),
         failures,
-    }))
+    })
 }
 
 #[cfg(test)]
