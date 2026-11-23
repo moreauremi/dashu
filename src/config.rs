@@ -25,8 +25,8 @@ pub struct Config {
     pub google: Option<GoogleConfig>,
     /// Logs en JSON (une ligne par événement) plutôt qu'en texte.
     pub log_json: bool,
-    /// `None` si `API_TOKEN` n'est pas renseigné : toutes les routes `/api`
-    /// répondent alors 404.
+    /// `None` si `API_TOKEN` n'est pas renseigné : l'API n'accepte alors que
+    /// les jetons personnels (Réglages › Connexions).
     pub api: Option<ApiConfig>,
     /// `None` si `FILES_DIR` n'est pas renseigné : la page Fichiers l'indique
     /// et n'accepte aucun envoi.

@@ -347,6 +347,9 @@
     </div>
   </section>
 
+  {#- Connexions : jetons d'accès (settings/_connexions.html, déjà rendu). -#}
+  {{ connexions_html|safe }}
+
   {#- Google Agenda : les événements créés dans dashu y sont copiés (un seul
       sens). Seulement si Google est configuré sur ce serveur. -#}
   {% if google_enabled %}

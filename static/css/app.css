@@ -5046,6 +5046,19 @@ a.cal-allday.is-own:hover {
   flex: 3 1 260px;
 }
 
+/* Carte Connexions : le jeton tout juste créé, et la mention « expiré ». */
+.token-new {
+  margin-bottom: 12px;
+}
+
+.token-new code {
+  overflow-wrap: anywhere;
+}
+
+.token-expired {
+  color: var(--danger);
+}
+
 .auth {
   display: grid;
   place-items: center;
