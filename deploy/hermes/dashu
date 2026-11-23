@@ -137,6 +137,13 @@ def fmt_files(files):
         print(f"#{f['id']} {f['name']} ({size_label(f['size'])}, {where}){tags}")
 
 
+def fmt_job(j):
+    result = f" -> #{j['result']['id']} {j['result']['name']}" if j.get("result") else ""
+    error = f" ({j['error']})" if j.get("error") else ""
+    progress = f" {j['progress']} %" if j["status"] == "running" else ""
+    print(f"conversion #{j['id']} {j['label']} de {j['source_name']} : {j['status']}{progress}{error}{result}")
+
+
 def fmt_folders(folders):
     if not folders:
         print("Aucun dossier.")
@@ -367,6 +374,23 @@ def main():
     s = sub.add_parser("folder-rm", help="met un dossier et son contenu dans la corbeille")
     s.add_argument("id", type=int)
 
+    s = reader("formats", "conversions possibles d'un fichier")
+    s.add_argument("id", type=int)
+
+    s = sub.add_parser("convert", help="convertit (ou compresse) un fichier")
+    s.add_argument("id", type=int)
+    s.add_argument("--to", required=True, help="une valeur de dashu formats ID (compress pour compresser)")
+    s.add_argument("--pages", help="pour --to pages : 2-4")
+
+    s = reader("jobs", "conversions récentes")
+    s.add_argument("--active", action="store_true", help="seulement celles en cours")
+
+    s = reader("job", "où en est une conversion")
+    s.add_argument("id", type=int)
+
+    s = sub.add_parser("replace", help="le résultat d'une conversion remplace l'original (mis dans la corbeille)")
+    s.add_argument("id", type=int, help="numéro de la conversion")
+
     reader("trash", "ce qui est dans la corbeille")
 
     s = sub.add_parser("restore", help="restaure depuis la corbeille")
@@ -539,6 +563,22 @@ def main():
     elif args.cmd == "folder-rm":
         call("DELETE", f"/folders/{args.id}")
         print(f"Dossier #{args.id} mis dans la corbeille avec son contenu (30 jours pour le restaurer).")
+    elif args.cmd == "formats":
+        show(call("GET", f"/files/{args.id}/conversions"), args,
+             lambda fs: print("\n".join(f"{f['to']} : {f['label']}" for f in fs) or "Aucune conversion possible."))
+    elif args.cmd == "convert":
+        body = {"to": args.to}
+        if args.pages:
+            body["pages"] = args.pages
+        fmt_job(call("POST", f"/files/{args.id}/convert", body=body))
+    elif args.cmd == "jobs":
+        show(call("GET", "/jobs", {"active": "true" if args.active else None}), args,
+             lambda js: [fmt_job(j) for j in js] or print("Aucune conversion."))
+    elif args.cmd == "job":
+        show(call("GET", f"/jobs/{args.id}"), args, fmt_job)
+    elif args.cmd == "replace":
+        r = call("POST", f"/jobs/{args.id}/replace")
+        print(f"Il reste #{r['file']['id']} {r['file']['name']} ; l'original est dans la corbeille.")
     elif args.cmd == "trash":
         show(call("GET", "/trash"), args, fmt_trash)
     elif args.cmd == "restore":

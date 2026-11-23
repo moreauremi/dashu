@@ -377,6 +377,52 @@ const TOOLS: &[Tool] = &[
         required: &["kind", "id"],
     },
     Tool {
+        name: "formats_possibles",
+        title: "Formats possibles d'un fichier",
+        description: "Ce que le menu « Convertir » propose pour ce fichier : les valeurs de `to` pour convertir (compress pour une copie plus légère).",
+        kind: Kind::Read,
+        properties: || json!({ "id": id_prop("le fichier") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "convertir",
+        title: "Convertir un fichier",
+        description: "Lance une conversion (ou une compression avec to: compress) ; le résultat arrive à côté de l'original. Suivre avec suivre_conversion.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "id": id_prop("le fichier"),
+                "to": { "type": "string", "description": "Une valeur de formats_possibles" },
+                "pages": { "type": "string", "description": "Pour to: pages, la plage à extraire : « 2-4 » ou « 3 »" },
+            })
+        },
+        required: &["id", "to"],
+    },
+    Tool {
+        name: "lister_conversions",
+        title: "Lister les conversions",
+        description: "Les conversions du compte, récentes d'abord, ou seulement celles en cours (active: true).",
+        kind: Kind::Read,
+        properties: || json!({ "active": { "type": "boolean", "description": "Seulement celles en file ou en cours" } }),
+        required: &[],
+    },
+    Tool {
+        name: "suivre_conversion",
+        title: "Suivre une conversion",
+        description: "Où en est une conversion : en file, en cours (progression), terminée (avec le fichier produit) ou en échec (avec l'erreur).",
+        kind: Kind::Read,
+        properties: || json!({ "job": id_prop("la conversion") }),
+        required: &["job"],
+    },
+    Tool {
+        name: "remplacer_original",
+        title: "Remplacer l'original par le résultat",
+        description: "Le résultat d'une conversion terminée prend la place, le dossier et le nom de l'original ; l'original part dans la corbeille.",
+        kind: Kind::Destructive,
+        properties: || json!({ "job": id_prop("la conversion terminée") }),
+        required: &["job"],
+    },
+    Tool {
         name: "lire_agenda",
         title: "Lire l'agenda",
         description: "Les événements entre deux jours (62 jours au plus) : cours des flux iCal et événements ajoutés dans dashu. L'espace Perso réunit les agendas de tous les espaces.",
@@ -541,6 +587,20 @@ struct Restore {
     id: i64,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Convert {
+    id: i64,
+    to: String,
+    pages: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ByJob {
+    job: i64,
+}
+
 /// Par MCP, un fichier se lit et s'envoie jusqu'à 10 Mo.
 const MCP_FILE_MAX: usize = 10 * 1024 * 1024;
 
@@ -684,6 +744,32 @@ async fn run(
         "restaurer" => {
             let restore: Restore = args(arguments)?;
             api::trash_restore(&state.db, user, &restore.kind, restore.id).await
+        }
+        "formats_possibles" => {
+            let ById { id } = args(arguments)?;
+            to_value(api::formats(state, user, id).await?)
+        }
+        "convertir" => {
+            let convert: Convert = args(arguments)?;
+            to_value(
+                api::start(
+                    state,
+                    user,
+                    convert.id,
+                    &convert.to,
+                    convert.pages.as_deref(),
+                )
+                .await?,
+            )
+        }
+        "lister_conversions" => to_value(api::jobs(state, user, args(arguments)?).await?),
+        "suivre_conversion" => {
+            let ByJob { job } = args(arguments)?;
+            to_value(api::fetch_job(state, user, job).await?)
+        }
+        "remplacer_original" => {
+            let ByJob { job } = args(arguments)?;
+            api::replace_original(state, user, job).await
         }
         "lire_agenda" => to_value(api::calendar_events(state, user, args(arguments)?).await?),
         "rafraichir_agenda" => to_value(api::calendar_refresh(state, user).await?),

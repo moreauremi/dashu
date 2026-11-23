@@ -320,6 +320,12 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 - [x] La commande `dashu` d'Hermès et son skill suivent (fichiers, dossiers, liens, corbeille ; envoi par morceaux) ; la règle « pas de commande pour supprimer une note » devient « une suppression part dans la corbeille », et la confirmation couvre toute suppression et la création d'un lien. Vérifié par une relecture et `python -m py_compile`, pas contre un vrai dashu.
 - Chaque appel d'API est journalisé avec le compte, le jeton et l'action (méthode et chemin), jamais le contenu.
 
+**Étape 6, API des conversions** (23 novembre 2026). Vérifiée par les tests (`tests/api_outils.rs`, 3 tests, avec le faux service de conversion des tests du site). **Pas encore sur le serveur.**
+
+- [x] Formats possibles d'un fichier, convertir, compresser, suivre une conversion (en file, terminée avec le fichier produit), remplacer l'original par le résultat (l'original part dans la corbeille, avec le nom du jeton). Refus : sortie inconnue ou impossible pour ce type, pages manquantes ; un autre compte reçoit 404 ; sans service de conversion (`WORK_DIR`), les routes répondent 404. Test `formats_convertir_suivre_remplacer`, `sans_service_de_conversion_les_routes_n_existent_pas`.
+- [x] Mêmes fonctions que le site : `tools::queue` rend maintenant le numéro de la tâche ; « Remplacer l'original » est devenu `tools::replace_with_result`, partagé (le test du site passe toujours).
+- [x] Connecteur Claude : `formats_possibles`, `convertir`, `lister_conversions`, `suivre_conversion`, `remplacer_original` (destructeur). Test `les_outils_mcp_des_conversions`. Hermès : `formats`, `convert`, `jobs`, `job`, `replace` ; skill 1.2.0.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

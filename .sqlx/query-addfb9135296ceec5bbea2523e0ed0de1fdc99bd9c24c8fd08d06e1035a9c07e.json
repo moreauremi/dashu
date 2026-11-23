@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", kind, target, file_id, source_name, status, progress, error,\n                  result_file_id, created_at, updated_at\n           FROM jobs WHERE user_id = ?1 AND kind IN ('compress', 'convert')\n             AND (?2 = 0 OR status IN ('queued', 'running'))\n           ORDER BY created_at DESC, id DESC LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "target",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_id",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "progress",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "error",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "result_file_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "addfb9135296ceec5bbea2523e0ed0de1fdc99bd9c24c8fd08d06e1035a9c07e"
+}

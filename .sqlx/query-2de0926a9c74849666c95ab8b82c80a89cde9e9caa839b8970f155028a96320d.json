@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", kind, target, file_id, source_name, status, progress, error,\n                  result_file_id, created_at, updated_at\n           FROM jobs WHERE id = ? AND user_id = ? AND kind IN ('compress', 'convert')",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "target",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_id",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "progress",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "error",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "result_file_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2de0926a9c74849666c95ab8b82c80a89cde9e9caa839b8970f155028a96320d"
+}
