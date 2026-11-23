@@ -40,7 +40,7 @@ Le contexte privé (infra, adresses, historique, suite prévue) est dans `PASSAT
 - `deploy/lxc/dashu-admin` est la commande forcée de la clé SSH d'Hermès, exécutée en root. Toute modification est sensible : garder exactement six actions (`status`, `logs [N]`, `restart`, `update`, `update-status`, `backup`), sans paramètre libre. Pas de restauration par Hermès.
 - Le service est limité à 256 Mo de mémoire, en lecture seule sauf `/var/lib/dashu`, sans capacité Linux (`deploy/lxc/hardening.conf`). Un outil lourd (ffmpeg, LibreOffice…) doit tourner dans un service à part, pas dans dashu.
 - `BASE_URL=https://app.dashu.dev` : la connexion Google ne marche que depuis cette adresse ; l'adresse Tailscale sert au mot de passe.
-- Sauvegarde chaque nuit à 3 h 30 (heure du conteneur, UTC) ; `dashu-restore` pour restaurer. Les sauvegardes sont encore sur le même disque que la base (écart noté dans `STATUS.md`).
+- Sauvegarde chaque nuit à 3 h 30 (heure du conteneur, UTC) ; `dashu-restore` pour restaurer. La base est sauvegardée sur le second disque (`ssd2`, `/var/backups/dashu`), les fichiers sur le premier (`/var/backups/dashu-fichiers`) : chaque sauvegarde est sur un autre disque que ce qu'elle protège.
 
 ## La suite : v2
 
