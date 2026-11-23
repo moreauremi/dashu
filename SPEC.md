@@ -1323,3 +1323,239 @@ Pendant la réalisation (23 novembre 2026) :
 - **Comment la corbeille se cache** : une note, un fichier ou un dossier supprimé passe dans l'espace « corbeille » caché de son espace (`spaces.trash_of`), que la vue `space_access` ne donne à personne ; un espace supprimé est marqué `deleted_at`, et la vue le cache avec son contenu. Toutes les requêtes de contenu passaient déjà par `space_access` (espaces partagés) : rien n'a eu à être filtré requête par requête, ce qui était le risque principal noté plus haut. Les colonnes prévues (`deleted_at`, `deleted_by`, `deleted_via`, `trash_op`) sont là ; s'y ajoutent `trash_root` (la ligne que la personne a supprimée), `trash_folder_id` (son dossier d'origine) et, pour un dossier, `trash_name` (les noms de dossiers sont uniques par emplacement).
 - **Un espace supprimé perd ses membres**, comme avant la corbeille : ils sont retirés (leurs agendas rentrent chez eux) et ne reviennent pas s'il est restauré. Son slug est libéré pour un nouvel espace, et repris à la restauration s'il est encore libre.
 - **Supprimer un dossier en transférant son contenu** : le contenu monte d'un niveau, puis le dossier, vide, part dans la corbeille.
+
+---
+
+# dashu — Installation simple
+
+Nov 23, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 23 novembre 2026 : installer dashu sur n'importe quelle machine en tapant une commande, en répondant aux questions au fur et à mesure, et que tout marche. Sans nom de domaine obligatoire.
+
+Aujourd'hui, c'est laborieux :
+
+- `deploy/lxc/install.sh` prend l'email et l'adresse en arguments, puis **compile** dashu sur place : 10 à 20 minutes, Rust à installer, environ 1,2 Go de mémoire. `dashu-update` recompile aussi à chaque mise à jour.
+- Il ne marche qu'en x86_64 (processeurs Intel et AMD) : Typst y est téléchargé dans cette seule version.
+- Le compte se crée avec une commande à recopier. Tailscale, le tunnel Cloudflare et Google se font à la main, en suivant le README.
+- La page d'accueil (dashu.dev) propose d'installer dashu avec Docker, mais aucune image n'est publiée.
+
+L'installation s'adresse aussi à d'autres personnes que Rémi. Le travail se fait en six étapes, une PR chacune. Chaque étape sert dès qu'elle est fusionnée : après la deuxième, on installe dashu en une commande ; les étapes 4 et 5 permettent de créer le compte et de régler Google depuis le navigateur, sans terminal.
+
+## Fonctionnement
+
+### Étape 1 : des binaires tout faits
+
+- **Licence AGPL** (version 3 ou ultérieure) : fichier `LICENSE`, champ `license` de `Cargo.toml`, section Licence du README.
+- `dashu version` affiche la version (celle de `Cargo.toml`) et le commit dont le binaire est issu.
+- La CI compile dashu pour Linux, en x86_64 et en aarch64 (ARM 64 bits : Raspberry Pi 4 et 5, serveurs ARM). Les binaires sont liés à **musl**, une bibliothèque C embarquée dans le binaire : il ne dépend pas de celle de la machine et tourne sur toute distribution Linux. L'image Docker l'est déjà.
+- Chaque architecture est compilée sur son propre runner GitHub (la machine qui exécute la CI), x86_64 ou ARM : pas de compilation croisée, que ring et SQLite, écrits en partie en C, compliquent.
+- Une **version publiée** (release GitHub) contient, par architecture, une archive `dashu-<version>-<arch>-linux.tar.gz` : le binaire, `deploy/lxc/` (services et scripts) et `LICENSE`. Le fichier `SHA256SUMS` donne l'empreinte SHA-256 de chaque archive, ce qui permet de vérifier qu'elle est arrivée intacte.
+- Deux **canaux**, c'est-à-dire deux suites de versions qu'une installation peut suivre :
+  - `v1` : à chaque push sur la branche `v1`, une fois la CI verte, la pré-version `v1` est remplacée. C'est le canal du serveur de Rémi.
+  - `stable` : chaque tag `vX.Y.Z` crée une version. C'est le canal par défaut des autres installations.
+- **Image Docker** `ghcr.io/moreauremi/dashu`, pour amd64 et arm64, construite à partir des mêmes binaires. Tags : `v1`, `X.Y.Z` et `latest` (la dernière version stable). Elle fait moins de 30 Mo, comme aujourd'hui.
+- Les outils de conversion (ffmpeg, pandoc, Typst, Ghostscript, heif-dec) restent hors du binaire et de l'image : l'installateur les propose.
+
+### Étape 2 : l'installateur pose les questions
+
+```
+curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | sudo bash
+```
+
+Le script vérifie d'abord la machine : Linux avec systemd, x86_64 ou aarch64, droits root. Sinon, il s'arrête en expliquant pourquoi, et renvoie vers Docker pour macOS, Windows ou un NAS. Puis il télécharge l'archive du canal `stable` pour l'architecture de la machine, vérifie son empreinte, installe le binaire, crée l'utilisateur `dashu`, ses dossiers et ses services, comme aujourd'hui.
+
+Ensuite, il pose les questions, dans cet ordre.
+
+**1. Comment accéder à dashu ?** Un ou plusieurs choix :
+
+| Mode | Ce que fait le script | Adresse | Limites |
+| --- | --- | --- | --- |
+| Local | dashu écoute sur le réseau de la maison | `http://<ip>:3000` | Pas de HTTPS : le navigateur signale une connexion non sécurisée et le mot de passe passe en clair sur le réseau local. Rien depuis l'extérieur, pas de Google, pas de connecteur Claude sur claude.ai |
+| Tailscale | Installe Tailscale, affiche le lien de connexion au compte Tailscale, puis publie dashu sur le réseau Tailscale (`tailscale serve`) | `https://<machine>.<réseau>.ts.net` | Seulement les appareils du réseau Tailscale : pas de connecteur Claude sur claude.ai, liens de partage inutiles pour les autres |
+| Tailscale Funnel | Comme Tailscale, puis ouvre cette adresse à tout Internet (`tailscale funnel`) | La même, publique | Pas de nom personnalisé |
+| Domaine + Cloudflare | Demande le domaine et le jeton du tunnel, installe `cloudflared` et dit quelle route publier dans Cloudflare | `https://app.mondomaine.fr` | Il faut un domaine et un compte Cloudflare |
+
+- **Funnel** donne une adresse publique en HTTPS sans acheter de domaine ni passer par Cloudflare. Il s'active dans la console Tailscale : si ce n'est pas fait, le script dit quoi cocher.
+- Pour Tailscale, le script vérifie que MagicDNS et HTTPS sont activés dans la console, et que `/dev/net/tun` existe. Dans un conteneur LXC qui ne l'a pas, il affiche les deux lignes à ajouter côté Proxmox.
+- `BASE_URL`, l'adresse publique de dashu, est déduite du choix. Avec plusieurs modes, c'est la plus ouverte : Cloudflare, puis Funnel, puis Tailscale, puis local. Les autres adresses servent à se connecter par mot de passe, comme Tailscale chez Rémi aujourd'hui.
+
+**2. Activer les fichiers ?** Oui ou non, puis le dossier (`/srv/dashu` par défaut). Si les sauvegardes tombent sur le même disque que ce qu'elles protègent, le script le dit.
+
+**3. Activer les conversions ?** Le script annonce la place nécessaire (plusieurs centaines de Mo), installe les paquets, Typst pour la bonne architecture, et le service de conversion. Une version de Typst différente de celle attendue est remplacée.
+
+**4. Le compte** : email, puis mot de passe tapé deux fois, sans s'afficher.
+
+**5. Google, facultatif** : le script affiche l'adresse de retour exacte à déclarer, rappelle les étapes de la console Google, puis demande l'identifiant et le secret, sans afficher le secret. On peut passer et y revenir plus tard.
+
+À la fin, le script attend que dashu réponde, vérifie l'adresse principale, puis affiche un résumé : l'adresse, et les commandes utiles (`dashu-update`, `dashu-compte`, sauvegarde et restauration).
+
+- **Relancer le script** sur une machine déjà installée affiche un menu : mettre à jour, changer l'accès, activer les fichiers ou les conversions, ajouter Google, changer le mot de passe. La base n'est jamais touchée. `dashu.env` est copié avant chaque changement et remis en place si dashu ne redémarre pas, comme le fait déjà `dashu-compte`.
+- **Les questions lisent le terminal** (`/dev/tty`) : avec `curl … | bash`, l'entrée du script est le téléchargement, pas le clavier. Sans terminal, le script s'arrête, sauf en mode `--non-interactif`.
+- **Rien ne casse** : `install.sh <email> <adresse>` installe comme avant, sans question. `--non-interactif` prend les réponses en options, pour automatiser. `--binaire <fichier>` installe un binaire local, pour les tests. `--depuis-les-sources` compile comme aujourd'hui.
+- Au passage, `.env.example` est remis d'accord avec le README (`BASE_URL`, l'API sans `API_TOKEN`). L'avertissement « `ALLOWED_EMAILS` est vide », émis aujourd'hui avant que les logs ne soient en place et donc perdu, s'affiche vraiment.
+
+### Étape 3 : la mise à jour télécharge
+
+- `dashu-update` lit le canal dans `/etc/dashu/branch` (`v1` chez Rémi, `stable` ailleurs). Il télécharge l'archive de son architecture, vérifie son empreinte et compare la version avec `dashu version`. Rien à faire : « déjà à jour ».
+- La suite ne change pas : instantané de la base, ancien binaire gardé (`dashu.prev`), installation, redémarrage, attente de `/health`, retour arrière en cas d'échec.
+- Les scripts d'exploitation viennent de l'archive, rangée dans `/opt/dashu/share`, et non plus du dépôt git `/opt/dashu/src`.
+- Une mise à jour prend une à deux minutes au lieu de 10 à 20. `dashu-update --depuis-les-sources` compile encore, en secours.
+- `dashu-admin` garde exactement ses six actions. `status` lit la version avec `dashu version` au lieu de git, et `update` ne parle plus de recompiler.
+- Hermès : `deploy/hermes/install.sh` copie ses fichiers depuis `/opt/dashu/share`, et son skill décrit la mise à jour telle qu'elle devient.
+- **Bascule du serveur de Rémi** : une commande décrite dans le README. Rust et `/opt/dashu/src` restent en place jusqu'à ce que Rémi valide ; leur retrait est une commande à part.
+
+### Étape 4 : premier lancement dans le navigateur
+
+L'installateur ne pose plus que les questions du système (accès, fichiers, conversions). Le compte et Google se règlent dans le navigateur. Avec Docker, sur n'importe quel système :
+
+```
+docker run -d -p 3000:3000 -v dashu:/data ghcr.io/moreauremi/dashu
+```
+
+- **`SESSION_SECRET` devient facultatif.** Absent, dashu le crée au premier démarrage dans un fichier `secret` à côté de la base, lisible par dashu seul, et le garde ensuite. `dashu-backup` le sauvegarde avec la base : sans lui, les jetons Google Agenda d'une base restaurée seraient illisibles.
+- **Mode installation**, tant qu'aucun compte n'existe :
+  - Au démarrage, dashu écrit dans son journal un **code d'installation** de 12 caractères (`K7QM-2XPA-9RTD`), nouveau à chaque démarrage. L'installateur l'affiche avec l'adresse ; sous Docker, `docker logs` le montre.
+  - Toute page mène à `/setup`, sauf `/health` et les fichiers statiques. L'API et `/mcp` sont fermés.
+  - `/setup` demande le code, puis trois étapes :
+    1. **Le compte** : email et mot de passe (12 caractères au moins). Ce compte est l'administrateur de l'instance.
+    2. **L'adresse publique** : dashu propose celle que le navigateur utilise en ce moment. Il vérifie qu'elle mène bien à lui quand c'est possible, et prévient sans bloquer sinon.
+    3. **Google, facultatif** : l'adresse de retour s'affiche avec un bouton Copier, puis les étapes de la console Google, l'identifiant et le secret. On peut passer.
+  - À la fin, dashu enregistre, ouvre la session du compte et se relance pour prendre la nouvelle configuration. La session survit à la relance : le secret ne change pas.
+- **Les réglages de l'instance** (adresse publique, Google, adresses autorisées) sont rangés en base. **Les variables d'environnement restent prioritaires** : une valeur posée dans `dashu.env` ne se change pas depuis le site. Le serveur de Rémi, configuré par `dashu.env`, ne voit aucun changement.
+- `ALLOWED_EMAILS` devient facultative : absente, la liste vient de la base. `dashu set-password` vérifie la même liste que la page de connexion.
+
+### Étape 5 : la carte Instance dans Réglages
+
+- Visible par l'administrateur seulement. On y change l'adresse publique, Google (le secret n'est jamais réaffiché : on le remplace ou on le retire) et les adresses autorisées.
+- Mêmes garde-fous que `dashu-compte` : ni la dernière adresse, ni celle de l'API ne se retirent.
+- Une valeur qui vient de l'environnement s'affiche verrouillée : « définie sur le serveur ».
+- Un changement relance dashu : quelques secondes de coupure, les notes ouvertes en direct se reconnectent.
+- `dashu-compte` continue de modifier `dashu.env`. Sur une installation sans `ALLOWED_EMAILS`, `ajouter` et `retirer` renvoient vers la carte Instance ; `mot-de-passe` marche partout.
+
+### Étape 6 : la page d'accueil
+
+La section Installer de dashu.dev donne la commande en une ligne et la variante Docker, à la place du `git clone` et du `docker compose up --build`. PR vers `main`.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `instance_settings` | key, value, updated\_at | Réglages de l'instance : `base_url`, `google_client_id`, `google_client_secret`. Le secret Google est chiffré avec la clé tirée du secret de session, comme les jetons Google Agenda |
+| `allowed_emails` | email, added\_at, added\_by | Adresses autorisées, quand `ALLOWED_EMAILS` n'est pas posée |
+| `users` | + `is_admin` | Le compte créé par l'assistant. Sur une base existante, le plus ancien compte |
+
+## Sécurité
+
+- **Sans le code, rien.** Le premier venu qui tombe sur `/setup` ne prend pas l'instance. Le code est aléatoire, gardé en mémoire seulement, nouveau à chaque démarrage et comparé à temps constant. Il se tape dans un formulaire avec jeton CSRF, jamais dans l'adresse : ni les logs d'accès ni l'historique du navigateur ne le gardent. Les essais sont limités comme sur `/login`. Il ne s'écrit que dans le journal du service, que seuls root et Docker lisent.
+- **`/setup` se ferme pour de bon.** Dès qu'un compte existe, il répond 404, vérifié en base à chaque requête. Pas de remise à zéro par le site.
+- **Téléchargements vérifiés.** Tout passe en HTTPS, et chaque archive est comparée à `SHA256SUMS` avant d'être installée. Limite assumée : l'empreinte protège d'un téléchargement abîmé, pas d'une version publiée par quelqu'un qui aurait pris la main sur le dépôt (voir « Reste à trancher »). Tailscale et `cloudflared` viennent de leurs dépôts officiels.
+- **Les secrets ne s'affichent jamais.** Mot de passe, jeton du tunnel et secret Google se tapent sans écho. Ils ne passent jamais en argument d'une commande (visible de tous par `ps`) ni dans les logs. `dashu.env` reste en 640 (root et le groupe `dashu`), le fichier `secret` en 600.
+- **Le service reste enfermé.** L'assistant web écrit en base, jamais dans le système ni dans `/etc`. Installer des paquets, Tailscale ou `cloudflared` reste le travail du script, en root. `hardening.conf` ne change pas.
+- **L'environnement prime.** Sur un serveur configuré par fichier, comme celui de Rémi, un compte volé ne peut pas changer l'adresse ni Google depuis le site. La carte Instance est réservée à l'administrateur, avec jeton CSRF.
+- **Un accès public, c'est Internet.** Avec Funnel ou Cloudflare, la page de connexion est ouverte à tous : le script le dit, et le limiteur de `/login` s'applique. En mode local, il prévient que le mot de passe passe en clair sur le réseau.
+- **`dashu-admin` ne change pas** : six actions, sans paramètre libre. `dashu-update` n'installe qu'une archive vérifiée.
+
+## Prérequis
+
+- Le dépôt est déjà public. Sur GitHub, la release demande les droits `contents: write`, l'image `packages: write`. Une fois l'image publiée, Rémi rend le paquet public dans les réglages de GitHub (une seule fois).
+- Les runners ARM de GitHub (`ubuntu-24.04-arm`) sont gratuits pour les dépôts publics.
+- Pour les essais à la main : un conteneur LXC Debian 13 de test sur le Proxmox et, si possible, une machine ARM.
+- À vérifier pendant l'étape 2 : que Google accepte une adresse de retour en `.ts.net` (Tailscale et Funnel).
+
+## Critères d'acceptation
+
+Étape 1 :
+
+- [ ] `LICENSE` contient l'AGPL-3.0, `Cargo.toml` la déclare, le README le dit
+- [ ] `dashu version` affiche la version et le commit
+- [ ] Un push sur `v1` (CI verte) remplace la pré-version `v1` ; un tag `vX.Y.Z` crée une version ; chacune a les archives x86_64 et aarch64 et `SHA256SUMS`
+- [ ] Le binaire aarch64 démarre sur un runner ARM et répond à `/health`
+- [ ] L'image `ghcr.io/moreauremi/dashu` existe pour amd64 et arm64, fait moins de 30 Mo et répond à `/health`
+- [ ] Le binaire musl est mesuré contre le binaire actuel (mesures de STATUS) avant la bascule du serveur
+
+Étape 2 :
+
+- [ ] Sur une Debian 13 neuve, `curl … | sudo bash` installe dashu en posant les questions, sans rien compiler
+- [ ] Chaque mode d'accès marche de bout en bout : local, Tailscale, Funnel, Cloudflare ; l'adresse principale est vérifiée à la fin
+- [ ] Mot de passe, jeton du tunnel et secret Google n'apparaissent ni à l'écran ni dans la liste des processus
+- [ ] Une archive dont l'empreinte ne correspond pas est refusée, et rien n'est installé
+- [ ] Relancé, le script propose le menu et n'écrase ni la base ni `dashu.env` ; un changement qui empêche dashu de démarrer est annulé
+- [ ] `install.sh <email> <adresse>` marche comme avant ; `--non-interactif` installe sans question
+- [ ] L'installation marche en x86_64 et en aarch64, Typst compris
+- [ ] `tests/deploy/installation.sh` tourne dans la CI : installation non interactive, puis une passe interactive dans un terminal simulé, compte, connexion, relance
+
+Étape 3 :
+
+- [ ] `dashu-update` télécharge, vérifie et installe la version du canal en moins de 2 minutes ; « déjà à jour » si rien n'a changé
+- [ ] Un binaire qui ne démarre pas est remplacé par l'ancien et la base restaurée, comme aujourd'hui
+- [ ] `dashu-admin` garde exactement ses six actions ; `status` affiche la version sans git
+- [ ] Hermès met à jour dashu comme avant ; son installation lit `/opt/dashu/share`
+- [ ] Le serveur de Rémi est passé aux binaires ; STATUS relevé
+
+Étape 4 :
+
+- [ ] Sans compte, toute page mène à `/setup` ; l'API et `/mcp` sont fermés ; sans le bon code, rien ne se crée ; les essais sont limités
+- [ ] Le code n'apparaît dans aucune adresse ni dans les logs d'accès ; il change à chaque démarrage
+- [ ] L'assistant crée le compte administrateur, enregistre l'adresse et, si demandé, Google ; dashu se relance et la session reste ouverte
+- [ ] Une fois un compte créé, `/setup` répond 404
+- [ ] Sans `SESSION_SECRET`, le secret est créé une fois, gardé au redémarrage et sauvegardé avec la base
+- [ ] Une variable d'environnement prime sur la base ; le serveur de Rémi démarre sans aucun changement
+- [ ] `docker run` de l'image mène au même assistant
+- [ ] L'installateur ne pose plus que les questions du système, puis affiche l'adresse et le code
+
+Étape 5 :
+
+- [ ] La carte Instance n'apparaît que pour l'administrateur ; ses routes répondent 404 aux autres comptes
+- [ ] Adresse, Google et adresses autorisées s'y changent ; une valeur de l'environnement s'affiche verrouillée
+- [ ] Ni la dernière adresse ni celle de l'API ne se retirent ; une adresse retirée perd l'accès à la requête suivante
+- [ ] Le secret Google n'est jamais réaffiché
+
+Étape 6 :
+
+- [ ] La page d'accueil donne la commande d'installation et la variante Docker, qui marchent telles quelles
+
+Toutes les étapes :
+
+- [ ] Chaque point a ses tests (`tests/installation.rs`, `tests/deploy/installation.sh`) ; STATUS et README à jour à chaque étape
+
+## Ordre de livraison
+
+Une PR par ligne :
+
+1. Licence, `dashu version`, binaires et image publiés (étape 1)
+2. Installateur interactif (étape 2)
+3. `dashu-update` par binaires, puis bascule du serveur de Rémi (étape 3)
+4. Premier lancement dans le navigateur (étape 4), après la fusion de la branche `api-contenu`, qui touche les mêmes fichiers (`config.rs`, `lib.rs`, `main.rs`)
+5. Carte Instance (étape 5)
+6. Page d'accueil, PR vers `main` (étape 6)
+
+## Décisions
+
+Prises avec Rémi le 23 novembre 2026 :
+
+- **L'installation s'adresse à d'autres personnes**, pas seulement aux machines de Rémi : versions numérotées, image Docker publiée, page d'accueil.
+- **Le serveur de Rémi passe aux binaires** : `dashu-update` télécharge au lieu de compiler. Le binaire musl est mesuré avant la bascule.
+- **Licence AGPL** : qui modifie dashu et le propose en ligne à d'autres doit publier ses modifications.
+- **Le domaine n'est pas obligatoire** : quatre modes d'accès au choix, local, Tailscale, Tailscale Funnel, domaine et Cloudflare.
+- **Assistant web au premier lancement** (étapes 4 et 5), après l'installateur en terminal.
+
+Par défaut, pour avancer :
+
+- **Linux avec systemd** pour l'installateur, en x86_64 et aarch64 ; Docker pour le reste (macOS, Windows, NAS).
+- **musl** pour les binaires : un seul binaire pour toutes les distributions, déjà utilisé par l'image Docker.
+- **Runners natifs** x86_64 et ARM, plutôt qu'une compilation croisée.
+- **`/etc/dashu/branch` garde son nom** et contient le canal (`v1` ou `stable`).
+- **Conversions en option** : ni dans le binaire ni dans l'image Docker ; l'installateur les propose avec leur taille.
+- **Adresse principale** : avec plusieurs modes d'accès, `BASE_URL` prend la plus ouverte.
+- **Réglages de l'instance en base**, l'environnement restant prioritaire.
+- **Relance de dashu après un changement de configuration**, plutôt qu'une configuration modifiable à chaud : plus simple, quelques secondes de coupure.
+- **Code d'installation de 12 caractères**, écrit dans le journal seulement.
+- **Les unités systemd** ne sont installées que par le script, comme aujourd'hui : `dashu-update` n'y touche pas.
+
+Reste à trancher :
+
+- **Signature des archives** (avec minisign, par exemple) en plus de l'empreinte : elle protégerait d'une version publiée par quelqu'un d'autre que Rémi.
+- **Inviter quelqu'un par lien**, plutôt qu'en ajoutant son adresse.
+- **Une adresse courte** pour la commande (`https://dashu.dev/install.sh`, servie par la page d'accueil).
