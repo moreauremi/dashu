@@ -57,11 +57,21 @@ fn tags_prop(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "string" }, "maxItems": 20, "description": what })
 }
 
+fn color_prop() -> Value {
+    let colors: Vec<&str> = crate::spaces::COLORS.iter().map(|(key, _)| *key).collect();
+    json!({ "type": "string", "enum": colors, "description": "Couleur de l'espace" })
+}
+
+fn icon_prop() -> Value {
+    let icons: Vec<&str> = crate::spaces::ICONS.iter().map(|(key, _)| *key).collect();
+    json!({ "type": "string", "enum": icons, "description": "Icône de l'espace" })
+}
+
 const TOOLS: &[Tool] = &[
     Tool {
         name: "lister_espaces",
         title: "Lister les espaces",
-        description: "Les espaces du compte, espaces partagés rejoints compris : identifiant court (slug) et nom.",
+        description: "Les espaces du compte, espaces partagés rejoints compris : identifiant court (slug), nom, couleur, icône, archivé ou non, propriétaire ou membre (mine), règles automatiques.",
         kind: Kind::Read,
         properties: || json!({}),
         required: &[],
@@ -107,6 +117,19 @@ const TOOLS: &[Tool] = &[
             })
         },
         required: &["id"],
+    },
+    Tool {
+        name: "deplacer_tache",
+        title: "Déplacer une tâche",
+        description: "Change une tâche d'espace. Sortie d'un espace partagé, elle n'est plus visible de ses membres.",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "id": id_prop("la tâche"),
+                "space": space_prop("où la déplacer"),
+            })
+        },
+        required: &["id", "space"],
     },
     Tool {
         name: "supprimer_tache",
@@ -521,6 +544,209 @@ const TOOLS: &[Tool] = &[
         properties: || json!({}),
         required: &[],
     },
+    Tool {
+        name: "creer_espace",
+        title: "Créer un espace",
+        description: "Crée un espace (8 en service au plus). Sans couleur ni icône, prend les premières libres.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "name": { "type": "string", "maxLength": 24, "description": "Nom de l'espace" },
+                "color": color_prop(),
+                "icon": icon_prop(),
+            })
+        },
+        required: &["name"],
+    },
+    Tool {
+        name: "modifier_espace",
+        title: "Modifier un espace",
+        description: "Renomme un espace, change sa couleur, son icône ou ses règles automatiques (propriétaire seulement). Le slug ne change pas ; les champs absents restent.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "space": space_prop("à modifier"),
+                "name": { "type": "string", "maxLength": 24, "description": "Nouveau nom" },
+                "color": color_prop(),
+                "icon": icon_prop(),
+                "auto_mp4": { "type": "boolean", "description": "Règle : une vidéo qui arrive est convertie en MP4" },
+                "auto_heic_jpeg": { "type": "boolean", "description": "Règle : une photo HEIC qui arrive est doublée d'un JPEG" },
+            })
+        },
+        required: &["space"],
+    },
+    Tool {
+        name: "archiver_espace",
+        title: "Archiver un espace",
+        description: "Archive un espace (propriétaire seulement, pas Perso) : il quitte le sélecteur et les listes, pour lui et pour ses membres, et se désarchive à tout moment.",
+        kind: Kind::Destructive,
+        properties: || json!({ "space": space_prop("à archiver") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "desarchiver_espace",
+        title: "Désarchiver un espace",
+        description: "Remet un espace archivé en service (propriétaire seulement).",
+        kind: Kind::Write,
+        properties: || json!({ "space": space_prop("à remettre en service") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "supprimer_espace",
+        title: "Supprimer un espace",
+        description: "Met un espace dans la corbeille (propriétaire seulement, pas Perso) : ses membres perdent l'accès. Dire quoi faire du contenu : content « trash » (il part avec l'espace, 30 jours pour le restaurer) ou transfer_to (il passe dans cet autre espace).",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "space": space_prop("à supprimer"),
+                "content": { "type": "string", "enum": ["trash"], "description": "trash : le contenu part dans la corbeille avec l'espace" },
+                "transfer_to": space_prop("qui reçoit le contenu (à la place de content)"),
+            })
+        },
+        required: &["space"],
+    },
+    Tool {
+        name: "lister_membres",
+        title: "Lister les membres",
+        description: "Le propriétaire et les membres d'un espace ; pour le propriétaire, les invitations en attente.",
+        kind: Kind::Read,
+        properties: || json!({ "space": space_prop("partagé") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "inviter_membre",
+        title: "Inviter dans un espace",
+        description: "Invite un compte existant dans un espace, par son adresse e-mail (propriétaire seulement). Une fois l'invitation acceptée, il voit et modifie tout le contenu de l'espace.",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "space": space_prop("à partager"),
+                "email": { "type": "string", "description": "Adresse du compte à inviter" },
+            })
+        },
+        required: &["space", "email"],
+    },
+    Tool {
+        name: "annuler_invitation",
+        title: "Annuler une invitation",
+        description: "Annule une invitation en attente (propriétaire seulement).",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "space": space_prop("de l'invitation"),
+                "id": id_prop("l'invitation (voir lister_membres)"),
+            })
+        },
+        required: &["space", "id"],
+    },
+    Tool {
+        name: "retirer_membre",
+        title: "Retirer un membre",
+        description: "Retire un membre d'un espace (propriétaire seulement) : son accès se coupe, ce qu'il a créé reste.",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "space": space_prop("partagé"),
+                "id": id_prop("le compte à retirer (voir lister_membres)"),
+            })
+        },
+        required: &["space", "id"],
+    },
+    Tool {
+        name: "quitter_espace",
+        title: "Quitter un espace",
+        description: "Quitte un espace partagé rejoint : l'accès se coupe, ce qu'on y a créé reste. Le propriétaire ne quitte pas son espace.",
+        kind: Kind::Destructive,
+        properties: || json!({ "space": space_prop("à quitter") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "lister_invitations",
+        title: "Lister les invitations reçues",
+        description: "Les invitations reçues, en attente : l'espace et qui invite.",
+        kind: Kind::Read,
+        properties: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "accepter_invitation",
+        title: "Accepter une invitation",
+        description: "Accepte une invitation reçue : l'espace rejoint apparaît dans les espaces du compte.",
+        kind: Kind::Write,
+        properties: || json!({ "id": id_prop("l'invitation") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "refuser_invitation",
+        title: "Refuser une invitation",
+        description: "Refuse une invitation reçue.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("l'invitation") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "lire_tableau_de_bord",
+        title: "Lire un tableau de bord",
+        description: "La disposition du tableau de bord d'un espace : ses widgets, leur taille, et les widgets qui existent.",
+        kind: Kind::Read,
+        properties: || json!({ "space": space_prop("du tableau de bord") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "modifier_tableau_de_bord",
+        title: "Modifier un tableau de bord",
+        description: "Remplace la disposition du tableau de bord d'un espace. Format : « calendar:2x3,tasks:2x2 » (widget:largeurxhauteur, de 1 à 4) ; chaîne vide : aucun widget ; null : la disposition par défaut.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "space": space_prop("du tableau de bord"),
+                "layout": { "type": ["string", "null"], "description": "La disposition" },
+            })
+        },
+        required: &["space", "layout"],
+    },
+    Tool {
+        name: "lire_reglages",
+        title: "Lire les réglages",
+        description: "Profil et affichage du compte : prénom, nom, thème, taille de l'interface, barre latérale, raccourcis du téléphone, espace du moment.",
+        kind: Kind::Read,
+        properties: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "modifier_reglages",
+        title: "Modifier les réglages",
+        description: "Change le profil ou l'affichage du compte ; les champs absents restent. Le mot de passe, la connexion Google et les jetons ne se changent que sur le site.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "first_name": { "type": "string", "maxLength": 40, "description": "Prénom" },
+                "last_name": { "type": "string", "maxLength": 40, "description": "Nom" },
+                "theme": { "type": "string", "enum": ["dark", "light", "system"] },
+                "ui_size": { "type": "string", "enum": ["small", "normal", "large"] },
+                "sidebar_floating": { "type": "boolean", "description": "true : barre latérale détachée ; false : ancrée" },
+                "mobile_tabs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 4, "description": "Raccourcis de la barre du téléphone (voir lire_reglages)" },
+                "moment_space": { "type": ["string", "null"], "description": "Slug de l'espace des jours sans cours ; null : le dernier utilisé" },
+            })
+        },
+        required: &[],
+    },
+    Tool {
+        name: "changer_avatar",
+        title: "Changer la photo de profil",
+        description: "Remplace la photo de profil : une image JPEG, PNG ou WebP de 2 Mo au plus, en base64, recadrée au carré.",
+        kind: Kind::Write,
+        properties: || json!({ "content_base64": { "type": "string", "description": "L'image, en base64" } }),
+        required: &["content_base64"],
+    },
+    Tool {
+        name: "retirer_avatar",
+        title: "Retirer la photo de profil",
+        description: "Retire la photo de profil : les initiales reviennent.",
+        kind: Kind::Destructive,
+        properties: || json!({}),
+        required: &[],
+    },
 ];
 
 pub fn exists(name: &str) -> bool {
@@ -678,6 +904,37 @@ struct ByJob {
     job: i64,
 }
 
+/// Un espace, puis les champs d'une route d'API.
+#[derive(Deserialize)]
+struct InSpace<T> {
+    space: String,
+    #[serde(flatten)]
+    rest: T,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BySpace {
+    space: String,
+}
+
+/// Une invitation ou un membre d'un espace.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpaceItem {
+    space: String,
+    id: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NewAvatar {
+    content_base64: String,
+}
+
+/// Même limite que la route d'API (corps de 2 Mo).
+const AVATAR_MAX: usize = 2 * 1024 * 1024;
+
 /// Par MCP, un fichier se lit et s'envoie jusqu'à 10 Mo.
 const MCP_FILE_MAX: usize = 10 * 1024 * 1024;
 
@@ -689,9 +946,10 @@ struct NoteReplace {
     title: Option<String>,
 }
 
+/// Une note ou une tâche, et l'espace où la déplacer.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NoteMove {
+struct MoveToSpace {
     id: i64,
     space: String,
 }
@@ -725,6 +983,17 @@ async fn run(
                 title: edit.title,
                 done: edit.done,
                 due_date: edit.due_date,
+                space: None,
+            };
+            to_value(api::task_update(state, user, edit.id, changes).await?)
+        }
+        "deplacer_tache" => {
+            let edit: MoveToSpace = args(arguments)?;
+            let changes = api::TaskChanges {
+                title: None,
+                done: None,
+                due_date: None,
+                space: Some(edit.space),
             };
             to_value(api::task_update(state, user, edit.id, changes).await?)
         }
@@ -761,7 +1030,7 @@ async fn run(
             to_value(api::note_update(state, user, edit.id, changes).await?)
         }
         "deplacer_note" => {
-            let edit: NoteMove = args(arguments)?;
+            let edit: MoveToSpace = args(arguments)?;
             let changes = api::NoteChanges {
                 space: Some(edit.space),
                 ..Default::default()
@@ -868,6 +1137,84 @@ async fn run(
             let ById { id } = args(arguments)?;
             api::source_remove(state, user, id).await?;
             Ok(json!({ "retire": id }))
+        }
+        "creer_espace" => {
+            to_value(api::space_create(state, user, args::<api::NewSpace>(arguments)?).await?)
+        }
+        "modifier_espace" => {
+            let edit: InSpace<api::SpaceChanges> = args(arguments)?;
+            to_value(api::space_update(state, user, &edit.space, edit.rest).await?)
+        }
+        "archiver_espace" => {
+            let BySpace { space } = args(arguments)?;
+            to_value(api::space_archive(state, user, &space).await?)
+        }
+        "desarchiver_espace" => {
+            let BySpace { space } = args(arguments)?;
+            to_value(api::space_unarchive(state, user, &space).await?)
+        }
+        "supprimer_espace" => {
+            let removal: InSpace<api::SpaceRemoval> = args(arguments)?;
+            api::space_delete(state, user, &removal.space, removal.rest).await?;
+            Ok(json!({ "dans_la_corbeille": removal.space }))
+        }
+        "lister_membres" => {
+            let BySpace { space } = args(arguments)?;
+            to_value(api::members_list(state, user, &space).await?)
+        }
+        "inviter_membre" => {
+            let invite: InSpace<api::NewInvitation> = args(arguments)?;
+            to_value(api::member_invite(state, user, &invite.space, &invite.rest.email).await?)
+        }
+        "annuler_invitation" => {
+            let SpaceItem { space, id } = args(arguments)?;
+            api::invitation_cancel(state, user, &space, id).await?;
+            Ok(json!({ "annulee": id }))
+        }
+        "retirer_membre" => {
+            let SpaceItem { space, id } = args(arguments)?;
+            api::member_remove(state, user, &space, id).await?;
+            Ok(json!({ "retire": id }))
+        }
+        "quitter_espace" => {
+            let BySpace { space } = args(arguments)?;
+            api::space_leave(state, user, &space).await?;
+            Ok(json!({ "quitte": space }))
+        }
+        "lister_invitations" => to_value(api::invitations_list(state, user).await?),
+        "accepter_invitation" => {
+            let ById { id } = args(arguments)?;
+            to_value(api::invitation_accept(state, user, id).await?)
+        }
+        "refuser_invitation" => {
+            let ById { id } = args(arguments)?;
+            crate::spaces::decline_for(&state.db, user.id, id).await?;
+            Ok(json!({ "refusee": id }))
+        }
+        "lire_tableau_de_bord" => {
+            let BySpace { space } = args(arguments)?;
+            to_value(api::dashboard_read(state, user, &space).await?)
+        }
+        "modifier_tableau_de_bord" => {
+            let edit: InSpace<api::DashboardBody> = args(arguments)?;
+            to_value(api::dashboard_write(state, user, &edit.space, edit.rest).await?)
+        }
+        "lire_reglages" => to_value(api::settings_read(state, user).await?),
+        "modifier_reglages" => to_value(api::settings_update(state, user, args(arguments)?).await?),
+        "changer_avatar" => {
+            let NewAvatar { content_base64 } = args(arguments)?;
+            if content_base64.len() > AVATAR_MAX / 3 * 4 + 4 {
+                return Err(ApiError::bad_request("image de plus de 2 Mo"));
+            }
+            let bytes = BASE64
+                .decode(content_base64.trim())
+                .map_err(|_| ApiError::bad_request("content_base64 n'est pas du base64 valide"))?;
+            crate::settings::profile::store_avatar(&state.db, user.id, bytes.into()).await?;
+            Ok(json!({ "avatar": true }))
+        }
+        "retirer_avatar" => {
+            crate::settings::profile::remove_avatar(&state.db, user.id).await?;
+            Ok(json!({ "avatar": false }))
         }
         _ => Err(ApiError::bad_request(format!("outil inconnu « {name} »"))),
     }

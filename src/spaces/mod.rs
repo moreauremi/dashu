@@ -9,7 +9,7 @@
 use askama::Template;
 use axum::extract::{Path, State};
 use axum::response::Response;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 pub mod url;
@@ -330,12 +330,52 @@ pub(crate) fn new_slug(name: &str, taken: &[&str]) -> String {
 
 /// Seul le propriétaire gère un espace (nom, couleur, archivage, suppression,
 /// membres) : le serveur le vérifie, le masquage des boutons ne suffit pas.
-fn owner_only(space: &Space) -> AppResult<()> {
+pub(crate) fn owner_only(space: &Space) -> AppResult<()> {
     if space.mine {
         Ok(())
     } else {
         Err(AppError::Forbidden)
     }
+}
+
+/// Espaces en service : les archivés ne comptent pas dans la limite.
+fn in_service(spaces: &[Space]) -> usize {
+    spaces.iter().filter(|s| !s.archived).count()
+}
+
+/// Crée un espace. Rend son slug et son nom, ou le refus à montrer. Aussi
+/// pour l'API. `spaces` : tous ceux du compte, archivés compris.
+pub(crate) async fn create_space(
+    db: &SqlitePool,
+    user_id: i64,
+    spaces: &[Space],
+    form: &SpaceForm,
+) -> AppResult<Result<(String, String), String>> {
+    if in_service(spaces) >= MAX_SPACES {
+        return Ok(Err(format!(
+            "{MAX_SPACES} espaces au plus : supprimes-en un pour en créer un autre."
+        )));
+    }
+    let valid = match validate(form, spaces, None) {
+        Ok(valid) => valid,
+        Err(message) => return Ok(Err(message)),
+    };
+    // Les slugs des espaces archivés restent pris (leurs adresses aussi).
+    let taken: Vec<&str> = spaces.iter().map(|s| s.slug.as_str()).collect();
+    let slug = new_slug(&valid.name, &taken);
+    sqlx::query!(
+        "INSERT INTO spaces (user_id, slug, name, color, icon, position)
+         VALUES (?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM spaces WHERE user_id = ?))",
+        user_id,
+        slug,
+        valid.name,
+        valid.color,
+        valid.icon,
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(Ok((slug, valid.name)))
 }
 
 /// `POST /settings/spaces` : crée un espace et en fait l'espace actif.
@@ -344,40 +384,59 @@ pub async fn create(
     State(state): State<AppState>,
     axum::Form(form): axum::Form<SpaceForm>,
 ) -> AppResult<Response> {
-    if ctx.spaces.len() >= MAX_SPACES {
-        ctx.flash_error(format!(
-            "{MAX_SPACES} espaces au plus : supprimes-en un pour en créer un autre."
-        ))
-        .await?;
-        return Ok(see_other(BACK));
-    }
-    let all = ctx.all_spaces();
-    let valid = match validate(&form, &all, None) {
-        Ok(valid) => valid,
-        Err(message) => {
-            ctx.flash_error(message).await?;
-            return Ok(see_other(BACK));
+    match create_space(&state.db, ctx.user.id, &ctx.all_spaces(), &form).await? {
+        Ok((slug, name)) => {
+            ctx.session.insert(ACTIVE_SPACE, &slug).await?;
+            ctx.flash_ok(format!("Espace « {name} » créé")).await?;
         }
+        Err(message) => ctx.flash_error(message).await?,
+    }
+    Ok(see_other(BACK))
+}
+
+/// Change le nom, la couleur, l'icône et, si le formulaire les porte, les
+/// règles d'un espace (propriétaire seulement). Rend le message à montrer,
+/// ou le refus. Aussi pour l'API.
+pub(crate) async fn update_space(
+    db: &SqlitePool,
+    user_id: i64,
+    spaces: &[Space],
+    space: &Space,
+    form: &SpaceForm,
+) -> AppResult<Result<String, String>> {
+    owner_only(space)?;
+    let id = space.id;
+    let valid = match validate(form, spaces, Some(id)) {
+        Ok(valid) => valid,
+        Err(message) => return Ok(Err(message)),
     };
-    // Les slugs des espaces archivés restent pris (leurs adresses aussi).
-    let taken: Vec<&str> = all.iter().map(|s| s.slug.as_str()).collect();
-    let slug = new_slug(&valid.name, &taken);
     sqlx::query!(
-        "INSERT INTO spaces (user_id, slug, name, color, icon, position)
-         VALUES (?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM spaces WHERE user_id = ?))",
-        ctx.user.id,
-        slug,
+        "UPDATE spaces SET name = ?, color = ?, icon = ? WHERE id = ? AND user_id = ?",
         valid.name,
         valid.color,
         valid.icon,
-        ctx.user.id
+        id,
+        user_id
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
-    ctx.session.insert(ACTIVE_SPACE, &slug).await?;
-    ctx.flash_ok(format!("Espace « {} » créé", valid.name))
+    if form.rules.is_some() {
+        let (mp4, heic) = (form.auto_mp4.is_some(), form.auto_heic_jpeg.is_some());
+        sqlx::query!(
+            "UPDATE spaces SET auto_mp4 = ?, auto_heic_jpeg = ? WHERE id = ? AND user_id = ?",
+            mp4,
+            heic,
+            id,
+            user_id
+        )
+        .execute(db)
         .await?;
-    Ok(see_other(BACK))
+    }
+    Ok(Ok(if valid.name == space.name {
+        format!("Espace « {} » modifié", valid.name)
+    } else {
+        format!("« {} » s'appelle maintenant « {} »", space.name, valid.name)
+    }))
 }
 
 /// `POST /settings/spaces/{id}` : renomme un espace, change sa couleur ou son icône.
@@ -388,48 +447,46 @@ pub async fn update(
     axum::Form(form): axum::Form<SpaceForm>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
-    owner_only(space)?;
-    let valid = match validate(&form, &ctx.all_spaces(), Some(id)) {
-        Ok(valid) => valid,
-        Err(message) => {
-            ctx.flash_error(message).await?;
-            return Ok(see_other(BACK));
-        }
-    };
-    sqlx::query!(
-        "UPDATE spaces SET name = ?, color = ?, icon = ? WHERE id = ? AND user_id = ?",
-        valid.name,
-        valid.color,
-        valid.icon,
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
-    if form.rules.is_some() {
-        let (mp4, heic) = (form.auto_mp4.is_some(), form.auto_heic_jpeg.is_some());
-        sqlx::query!(
-            "UPDATE spaces SET auto_mp4 = ?, auto_heic_jpeg = ? WHERE id = ? AND user_id = ?",
-            mp4,
-            heic,
-            id,
-            ctx.user.id
-        )
-        .execute(&state.db)
-        .await?;
+    match update_space(&state.db, ctx.user.id, &ctx.all_spaces(), space, &form).await? {
+        Ok(message) => ctx.flash_ok(message).await?,
+        Err(message) => ctx.flash_error(message).await?,
     }
-    let message = if valid.name == space.name {
-        format!("Espace « {} » modifié", valid.name)
-    } else {
-        format!("« {} » s'appelle maintenant « {} »", space.name, valid.name)
-    };
-    ctx.flash_ok(message).await?;
     Ok(see_other(BACK))
 }
 
-/// `POST /settings/spaces/{id}/archive` : archive un espace (pas Perso). Il
-/// quitte le sélecteur, les listes et la vue d'ensemble ; son contenu reste
-/// cherchable par la palette, et il se rouvre ou se restaure depuis Réglages.
+/// Archive un espace (pas Perso, propriétaire seulement). Il quitte le
+/// sélecteur, les listes et la vue d'ensemble ; son contenu reste cherchable
+/// par la palette. Rend le message à montrer, ou le refus. Aussi pour l'API.
+pub(crate) async fn archive_space(
+    db: &SqlitePool,
+    user_id: i64,
+    spaces: &[Space],
+    space: &Space,
+) -> AppResult<Result<String, String>> {
+    owner_only(space)?;
+    if space.archived {
+        return Ok(Err(format!("{} est déjà archivé.", space.name)));
+    }
+    if space.is_overview() || in_service(spaces) <= 1 {
+        return Ok(Err(format!("{} ne s'archive pas.", space.name)));
+    }
+    let now = crate::time::now();
+    sqlx::query!(
+        "UPDATE spaces SET archived_at = ? WHERE id = ? AND user_id = ?",
+        now,
+        space.id,
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(Ok(format!(
+        "{} archivé : il n'est plus dans le sélecteur, ses notes restent cherchables",
+        space.name
+    )))
+}
+
+/// `POST /settings/spaces/{id}/archive` : archive un espace, qui se rouvre ou
+/// se restaure depuis Réglages.
 pub async fn archive(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -440,31 +497,48 @@ pub async fn archive(
         .iter()
         .find(|s| s.id == id)
         .ok_or(AppError::NotFound)?;
-    owner_only(space)?;
-    if space.is_overview() || ctx.spaces.len() <= 1 {
-        ctx.flash_error(format!("{} ne s'archive pas.", space.name))
-            .await?;
-        return Ok(see_other(BACK));
+    match archive_space(&state.db, ctx.user.id, &ctx.all_spaces(), space).await? {
+        Ok(message) => {
+            // L'espace actif part : on revient au premier espace en service.
+            if ctx.active.id == id {
+                ctx.session.remove::<String>(ACTIVE_SPACE).await?;
+            }
+            ctx.flash_ok(message).await?;
+        }
+        Err(message) => ctx.flash_error(message).await?,
     }
-    let now = crate::time::now();
-    sqlx::query!(
-        "UPDATE spaces SET archived_at = ? WHERE id = ? AND user_id = ?",
-        now,
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
-    // L'espace actif part : on revient au premier espace en service.
-    if ctx.active.id == id {
-        ctx.session.remove::<String>(ACTIVE_SPACE).await?;
-    }
-    ctx.flash_ok(format!(
-        "{} archivé : il n'est plus dans le sélecteur, ses notes restent cherchables",
-        space.name
-    ))
-    .await?;
     Ok(see_other(BACK))
+}
+
+/// Remet un espace archivé en service (propriétaire seulement). Rend le
+/// message à montrer, ou le refus. Aussi pour l'API.
+pub(crate) async fn unarchive_space(
+    db: &SqlitePool,
+    user_id: i64,
+    spaces: &[Space],
+    space: &Space,
+) -> AppResult<Result<String, String>> {
+    owner_only(space)?;
+    if !space.archived {
+        return Ok(Err(format!("{} n'est pas archivé.", space.name)));
+    }
+    if in_service(spaces) >= MAX_SPACES {
+        return Ok(Err(format!(
+            "{MAX_SPACES} espaces au plus : archive ou supprime-en un pour restaurer {}.",
+            space.name
+        )));
+    }
+    sqlx::query!(
+        "UPDATE spaces SET archived_at = NULL WHERE id = ? AND user_id = ?",
+        space.id,
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(Ok(format!(
+        "{} est de retour dans le sélecteur",
+        space.name
+    )))
 }
 
 /// `POST /settings/spaces/{id}/restore` : remet un espace archivé en service.
@@ -478,24 +552,10 @@ pub async fn restore(
         .iter()
         .find(|s| s.id == id)
         .ok_or(AppError::NotFound)?;
-    owner_only(space)?;
-    if ctx.spaces.len() >= MAX_SPACES {
-        ctx.flash_error(format!(
-            "{MAX_SPACES} espaces au plus : archive ou supprime-en un pour restaurer {}.",
-            space.name
-        ))
-        .await?;
-        return Ok(see_other(BACK));
+    match unarchive_space(&state.db, ctx.user.id, &ctx.all_spaces(), space).await? {
+        Ok(message) => ctx.flash_ok(message).await?,
+        Err(message) => ctx.flash_error(message).await?,
     }
-    sqlx::query!(
-        "UPDATE spaces SET archived_at = NULL WHERE id = ? AND user_id = ?",
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
-    ctx.flash_ok(format!("{} est de retour dans le sélecteur", space.name))
-        .await?;
     Ok(see_other(BACK))
 }
 
@@ -617,36 +677,144 @@ pub struct DeleteForm {
     target: Option<i64>,
 }
 
-/// `POST /settings/spaces/{id}/delete`
-pub async fn delete(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-    axum::Form(form): axum::Form<DeleteForm>,
-) -> AppResult<Response> {
-    let space = ctx.space_by_id(id).cloned().ok_or(AppError::NotFound)?;
-    owner_only(&space)?;
+/// Ce que dit une suppression d'espace réussie.
+pub(crate) struct Removed {
+    pub(crate) message: String,
+    /// Espace qui a reçu le contenu : l'espace actif y passe.
+    pub(crate) next_active: Option<String>,
+}
+
+/// Fait passer tout le contenu d'un espace dans `target`, y compris les
+/// envois en cours et les conversions de `user_id`, le propriétaire.
+async fn transfer_content(db: &SqlitePool, user_id: i64, id: i64, target: i64) -> AppResult<()> {
+    let folders: Vec<crate::folders::Folder> = sqlx::query!(
+        r#"SELECT id AS "id!", space_id, parent_id, name FROM folders
+                   WHERE space_id = ? OR space_id = ?"#,
+        id,
+        target
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|row| crate::folders::Folder {
+        id: row.id,
+        space_id: row.space_id,
+        parent_id: row.parent_id,
+        name: row.name,
+    })
+    .collect();
+    let mut tx = db.begin().await?;
+    // Ses dossiers suivent leur contenu. Un nom déjà pris dans l'espace
+    // qui les reçoit devient « Math (2) » ; les sous-dossiers gardent
+    // leur dossier parent, donc leur nom.
+    let mut taken = crate::folders::neighbours(&folders, target, None, None);
+    for folder in folders.iter().filter(|f| f.space_id == id && f.is_top()) {
+        let name = crate::folders::free_name(&taken, &folder.name);
+        sqlx::query!(
+            "UPDATE folders SET space_id = ?, name = ? WHERE id = ?",
+            target,
+            name,
+            folder.id
+        )
+        .execute(&mut *tx)
+        .await?;
+        taken.push(name);
+    }
+    sqlx::query!(
+        "UPDATE folders SET space_id = ? WHERE space_id = ?",
+        target,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE notes SET space_id = ? WHERE space_id = ?",
+        target,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE tasks SET space_id = ? WHERE space_id = ?",
+        target,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE calendar_sources SET space_id = ? WHERE space_id = ? AND user_id = ?",
+        target,
+        id,
+        user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Événements de dashu : ceux des membres sont déjà revenus dans
+    // leur Perso (remove_member) ; ceux du propriétaire suivent.
+    sqlx::query!(
+        "UPDATE events SET space_id = ? WHERE space_id = ?",
+        target,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE files SET space_id = ? WHERE space_id = ?",
+        target,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE uploads SET space_id = ? WHERE space_id = ? AND user_id = ?",
+        target,
+        id,
+        user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE jobs SET space_id = ? WHERE space_id = ? AND user_id = ?",
+        target,
+        id,
+        user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Supprime un espace (propriétaire seulement, jamais Perso) : `content` vaut
+/// `move`, et tout passe dans l'espace `target`, ou `delete`, et tout part
+/// avec lui dans la corbeille. Rend ce qu'il faut dire, ou le refus. Aussi
+/// pour l'API.
+pub(crate) async fn delete_space(
+    db: &SqlitePool,
+    who: crate::trash::Who<'_>,
+    spaces: &[Space],
+    space: &Space,
+    content: &str,
+    target: Option<i64>,
+) -> AppResult<Result<Removed, String>> {
+    owner_only(space)?;
     if space.is_overview() {
-        ctx.flash_error(format!(
+        return Ok(Err(format!(
             "« {} » ne se supprime pas : son agenda réunit ceux de tous les espaces.",
             space.name
-        ))
-        .await?;
-        return Ok(see_other(BACK));
+        )));
     }
-    if ctx.spaces.len() <= 1 {
-        ctx.flash_error("Il faut garder au moins un espace.")
-            .await?;
-        return Ok(see_other(BACK));
+    if in_service(spaces) <= 1 {
+        return Ok(Err("Il faut garder au moins un espace.".into()));
     }
-    let user_id = ctx.user.id;
+    let id = space.id;
 
     // Les choix sont vérifiés avant de toucher à quoi que ce soit.
-    let target = match form.content.as_str() {
+    let target = match content {
         "move" => Some(
-            form.target
+            target
                 .filter(|&target| target != id)
-                .and_then(|target| ctx.space_by_id(target))
+                .and_then(|target| spaces.iter().find(|s| s.id == target))
                 .filter(|s| s.mine)
                 .ok_or_else(|| AppError::BadRequest("Espace de destination inconnu.".into()))?,
         ),
@@ -664,154 +832,70 @@ pub async fn delete(
         r#"SELECT user_id AS "user_id!: i64" FROM space_members WHERE space_id = ?"#,
         id
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await?;
     for member in members {
-        remove_member(&state.db, id, member).await?;
+        remove_member(db, id, member).await?;
     }
 
-    let (message, next_active) = match form.content.as_str() {
-        "move" => {
-            let target = target.expect("destination vérifiée plus haut");
-            // Tout passe dans l'espace choisi, y compris les envois en cours
-            // et les conversions, puis l'espace (vide) est supprimé. Les
-            // dossiers sont lus sans filtre de compte : ceux des membres
-            // suivent aussi.
-            let folders: Vec<crate::folders::Folder> = sqlx::query!(
-                r#"SELECT id AS "id!", space_id, parent_id, name FROM folders
-                   WHERE space_id = ? OR space_id = ?"#,
-                id,
-                target.id
-            )
-            .fetch_all(&state.db)
-            .await?
-            .into_iter()
-            .map(|row| crate::folders::Folder {
-                id: row.id,
-                space_id: row.space_id,
-                parent_id: row.parent_id,
-                name: row.name,
-            })
-            .collect();
-            let mut tx = state.db.begin().await?;
-            // Ses dossiers suivent leur contenu. Un nom déjà pris dans l'espace
-            // qui les reçoit devient « Math (2) » ; les sous-dossiers gardent
-            // leur dossier parent, donc leur nom.
-            let mut taken = crate::folders::neighbours(&folders, target.id, None, None);
-            for folder in folders.iter().filter(|f| f.space_id == id && f.is_top()) {
-                let name = crate::folders::free_name(&taken, &folder.name);
-                sqlx::query!(
-                    "UPDATE folders SET space_id = ?, name = ? WHERE id = ?",
-                    target.id,
-                    name,
-                    folder.id
-                )
-                .execute(&mut *tx)
-                .await?;
-                taken.push(name);
-            }
-            sqlx::query!(
-                "UPDATE folders SET space_id = ? WHERE space_id = ?",
-                target.id,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE notes SET space_id = ? WHERE space_id = ?",
-                target.id,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE tasks SET space_id = ? WHERE space_id = ?",
-                target.id,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE calendar_sources SET space_id = ? WHERE space_id = ? AND user_id = ?",
-                target.id,
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
-            // Événements de dashu : ceux des membres sont déjà revenus dans
-            // leur Perso (remove_member) ; ceux du propriétaire suivent.
-            sqlx::query!(
-                "UPDATE events SET space_id = ? WHERE space_id = ?",
-                target.id,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE files SET space_id = ? WHERE space_id = ?",
-                target.id,
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE uploads SET space_id = ? WHERE space_id = ? AND user_id = ?",
-                target.id,
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!(
-                "UPDATE jobs SET space_id = ? WHERE space_id = ? AND user_id = ?",
-                target.id,
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
-            tx.commit().await?;
+    Ok(Ok(match target {
+        Some(target) => {
+            transfer_content(db, who.user, id, target.id).await?;
             // L'espace, vide, part dans la corbeille.
-            crate::trash::space(&state.db, crate::trash::Who::site(user_id), id).await?;
-            (
-                format!(
+            crate::trash::space(db, who, id).await?;
+            Removed {
+                message: format!(
                     "Espace « {} » mis dans la corbeille : son contenu est maintenant dans « {} »",
                     space.name, target.name
                 ),
-                Some(target.slug.clone()),
-            )
+                next_active: Some(target.slug.clone()),
+            }
         }
-        "delete" => {
+        None => {
             // L'espace et tout son contenu partent dans la corbeille : 30 jours
             // pour le restaurer (voir src/trash).
-            crate::trash::space(&state.db, crate::trash::Who::site(user_id), id).await?;
-            (
-                format!(
+            crate::trash::space(db, who, id).await?;
+            Removed {
+                message: format!(
                     "Espace « {} » mis dans la corbeille avec son contenu (Réglages › Corbeille)",
                     space.name
                 ),
-                None,
-            )
+                next_active: None,
+            }
         }
-        _ => {
-            return Err(AppError::BadRequest(
-                "Choisis quoi faire du contenu de l'espace.".into(),
-            ));
-        }
-    };
+    }))
+}
+
+/// `POST /settings/spaces/{id}/delete`
+pub async fn delete(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<DeleteForm>,
+) -> AppResult<Response> {
+    let space = ctx.space_by_id(id).cloned().ok_or(AppError::NotFound)?;
+    let who = crate::trash::Who::site(ctx.user.id);
+    let all = ctx.all_spaces();
+    let removed =
+        match delete_space(&state.db, who, &all, &space, &form.content, form.target).await? {
+            Ok(removed) => removed,
+            Err(message) => {
+                ctx.flash_error(message).await?;
+                return Ok(see_other(BACK));
+            }
+        };
 
     // L'espace actif vient de disparaître : on passe à celui qui a reçu le
     // contenu, ou au premier.
     if ctx.active.id == id {
-        match next_active {
+        match removed.next_active {
             Some(slug) => ctx.session.insert(ACTIVE_SPACE, slug).await?,
             None => {
                 ctx.session.remove::<String>(ACTIVE_SPACE).await?;
             }
         }
     }
-    ctx.flash_ok(message).await?;
+    ctx.flash_ok(removed.message).await?;
     Ok(see_other(BACK))
 }
 
@@ -829,7 +913,8 @@ pub(crate) fn person_name(first_name: &str, last_name: &str, email: &str) -> Str
     }
 }
 
-/// Un compte affiché sur la page Membres.
+/// Un compte affiché sur la page Membres, ou renvoyé par l'API.
+#[derive(Serialize)]
 pub struct Person {
     pub id: i64,
     pub name: String,
@@ -915,22 +1000,27 @@ struct MembersPage {
     pending: Vec<(i64, Person)>,
 }
 
-/// `GET /settings/spaces/{id}/members` : le propriétaire, les membres et les
-/// invitations en attente. Perso n'a pas de page Membres.
-pub async fn members_page(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> AppResult<Response> {
-    let space = ctx.space_by_id(id).cloned().ok_or(AppError::NotFound)?;
+/// Qui a accès à un espace.
+pub(crate) struct Roster {
+    pub(crate) owner: Person,
+    pub(crate) members: Vec<Person>,
+    /// Invitations en attente : (identifiant de l'invitation, invité). Vide
+    /// pour un membre : elles ne regardent que le propriétaire.
+    pub(crate) pending: Vec<(i64, Person)>,
+}
+
+/// Le propriétaire, les membres et les invitations en attente d'un espace.
+/// Perso n'a pas de membres (404). Aussi pour l'API.
+pub(crate) async fn roster(db: &SqlitePool, space: &Space) -> AppResult<Roster> {
     if space.is_overview() {
         return Err(AppError::NotFound);
     }
+    let id = space.id;
     let owner = sqlx::query!(
         r#"SELECT id AS "id!", email, first_name, last_name FROM users WHERE id = ?"#,
         space.owner_id
     )
-    .fetch_one(&state.db)
+    .fetch_one(db)
     .await?;
     let members = sqlx::query!(
         r#"SELECT u.id AS "id!", u.email, u.first_name, u.last_name
@@ -938,7 +1028,7 @@ pub async fn members_page(
            WHERE m.space_id = ? ORDER BY m.joined_at, u.id"#,
         id
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await?
     .into_iter()
     .map(|u| Person {
@@ -955,7 +1045,7 @@ pub async fn members_page(
                WHERE i.space_id = ? ORDER BY i.id"#,
             id
         )
-        .fetch_all(&state.db)
+        .fetch_all(db)
         .await?
         .into_iter()
         .map(|u| {
@@ -972,12 +1062,32 @@ pub async fn members_page(
     } else {
         Vec::new()
     };
-    let page = MembersPage {
+    Ok(Roster {
         owner: Person {
             id: owner.id,
             name: person_name(&owner.first_name, &owner.last_name, &owner.email),
             email: owner.email,
         },
+        members,
+        pending,
+    })
+}
+
+/// `GET /settings/spaces/{id}/members` : le propriétaire, les membres et les
+/// invitations en attente. Perso n'a pas de page Membres.
+pub async fn members_page(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    let space = ctx.space_by_id(id).cloned().ok_or(AppError::NotFound)?;
+    let Roster {
+        owner,
+        members,
+        pending,
+    } = roster(&state.db, &space).await?;
+    let page = MembersPage {
+        owner,
         members,
         pending,
         space,
@@ -997,44 +1107,34 @@ pub struct InviteForm {
     email: String,
 }
 
-/// `POST /settings/spaces/{id}/invitations` : le propriétaire invite un
-/// compte existant, par son adresse. Un refus le dit et ne crée rien.
-pub async fn invite(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-    axum::Form(form): axum::Form<InviteForm>,
-) -> AppResult<Response> {
-    let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
+/// Le propriétaire invite un compte existant, par son adresse. Rend le
+/// numéro de l'invitation et l'adresse, ou le refus (rien n'est créé). Aussi
+/// pour l'API.
+pub(crate) async fn invite_to(
+    state: &AppState,
+    user_id: i64,
+    space: &Space,
+    raw_email: &str,
+) -> AppResult<Result<(i64, String), String>> {
     owner_only(space)?;
+    let id = space.id;
     if space.is_overview() {
-        // Perso n'a pas de page Membres : le message s'affiche dans les réglages.
-        ctx.flash_error(format!(
+        return Ok(Err(format!(
             "{} reste privé : il ne se partage pas.",
             space.name
-        ))
-        .await?;
-        return Ok(see_other(BACK));
+        )));
     }
     if space.archived {
-        return refuse(
-            &ctx,
-            id,
-            format!(
-                "{} est archivé : restaure-le avant d'inviter quelqu'un.",
-                space.name
-            ),
-        )
-        .await;
+        return Ok(Err(format!(
+            "{} est archivé : restaure-le avant d'inviter quelqu'un.",
+            space.name
+        )));
     }
-    let email = form.email.trim().to_lowercase();
+    let email = raw_email.trim().to_lowercase();
     if email.is_empty() {
-        return refuse(
-            &ctx,
-            id,
-            "Saisis l'adresse e-mail de la personne à inviter.",
-        )
-        .await;
+        return Ok(Err(
+            "Saisis l'adresse e-mail de la personne à inviter.".into()
+        ));
     }
     // Un compte, c'est quelqu'un qui s'est déjà connecté une fois ; son
     // adresse doit aussi être encore autorisée.
@@ -1043,12 +1143,12 @@ pub async fn invite(
         .await?
         .filter(|_| state.config.is_allowed(&email));
     let Some(invited) = invited else {
-        return refuse(&ctx, id, format!(
+        return Ok(Err(format!(
             "Aucun compte ne porte l'adresse {email} : la personne doit d'abord se connecter une fois."
-        )).await;
+        )));
     };
-    if invited == ctx.user.id {
-        return refuse(&ctx, id, "Tu es déjà le propriétaire de cet espace.").await;
+    if invited == user_id {
+        return Ok(Err("Tu es déjà le propriétaire de cet espace.".into()));
     }
     let member = sqlx::query_scalar!(
         r#"SELECT user_id AS "user_id!: i64" FROM space_members WHERE space_id = ? AND user_id = ?"#,
@@ -1058,7 +1158,7 @@ pub async fn invite(
     .fetch_optional(&state.db)
     .await?;
     if member.is_some() {
-        return refuse(&ctx, id, format!("{email} est déjà membre de cet espace.")).await;
+        return Ok(Err(format!("{email} est déjà membre de cet espace.")));
     }
     let pending = sqlx::query_scalar!(
         r#"SELECT id AS "id!: i64" FROM space_invitations WHERE space_id = ? AND user_id = ?"#,
@@ -1068,27 +1168,62 @@ pub async fn invite(
     .fetch_optional(&state.db)
     .await?;
     if pending.is_some() {
-        return refuse(
-            &ctx,
-            id,
-            format!("{email} a déjà une invitation en attente."),
-        )
-        .await;
+        return Ok(Err(format!("{email} a déjà une invitation en attente.")));
     }
 
     let now = crate::time::now();
-    sqlx::query!(
+    let invitation = sqlx::query!(
         "INSERT INTO space_invitations (space_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)",
         id,
         invited,
-        ctx.user.id,
+        user_id,
         now
     )
     .execute(&state.db)
-    .await?;
-    ctx.flash_ok(format!("Invitation envoyée à {email}"))
-        .await?;
-    Ok(see_other(&members_url(id)))
+    .await?
+    .last_insert_rowid();
+    Ok(Ok((invitation, email)))
+}
+
+/// `POST /settings/spaces/{id}/invitations` : le propriétaire invite un
+/// compte existant, par son adresse. Un refus le dit et ne crée rien.
+pub async fn invite(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<InviteForm>,
+) -> AppResult<Response> {
+    let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
+    match invite_to(&state, ctx.user.id, space, &form.email).await? {
+        Ok((_, email)) => {
+            ctx.flash_ok(format!("Invitation envoyée à {email}"))
+                .await?;
+            Ok(see_other(&members_url(id)))
+        }
+        // Perso n'a pas de page Membres : le message s'affiche dans les réglages.
+        Err(message) if space.is_overview() => {
+            ctx.flash_error(message).await?;
+            Ok(see_other(BACK))
+        }
+        Err(message) => refuse(&ctx, id, message).await,
+    }
+}
+
+/// Annule une invitation en attente (propriétaire seulement). Aussi pour l'API.
+pub(crate) async fn cancel_invite(db: &SqlitePool, space: &Space, inv: i64) -> AppResult<()> {
+    owner_only(space)?;
+    let deleted = sqlx::query!(
+        "DELETE FROM space_invitations WHERE id = ? AND space_id = ?",
+        inv,
+        space.id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    if deleted == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
 }
 
 /// `POST /settings/spaces/{id}/invitations/{inv}/cancel`
@@ -1098,20 +1233,25 @@ pub async fn cancel_invitation(
     Path((id, inv)): Path<(i64, i64)>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
-    owner_only(space)?;
-    let deleted = sqlx::query!(
-        "DELETE FROM space_invitations WHERE id = ? AND space_id = ?",
-        inv,
-        id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if deleted == 0 {
-        return Err(AppError::NotFound);
-    }
+    cancel_invite(&state.db, space, inv).await?;
     ctx.flash_ok("Invitation annulée").await?;
     Ok(see_other(&members_url(id)))
+}
+
+/// Retire un membre (propriétaire seulement). Aussi pour l'API.
+pub(crate) async fn remove_from(db: &SqlitePool, space: &Space, user: i64) -> AppResult<()> {
+    owner_only(space)?;
+    let member = sqlx::query_scalar!(
+        r#"SELECT user_id AS "user_id!: i64" FROM space_members WHERE space_id = ? AND user_id = ?"#,
+        space.id,
+        user
+    )
+    .fetch_optional(db)
+    .await?;
+    if member.is_none() {
+        return Err(AppError::NotFound);
+    }
+    remove_member(db, space.id, user).await
 }
 
 /// `POST /settings/spaces/{id}/members/{user}/remove`
@@ -1121,35 +1261,29 @@ pub async fn remove(
     Path((id, user)): Path<(i64, i64)>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
-    owner_only(space)?;
-    let member = sqlx::query_scalar!(
-        r#"SELECT user_id AS "user_id!: i64" FROM space_members WHERE space_id = ? AND user_id = ?"#,
-        id,
-        user
-    )
-    .fetch_optional(&state.db)
-    .await?;
-    if member.is_none() {
-        return Err(AppError::NotFound);
-    }
-    remove_member(&state.db, id, user).await?;
+    remove_from(&state.db, space, user).await?;
     ctx.flash_ok("Membre retiré : plus d'accès à l'espace")
         .await?;
     Ok(see_other(&members_url(id)))
 }
 
-/// `POST /settings/spaces/{id}/leave` : un membre quitte l'espace. Le
-/// propriétaire, lui, le supprime ou l'archive.
+/// Un membre quitte l'espace. Le propriétaire, lui, le supprime ou
+/// l'archive. Aussi pour l'API.
+pub(crate) async fn leave_space(db: &SqlitePool, user_id: i64, space: &Space) -> AppResult<()> {
+    if space.mine {
+        return Err(AppError::Forbidden);
+    }
+    remove_member(db, space.id, user_id).await
+}
+
+/// `POST /settings/spaces/{id}/leave`
 pub async fn leave(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
-    if space.mine {
-        return Err(AppError::Forbidden);
-    }
-    remove_member(&state.db, id, ctx.user.id).await?;
+    leave_space(&state.db, ctx.user.id, space).await?;
     if ctx.active.id == id {
         ctx.session.remove::<String>(ACTIVE_SPACE).await?;
     }
@@ -1170,13 +1304,14 @@ fn joined_slug(base: &str, taken: &[String]) -> String {
     slug
 }
 
-/// `POST /settings/invitations/{inv}/accept` : l'invité seulement.
-pub async fn accept_invitation(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    Path(inv): Path<i64>,
-) -> AppResult<Response> {
-    let user_id = ctx.user.id;
+/// L'invité accepte : l'espace rejoint prend une place dans son île. Rend
+/// l'identifiant et le nom de l'espace, ou le refus. Aussi pour l'API.
+pub(crate) async fn accept_for(
+    db: &SqlitePool,
+    user_id: i64,
+    spaces: &[Space],
+    inv: i64,
+) -> AppResult<Result<(i64, String), String>> {
     let invitation = sqlx::query!(
         r#"SELECT i.space_id, s.slug, s.name FROM space_invitations i
            JOIN spaces s ON s.id = i.space_id
@@ -1184,19 +1319,17 @@ pub async fn accept_invitation(
         inv,
         user_id
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await?
     .ok_or(AppError::NotFound)?;
-    if ctx.spaces.len() >= MAX_SPACES {
-        ctx.flash_error(format!(
+    if in_service(spaces) >= MAX_SPACES {
+        return Ok(Err(format!(
             "{MAX_SPACES} espaces au plus : archive ou supprime-en un pour rejoindre « {} ».",
             invitation.name
-        ))
-        .await?;
-        return Ok(see_other(BACK));
+        )));
     }
 
-    let mut tx = state.db.begin().await?;
+    let mut tx = db.begin().await?;
     // Les slugs de ses espaces, archivés compris, et de ceux déjà rejoints.
     let taken: Vec<String> = sqlx::query_scalar!(
         r#"SELECT slug AS "slug!" FROM spaces WHERE user_id = ?1
@@ -1225,9 +1358,36 @@ pub async fn accept_invitation(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    ctx.flash_ok(format!("Tu as rejoint « {} »", invitation.name))
-        .await?;
+    Ok(Ok((invitation.space_id, invitation.name)))
+}
+
+/// `POST /settings/invitations/{inv}/accept` : l'invité seulement.
+pub async fn accept_invitation(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(inv): Path<i64>,
+) -> AppResult<Response> {
+    match accept_for(&state.db, ctx.user.id, &ctx.all_spaces(), inv).await? {
+        Ok((_, name)) => ctx.flash_ok(format!("Tu as rejoint « {name} »")).await?,
+        Err(message) => ctx.flash_error(message).await?,
+    }
     Ok(see_other(BACK))
+}
+
+/// L'invité refuse (404 pour l'invitation d'un autre compte). Aussi pour l'API.
+pub(crate) async fn decline_for(db: &SqlitePool, user_id: i64, inv: i64) -> AppResult<()> {
+    let deleted = sqlx::query!(
+        "DELETE FROM space_invitations WHERE id = ? AND user_id = ?",
+        inv,
+        user_id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    if deleted == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
 }
 
 /// `POST /settings/invitations/{inv}/decline` : l'invité seulement.
@@ -1236,17 +1396,7 @@ pub async fn decline_invitation(
     State(state): State<AppState>,
     Path(inv): Path<i64>,
 ) -> AppResult<Response> {
-    let deleted = sqlx::query!(
-        "DELETE FROM space_invitations WHERE id = ? AND user_id = ?",
-        inv,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if deleted == 0 {
-        return Err(AppError::NotFound);
-    }
+    decline_for(&state.db, ctx.user.id, inv).await?;
     ctx.flash_ok("Invitation refusée").await?;
     Ok(see_other("/settings"))
 }

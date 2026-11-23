@@ -438,6 +438,29 @@ pub struct MoveForm {
     space_id: i64,
 }
 
+/// Déplace une tâche vers un espace du compte (déjà vérifié). Une tâche
+/// inaccessible répond 404. Aussi pour l'API.
+pub(crate) async fn move_task_to(
+    db: &sqlx::SqlitePool,
+    user_id: i64,
+    id: i64,
+    target: i64,
+) -> AppResult<()> {
+    let moved = sqlx::query!(
+        "UPDATE tasks SET space_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        target,
+        id,
+        user_id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    if moved == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 /// `POST /tasks/{id}/move` : déplace une tâche vers un autre espace.
 pub async fn move_task(
     ctx: Ctx,
@@ -446,18 +469,7 @@ pub async fn move_task(
     axum::Form(form): axum::Form<MoveForm>,
 ) -> AppResult<Response> {
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
-    let moved = sqlx::query!(
-        "UPDATE tasks SET space_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
-        target.id,
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if moved == 0 {
-        return Err(AppError::NotFound);
-    }
+    move_task_to(&state.db, ctx.user.id, id, target.id).await?;
     let notice = format!("Tâche déplacée vers {}", target.name);
     tasks_widget(&state.db, &ctx, Some(notice)).await
 }

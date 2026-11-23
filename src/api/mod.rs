@@ -14,9 +14,10 @@
 //!
 //! Ce que l'API permet (SPEC, « API complète et corbeille ») : les tâches,
 //! les notes, les fichiers et leurs liens de partage, les dossiers, la
-//! corbeille (lister, restaurer), l'agenda. Une suppression part dans la
-//! corbeille. Hors de l'API : ce qui protège le compte (mot de passe,
-//! connexions, jetons), l'effacement définitif, l'administration.
+//! corbeille (lister, restaurer), l'agenda, les conversions, les espaces et
+//! leurs membres, les réglages. Une suppression part dans la corbeille. Hors
+//! de l'API : ce qui protège le compte (mot de passe, connexions, jetons),
+//! l'effacement définitif, l'administration.
 //!
 //! Les erreurs sont toujours du JSON : `{"error": "message en français"}`.
 
@@ -45,6 +46,7 @@ use crate::web::AppError;
 
 mod agenda;
 mod contenu;
+mod espaces;
 mod outils;
 
 pub(crate) use agenda::{
@@ -55,6 +57,12 @@ pub(crate) use contenu::{
     FileChanges, FolderChanges, NewUpload, fetch_file, file_delete, file_update, files_list,
     folder_create, folder_delete, folder_update, folders_list, link_create, links_list, stored,
     trash_list, trash_restore, upload_place,
+};
+pub(crate) use espaces::{
+    DashboardBody, NewInvitation, NewSpace, SpaceChanges, SpaceRemoval, dashboard_read,
+    dashboard_write, invitation_accept, invitation_cancel, invitations_list, member_invite,
+    member_remove, members_list, settings_read, settings_update, space_archive, space_create,
+    space_delete, space_leave, space_unarchive, space_update, spaces_out,
 };
 pub(crate) use outils::{fetch_job, formats, jobs, replace_original, start};
 
@@ -67,7 +75,6 @@ const CALENDAR_MAX_DAYS: i64 = 62;
 
 pub fn router() -> Router<AppState> {
     let v1 = Router::new()
-        .route("/spaces", get(list_spaces))
         .route("/tasks", get(list_tasks).post(create_task))
         .route(
             "/tasks/{id}",
@@ -83,6 +90,7 @@ pub fn router() -> Router<AppState> {
         .merge(contenu::routes())
         .merge(outils::routes())
         .merge(agenda::routes())
+        .merge(espaces::routes())
         .fallback(unknown_route)
         .layer(from_fn(json_errors));
     Router::new().nest("/api/v1", v1)
@@ -374,31 +382,6 @@ fn check_body(body: &str) -> ApiResult<()> {
 }
 
 // ---------------------------------------------------------------------
-// Espaces
-// ---------------------------------------------------------------------
-
-#[derive(Serialize)]
-pub(crate) struct SpaceOut {
-    slug: String,
-    name: String,
-}
-
-/// `GET /api/v1/spaces`
-async fn list_spaces(user: ApiUser) -> Json<Vec<SpaceOut>> {
-    Json(spaces_out(&user))
-}
-
-pub(crate) fn spaces_out(user: &ApiUser) -> Vec<SpaceOut> {
-    user.spaces
-        .iter()
-        .map(|s| SpaceOut {
-            slug: s.slug.clone(),
-            name: s.name.clone(),
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------
 // Tâches
 // ---------------------------------------------------------------------
 
@@ -557,9 +540,12 @@ pub(crate) struct TaskChanges {
     pub(crate) title: Option<String>,
     pub(crate) done: Option<bool>,
     pub(crate) due_date: Option<String>,
+    /// Déplace la tâche vers cet espace.
+    pub(crate) space: Option<String>,
 }
 
-/// `PATCH /api/v1/tasks/{id}` `{"done": true}` (champs facultatifs : title, done, due_date)
+/// `PATCH /api/v1/tasks/{id}` `{"done": true}` (champs facultatifs : title,
+/// done, due_date, space)
 async fn update_task(
     user: ApiUser,
     State(state): State<AppState>,
@@ -590,6 +576,11 @@ pub(crate) async fn task_update(
         Some(d) => Some(parse_date(d, "due_date")?.format("%Y-%m-%d").to_string()),
         None => None,
     };
+    // L'espace cible est vérifié avant toute écriture.
+    let target = match changes.space.as_deref() {
+        Some(slug) => Some(user.space(slug)?.id),
+        None => None,
+    };
     let now = time::now();
 
     // Dans le SET, les colonnes désignent encore les anciennes valeurs : une
@@ -613,6 +604,9 @@ pub(crate) async fn task_update(
     .rows_affected();
     if changed == 0 {
         return Err(ApiError::not_found("tâche"));
+    }
+    if let Some(space) = target {
+        crate::dashboard::move_task_to(&state.db, user.id, id, space).await?;
     }
     fetch_task(&state.db, user, id).await
 }

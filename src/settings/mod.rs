@@ -70,13 +70,41 @@ struct SettingsPage {
     trash_count: usize,
 }
 
-struct InvitationRow {
-    id: i64,
-    space_name: String,
-    space_color: String,
-    space_icon: String,
+pub(crate) struct InvitationRow {
+    pub(crate) id: i64,
+    pub(crate) space_name: String,
+    pub(crate) space_color: String,
+    pub(crate) space_icon: String,
     /// Qui invite.
-    from: String,
+    pub(crate) from: String,
+}
+
+/// Invitations reçues par un compte, en attente. Aussi pour l'API.
+pub(crate) async fn received_invitations(
+    db: &sqlx::SqlitePool,
+    user: i64,
+) -> AppResult<Vec<InvitationRow>> {
+    let invitations = sqlx::query!(
+        r#"SELECT i.id AS "id!", s.name AS space_name, s.color, s.icon,
+                  u.email, u.first_name, u.last_name
+           FROM space_invitations i
+           JOIN spaces s ON s.id = i.space_id
+           JOIN users u ON u.id = i.invited_by
+           WHERE i.user_id = ? ORDER BY i.id"#,
+        user
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|i| InvitationRow {
+        id: i.id,
+        space_name: i.space_name,
+        space_color: i.color,
+        space_icon: i.icon,
+        from: person_name(&i.first_name, &i.last_name, &i.email),
+    })
+    .collect();
+    Ok(invitations)
 }
 
 /// `GET /settings`
@@ -113,26 +141,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         .map(|tab| (tab, current.contains(&tab)))
         .collect();
 
-    let invitations = sqlx::query!(
-        r#"SELECT i.id AS "id!", s.name AS space_name, s.color, s.icon,
-                  u.email, u.first_name, u.last_name
-           FROM space_invitations i
-           JOIN spaces s ON s.id = i.space_id
-           JOIN users u ON u.id = i.invited_by
-           WHERE i.user_id = ? ORDER BY i.id"#,
-        ctx.user.id
-    )
-    .fetch_all(&state.db)
-    .await?
-    .into_iter()
-    .map(|i| InvitationRow {
-        id: i.id,
-        space_name: i.space_name,
-        space_color: i.color,
-        space_icon: i.icon,
-        from: person_name(&i.first_name, &i.last_name, &i.email),
-    })
-    .collect();
+    let invitations = received_invitations(&state.db, ctx.user.id).await?;
 
     // Espaces rejoints : qui les partage. Espaces à soi : avec combien de personnes.
     let mut shared = HashMap::new();
@@ -208,6 +217,28 @@ pub struct ThemeForm {
     pub(crate) next: Option<String>,
 }
 
+/// Valeur enregistrée pour un thème : `dark`, `light`, ou rien pour `system`.
+pub(crate) fn parse_theme(raw: &str) -> Result<Option<&'static str>, String> {
+    match raw {
+        "dark" => Ok(Some("dark")),
+        "light" => Ok(Some("light")),
+        "system" => Ok(None),
+        _ => Err("Thème inconnu.".into()),
+    }
+}
+
+/// Enregistre le thème sur le compte. Aussi pour l'API.
+pub(crate) async fn store_theme(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    theme: Option<&str>,
+) -> AppResult<()> {
+    sqlx::query!("UPDATE users SET theme = ? WHERE id = ?", theme, user)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 /// `POST /settings/theme` : le thème est enregistré sur le compte, il suit
 /// donc l'utilisateur d'un appareil à l'autre.
 pub async fn set_theme(
@@ -215,20 +246,18 @@ pub async fn set_theme(
     State(state): State<AppState>,
     axum::Form(form): axum::Form<ThemeForm>,
 ) -> AppResult<Response> {
-    let theme = match form.theme.as_str() {
-        "dark" => Some("dark"),
-        "light" => Some("light"),
-        "system" => None,
-        _ => return Err(AppError::BadRequest("Thème inconnu.".into())),
-    };
-    sqlx::query!(
-        "UPDATE users SET theme = ? WHERE id = ?",
-        theme,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    let theme = parse_theme(&form.theme).map_err(AppError::BadRequest)?;
+    store_theme(&state.db, ctx.user.id, theme).await?;
     Ok(see_other(local_path(form.next.as_deref())))
+}
+
+/// Enregistre les raccourcis du téléphone (valeur de `tabbar::encode`).
+/// Aussi pour l'API.
+pub(crate) async fn store_tabs(db: &sqlx::SqlitePool, user: i64, value: &str) -> AppResult<()> {
+    sqlx::query!("UPDATE users SET mobile_tabs = ? WHERE id = ?", value, user)
+        .execute(db)
+        .await?;
+    Ok(())
 }
 
 /// `POST /settings/tabs` : choix des raccourcis du téléphone. Une case
@@ -244,13 +273,7 @@ pub async fn set_tabs(
         .collect();
     match tabbar::encode(&keys) {
         Ok(value) => {
-            sqlx::query!(
-                "UPDATE users SET mobile_tabs = ? WHERE id = ?",
-                value,
-                ctx.user.id
-            )
-            .execute(&state.db)
-            .await?;
+            store_tabs(&state.db, ctx.user.id, &value).await?;
             ctx.flash_ok("Raccourcis enregistrés").await?;
         }
         Err(message) => ctx.flash_error(message).await?,
@@ -438,6 +461,23 @@ pub struct MomentForm {
     space: String,
 }
 
+/// Enregistre l'espace « moment » (déjà vérifié), ou le désactive. Aussi
+/// pour l'API.
+pub(crate) async fn store_moment(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    space: Option<i64>,
+) -> AppResult<()> {
+    sqlx::query!(
+        "UPDATE users SET moment_space = ? WHERE id = ?",
+        space,
+        user
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 /// `POST /settings/moment` : réglage « espace du moment » à l'ouverture.
 pub async fn set_moment(
     ctx: Ctx,
@@ -458,13 +498,7 @@ pub async fn set_moment(
             )
         }
     };
-    sqlx::query!(
-        "UPDATE users SET moment_space = ? WHERE id = ?",
-        space,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    store_moment(&state.db, ctx.user.id, space).await?;
     ctx.flash_ok(match space {
         Some(_) => "L'app s'ouvrira sur l'espace du moment",
         None => "L'app s'ouvrira sur le dernier espace utilisé",
