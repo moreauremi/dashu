@@ -707,27 +707,41 @@ pub async fn keep(
 ) -> AppResult<Response> {
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
-    let folder = crate::folders::target(&state.db, ctx.user.id, target.id, folder).await?;
-    let kept = sqlx::query!(
-        "UPDATE files SET space_id = ?, folder_id = ?, expires_at = NULL
-         WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
-        target.id,
-        folder,
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if kept == 0 {
-        return Err(AppError::NotFound);
-    }
+    let folder = keep_in(&state.db, ctx.user.id, id, target.id, folder).await?;
     let place = place_label(&ctx, &state.db, target, folder).await?;
     ctx.flash_ok(format!("Fichier gardé dans {place}")).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/tools",
     }))
+}
+
+/// Garde dans un espace accessible (et un dossier) un fichier de Temporaire.
+/// 404 si le fichier n'est pas un fichier de Temporaire du compte. Rend le
+/// dossier. Aussi pour l'API.
+pub(crate) async fn keep_in(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    space: i64,
+    folder: Option<i64>,
+) -> AppResult<Option<i64>> {
+    let folder = crate::folders::target(db, user, space, folder).await?;
+    let kept = sqlx::query!(
+        "UPDATE files SET space_id = ?, folder_id = ?, expires_at = NULL
+         WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
+        space,
+        folder,
+        id,
+        user
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    if kept == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(folder)
 }
 
 /// « École » ou « École / Math » : l'endroit où un élément vient d'être rangé.
@@ -761,37 +775,80 @@ pub async fn rename(
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<RenameForm>,
 ) -> AppResult<Response> {
-    let old = sqlx::query_scalar!(
-        "SELECT name FROM files WHERE id = ?2
-           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
-           OR (expires_at IS NOT NULL AND user_id = ?1))",
-        ctx.user.id,
-        id
-    )
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound)?;
     let back = match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)).to_string(),
         None => format!("/files/{id}"),
     };
-    let Some(name) = renamed(&old, &form.name) else {
+    let Some(name) = rename_to(&state.db, ctx.user.id, id, &form.name).await? else {
         ctx.flash_error("Donne un nom au fichier.").await?;
         return Ok(see_other(&back));
+    };
+    ctx.flash_ok(format!("Fichier renommé en « {name} »"))
+        .await?;
+    Ok(see_other(&back))
+}
+
+/// Renomme un fichier accessible (404 sinon), en gardant son extension.
+/// Rend le nouveau nom, ou `None` si le nom tapé est vide. Aussi pour l'API.
+pub(crate) async fn rename_to(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    typed: &str,
+) -> AppResult<Option<String>> {
+    let old = sqlx::query_scalar!(
+        "SELECT name FROM files WHERE id = ?2
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        user,
+        id
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let Some(name) = renamed(&old, typed) else {
+        return Ok(None);
     };
     sqlx::query!(
         "UPDATE files SET name = ?2 WHERE id = ?3
            AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
            OR (expires_at IS NOT NULL AND user_id = ?1))",
-        ctx.user.id,
+        user,
         name,
         id
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
-    ctx.flash_ok(format!("Fichier renommé en « {name} »"))
-        .await?;
-    Ok(see_other(&back))
+    Ok(Some(name))
+}
+
+/// Range un fichier accessible (404 sinon) dans un espace accessible et un
+/// dossier de cet espace (`None` : sa racine). Rend le dossier. Aussi pour
+/// l'API.
+pub(crate) async fn move_into(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    space: i64,
+    folder: Option<i64>,
+) -> AppResult<Option<i64>> {
+    let folder = crate::folders::target(db, user, space, folder).await?;
+    let moved = sqlx::query!(
+        "UPDATE files SET space_id = ?2, folder_id = ?3 WHERE id = ?4
+           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
+           OR (expires_at IS NOT NULL AND user_id = ?1))",
+        user,
+        space,
+        folder,
+        id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    if moved == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(folder)
 }
 
 #[derive(Deserialize)]
@@ -816,22 +873,7 @@ pub async fn move_to_space(
     // L'espace cible doit être accessible à l'utilisateur, le dossier à cet espace.
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
-    let folder = crate::folders::target(&state.db, ctx.user.id, target.id, folder).await?;
-    let moved = sqlx::query!(
-        "UPDATE files SET space_id = ?2, folder_id = ?3 WHERE id = ?4
-           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
-           OR (expires_at IS NOT NULL AND user_id = ?1))",
-        ctx.user.id,
-        target.id,
-        folder,
-        id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if moved == 0 {
-        return Err(AppError::NotFound);
-    }
+    let folder = move_into(&state.db, ctx.user.id, id, target.id, folder).await?;
     let message = match folder {
         Some(_) => format!(
             "Fichier rangé dans {}",
@@ -926,7 +968,7 @@ pub async fn start_upload(
     State(state): State<AppState>,
     Query(query): Query<StartQuery>,
 ) -> AppResult<Response> {
-    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    state.config.files.as_ref().ok_or(AppError::NotFound)?;
     // L'espace et le dossier choisis doivent être accessibles à l'utilisateur, et
     // le dossier à cet espace. Un fichier de l'onglet Outils n'a pas de dossier.
     let (space_id, folder_id) = match query.folder.filter(|_| query.tools != 1) {
@@ -944,11 +986,34 @@ pub async fn start_upload(
             None => (ctx.active.id, None),
         },
     };
-    if query.size > files.max_upload_bytes {
+    let id = open_upload(
+        &state,
+        ctx.user.id,
+        (space_id, folder_id),
+        &query.name,
+        query.size,
+        query.tools == 1,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, id).into_response())
+}
+
+/// Ouvre un envoi, dans un espace et un dossier déjà vérifiés, et rend son
+/// identifiant. Aussi pour l'API.
+pub(crate) async fn open_upload(
+    state: &AppState,
+    user: i64,
+    (space_id, folder_id): (i64, Option<i64>),
+    raw_name: &str,
+    size: u64,
+    for_tools: bool,
+) -> AppResult<String> {
+    let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
+    if size > files.max_upload_bytes {
         return Err(too_large(files.max_upload_bytes));
     }
-    let size = i64::try_from(query.size).map_err(|_| too_large(files.max_upload_bytes))?;
-    let name = clean_name(&query.name);
+    let size = i64::try_from(size).map_err(|_| too_large(files.max_upload_bytes))?;
+    let name = clean_name(raw_name);
 
     let id = web::csrf::random_token();
     let part = part_path(&files.dir, &id);
@@ -961,12 +1026,12 @@ pub async fn start_upload(
         .await
         .with_context(|| format!("création de {}", part.display()))?;
     let now = time::now();
-    let for_tools = i64::from(query.tools == 1);
+    let for_tools = i64::from(for_tools);
     sqlx::query!(
         "INSERT INTO uploads (id, user_id, space_id, folder_id, name, size, received, for_tools, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
         id,
-        ctx.user.id,
+        user,
         space_id,
         folder_id,
         name,
@@ -977,7 +1042,7 @@ pub async fn start_upload(
     )
     .execute(&state.db)
     .await?;
-    Ok((StatusCode::CREATED, id).into_response())
+    Ok(id)
 }
 
 #[derive(Deserialize)]
@@ -995,11 +1060,50 @@ pub async fn upload_chunk(
     Query(query): Query<ChunkQuery>,
     body: Body,
 ) -> AppResult<Response> {
+    Ok(
+        match receive(&state, ctx.user.id, &id, query.offset, body).await? {
+            Received::OutOfOrder(received) => out_of_order(received),
+            Received::Partial(received) => (
+                StatusCode::OK,
+                [(RECEIVED_HEADER, received.to_string())],
+                "Morceau reçu",
+            )
+                .into_response(),
+            // L'identifiant du fichier : l'éditeur de notes s'en sert pour
+            // insérer une image collée.
+            Received::Done(file_id) => (
+                StatusCode::CREATED,
+                [(FILE_ID_HEADER, file_id.to_string())],
+                "Fichier reçu",
+            )
+                .into_response(),
+        },
+    )
+}
+
+/// Ce que donne un morceau reçu.
+pub(crate) enum Received {
+    /// Ce n'était pas le morceau attendu : reprendre à cet octet.
+    OutOfOrder(u64),
+    /// Morceau écrit ; octets reçus jusqu'ici.
+    Partial(u64),
+    /// Dernier morceau : le fichier est rangé, avec cet identifiant.
+    Done(i64),
+}
+
+/// Ajoute un morceau à un envoi du compte. Aussi pour l'API.
+pub(crate) async fn receive(
+    state: &AppState,
+    user: i64,
+    id: &str,
+    offset: u64,
+    body: Body,
+) -> AppResult<Received> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
-    if !is_token(&id) {
+    if !is_token(id) {
         return Err(AppError::NotFound);
     }
-    let Some(_busy) = BusyGuard::take(&state.uploads_busy, &id) else {
+    let Some(_busy) = BusyGuard::take(&state.uploads_busy, id) else {
         return Err(AppError::BadRequest(
             "Un morceau de ce fichier est déjà en cours d'envoi.".into(),
         ));
@@ -1007,17 +1111,17 @@ pub async fn upload_chunk(
     let upload = sqlx::query!(
         "SELECT space_id, folder_id, name, size, received, for_tools FROM uploads WHERE id = ? AND user_id = ?",
         id,
-        ctx.user.id
+        user
     )
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
     let (size, received) = (upload.size as u64, upload.received as u64);
-    if query.offset != received {
-        return Ok(out_of_order(received));
+    if offset != received {
+        return Ok(Received::OutOfOrder(received));
     }
 
-    let part = part_path(&files.dir, &id);
+    let part = part_path(&files.dir, id);
     let Ok(mut out) = tokio::fs::OpenOptions::new().append(true).open(&part).await else {
         // Fichier partiel disparu : l'envoi ne peut pas reprendre.
         sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
@@ -1062,23 +1166,23 @@ pub async fn upload_chunk(
         )
         .execute(&state.db)
         .await?;
-        return Ok((
-            StatusCode::OK,
-            [(RECEIVED_HEADER, received.to_string())],
-            "Morceau reçu",
-        )
-            .into_response());
+        return Ok(Received::Partial(received));
     }
 
     // L'espace (ou le dossier) a pu être quitté, supprimé ou retiré depuis le
     // début de l'envoi : on ne range que dans ce qui reste accessible.
     let still_there = match upload.folder_id {
-        Some(folder) => {
-            crate::folders::target(&state.db, ctx.user.id, upload.space_id, Some(folder))
-                .await
-                .is_ok()
-        }
-        None => ctx.space_by_id(upload.space_id).is_some(),
+        Some(folder) => crate::folders::target(&state.db, user, upload.space_id, Some(folder))
+            .await
+            .is_ok(),
+        None => sqlx::query_scalar!(
+            r#"SELECT count(*) AS "n!: i64" FROM space_access WHERE user_id = ? AND space_id = ?"#,
+            user,
+            upload.space_id
+        )
+        .fetch_one(&state.db)
+        .await?
+            > 0,
     };
     if !still_there {
         let _ = tokio::fs::remove_file(&part).await;
@@ -1088,23 +1192,16 @@ pub async fn upload_chunk(
         return Err(AppError::NotFound);
     }
     let file_id = finish(
-        &state,
+        state,
         files,
-        &id,
+        id,
         (upload.space_id, upload.folder_id),
         &upload.name,
-        ctx.user.id,
+        user,
         upload.for_tools == 1,
     )
     .await?;
-    // L'identifiant du fichier : l'éditeur de notes s'en sert pour insérer
-    // une image collée.
-    Ok((
-        StatusCode::CREATED,
-        [(FILE_ID_HEADER, file_id.to_string())],
-        "Fichier reçu",
-    )
-        .into_response())
+    Ok(Received::Done(file_id))
 }
 
 /// Dernier morceau reçu : le fichier partiel prend sa place définitive et

@@ -12,9 +12,11 @@
 //! site tiers peut faire envoyer un cookie par le navigateur, pas un en-tête
 //! `Authorization`. À l'inverse, un cookie de session valide n'ouvre pas l'API.
 //!
-//! Ce que l'API permet : lire et gérer les tâches, créer, lire, chercher et
-//! compléter les notes (pas les supprimer), lire l'agenda. Elle ne touche ni
-//! au mot de passe, ni aux sources iCal, ni aux réglages.
+//! Ce que l'API permet (SPEC, « API complète et corbeille ») : les tâches,
+//! les notes, les fichiers et leurs liens de partage, les dossiers, la
+//! corbeille (lister, restaurer), l'agenda. Une suppression part dans la
+//! corbeille. Hors de l'API : ce qui protège le compte (mot de passe,
+//! connexions, jetons), l'effacement définitif, l'administration.
 //!
 //! Les erreurs sont toujours du JSON : `{"error": "message en français"}`.
 
@@ -41,6 +43,14 @@ use crate::spaces::{self, Space};
 use crate::time;
 use crate::web::AppError;
 
+mod contenu;
+
+pub(crate) use contenu::{
+    FileChanges, FolderChanges, NewUpload, fetch_file, file_delete, file_update, files_list,
+    folder_create, folder_delete, folder_update, folders_list, link_create, links_list, stored,
+    trash_list, trash_restore, upload_place,
+};
+
 const TASK_MAX_CHARS: usize = 200;
 /// Une note de plus de 200 000 caractères n'a rien à faire dans dashu.
 const BODY_MAX_CHARS: usize = 200_000;
@@ -57,9 +67,13 @@ pub fn router() -> Router<AppState> {
             get(get_task).patch(update_task).delete(delete_task),
         )
         .route("/notes", get(list_notes).post(create_note))
-        .route("/notes/{id}", get(get_note).patch(update_note))
+        .route(
+            "/notes/{id}",
+            get(get_note).patch(update_note).delete(delete_note),
+        )
         .route("/calendar", get(calendar))
         .route("/calendar/refresh", post(refresh_calendar))
+        .merge(contenu::routes())
         .fallback(unknown_route)
         .layer(from_fn(json_errors));
     Router::new().nest("/api/v1", v1)
@@ -188,6 +202,10 @@ async fn json_errors(request: Request, next: Next) -> Response {
 pub struct ApiUser {
     pub id: i64,
     pub spaces: Vec<Space>,
+    /// Par où passe la requête : le nom du jeton (« Claude Code du Mac »),
+    /// de l'application autorisée (« Claude »), ou « Hermès » pour
+    /// `API_TOKEN`. C'est la trace qu'affiche la corbeille.
+    pub via: String,
 }
 
 impl ApiUser {
@@ -236,11 +254,11 @@ impl FromRequestParts<AppState> for ApiUser {
         };
         let presented = bearer(parts).ok_or_else(refused)?;
 
-        let id = if presented.starts_with(tokens::PREFIX) {
+        let (id, via) = if presented.starts_with(tokens::PREFIX) {
             // Jeton personnel. Ceux d'une autorisation OAuth ne valent que
             // pour /mcp (SPEC, « Connecteur Claude », « Chaque jeton à sa place »).
             match tokens::authenticate(state, presented).await? {
-                Some(owner) if owner.grant_id.is_none() => owner.user_id,
+                Some(owner) if owner.grant_id.is_none() => (owner.user_id, owner.name),
                 _ => return Err(refused()),
             }
         } else {
@@ -259,23 +277,40 @@ impl FromRequestParts<AppState> for ApiUser {
                     StatusCode::CONFLICT,
                     "le compte de API_USER_EMAIL n'existe pas encore : crée-le avec `dashu set-password` ou connecte-toi une fois",
                 )
-            })?
+            })
+            .map(|id| (id, "Hermès".to_string()))?
         };
 
-        Self::load(state, id).await
+        // La trace : le compte, le jeton et l'action, jamais le contenu.
+        tracing::info!(
+            user = id,
+            via,
+            method = %parts.method,
+            path = parts.uri.path(),
+            "appel d'API"
+        );
+        Self::load(state, id, via).await
     }
 }
 
 impl ApiUser {
     /// Le compte et ses espaces, relus à chaque requête.
-    pub(crate) async fn load(state: &AppState, id: i64) -> ApiResult<Self> {
+    pub(crate) async fn load(state: &AppState, id: i64, via: String) -> ApiResult<Self> {
         let mut spaces = spaces::list(&state.db, id).await?;
         if spaces.is_empty() {
             // Compte créé en ligne de commande et jamais ouvert dans le navigateur.
             spaces::ensure_defaults(&state.db, id).await?;
             spaces = spaces::list(&state.db, id).await?;
         }
-        Ok(Self { id, spaces })
+        Ok(Self { id, spaces, via })
+    }
+
+    /// Qui agit, et par où : pour la corbeille.
+    pub(crate) fn who(&self) -> crate::trash::Who<'_> {
+        crate::trash::Who {
+            user: self.id,
+            via: &self.via,
+        }
     }
 }
 
@@ -852,8 +887,13 @@ pub(crate) struct NoteChanges {
     pub(crate) pinned: Option<bool>,
     /// Déplace la note vers cet espace.
     pub(crate) space: Option<String>,
+    /// Range la note dans ce dossier de son espace ; `null` : sa racine.
+    #[serde(default, deserialize_with = "contenu::some")]
+    pub(crate) folder: Option<Option<i64>>,
     #[serde(default)]
     pub(crate) add_tags: Vec<String>,
+    #[serde(default)]
+    pub(crate) remove_tags: Vec<String>,
 }
 
 /// `PATCH /api/v1/notes/{id}` (champs facultatifs : title, body_md ou append,
@@ -879,7 +919,7 @@ pub(crate) async fn note_update(
             "body_md et append ne vont pas ensemble : l'un remplace, l'autre ajoute",
         ));
     }
-    if changes.add_tags.len() > MAX_TAGS_PER_REQUEST {
+    if changes.add_tags.len() + changes.remove_tags.len() > MAX_TAGS_PER_REQUEST {
         return Err(ApiError::bad_request(format!(
             "{MAX_TAGS_PER_REQUEST} tags au plus par requête"
         )));
@@ -955,10 +995,47 @@ pub(crate) async fn note_update(
         .execute(&state.db)
         .await?;
     }
+    if let Some(folder) = changes.folder {
+        notes::file_in_folder(&state.db, user.id, id, folder).await?;
+    }
     for tag in &changes.add_tags {
         notes::attach_tag(&state.db, user.id, id, tag).await?;
     }
+    for tag in &changes.remove_tags {
+        let name = notes::normalize_tag(tag);
+        let found = sqlx::query_scalar!(
+            r#"SELECT t.id AS "id!" FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+               WHERE nt.note_id = ? AND t.name = ?"#,
+            id,
+            name
+        )
+        .fetch_optional(&state.db)
+        .await?;
+        if let Some(tag_id) = found {
+            notes::detach_tag(&state.db, user.id, id, tag_id).await?;
+        }
+    }
     fetch_note(&state.db, user, id).await
+}
+
+/// `DELETE /api/v1/notes/{id}` : dans la corbeille (30 jours pour la
+/// restaurer, depuis le site ou par `POST /api/v1/trash/note/{id}/restore`).
+async fn delete_note(
+    user: ApiUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> ApiResult<StatusCode> {
+    note_delete(&state, &user, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn note_delete(state: &AppState, user: &ApiUser, id: i64) -> ApiResult<()> {
+    crate::trash::note(&state.db, user.who(), id)
+        .await
+        .map_err(|e| match e {
+            AppError::NotFound => ApiError::not_found("note"),
+            other => other.into(),
+        })
 }
 
 // ---------------------------------------------------------------------

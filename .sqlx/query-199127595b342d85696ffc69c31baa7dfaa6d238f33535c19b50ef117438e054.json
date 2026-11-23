@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT f.id AS \"id!\", f.name, f.mime, f.size, f.space_id, f.folder_id, f.expires_at,\n                  f.created_at, f.updated_at\n           FROM files f\n           WHERE ((?2 = 0 AND f.expires_at IS NULL\n                   AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n                  OR (?2 = 1 AND f.expires_at IS NOT NULL AND f.user_id = ?1))\n             AND (?3 IS NULL OR f.space_id = ?3)\n             AND (?4 IS NULL OR f.folder_id = ?4)\n             AND (?5 IS NULL OR EXISTS (\n                   SELECT 1 FROM file_tags ft JOIN tags t ON t.id = ft.tag_id\n                   WHERE ft.file_id = f.id AND t.name = ?5))\n             AND (?6 IS NULL OR f.id IN (SELECT rowid FROM files_fts WHERE files_fts MATCH ?6))\n           ORDER BY f.updated_at DESC, f.id DESC\n           LIMIT ?7",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "mime",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "199127595b342d85696ffc69c31baa7dfaa6d238f33535c19b50ef117438e054"
+}

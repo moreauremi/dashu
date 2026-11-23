@@ -328,34 +328,61 @@ pub async fn create(
     .ok_or(AppError::NotFound)?;
     let parent_id = parent.as_ref().map(|p| p.id);
     let back = view_url(&space.slug, parent_id);
-
-    let name = clean_name(&form.name);
-    if name.is_empty() {
-        ctx.flash_error("Donne un nom au dossier.").await?;
-        return Ok(see_other(&back));
+    match create_in(&state.db, user, space.id, parent_id, &form.name).await? {
+        Ok((_, name)) => ctx.flash_ok(format!("Dossier « {name} » créé")).await?,
+        Err(refusal) => ctx.flash_error(refusal).await?,
     }
-    let folders = all(&state.db, user).await?;
-    if neighbours(&folders, space.id, parent_id, None)
+    Ok(see_other(&back))
+}
+
+/// Crée un dossier dans un espace (déjà vérifié), ou dans un dossier du
+/// premier niveau de cet espace. Rend son identifiant et son nom, ou le
+/// refus à montrer (nom vide ou déjà pris). Aussi pour l'API.
+pub(crate) async fn create_in(
+    db: &SqlitePool,
+    user: i64,
+    space: i64,
+    parent: Option<i64>,
+    raw: &str,
+) -> AppResult<Result<(i64, String), String>> {
+    let name = clean_name(raw);
+    if name.is_empty() {
+        return Ok(Err("Donne un nom au dossier.".into()));
+    }
+    let folders = all(db, user).await?;
+    if let Some(parent) = parent {
+        match folders
+            .iter()
+            .find(|f| f.id == parent && f.space_id == space)
+        {
+            None => return Err(AppError::NotFound),
+            Some(p) if !p.is_top() => {
+                return Ok(Err(
+                    "Pas de dossier dans un sous-dossier : trois niveaux au plus.".into(),
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    if neighbours(&folders, space, parent, None)
         .iter()
         .any(|n| same_name(n, &name))
     {
-        ctx.flash_error(format!("Un dossier « {name} » existe déjà ici."))
-            .await?;
-        return Ok(see_other(&back));
+        return Ok(Err(format!("Un dossier « {name} » existe déjà ici.")));
     }
     let now = time::now();
-    sqlx::query!(
+    let id = sqlx::query!(
         "INSERT INTO folders (user_id, space_id, parent_id, name, created_at) VALUES (?, ?, ?, ?, ?)",
         user,
-        space.id,
-        parent_id,
+        space,
+        parent,
         name,
         now
     )
-    .execute(&state.db)
-    .await?;
-    ctx.flash_ok(format!("Dossier « {name} » créé")).await?;
-    Ok(see_other(&back))
+    .execute(db)
+    .await?
+    .last_insert_rowid();
+    Ok(Ok((id, name)))
 }
 
 #[derive(Deserialize)]
@@ -374,33 +401,45 @@ pub async fn rename(
     let folder = find(&state.db, user, id).await?.ok_or(AppError::NotFound)?;
     let space = ctx.space_by_id(folder.space_id).ok_or(AppError::NotFound)?;
     let back = view_url(&space.slug, folder.parent_id);
-
-    let name = clean_name(&form.name);
-    if name.is_empty() {
-        ctx.flash_error("Donne un nom au dossier.").await?;
-        return Ok(see_other(&back));
+    match rename_to(&state.db, user, &folder, &form.name).await? {
+        Ok(name) => {
+            ctx.flash_ok(format!("Dossier renommé en « {name} »"))
+                .await?
+        }
+        Err(refusal) => ctx.flash_error(refusal).await?,
     }
-    let folders = all(&state.db, user).await?;
-    if neighbours(&folders, space.id, folder.parent_id, Some(id))
+    Ok(see_other(&back))
+}
+
+/// Renomme un dossier accessible. Rend le nouveau nom, ou le refus à
+/// montrer (nom vide ou déjà pris par un voisin). Aussi pour l'API.
+pub(crate) async fn rename_to(
+    db: &SqlitePool,
+    user: i64,
+    folder: &Folder,
+    raw: &str,
+) -> AppResult<Result<String, String>> {
+    let name = clean_name(raw);
+    if name.is_empty() {
+        return Ok(Err("Donne un nom au dossier.".into()));
+    }
+    let folders = all(db, user).await?;
+    if neighbours(&folders, folder.space_id, folder.parent_id, Some(folder.id))
         .iter()
         .any(|n| same_name(n, &name))
     {
-        ctx.flash_error(format!("Un dossier « {name} » existe déjà ici."))
-            .await?;
-        return Ok(see_other(&back));
+        return Ok(Err(format!("Un dossier « {name} » existe déjà ici.")));
     }
     sqlx::query!(
         "UPDATE folders SET name = ?2 WHERE id = ?3
            AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
         user,
         name,
-        id
+        folder.id
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
-    ctx.flash_ok(format!("Dossier renommé en « {name} »"))
-        .await?;
-    Ok(see_other(&back))
+    Ok(Ok(name))
 }
 
 #[derive(Deserialize)]
@@ -534,15 +573,50 @@ pub async fn move_folder(
     axum::Form(form): axum::Form<MoveForm>,
 ) -> AppResult<Response> {
     let user = ctx.user.id;
-    let folders = all(&state.db, user).await?;
+    // L'espace de destination doit être accessible.
+    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
+    let parent_id = parse_id(form.folder_id.as_deref())?;
+    let back = form
+        .next
+        .as_deref()
+        .map(|n| web::local_path(Some(n)).to_string())
+        .unwrap_or_else(|| view_url(&target.slug, parent_id));
+    match move_to(&state.db, user, id, target, parent_id).await? {
+        Moved::Same => {}
+        Moved::Done(message) => ctx.flash_ok(message).await?,
+        Moved::Refused(message) => ctx.flash_error(message).await?,
+    }
+    Ok(see_other(&back))
+}
+
+/// Ce qu'a donné le déplacement d'un dossier.
+pub(crate) enum Moved {
+    /// Il y était déjà : rien n'a bougé.
+    Same,
+    /// Déplacé ; le message à montrer.
+    Done(String),
+    /// Refusé (niveau de trop, homonyme, dans lui-même) : rien n'a bougé.
+    Refused(String),
+}
+
+/// Déplace un dossier accessible, avec ses notes, ses fichiers et ses
+/// sous-dossiers, à la racine d'un espace accessible (`target`) ou dans un
+/// dossier du premier niveau de cet espace. 404 si le dossier ou le dossier
+/// de destination n'est pas accessible. Aussi pour l'API.
+pub(crate) async fn move_to(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    target: &Space,
+    parent_id: Option<i64>,
+) -> AppResult<Moved> {
+    let folders = all(db, user).await?;
     let folder = folders
         .iter()
         .find(|f| f.id == id)
         .ok_or(AppError::NotFound)?;
-    // L'espace et le dossier de destination doivent être accessibles, et le
-    // dossier dans cet espace.
-    let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
-    let parent = match parse_id(form.folder_id.as_deref())? {
+    // Le dossier de destination doit être dans l'espace choisi.
+    let parent = match parent_id {
         Some(pid) => Some(
             folders
                 .iter()
@@ -551,12 +625,6 @@ pub async fn move_folder(
         ),
         None => None,
     };
-    let parent_id = parent.map(|p| p.id);
-    let back = form
-        .next
-        .as_deref()
-        .map(|n| web::local_path(Some(n)).to_string())
-        .unwrap_or_else(|| view_url(&target.slug, parent_id));
     let subs: Vec<i64> = folders
         .iter()
         .filter(|f| f.parent_id == Some(id))
@@ -564,7 +632,7 @@ pub async fn move_folder(
         .collect();
 
     if folder.space_id == target.id && folder.parent_id == parent_id {
-        return Ok(see_other(&back));
+        return Ok(Moved::Same);
     }
     let refusal = match parent {
         Some(p) if p.id == id => Some("Un dossier ne va pas dans lui-même.".to_string()),
@@ -588,11 +656,10 @@ pub async fn move_folder(
         _ => None,
     };
     if let Some(message) = refusal {
-        ctx.flash_error(message).await?;
-        return Ok(see_other(&back));
+        return Ok(Moved::Refused(message));
     }
 
-    let mut tx = state.db.begin().await?;
+    let mut tx = db.begin().await?;
     sqlx::query!(
         "UPDATE folders SET space_id = ?, parent_id = ? WHERE id = ?",
         target.id,
@@ -645,13 +712,11 @@ pub async fn move_folder(
         }
     }
     tx.commit().await?;
-    ctx.flash_ok(format!(
+    Ok(Moved::Done(format!(
         "Dossier « {} » déplacé dans « {} »",
         folder.name,
         label(&target.name, &folders, parent_id)
-    ))
-    .await?;
-    Ok(see_other(&back))
+    )))
 }
 
 // ---------------------------------------------------------------------

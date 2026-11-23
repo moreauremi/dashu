@@ -10,6 +10,9 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
+
 use crate::AppState;
 use crate::api::{self, ApiError, ApiUser};
 
@@ -44,6 +47,10 @@ fn date_prop(what: &str) -> Value {
 
 fn id_prop(what: &str) -> Value {
     json!({ "type": "integer", "description": format!("Identifiant de {what}") })
+}
+
+fn folder_prop(what: &str) -> Value {
+    json!({ "type": ["integer", "null"], "description": format!("Dossier {what} ; null : la racine") })
 }
 
 fn tags_prop(what: &str) -> Value {
@@ -159,6 +166,7 @@ const TOOLS: &[Tool] = &[
                 "append": { "type": "string", "description": "Texte Markdown à ajouter à la fin" },
                 "pinned": { "type": "boolean", "description": "Épinglée en tête de liste" },
                 "add_tags": tags_prop("Tags à ajouter (20 au plus)"),
+                "remove_tags": tags_prop("Tags à retirer"),
             })
         },
         required: &["id"],
@@ -184,6 +192,189 @@ const TOOLS: &[Tool] = &[
         kind: Kind::Destructive,
         properties: || json!({ "id": id_prop("la note"), "space": space_prop("d'arrivée") }),
         required: &["id", "space"],
+    },
+    Tool {
+        name: "ranger_note",
+        title: "Ranger une note",
+        description: "Range une note dans un dossier de son espace, ou à sa racine (folder: null).",
+        kind: Kind::Write,
+        properties: || json!({ "id": id_prop("la note"), "folder": folder_prop("de son espace") }),
+        required: &["id", "folder"],
+    },
+    Tool {
+        name: "supprimer_note",
+        title: "Supprimer une note",
+        description: "Met une note dans la corbeille : elle disparaît de partout, et se restaure pendant 30 jours.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("la note") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "lister_fichiers",
+        title: "Lister des fichiers",
+        description: "Les fichiers rangés, récents d'abord, ou ceux de Temporaire (temporary: true). Filtre par espace, dossier, tag, et recherche sur le nom.",
+        kind: Kind::Read,
+        properties: || {
+            json!({
+                "space": space_prop("(tous si absent)"),
+                "folder": { "type": "integer", "description": "Seulement ce dossier" },
+                "tag": { "type": "string", "description": "Seulement les fichiers qui portent ce tag" },
+                "q": { "type": "string", "description": "Mots du nom (accents ignorés)" },
+                "temporary": { "type": "boolean", "description": "Les fichiers de Temporaire (onglet Outils)" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 200, "description": "50 par défaut" },
+            })
+        },
+        required: &[],
+    },
+    Tool {
+        name: "lire_fichier",
+        title: "Lire un fichier",
+        description: "Les informations d'un fichier, et son contenu en base64 si contenu: true (10 Mo au plus ; au-delà, passer par l'API ou le site).",
+        kind: Kind::Read,
+        properties: || {
+            json!({
+                "id": id_prop("le fichier"),
+                "contenu": { "type": "boolean", "description": "Joindre le contenu, en base64" },
+            })
+        },
+        required: &["id"],
+    },
+    Tool {
+        name: "envoyer_fichier",
+        title: "Envoyer un fichier",
+        description: "Envoie un fichier de 10 Mo au plus, en base64, dans un espace ou un dossier (ou dans Temporaire).",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "name": { "type": "string", "description": "Nom du fichier, avec son extension" },
+                "content_base64": { "type": "string", "description": "Contenu, en base64" },
+                "space": space_prop("d'arrivée"),
+                "folder": { "type": "integer", "description": "Dossier d'arrivée (il donne l'espace)" },
+                "temporary": { "type": "boolean", "description": "Dans Temporaire, effacé au bout de 24 heures" },
+            })
+        },
+        required: &["name", "content_base64"],
+    },
+    Tool {
+        name: "modifier_fichier",
+        title: "Modifier un fichier",
+        description: "Renomme (l'extension ne change pas), range dans un espace ou un dossier, garde un fichier de Temporaire (keep: true), pose ou retire des tags.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "id": id_prop("le fichier"),
+                "name": { "type": "string", "description": "Nouveau nom" },
+                "space": space_prop("où le ranger"),
+                "folder": folder_prop("de l'espace"),
+                "keep": { "type": "boolean", "description": "Garde un fichier de Temporaire dans space" },
+                "add_tags": tags_prop("Tags à poser"),
+                "remove_tags": tags_prop("Tags à retirer"),
+            })
+        },
+        required: &["id"],
+    },
+    Tool {
+        name: "supprimer_fichier",
+        title: "Supprimer un fichier",
+        description: "Met un fichier dans la corbeille (30 jours pour le restaurer) ; ses liens de partage sont révoqués.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("le fichier") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "lister_liens",
+        title: "Lister les liens de partage",
+        description: "Les liens de partage encore valables d'un fichier.",
+        kind: Kind::Read,
+        properties: || json!({ "id": id_prop("le fichier") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "creer_lien",
+        title: "Créer un lien de partage",
+        description: "Rend un fichier public par un lien temporaire (1h, 1j ou 7j), révocable. L'adresse n'est donnée qu'une fois.",
+        kind: Kind::Destructive,
+        properties: || {
+            json!({
+                "id": id_prop("le fichier"),
+                "duration": { "type": "string", "enum": ["1h", "1j", "7j"], "description": "Durée du lien" },
+            })
+        },
+        required: &["id", "duration"],
+    },
+    Tool {
+        name: "revoquer_lien",
+        title: "Révoquer un lien de partage",
+        description: "Le lien ne marche plus, tout de suite.",
+        kind: Kind::Write,
+        properties: || json!({ "id": id_prop("le fichier"), "link": id_prop("le lien") }),
+        required: &["id", "link"],
+    },
+    Tool {
+        name: "lister_dossiers",
+        title: "Lister les dossiers",
+        description: "L'arborescence : chaque dossier avec son espace et son dossier parent (trois niveaux au plus : l'espace, un dossier, un sous-dossier).",
+        kind: Kind::Read,
+        properties: || json!({ "space": space_prop("(tous si absent)") }),
+        required: &[],
+    },
+    Tool {
+        name: "creer_dossier",
+        title: "Créer un dossier",
+        description: "Crée un dossier dans un espace, ou un sous-dossier dans un dossier du premier niveau.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "name": { "type": "string", "description": "Nom du dossier" },
+                "space": space_prop("où le créer"),
+                "parent": { "type": "integer", "description": "Dossier du premier niveau où le créer" },
+            })
+        },
+        required: &["name"],
+    },
+    Tool {
+        name: "modifier_dossier",
+        title: "Modifier un dossier",
+        description: "Renomme un dossier, ou le déplace avec tout son contenu dans un autre espace ou dossier.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "id": id_prop("le dossier"),
+                "name": { "type": "string", "description": "Nouveau nom" },
+                "space": space_prop("où l'emmener"),
+                "parent": folder_prop("du premier niveau"),
+            })
+        },
+        required: &["id"],
+    },
+    Tool {
+        name: "supprimer_dossier",
+        title: "Supprimer un dossier",
+        description: "Met un dossier dans la corbeille avec tout ce qu'il contient (notes, fichiers, sous-dossiers) ; 30 jours pour le restaurer.",
+        kind: Kind::Destructive,
+        properties: || json!({ "id": id_prop("le dossier") }),
+        required: &["id"],
+    },
+    Tool {
+        name: "lister_corbeille",
+        title: "Lister la corbeille",
+        description: "Ce qui a été supprimé : quoi, d'où, par qui, par où, quand.",
+        kind: Kind::Read,
+        properties: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "restaurer",
+        title: "Restaurer depuis la corbeille",
+        description: "Remet un élément de la corbeille à sa place (à la racine de son espace si son dossier n'existe plus).",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "kind": { "type": "string", "enum": ["note", "fichier", "dossier", "espace"] },
+                "id": id_prop("l'élément"),
+            })
+        },
+        required: &["kind", "id"],
     },
     Tool {
         name: "lire_agenda",
@@ -291,7 +482,67 @@ struct NoteEdit {
     pinned: Option<bool>,
     #[serde(default)]
     add_tags: Vec<String>,
+    #[serde(default)]
+    remove_tags: Vec<String>,
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NoteFiling {
+    id: i64,
+    folder: Option<i64>,
+}
+
+/// Un identifiant, puis les champs d'une route d'API.
+#[derive(Deserialize)]
+struct WithId<T> {
+    id: i64,
+    #[serde(flatten)]
+    rest: T,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileRead {
+    id: i64,
+    #[serde(default)]
+    contenu: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileUpload {
+    name: String,
+    content_base64: String,
+    space: Option<String>,
+    folder: Option<i64>,
+    #[serde(default)]
+    temporary: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LinkNew {
+    id: i64,
+    duration: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LinkRevoke {
+    id: i64,
+    link: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Restore {
+    kind: String,
+    id: i64,
+}
+
+/// Par MCP, un fichier se lit et s'envoie jusqu'à 10 Mo.
+const MCP_FILE_MAX: usize = 10 * 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -358,6 +609,7 @@ async fn run(
                 append: edit.append,
                 pinned: edit.pinned,
                 add_tags: edit.add_tags,
+                remove_tags: edit.remove_tags,
                 ..Default::default()
             };
             to_value(api::note_update(state, user, edit.id, changes).await?)
@@ -379,8 +631,123 @@ async fn run(
             };
             to_value(api::note_update(state, user, edit.id, changes).await?)
         }
+        "ranger_note" => {
+            let filing: NoteFiling = args(arguments)?;
+            let changes = api::NoteChanges {
+                folder: Some(filing.folder),
+                ..Default::default()
+            };
+            to_value(api::note_update(state, user, filing.id, changes).await?)
+        }
+        "supprimer_note" => {
+            let ById { id } = args(arguments)?;
+            api::note_delete(state, user, id).await?;
+            Ok(json!({ "dans_la_corbeille": id }))
+        }
+        "lister_fichiers" => to_value(api::files_list(state, user, args(arguments)?).await?),
+        "lire_fichier" => read_file(state, user, args(arguments)?).await,
+        "envoyer_fichier" => send_file(state, user, args(arguments)?).await,
+        "modifier_fichier" => {
+            let edit: WithId<api::FileChanges> = args(arguments)?;
+            to_value(api::file_update(state, user, edit.id, edit.rest).await?)
+        }
+        "supprimer_fichier" => {
+            let ById { id } = args(arguments)?;
+            api::file_delete(state, user, id).await?;
+            Ok(json!({ "dans_la_corbeille": id }))
+        }
+        "lister_liens" => {
+            let ById { id } = args(arguments)?;
+            to_value(api::links_list(&state.db, user, id).await?)
+        }
+        "creer_lien" => {
+            let link: LinkNew = args(arguments)?;
+            to_value(api::link_create(state, user, link.id, &link.duration).await?)
+        }
+        "revoquer_lien" => {
+            let link: LinkRevoke = args(arguments)?;
+            crate::files::share::revoke_link(&state.db, user.id, link.id, link.link).await?;
+            Ok(json!({ "revoque": link.link }))
+        }
+        "lister_dossiers" => to_value(api::folders_list(&state.db, user, args(arguments)?).await?),
+        "creer_dossier" => to_value(api::folder_create(&state.db, user, args(arguments)?).await?),
+        "modifier_dossier" => {
+            let edit: WithId<api::FolderChanges> = args(arguments)?;
+            to_value(api::folder_update(&state.db, user, edit.id, edit.rest).await?)
+        }
+        "supprimer_dossier" => {
+            let ById { id } = args(arguments)?;
+            api::folder_delete(&state.db, user, id).await?;
+            Ok(json!({ "dans_la_corbeille": id }))
+        }
+        "lister_corbeille" => to_value(api::trash_list(&state.db, user).await?),
+        "restaurer" => {
+            let restore: Restore = args(arguments)?;
+            api::trash_restore(&state.db, user, &restore.kind, restore.id).await
+        }
         "lire_agenda" => to_value(api::calendar_events(state, user, args(arguments)?).await?),
         "rafraichir_agenda" => to_value(api::calendar_refresh(state, user).await?),
         _ => Err(ApiError::bad_request(format!("outil inconnu « {name} »"))),
+    }
+}
+
+/// `lire_fichier` : les informations, et le contenu en base64 sur demande.
+async fn read_file(state: &AppState, user: &ApiUser, read: FileRead) -> Result<Value, ApiError> {
+    let info = api::fetch_file(&state.db, user, read.id).await?;
+    let mut value = to_value(info)?;
+    if read.contenu {
+        let config = state
+            .config
+            .files
+            .as_ref()
+            .ok_or_else(|| ApiError::bad_request("fichiers désactivés sur ce serveur"))?;
+        let (_, size, key) = api::stored(&state.db, user, read.id).await?;
+        if usize::try_from(size).unwrap_or(usize::MAX) > MCP_FILE_MAX {
+            return Err(ApiError::bad_request(
+                "fichier de plus de 10 Mo : télécharge-le par l'API (GET /api/v1/files/{id}/download) ou sur le site",
+            ));
+        }
+        let bytes = tokio::fs::read(crate::files::stored_path(&config.dir, &key))
+            .await
+            .map_err(|e| ApiError::internal(e.into()))?;
+        value["content_base64"] = Value::String(BASE64.encode(bytes));
+    }
+    Ok(value)
+}
+
+/// `envoyer_fichier` : le même envoi que le site, en un seul morceau.
+async fn send_file(
+    state: &AppState,
+    user: &ApiUser,
+    upload: FileUpload,
+) -> Result<Value, ApiError> {
+    if upload.content_base64.len() > MCP_FILE_MAX / 3 * 4 + 4 {
+        return Err(ApiError::bad_request(
+            "fichier de plus de 10 Mo : envoie-le par l'API (POST /api/v1/files/uploads) ou sur le site",
+        ));
+    }
+    let bytes = BASE64
+        .decode(upload.content_base64.trim())
+        .map_err(|_| ApiError::bad_request("content_base64 n'est pas du base64 valide"))?;
+    let size = bytes.len() as u64;
+    let place = api::upload_place(
+        &state.db,
+        user,
+        &api::NewUpload {
+            name: upload.name.clone(),
+            size,
+            space: upload.space,
+            folder: upload.folder,
+            temporary: upload.temporary,
+        },
+    )
+    .await?;
+    let id = crate::files::open_upload(state, user.id, place, &upload.name, size, upload.temporary)
+        .await?;
+    match crate::files::receive(state, user.id, &id, 0, axum::body::Body::from(bytes)).await? {
+        crate::files::Received::Done(file) => {
+            to_value(api::fetch_file(&state.db, user, file).await?)
+        }
+        _ => Err(ApiError::bad_request("envoi incomplet")),
     }
 }
