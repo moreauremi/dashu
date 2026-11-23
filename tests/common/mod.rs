@@ -327,6 +327,43 @@ impl TestApp {
     }
 }
 
+impl TestApp {
+    /// Appel de l'API dont la réponse n'est pas du JSON (un téléchargement),
+    /// ou dont le corps envoyé est brut (un morceau de fichier).
+    pub async fn api_bytes(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+        token: Option<&str>,
+    ) -> (StatusCode, HeaderMap, Vec<u8>) {
+        let mut request = Request::builder().method(method).uri(path);
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+        let body = match body {
+            Some(bytes) => {
+                request = request.header(header::CONTENT_TYPE, "application/octet-stream");
+                Body::from(bytes)
+            }
+            None => Body::empty(),
+        };
+        let response = self
+            .router
+            .clone()
+            .oneshot(request.body(body).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .to_vec();
+        (status, headers, bytes)
+    }
+}
+
 impl Drop for TestApp {
     fn drop(&mut self) {
         remove_db(&self.db_path);

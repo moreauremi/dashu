@@ -122,17 +122,40 @@ pub async fn create(
     axum::Form(form): axum::Form<CreateForm>,
 ) -> AppResult<Response> {
     let user = ctx.user.id;
+    let created = create_link(&state, user, id, &form.duree).await?;
+    let mut fragment = ShareFragment::load(&state.db, user, id).await?;
+    fragment.new_link = Some(created.url);
+    fragment.new_for = created.label;
+    Ok(web::html(fragment))
+}
+
+/// Un lien tout juste créé : son adresse entière, montrée une seule fois.
+pub(crate) struct NewLink {
+    pub id: i64,
+    pub url: String,
+    pub label: &'static str,
+    pub expires_at: i64,
+}
+
+/// Crée un lien vers un fichier rangé et accessible (404 sinon), pour une
+/// durée de `DURATIONS` (`1h`, `1j`, `7j`). Aussi pour l'API.
+pub(crate) async fn create_link(
+    state: &AppState,
+    user: i64,
+    id: i64,
+    duration: &str,
+) -> AppResult<NewLink> {
     ensure_shareable(&state.db, user, id).await?;
     let (_, seconds, label) = DURATIONS
         .iter()
-        .find(|(key, _, _)| *key == form.duree)
+        .find(|(key, _, _)| *key == duration)
         .copied()
-        .ok_or_else(|| AppError::BadRequest("Durée inconnue.".into()))?;
+        .ok_or_else(|| AppError::BadRequest("Durée inconnue : 1h, 1j ou 7j.".into()))?;
     let token = web::csrf::random_token();
     let token_hash = hash(&token);
     let now = time::now();
     let expires_at = now + seconds;
-    sqlx::query!(
+    let link = sqlx::query!(
         "INSERT INTO share_links (user_id, file_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
         user,
         id,
@@ -141,23 +164,18 @@ pub async fn create(
         now
     )
     .execute(&state.db)
-    .await?;
-    let mut fragment = ShareFragment::load(&state.db, user, id).await?;
-    fragment.new_link = Some(format!(
-        "{}/s/{token}",
-        state.config.base_url.trim_end_matches('/')
-    ));
-    fragment.new_for = label;
-    Ok(web::html(fragment))
+    .await?
+    .last_insert_rowid();
+    Ok(NewLink {
+        id: link,
+        url: format!("{}/s/{token}", state.config.base_url.trim_end_matches('/')),
+        label,
+        expires_at,
+    })
 }
 
-/// `POST /files/{id}/share/{link}/revoke` : le lien ne marche plus, tout de suite.
-pub async fn revoke(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    Path((id, link)): Path<(i64, i64)>,
-) -> AppResult<Response> {
-    let user = ctx.user.id;
+/// Révoque un lien d'un fichier accessible (404 sinon). Aussi pour l'API.
+pub(crate) async fn revoke_link(db: &SqlitePool, user: i64, id: i64, link: i64) -> AppResult<()> {
     let now = time::now();
     let revoked = sqlx::query!(
         "UPDATE share_links SET revoked_at = ?1 WHERE id = ?2 AND file_id = ?3 AND revoked_at IS NULL
@@ -168,12 +186,23 @@ pub async fn revoke(
         id,
         user
     )
-    .execute(&state.db)
+    .execute(db)
     .await?
     .rows_affected();
     if revoked == 0 {
         return Err(AppError::NotFound);
     }
+    Ok(())
+}
+
+/// `POST /files/{id}/share/{link}/revoke` : le lien ne marche plus, tout de suite.
+pub async fn revoke(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path((id, link)): Path<(i64, i64)>,
+) -> AppResult<Response> {
+    let user = ctx.user.id;
+    revoke_link(&state.db, user, id, link).await?;
     Ok(web::html(ShareFragment::load(&state.db, user, id).await?))
 }
 

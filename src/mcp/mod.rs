@@ -281,7 +281,7 @@ async fn handle(State(state): State<AppState>, headers: HeaderMap, body: Bytes) 
                 .cloned()
                 .filter(|a| !a.is_null())
                 .unwrap_or_else(|| json!({}));
-            let user = match ApiUser::load(&state, owner.user_id).await {
+            let user = match ApiUser::load(&state, owner.user_id, owner.name.clone()).await {
                 Ok(user) => user,
                 Err(_) => return rpc_error(&id, INTERNAL_ERROR, "erreur interne"),
             };

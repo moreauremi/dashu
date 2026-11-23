@@ -106,7 +106,12 @@ pub async fn markdown(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
-    let note = load(&state, ctx.user.id, id).await?;
+    markdown_download(&state, ctx.user.id, id).await
+}
+
+/// La note en Markdown, en téléchargement (aussi pour l'API).
+pub(crate) async fn markdown_download(state: &AppState, user: i64, id: i64) -> AppResult<Response> {
+    let note = load(state, user, id).await?;
     Ok(download(
         markdown_file(&note.title, &note.body_md).into_bytes(),
         "text/markdown; charset=utf-8",
@@ -123,11 +128,21 @@ pub async fn pdf(
     Path(id): Path<i64>,
     Query(query): Query<PdfQuery>,
 ) -> AppResult<Response> {
+    pdf_download(&state, ctx.user.id, id, query).await
+}
+
+/// La note en PDF, par le service de conversion (aussi pour l'API).
+pub(crate) async fn pdf_download(
+    state: &AppState,
+    user: i64,
+    id: i64,
+    query: PdfQuery,
+) -> AppResult<Response> {
     if state.config.work_dir.is_none() {
         return Err(AppError::NotFound);
     }
     let options = query.check()?;
-    let note = load(&state, ctx.user.id, id).await?;
+    let note = load(state, user, id).await?;
     let date = time::paris_date(note.updated_at);
     let source = pdf_source(
         &note.title,
@@ -135,7 +150,7 @@ pub async fn pdf(
         &format!("{} {}", time::day_month(date), date.year()),
         options,
     );
-    let bytes = tools::export_pdf(&state, source).await?;
+    let bytes = tools::export_pdf(state, source).await?;
     Ok(download(
         bytes,
         "application/pdf",

@@ -791,6 +791,35 @@ pub struct FolderForm {
     folder_id: Option<String>,
 }
 
+/// Range une note dans un dossier de son espace (`None` : sa racine). Rend
+/// l'espace de la note et le dossier. 404 si la note ou le dossier n'est pas
+/// accessible, ou si le dossier est dans un autre espace. Aussi pour l'API.
+pub(crate) async fn file_in_folder(
+    db: &SqlitePool,
+    user: i64,
+    id: i64,
+    folder: Option<i64>,
+) -> AppResult<(i64, Option<i64>)> {
+    let space = sqlx::query_scalar!(
+        "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        id,
+        user
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let folder = folders::target(db, user, space, folder).await?;
+    sqlx::query!(
+        "UPDATE notes SET folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        folder,
+        id,
+        user
+    )
+    .execute(db)
+    .await?;
+    Ok((space, folder))
+}
+
 /// `POST /notes/{id}/folder` : range la note dans un dossier de son espace
 /// (le sélecteur de l'éditeur). Répond par le sélecteur, à jour.
 pub async fn set_folder(
@@ -799,24 +828,8 @@ pub async fn set_folder(
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<FolderForm>,
 ) -> AppResult<Response> {
-    let space = sqlx::query_scalar!(
-        "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
-        id,
-        ctx.user.id
-    )
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound)?;
     let folder = folders::parse_id(form.folder_id.as_deref())?;
-    let folder = folders::target(&state.db, ctx.user.id, space, folder).await?;
-    sqlx::query!(
-        "UPDATE notes SET folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
-        folder,
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    let (space, folder) = file_in_folder(&state.db, ctx.user.id, id, folder).await?;
     Ok(web::html(FolderFragment {
         id,
         folder: note_folder(&ctx, &state.db, space, folder).await?,

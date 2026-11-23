@@ -186,7 +186,18 @@ Il n'y a ni cookie ni session : la protection CSRF ne s'applique pas, et à l'in
 | `GET /api/v1/notes?q=vlan&space=ecole&tag=bts&limit=20` | Notes récentes, ou recherche plein texte avec `q`. |
 | `POST /api/v1/notes` | Crée une note : `{"title", "body_md"?, "space", "tags"?}`. |
 | `GET /api/v1/notes/{id}` | Note complète, avec son Markdown. |
-| `PATCH /api/v1/notes/{id}` | `title`, `body_md` (remplace) ou `append` (ajoute à la fin), `pinned`, `space`, `add_tags`. |
+| `PATCH /api/v1/notes/{id}` | `title`, `body_md` (remplace) ou `append` (ajoute à la fin), `pinned`, `space`, `folder` (un dossier de son espace, `null` : la racine), `add_tags`, `remove_tags`. |
+| `DELETE /api/v1/notes/{id}` | Met la note dans la corbeille. |
+| `GET /api/v1/notes/{id}/download.md`, `download.pdf?zoom=125&titres=1` | La note en Markdown ou en PDF, en pièce jointe. |
+| `GET /api/v1/files?space=&folder=&tag=&q=&temporary=&limit=` | Fichiers rangés (ou de Temporaire), récents d'abord ; `q` cherche dans le nom. |
+| `GET /api/v1/files/{id}`, `GET /api/v1/files/{id}/download` | Informations d'un fichier ; son contenu, en pièce jointe (jamais affiché). |
+| `POST /api/v1/files/uploads`, `PUT /api/v1/files/uploads/{upload}?offset=` | Envoi par morceaux, comme le site : `{"name", "size", "space"? ou "folder"?, "temporary"?}`, puis des morceaux de 50 Mo au plus, dans l'ordre (409 donne l'octet où reprendre ; 201 et le fichier au dernier). |
+| `PATCH /api/v1/files/{id}` | `name` (l'extension ne change pas), `space`, `folder`, `keep` (garder un fichier de Temporaire dans `space`), `add_tags`, `remove_tags`. |
+| `DELETE /api/v1/files/{id}` | Met le fichier dans la corbeille et révoque ses liens (un fichier de Temporaire est effacé). |
+| `GET`, `POST /api/v1/files/{id}/shares`, `DELETE …/shares/{link}` | Liens de partage : liste, création (`{"duration": "1h" \| "1j" \| "7j"}`, l'adresse entière n'est donnée qu'une fois), révocation. |
+| `GET /api/v1/folders?space=`, `POST /api/v1/folders` | Arborescence (chaque dossier avec son parent) ; création `{"name", "space"? ou "parent"?}`. |
+| `PATCH /api/v1/folders/{id}`, `DELETE /api/v1/folders/{id}` | Renommer (`name`), déplacer avec tout son contenu (`space`, `parent`) ; mettre dans la corbeille avec son contenu. |
+| `GET /api/v1/trash`, `POST /api/v1/trash/{kind}/{id}/restore` | Ce qui est dans la corbeille (qui, quand, par où) ; restaurer (`kind` : `note`, `fichier`, `dossier`, `espace`). |
 | `GET /api/v1/calendar?from=2026-11-16&to=2026-11-20&space=ecole` | Événements de l'agenda, flux iCal et événements ajoutés dans dashu (7 jours à partir d'aujourd'hui par défaut, 62 au plus). |
 | `POST /api/v1/calendar/refresh` | Resynchronise tout de suite les flux iCal. |
 
@@ -197,7 +208,7 @@ curl -s -H "Authorization: Bearer $DASHU_TOKEN" -H "Content-Type: application/js
   -d '{"title": "Réviser le VLAN", "space": "ecole"}' https://app.dashu.dev/api/v1/tasks
 ```
 
-Volontairement absent : la suppression de notes, les réglages, le mot de passe et les sources iCal. Les dates renvoyées sont en heure de Paris, au format ISO 8601.
+Une suppression par l'API part dans la corbeille, avec le nom du jeton comme trace (« Hermès » pour `API_TOKEN`). Volontairement absent, pour toujours : ce qui protège le compte (mot de passe, liaison Google, connexions et jetons), l'effacement définitif et le vidage de la corbeille, l'administration du serveur. Les dates renvoyées sont en heure de Paris, au format ISO 8601. Les logs gardent, pour chaque appel, le compte, le jeton et l'action, jamais le contenu.
 
 ### Connecteur Claude (MCP)
 
@@ -207,7 +218,7 @@ dashu se pilote aussi depuis Claude. **MCP** (Model Context Protocol) est le pro
 claude mcp add --transport http dashu https://app.dashu.dev/mcp --header "Authorization: Bearer dashu_…"
 ```
 
-Les outils font ce que fait l'API, ni plus ni moins : ils appellent les mêmes fonctions, avec les mêmes règles et les mêmes limites. `lister_espaces` ; `lister_taches`, `creer_tache`, `modifier_tache`, `supprimer_tache` ; `chercher_notes`, `lire_note`, `creer_note`, `modifier_note` (titre, ajout à la fin, épingle, tags), `remplacer_note`, `deplacer_note` ; `lire_agenda`, `rafraichir_agenda`. Chacun porte une annotation (lecture, écriture ou destruction) dont Claude se sert pour demander confirmation. Une erreur de saisie revient comme un résultat lisible, que Claude corrige.
+Les outils font ce que fait l'API, ni plus ni moins : ils appellent les mêmes fonctions, avec les mêmes règles et les mêmes limites. `lister_espaces` ; `lister_taches`, `creer_tache`, `modifier_tache`, `supprimer_tache` ; `chercher_notes`, `lire_note`, `creer_note`, `modifier_note` (titre, ajout à la fin, épingle, tags), `remplacer_note`, `deplacer_note`, `ranger_note`, `supprimer_note` ; `lister_fichiers`, `lire_fichier`, `envoyer_fichier`, `modifier_fichier`, `supprimer_fichier` (un fichier se lit et s'envoie par MCP jusqu'à 10 Mo, en base64 ; au-delà, l'API ou le site) ; `lister_liens`, `creer_lien`, `revoquer_lien` ; `lister_dossiers`, `creer_dossier`, `modifier_dossier`, `supprimer_dossier` ; `lister_corbeille`, `restaurer` ; `lire_agenda`, `rafraichir_agenda`. Supprimer, remplacer le texte d'une note, la sortir d'un espace partagé ou créer un lien de partage sont marqués « destructeurs ». Chacun porte une annotation (lecture, écriture ou destruction) dont Claude se sert pour demander confirmation. Une erreur de saisie revient comme un résultat lisible, que Claude corrige.
 
 - Transport « Streamable HTTP » réduit au nécessaire : un message JSON-RPC par `POST /mcp`, une réponse JSON. Pas de flux ouvert (`GET /mcp` répond 405), pas de session MCP, pas de requête par lots.
 - Un jeton personnel, jamais `API_TOKEN` (qui ne vaut que pour `/api/v1`) ni un cookie de session. Sans jeton valable : 401.

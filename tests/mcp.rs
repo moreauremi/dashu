@@ -122,24 +122,24 @@ async fn initialisation_et_liste_des_outils() {
     let (_, body) = rpc(&app, t, "tools/list", json!({})).await;
     let tools = body["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(
-        names,
-        [
-            "lister_espaces",
-            "lister_taches",
-            "creer_tache",
-            "modifier_tache",
-            "supprimer_tache",
-            "chercher_notes",
-            "lire_note",
-            "creer_note",
-            "modifier_note",
-            "remplacer_note",
-            "deplacer_note",
-            "lire_agenda",
-            "rafraichir_agenda",
-        ]
-    );
+    // Ceux de l'étape 2 ; chaque lot de l'API en ajoute.
+    for name in [
+        "lister_espaces",
+        "lister_taches",
+        "creer_tache",
+        "modifier_tache",
+        "supprimer_tache",
+        "chercher_notes",
+        "lire_note",
+        "creer_note",
+        "modifier_note",
+        "remplacer_note",
+        "deplacer_note",
+        "lire_agenda",
+        "rafraichir_agenda",
+    ] {
+        assert!(names.contains(&name), "{name}");
+    }
     let tool = |name: &str| tools.iter().find(|t| t["name"] == name).unwrap().clone();
     // Annotations : lecture, écriture, destruction.
     assert_eq!(tool("lister_taches")["annotations"]["readOnlyHint"], true);

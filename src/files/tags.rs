@@ -37,8 +37,14 @@ pub async fn add(
     axum::Form(form): axum::Form<TagForm>,
 ) -> AppResult<Response> {
     let user = ctx.user.id;
-    ensure_owned(&state.db, user, id).await?;
-    let name = notes::normalize_tag(&form.name);
+    attach(&state.db, user, id, &form.name).await?;
+    fragment(&state.db, user, id).await
+}
+
+/// Pose un tag sur un fichier accessible (404 sinon). Aussi pour l'API.
+pub(crate) async fn attach(db: &SqlitePool, user: i64, id: i64, raw: &str) -> AppResult<()> {
+    ensure_owned(db, user, id).await?;
+    let name = notes::normalize_tag(raw);
     // Un fichier d'espace partagé peut déjà porter ce tag, posé par un autre
     // membre : les tags s'affichent par nom, on n'en ajoute pas un second.
     let already = sqlx::query_scalar!(
@@ -47,7 +53,7 @@ pub async fn add(
         id,
         name
     )
-    .fetch_one(&state.db)
+    .fetch_one(db)
     .await?
         > 0;
     if !name.is_empty() && !already {
@@ -56,7 +62,7 @@ pub async fn add(
             user,
             name
         )
-        .execute(&state.db)
+        .execute(db)
         .await?;
         sqlx::query!(
             "INSERT OR IGNORE INTO file_tags (file_id, tag_id)
@@ -65,10 +71,27 @@ pub async fn add(
             user,
             name
         )
-        .execute(&state.db)
+        .execute(db)
         .await?;
     }
-    fragment(&state.db, user, id).await
+    Ok(())
+}
+
+/// Retire d'un fichier accessible (404 sinon) les tags de ce nom, quel que
+/// soit le compte qui les a posés. Aussi pour l'API.
+pub(crate) async fn detach_named(db: &SqlitePool, user: i64, id: i64, raw: &str) -> AppResult<()> {
+    ensure_owned(db, user, id).await?;
+    let name = notes::normalize_tag(raw);
+    sqlx::query!(
+        "DELETE FROM file_tags WHERE file_id = ?1
+           AND tag_id IN (SELECT id FROM tags WHERE name = ?2)",
+        id,
+        name
+    )
+    .execute(db)
+    .await?;
+    notes::prune_orphan_tags(db, user).await?;
+    Ok(())
 }
 
 /// `DELETE /files/{id}/tags/{tag_id}`

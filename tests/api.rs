@@ -255,11 +255,18 @@ async fn cycle_de_vie_d_une_note() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(full["title"], "Cours réseau");
 
-    // Pas de suppression de note par l'API.
+    // Supprimer : dans la corbeille, avec « Hermès » (API_TOKEN) comme trace.
     let (status, _) = app
         .api(Method::DELETE, &format!("/api/v1/notes/{id}"), None, T)
         .await;
-    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app
+        .api(Method::GET, &format!("/api/v1/notes/{id}"), None, T)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, trash) = app.api(Method::GET, "/api/v1/trash", None, T).await;
+    assert_eq!(trash[0]["id"], id);
+    assert_eq!(trash[0]["via"], "Hermès");
 }
 
 #[tokio::test]
