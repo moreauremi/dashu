@@ -5184,6 +5184,32 @@ a.cal-allday.is-own:hover {
   background: var(--border);
 }
 
+/* Page « Autoriser » d'OAuth (templates/oauth/authorize.html). */
+.consent {
+  max-width: 420px;
+}
+
+.consent-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.consent-scope ul {
+  margin: 4px 0 12px;
+  padding-left: 20px;
+  color: var(--text-2);
+}
+
+.consent-scope li + li {
+  margin-top: 4px;
+}
+
+.consent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .error-card {
   align-items: flex-start;
 }

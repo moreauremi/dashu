@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO oauth_grants (user_id, client_id, refresh_hash, created_at, last_used_at, expires_at)\n         VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "05208e436e03e1528f84406a8ac6f8cd8b346496bd5cabbf6f67046da70aa236"
+}

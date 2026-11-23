@@ -4,7 +4,11 @@
 <main class="auth">
   <div class="auth-card">
     <h1 class="wordmark wordmark-lg logo-anim">{{ crate::assets::logo()|safe }}</h1>
+    {% if let Some(client) = oauth_client %}
+    <p class="muted auth-lead">Connecte-toi pour autoriser « {{ client }} » à accéder à ton compte</p>
+    {% else %}
     <p class="muted auth-lead">Connecte-toi pour retrouver ton espace</p>
+    {% endif %}
 
     {% if let Some(error) = error %}
     <p class="alert alert-error" role="alert">{{ error }}</p>

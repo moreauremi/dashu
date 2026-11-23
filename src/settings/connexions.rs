@@ -1,8 +1,9 @@
 //! Réglages › Connexions : les accès du compte donnés à des programmes.
 //!
-//! Pour l'instant, les jetons créés à la main (voir `crate::auth::tokens`).
-//! Chaque action remplace la carte (htmx) : le jeton entier ne s'affiche
-//! qu'une fois, dans la réponse à sa création.
+//! Les autorisations données à Claude par OAuth (voir `crate::oauth`), et
+//! les jetons créés à la main (voir `crate::auth::tokens`). Chaque action
+//! remplace la carte (htmx) : le jeton entier ne s'affiche qu'une fois, dans
+//! la réponse à sa création.
 
 use askama::Template;
 use axum::extract::{Path, State};
@@ -40,9 +41,20 @@ pub struct TokenRow {
     pub expired: bool,
 }
 
+/// Une autorisation donnée à une application (Claude) par OAuth.
+pub struct GrantRow {
+    pub id: i64,
+    pub name: String,
+    /// « autorisé le 23 novembre »
+    pub created: String,
+    /// « utilisé il y a 5 min », « jamais utilisé »
+    pub used: String,
+}
+
 #[derive(Template)]
 #[template(path = "settings/_connexions.html")]
 pub struct ConnexionsCard {
+    pub grants: Vec<GrantRow>,
     pub tokens: Vec<TokenRow>,
     /// Le jeton qui vient d'être créé, en entier : affiché une seule fois.
     pub new_token: Option<String>,
@@ -91,7 +103,33 @@ impl ConnexionsCard {
                 expired: t.expires_at <= now,
             })
             .collect();
+        // Dernière utilisation : le dernier renouvellement, ou le dernier
+        // appel fait avec un de ses jetons d'accès.
+        let grants = sqlx::query!(
+            r#"SELECT g.id AS "id!", c.name, g.created_at,
+                      max(coalesce(g.last_used_at, 0),
+                          coalesce((SELECT max(last_used_at) FROM access_tokens WHERE grant_id = g.id), 0))
+                        AS "used!: i64"
+               FROM oauth_grants g JOIN oauth_clients c ON c.client_id = g.client_id
+               WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC"#,
+            user
+        )
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|g| GrantRow {
+            id: g.id,
+            name: g.name,
+            created: format!("autorisé le {}", date_label(g.created_at, now)),
+            used: if g.used > 0 {
+                format!("utilisé {}", time::ago(g.used, now))
+            } else {
+                "jamais utilisé".into()
+            },
+        })
+        .collect();
         Ok(Self {
+            grants,
             tokens,
             new_token: None,
             new_name: String::new(),
@@ -225,13 +263,41 @@ pub async fn revoke(
     Ok(web::html(ConnexionsCard::load(&state, user).await?))
 }
 
-/// `POST /settings/tokens/revoke-all` : coupe d'un coup tous les accès du compte.
+/// `POST /settings/grants/{id}/revoke` : retire une autorisation donnée par
+/// OAuth ; ses jetons tombent avec elle, à la requête suivante.
+pub async fn revoke_grant(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Response> {
+    let user = ctx.user.id;
+    let deleted = sqlx::query!(
+        "DELETE FROM oauth_grants WHERE id = ? AND user_id = ?",
+        id,
+        user
+    )
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if deleted == 0 {
+        return Err(AppError::NotFound);
+    }
+    tracing::info!(user, id, "autorisation révoquée");
+    Ok(web::html(ConnexionsCard::load(&state, user).await?))
+}
+
+/// `POST /settings/tokens/revoke-all` : coupe d'un coup tous les accès du
+/// compte, jetons et autorisations.
 pub async fn revoke_all(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
     let user = ctx.user.id;
-    let deleted = sqlx::query!("DELETE FROM access_tokens WHERE user_id = ?", user)
+    let grants = sqlx::query!("DELETE FROM oauth_grants WHERE user_id = ?", user)
         .execute(&state.db)
         .await?
         .rows_affected();
-    tracing::info!(user, deleted, "tous les accès révoqués");
+    let tokens = sqlx::query!("DELETE FROM access_tokens WHERE user_id = ?", user)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+    tracing::info!(user, grants, tokens, "tous les accès révoqués");
     Ok(web::html(ConnexionsCard::load(&state, user).await?))
 }

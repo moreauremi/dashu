@@ -30,6 +30,16 @@ const CSP: &str = "default-src 'self'; \
     base-uri 'none'; \
     object-src 'none'";
 
+/// La même CSP, mais dont le formulaire peut partir vers `origin` au lieu
+/// de Google : la page « Autoriser » d'OAuth (src/oauth) renvoie le
+/// navigateur chez l'application qui demande l'accès, et seulement chez elle.
+pub fn csp_with_form_action(origin: &str) -> String {
+    CSP.replace(
+        "form-action 'self' https://accounts.google.com",
+        &format!("form-action 'self' {origin}"),
+    )
+}
+
 pub async fn security_headers(
     State(state): State<AppState>,
     request: Request,

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT g.id AS \"id!\", c.name, g.created_at,\n                      max(coalesce(g.last_used_at, 0),\n                          coalesce((SELECT max(last_used_at) FROM access_tokens WHERE grant_id = g.id), 0))\n                        AS \"used!: i64\"\n               FROM oauth_grants g JOIN oauth_clients c ON c.client_id = g.client_id\n               WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "used!: i64",
+        "ordinal": 3,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "aa7379e217edefe9f6a2f7807ebdb5799f2d6aba34bc4d7ff741ee26bad37864"
+}

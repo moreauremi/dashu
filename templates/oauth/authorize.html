@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Autoriser {{ client_name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block body %}
+{#- Page de consentement OAuth (src/oauth) : une application (Claude) demande
+    l'accès au compte. Formulaire classique, sans htmx : Autoriser renvoie le
+    navigateur chez l'application. La demande elle-même est dans la session ;
+    le formulaire ne porte que le choix. -#}
+<main class="auth">
+  <div class="auth-card consent">
+    <h1 class="wordmark wordmark-lg">{{ crate::assets::logo()|safe }}</h1>
+    <h2 class="consent-title">Autoriser « {{ client_name }} » ?</h2>
+    <p class="muted">Cette application demande l'accès au compte <strong>{{ email }}</strong>. Elle reviendra sur <strong>{{ redirect }}</strong>.</p>
+
+    <div class="consent-scope">
+      <p class="field-label">Elle pourra</p>
+      <ul>
+        <li>lire et modifier tes tâches, tes notes et ton agenda, dans tes espaces et les espaces partagés que tu as rejoints ;</li>
+        <li>faire tout ce que permet l'API de dashu, avec tes droits.</li>
+      </ul>
+      <p class="field-label">Elle ne pourra pas</p>
+      <ul>
+        <li>changer ton mot de passe, ni gérer tes connexions et tes jetons ;</li>
+        <li>administrer le serveur.</li>
+      </ul>
+    </div>
+
+    <p class="hint">Tu pourras révoquer cet accès à tout moment dans Réglages › Connexions.</p>
+
+    <form class="consent-actions" method="post" action="/oauth/authorize">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button class="btn btn-primary btn-block" type="submit" name="decision" value="allow">Autoriser</button>
+      <button class="btn btn-block" type="submit" name="decision" value="deny">Refuser</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

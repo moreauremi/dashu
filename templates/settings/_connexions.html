@@ -5,7 +5,7 @@
 <section class="card" id="connexions" aria-labelledby="s-connexions">
   <header class="card-head"><h2 id="s-connexions">Connexions</h2></header>
   <div class="card-body">
-    <p class="hint">Un jeton donne à un programme l'accès à ton compte, avec tes droits : tes espaces et les espaces partagés que tu as rejoints. Claude Code s'en sert pour piloter dashu (le connecteur <code>{{ mcp_url }}</code>) ; un script, pour appeler l'API.</p>
+    <p class="hint">Les accès donnés à des programmes, avec tes droits : tes espaces et les espaces partagés que tu as rejoints. Pour claude.ai et l'app iPhone, ajoute un connecteur personnalisé à l'adresse <code>{{ mcp_url }}</code> : Claude te demandera de l'autoriser ici. Un jeton sert à Claude Code ou à un script.</p>
 
     {%- if let Some(token) = new_token %}
     <div class="share-new token-new" role="status">
@@ -27,9 +27,26 @@
     <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ message }}</span></p>
     {%- endif %}
 
-    {%- if tokens.is_empty() %}
+    {%- if !grants.is_empty() %}
+    <ul class="sources tokens" role="list" aria-label="Applications autorisées">
+      {%- for grant in grants %}
+      <li class="source">
+        <div class="source-main">
+          <strong>{{ grant.name }}</strong>
+          <span class="space-tag">application autorisée</span>
+        </div>
+        <span class="muted">{{ grant.created }} · {{ grant.used }}</span>
+        <form hx-post="/settings/grants/{{ grant.id }}/revoke" hx-target="#connexions" hx-swap="outerHTML" hx-confirm="Révoquer l'accès de « {{ grant.name }} » ? Il faudra l'autoriser de nouveau depuis Claude.">
+          <button class="btn" type="submit">Révoquer</button>
+        </form>
+      </li>
+      {%- endfor %}
+    </ul>
+    {%- endif %}
+
+    {%- if tokens.is_empty() && grants.is_empty() %}
     <p class="hint">Aucun accès pour l'instant.</p>
-    {%- else %}
+    {%- else if !tokens.is_empty() %}
     <ul class="sources tokens" role="list">
       {%- for token in tokens %}
       <li class="source">
@@ -62,7 +79,7 @@
       <button class="btn btn-primary" type="submit">Nouveau jeton</button>
     </form>
 
-    {%- if !tokens.is_empty() %}
+    {%- if !tokens.is_empty() || !grants.is_empty() %}
     <form hx-post="/settings/tokens/revoke-all" hx-target="#connexions" hx-swap="outerHTML" hx-confirm="Tout révoquer ? Chaque programme branché sur ton compte perdra l'accès tout de suite.">
       <button class="btn btn-danger-outline" type="submit">Tout révoquer</button>
     </form>
