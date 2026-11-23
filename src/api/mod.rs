@@ -43,9 +43,14 @@ use crate::spaces::{self, Space};
 use crate::time;
 use crate::web::AppError;
 
+mod agenda;
 mod contenu;
 mod outils;
 
+pub(crate) use agenda::{
+    EventBody, NewSource, event_create, event_delete, event_update, source_add, source_remove,
+    sources,
+};
 pub(crate) use contenu::{
     FileChanges, FolderChanges, NewUpload, fetch_file, file_delete, file_update, files_list,
     folder_create, folder_delete, folder_update, folders_list, link_create, links_list, stored,
@@ -77,6 +82,7 @@ pub fn router() -> Router<AppState> {
         .route("/calendar/refresh", post(refresh_calendar))
         .merge(contenu::routes())
         .merge(outils::routes())
+        .merge(agenda::routes())
         .fallback(unknown_route)
         .layer(from_fn(json_errors));
     Router::new().nest("/api/v1", v1)
@@ -1058,6 +1064,9 @@ pub(crate) struct EventOut {
     end: String,
     all_day: bool,
     space: String,
+    /// Identifiant d'un événement créé dans dashu (modifiable par
+    /// `/api/v1/events/{id}`) ; `null` pour un cours d'un flux iCal.
+    event: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -1113,7 +1122,8 @@ pub(crate) async fn calendar_events(
     let events = sqlx::query!(
         r#"SELECT e.title AS "title!: String", e.location AS "location!: String",
                   e.starts_at AS "starts_at!: i64", e.ends_at AS "ends_at!: i64",
-                  e.all_day AS "all_day!: bool", e.space_id AS "space_id!: i64"
+                  e.all_day AS "all_day!: bool", e.space_id AS "space_id!: i64",
+                  e.event_id AS "event_id?: i64"
            FROM agenda_items e
            WHERE e.user_id = ?1 AND (?2 IS NULL OR e.space_id = ?2)
              AND e.ends_at > ?3 AND e.starts_at < ?4
@@ -1136,6 +1146,7 @@ pub(crate) async fn calendar_events(
         end: iso(e.ends_at),
         all_day: e.all_day,
         space: user.slug_of(e.space_id),
+        event: e.event_id,
     })
     .collect();
     Ok(events)
