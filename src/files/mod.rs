@@ -1408,21 +1408,29 @@ pub async fn delete(
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
-    let key = sqlx::query_scalar!(
-        r#"DELETE FROM files WHERE id = ?2
-           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
-           OR (expires_at IS NOT NULL AND user_id = ?1)) RETURNING storage_key AS "storage_key!""#,
-        ctx.user.id,
-        id
+    // Un fichier rangé part dans la corbeille ; un fichier de Temporaire
+    // (onglet Outils, effacé de toute façon au bout de 24 heures) est effacé.
+    let temporary = sqlx::query_scalar!(
+        r#"DELETE FROM files WHERE id = ? AND expires_at IS NOT NULL AND user_id = ?
+           RETURNING storage_key AS "storage_key!""#,
+        id,
+        ctx.user.id
     )
     .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound)?;
-
-    if let Some(files) = &state.config.files {
-        remove_stored(files, &key).await;
+    .await?;
+    match temporary {
+        Some(key) => {
+            if let Some(files) = &state.config.files {
+                remove_stored(files, &key).await;
+            }
+            ctx.flash_ok("Fichier supprimé").await?;
+        }
+        None => {
+            crate::trash::file(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
+            ctx.flash_ok("Fichier mis dans la corbeille (Réglages › Corbeille)")
+                .await?;
+        }
     }
-    ctx.flash_ok("Fichier supprimé").await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/files",

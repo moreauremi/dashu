@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM notes WHERE deleted_at < ? AND trash_root = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "93d1e116ddb0a05f42252b63e5d265beba8056ac5ce5101eb43ca95dc3002f0a"
+}

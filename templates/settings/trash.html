@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block title %}Corbeille · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+{#- Corbeille (src/trash) : ce qui a été supprimé, du plus récent au plus
+    ancien. Restaurer remet l'élément à sa place ; supprimer définitivement
+    et vider ne se font qu'ici, avec confirmation. -#}
+<header class="page-head">
+  <a class="back-link" href="/settings">{{ crate::assets::icon("arrow-left")|safe }}Réglages</a>
+  <h1>Corbeille</h1>
+</header>
+
+<section class="card">
+  <div class="card-body">
+    <p class="hint">Ce que tu supprimes, sur le site ou par un assistant, reste ici {{ keep_days }} jours, puis s'efface tout seul, fichiers du serveur compris. Dans un espace partagé, la corbeille est commune à ses membres.</p>
+    {% if rows.is_empty() %}
+    <p class="hint">La corbeille est vide.</p>
+    {% else %}
+    <ul class="sources trash-list" role="list">
+      {% for row in rows %}
+      <li class="source trash-row">
+        <div class="source-main">
+          <span class="with-icon">{{ crate::assets::icon(row.entry.icon())|safe }}<strong>{{ row.entry.name }}</strong></span>
+          <span class="pal-space" data-accent="{{ row.entry.origin_color }}"><span class="dot" aria-hidden="true"></span>{% if row.entry.kind_key() == "espace" %}Espace{% else %}{{ row.entry.origin }}{% endif %}</span>
+          {% if !row.entry.contents.is_empty() %}<span class="space-tag">{{ row.entry.contents }}</span>{% endif %}
+        </div>
+        <span class="muted">{{ row.entry.label() }} supprimé{% if row.entry.kind_key() == "note" %}e{% endif %} {{ row.when }} par {{ row.entry.who }}, depuis {{ row.entry.via }} · {{ row.left }}</span>
+        <div class="trash-actions">
+          <form method="post" action="/settings/trash/{{ row.entry.kind_key() }}/{{ row.entry.id }}/restore">
+            <input type="hidden" name="_csrf" value="{{ shell.csrf }}">
+            <button class="btn" type="submit">Restaurer</button>
+          </form>
+          <form method="post" action="/settings/trash/{{ row.entry.kind_key() }}/{{ row.entry.id }}/erase" hx-confirm="Supprimer définitivement « {{ row.entry.name }} » ? Ce sera sans retour possible.">
+            <input type="hidden" name="_csrf" value="{{ shell.csrf }}">
+            <button class="btn btn-danger-outline" type="submit" aria-label="Supprimer définitivement {{ row.entry.name }}">{{ crate::assets::icon("trash")|safe }}</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="/settings/trash/empty" hx-confirm="Vider la corbeille ? Tout ce qu'elle contient sera supprimé définitivement, sans retour possible.">
+      <input type="hidden" name="_csrf" value="{{ shell.csrf }}">
+      <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Vider la corbeille</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

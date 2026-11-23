@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT trash_op AS \"op!: i64\" FROM folders\n           WHERE deleted_at < ? AND trash_root = 1 AND trash_op IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "op!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "832844462c6abbe81f955624c10e00e0cd5cace31dfd55e12783125cab4bf392"
+}

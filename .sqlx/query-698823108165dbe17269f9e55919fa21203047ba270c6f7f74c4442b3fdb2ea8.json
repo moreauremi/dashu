@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT (SELECT count(*) FROM notes WHERE trash_op = ?1) AS \"notes!: i64\",\n                  (SELECT count(*) FROM files WHERE trash_op = ?1) AS \"files!: i64\",\n                  (SELECT count(*) FROM folders WHERE trash_op = ?1 AND trash_root = 0) AS \"subs!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "notes!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "files!: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "subs!: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "698823108165dbe17269f9e55919fa21203047ba270c6f7f74c4442b3fdb2ea8"
+}

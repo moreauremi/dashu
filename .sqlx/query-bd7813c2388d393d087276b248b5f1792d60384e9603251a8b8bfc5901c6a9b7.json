@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO spaces (user_id, slug, name, color, icon, position, trash_of)\n         SELECT user_id, '~corbeille-' || id, 'Corbeille', color, icon, 1000000 + id, id\n         FROM spaces WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "bd7813c2388d393d087276b248b5f1792d60384e9603251a8b8bfc5901c6a9b7"
+}

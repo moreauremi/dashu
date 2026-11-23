@@ -252,12 +252,14 @@ async fn remplacer_l_original_par_sa_copie() {
             .body
             .contains("Original remplacé : il reste « Vacances.mp4 »")
     );
-    let names: Vec<String> = sqlx::query_scalar("SELECT name FROM files ORDER BY id")
-        .fetch_all(&app.state.db)
-        .await
-        .unwrap();
+    // L'original est dans la corbeille : hors des listes, encore sur le disque.
+    let names: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM files WHERE deleted_at IS NULL ORDER BY id")
+            .fetch_all(&app.state.db)
+            .await
+            .unwrap();
     assert_eq!(names, vec!["Vacances.mp4".to_string()]);
-    assert_eq!(app.stored_files().len(), stored_before - 1);
+    assert_eq!(app.stored_files().len(), stored_before);
     // Une seconde fois : la tâche est partie avec l'original.
     assert_eq!(
         alice

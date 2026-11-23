@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM files WHERE deleted_at < ? AND trash_root = 1\n           RETURNING storage_key AS \"storage_key!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "storage_key!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e15a7e5c2339328624898ec716b6faccfad827fb4ca68f8ba253fbbeea84ac0f"
+}

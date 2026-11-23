@@ -157,13 +157,14 @@ pub async fn list(db: &SqlitePool, user_id: i64) -> AppResult<Vec<Space>> {
                SELECT s.id, s.slug, s.name, s.color, s.icon,
                       s.archived_at IS NOT NULL AS archived, s.auto_mp4, s.auto_heic_jpeg,
                       s.user_id AS owner_id, 1 AS mine, s.position AS place
-               FROM spaces s WHERE s.user_id = ?1
+               FROM spaces s
+               WHERE s.user_id = ?1 AND s.trash_of IS NULL AND s.deleted_at IS NULL
                UNION ALL
                SELECT s.id, m.slug, s.name, s.color, s.icon,
                       s.archived_at IS NOT NULL, s.auto_mp4, s.auto_heic_jpeg,
                       s.user_id, 0, m.position
                FROM space_members m JOIN spaces s ON s.id = m.space_id
-               WHERE m.user_id = ?1
+               WHERE m.user_id = ?1 AND s.deleted_at IS NULL
            )
            ORDER BY place, id"#,
         user_id
@@ -290,7 +291,7 @@ fn validate(form: &SpaceForm, spaces: &[Space], except: Option<i64>) -> Result<V
 
 /// Identifiant court tiré du nom : minuscules sans accents, chiffres et
 /// tirets (« Vie de famille » → `vie-de-famille`). Unique parmi `taken`.
-fn new_slug(name: &str, taken: &[&str]) -> String {
+pub(crate) fn new_slug(name: &str, taken: &[&str]) -> String {
     let mut folded = String::new();
     for c in name.chars().flat_map(char::to_lowercase) {
         let part = match c {
@@ -770,77 +771,26 @@ pub async fn delete(
             )
             .execute(&mut *tx)
             .await?;
-            sqlx::query!(
-                "DELETE FROM spaces WHERE id = ? AND user_id = ?",
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
             tx.commit().await?;
+            // L'espace, vide, part dans la corbeille.
+            crate::trash::space(&state.db, crate::trash::Who::site(user_id), id).await?;
             (
                 format!(
-                    "Espace « {} » supprimé : son contenu est maintenant dans « {} »",
+                    "Espace « {} » mis dans la corbeille : son contenu est maintenant dans « {} »",
                     space.name, target.name
                 ),
                 Some(target.slug.clone()),
             )
         }
         "delete" => {
-            // Les notes, tâches, agendas et fichiers sont supprimés un par un
-            // (les déclencheurs de la recherche plein texte suivent), puis
-            // l'espace : la cascade emporte le reste (étiquettes des notes,
-            // événements, envois en cours, conversions).
-            let mut tx = state.db.begin().await?;
-            let keys = sqlx::query_scalar!("SELECT storage_key FROM files WHERE space_id = ?", id)
-                .fetch_all(&mut *tx)
-                .await?;
-            sqlx::query!("DELETE FROM notes WHERE space_id = ?", id)
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query!("DELETE FROM tasks WHERE space_id = ?", id)
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query!(
-                "DELETE FROM calendar_sources WHERE space_id = ? AND user_id = ?",
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
-            // Les copies dans Google Agenda partent avec eux (au prochain
-            // envoi à Google, voir src/calendar/google.rs).
-            sqlx::query!(
-                "INSERT OR IGNORE INTO google_deletions (user_id, google_event_id)
-                 SELECT user_id, google_event_id FROM events
-                 WHERE space_id = ? AND google_event_id IS NOT NULL",
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query!("DELETE FROM events WHERE space_id = ?", id)
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query!("DELETE FROM files WHERE space_id = ?", id)
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query!(
-                "DELETE FROM spaces WHERE id = ? AND user_id = ?",
-                id,
-                user_id
-            )
-            .execute(&mut *tx)
-            .await?;
-            tx.commit().await?;
-            // Le disque après la base : un fichier dont la ligne a disparu
-            // n'est plus servi, même si son effacement échoue.
-            if let Some(config) = &state.config.files {
-                for key in keys {
-                    files::remove_stored(config, &key).await;
-                }
-            }
+            // L'espace et tout son contenu partent dans la corbeille : 30 jours
+            // pour le restaurer (voir src/trash).
+            crate::trash::space(&state.db, crate::trash::Who::site(user_id), id).await?;
             (
-                format!("Espace « {} » supprimé avec son contenu", space.name),
+                format!(
+                    "Espace « {} » mis dans la corbeille avec son contenu (Réglages › Corbeille)",
+                    space.name
+                ),
                 None,
             )
         }

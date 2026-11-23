@@ -21,6 +21,7 @@ pub mod spaces;
 pub mod tabbar;
 pub mod time;
 pub mod tools;
+pub mod trash;
 pub mod web;
 
 use std::sync::Arc;
@@ -306,6 +307,17 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/settings/spaces/{id}/delete",
             get(spaces::delete_page).post(spaces::delete),
+        )
+        // Corbeille
+        .route("/settings/trash", get(trash::page::show))
+        .route("/settings/trash/empty", post(trash::page::empty))
+        .route(
+            "/settings/trash/{kind}/{id}/restore",
+            post(trash::page::restore),
+        )
+        .route(
+            "/settings/trash/{kind}/{id}/erase",
+            post(trash::page::erase),
         )
         .route("/settings/calendars", post(settings::add_calendar))
         .route(

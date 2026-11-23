@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use dashu::config::Config;
-use dashu::{AppState, auth, build_router, calendar, db, files, tools};
+use dashu::{AppState, auth, build_router, calendar, db, files, tools, trash};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower_sessions::ExpiredDeletion;
 
@@ -54,6 +54,7 @@ async fn serve() -> anyhow::Result<()> {
     // Envois à Google Agenda qui n'ont pas pu partir (Google indisponible).
     calendar::google::spawn_retry(state.clone());
     files::spawn_cleanup(state.clone());
+    trash::spawn_purge(state.clone());
     tools::spawn_collector(state.clone());
     tokio::spawn(db::session_store(&pool).continuously_delete_expired(Duration::from_secs(3600)));
 

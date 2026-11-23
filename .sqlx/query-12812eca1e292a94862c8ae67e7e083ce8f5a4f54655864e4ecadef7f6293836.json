@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT count(*) AS \"n!: i64\" FROM events\n           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "12812eca1e292a94862c8ae67e7e083ce8f5a4f54655864e4ecadef7f6293836"
+}

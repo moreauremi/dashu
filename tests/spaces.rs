@@ -18,7 +18,8 @@ type Row = (String, String, String, String);
 async fn spaces_of(app: &TestApp, email: &str) -> Vec<Row> {
     sqlx::query_as(
         "SELECT s.slug, s.name, s.color, s.icon FROM spaces s JOIN users u ON u.id = s.user_id
-         WHERE u.email = ? ORDER BY s.position, s.id",
+         WHERE u.email = ? AND s.trash_of IS NULL AND s.deleted_at IS NULL
+         ORDER BY s.position, s.id",
     )
     .bind(email)
     .fetch_all(&app.state.db)
@@ -179,7 +180,7 @@ async fn supprimer_un_espace_en_transferant_son_contenu() {
     assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("Cet espace contient 1 fichier ("));
     assert!(page.body.contains("1 note et 1 tâche"));
-    assert!(page.body.contains("seront effacés du serveur"));
+    assert!(page.body.contains("restent 30 jours dans la corbeille"));
     assert!(page.body.contains("Le transférer dans"));
     assert!(
         page.body
@@ -249,11 +250,19 @@ async fn supprimer_un_espace_avec_son_contenu() {
     let page = alice.follow(deleted).await;
     assert!(
         page.body
-            .contains("Espace « Taff » supprimé avec son contenu")
+            .contains("Espace « Taff » mis dans la corbeille avec son contenu")
     );
     // L'espace actif a disparu : retour au premier.
     let home = alice.get("/").await;
     assert!(home.body.contains("class=\"app\" data-accent=\"orange\""));
+    // Dans la corbeille, plus rien ne se voit ; puis l'effacer pour de bon
+    // efface tout, fichier du disque compris.
+    assert_eq!(app.stored_files().len(), 1);
+    assert!(!alice.get("/notes").await.body.contains("motconfidentiel"));
+    let erased = alice
+        .post(&format!("/settings/trash/espace/{taff}/erase"), &[])
+        .await;
+    assert_eq!(erased.status, StatusCode::SEE_OTHER);
     assert!(app.stored_files().is_empty(), "le fichier quitte le disque");
     for table in ["notes", "tasks", "files"] {
         assert_eq!(count_in(&app, table, taff).await, 0, "{table}");

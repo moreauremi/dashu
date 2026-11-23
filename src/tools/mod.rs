@@ -1157,7 +1157,7 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
                   j.result_file_id, j.file_id, f.size AS "result_size?: i64"
            FROM jobs j
            LEFT JOIN files f ON f.id = j.result_file_id
-           WHERE j.user_id = ?1 AND (?2 IS NULL AND j.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR j.space_id = ?2)
+           WHERE j.user_id = ?1 AND (?2 IS NULL AND j.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR j.space_id = ?2)
              AND j.kind IN ('compress', 'convert')
              AND (j.status IN ('queued', 'running') OR j.updated_at > ?3)
            ORDER BY j.id DESC
@@ -1302,11 +1302,21 @@ pub async fn replace_original(
     let name = files::clean_name(&format!("{}.{ext}", stem(&row.source_name)));
     let mime = files::mime_for(&name);
     let now = time::now();
+    // Un original rangé part dans la corbeille ; un original de Temporaire
+    // (effacé de toute façon au bout de 24 heures) est effacé.
+    let to_trash = row.source_expires.is_none();
     let mut tx = state.db.begin().await?;
-    // La tâche part avec l'original (ON DELETE CASCADE) : le bouton disparaît.
-    sqlx::query!("DELETE FROM files WHERE id = ?", row.source)
-        .execute(&mut *tx)
-        .await?;
+    if to_trash {
+        // La tâche disparaît, et le bouton « Remplacer l'original » avec elle.
+        sqlx::query!("DELETE FROM jobs WHERE id = ?", id)
+            .execute(&mut *tx)
+            .await?;
+    } else {
+        // La tâche part avec l'original (ON DELETE CASCADE).
+        sqlx::query!("DELETE FROM files WHERE id = ?", row.source)
+            .execute(&mut *tx)
+            .await?;
+    }
     sqlx::query!(
         "UPDATE files SET name = ?, mime = ?, space_id = ?, folder_id = ?, expires_at = ?, updated_at = ?
          WHERE id = ?",
@@ -1321,10 +1331,18 @@ pub async fn replace_original(
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    files::remove_stored(files, &row.source_key).await;
+    if to_trash {
+        crate::trash::file(&state.db, crate::trash::Who::site(ctx.user.id), row.source).await?;
+    } else {
+        files::remove_stored(files, &row.source_key).await;
+    }
 
-    ctx.flash_ok(format!("Original remplacé : il reste « {name} »"))
-        .await?;
+    ctx.flash_ok(if to_trash {
+        format!("Original remplacé : il reste « {name} », l'original est dans la corbeille")
+    } else {
+        format!("Original remplacé : il reste « {name} »")
+    })
+    .await?;
     // Retour à la page d'où vient le clic (la liste des fichiers, l'onglet
     // Outils…), que htmx nomme dans HX-Current-URL ; sinon l'aperçu de la copie.
     let back = form

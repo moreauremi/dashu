@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", ical_url FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "ical_url",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "449b9c25b0c1eb4a6708417052c2094d1e6325e24e841765eedef4992ba988dc"
+}

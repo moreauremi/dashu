@@ -410,9 +410,9 @@ pub struct DeleteForm {
     contenu: Option<String>,
 }
 
-/// `POST /folders/{id}/delete` : supprime un dossier. S'il n'est pas vide,
-/// son contenu monte dans le dossier parent (ses sous-dossiers montent d'un
-/// niveau), ou il est effacé avec lui, fichiers du disque compris.
+/// `POST /folders/{id}/delete` : met un dossier dans la corbeille. S'il
+/// n'est pas vide, son contenu monte d'abord dans le dossier parent (ses
+/// sous-dossiers montent d'un niveau), ou part dans la corbeille avec lui.
 pub async fn delete(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -442,25 +442,8 @@ pub async fn delete(
     };
     let subs: Vec<&Folder> = folders.iter().filter(|f| f.parent_id == Some(id)).collect();
 
-    let mut keys = Vec::new();
     let mut tx = state.db.begin().await?;
-    if erase {
-        // Les notes et les fichiers du dossier et de ses sous-dossiers ; les
-        // sous-dossiers partent avec lui (ON DELETE CASCADE).
-        for folder_id in std::iter::once(id).chain(subs.iter().map(|f| f.id)) {
-            keys.extend(
-                sqlx::query_scalar!(
-                    r#"DELETE FROM files WHERE folder_id = ? RETURNING storage_key AS "storage_key!""#,
-                    folder_id
-                )
-                .fetch_all(&mut *tx)
-                .await?,
-            );
-            sqlx::query!("DELETE FROM notes WHERE folder_id = ?", folder_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-    } else {
+    if !erase {
         // Le contenu va dans le dossier du dessus (la racine de l'espace pour
         // un dossier du premier niveau), envois en cours compris.
         let parent = folder.parent_id;
@@ -507,25 +490,21 @@ pub async fn delete(
             }
         }
     }
-    sqlx::query!("DELETE FROM folders WHERE id = ?", id)
-        .execute(&mut *tx)
-        .await?;
     tx.commit().await?;
-    // Le disque après la base : un fichier dont la ligne a disparu n'est plus
-    // servi, même si son effacement échoue.
-    if let Some(files) = &state.config.files {
-        for key in keys {
-            crate::files::remove_stored(files, &key).await;
-        }
-    }
+    // Le dossier (et, s'il fallait tout supprimer, son contenu) part dans la
+    // corbeille : 30 jours pour le restaurer.
+    crate::trash::folder(&state.db, crate::trash::Who::site(user), &folder).await?;
 
     let message = if inside.is_empty() {
-        format!("Dossier « {} » supprimé", folder.name)
+        format!("Dossier « {} » mis dans la corbeille", folder.name)
     } else if erase {
-        format!("Dossier « {} » supprimé, avec son contenu", folder.name)
+        format!(
+            "Dossier « {} » mis dans la corbeille, avec son contenu",
+            folder.name
+        )
     } else {
         format!(
-            "Dossier « {} » supprimé : son contenu est dans « {} »",
+            "Dossier « {} » mis dans la corbeille : son contenu est dans « {} »",
             folder.name,
             label(&space.name, &folders, folder.parent_id)
         )

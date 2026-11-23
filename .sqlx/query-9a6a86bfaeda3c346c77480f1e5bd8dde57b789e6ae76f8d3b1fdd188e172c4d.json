@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", space_id, title, pinned AS \"pinned!: bool\", updated_at\n           FROM notes\n           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2)\n           ORDER BY pinned DESC, updated_at DESC\n           LIMIT 40",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "pinned!: bool",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9a6a86bfaeda3c346c77480f1e5bd8dde57b789e6ae76f8d3b1fdd188e172c4d"
+}

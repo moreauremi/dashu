@@ -127,7 +127,7 @@ pub async fn list(
            FROM note_tags nt
            JOIN tags t ON t.id = nt.tag_id
            JOIN notes n ON n.id = nt.note_id
-           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR n.space_id = ?2)
            ORDER BY t.name"#,
         user,
         space
@@ -148,7 +148,7 @@ pub async fn list(
            FROM tags t
            JOIN note_tags nt ON nt.tag_id = t.id
            JOIN notes n ON n.id = nt.note_id
-           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR n.space_id = ?2)
            GROUP BY t.name
            ORDER BY t.name"#,
         user,
@@ -283,7 +283,7 @@ pub fn mark_matches(text: &str) -> String {
         .replace(MARK_CLOSE, "</mark>")
 }
 
-fn display_title(title: &str) -> String {
+pub(crate) fn display_title(title: &str) -> String {
     if title.trim().is_empty() {
         "Sans titre".into()
     } else {
@@ -303,7 +303,7 @@ async fn recent_in_space(
                   n.pinned AS "pinned!: bool", n.updated_at AS "updated_at!: i64",
                   n.space_id AS "space_id!: i64", n.folder_id
            FROM notes n
-           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?2)
+           WHERE n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1) AND (?2 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR n.space_id = ?2)
              AND (?3 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?3))
@@ -350,7 +350,7 @@ async fn search_in_space(
                   n.space_id AS "space_id!: i64", n.folder_id
            FROM notes_fts
            JOIN notes n ON n.id = notes_fts.rowid
-           WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2) AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL) OR n.space_id = ?3)
+           WHERE notes_fts MATCH ?1 AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2) AND (?3 IS NULL AND n.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR n.space_id = ?3)
              AND (?4 IS NULL OR EXISTS (
                    SELECT 1 FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
                    WHERE nt.note_id = n.id AND t.name = ?4))
@@ -829,19 +829,10 @@ pub async fn delete(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
-    let deleted = sqlx::query!(
-        "DELETE FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
-        id,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?
-    .rows_affected();
-    if deleted == 0 {
-        return Err(AppError::NotFound);
-    }
-    prune_orphan_tags(&state.db, ctx.user.id).await?;
-    ctx.flash_ok("Note supprimée").await?;
+    // Dans la corbeille, pas effacée : 30 jours pour la restaurer.
+    crate::trash::note(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
+    ctx.flash_ok("Note mise dans la corbeille (Réglages › Corbeille)")
+        .await?;
     Ok(see_other("/notes"))
 }
 

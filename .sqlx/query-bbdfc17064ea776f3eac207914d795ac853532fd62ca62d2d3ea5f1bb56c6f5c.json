@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT name, last_fetched_at, last_error FROM calendar_sources\n           WHERE user_id = ?1 AND (?3 AND space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR space_id = ?2) ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_fetched_at",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_error",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "bbdfc17064ea776f3eac207914d795ac853532fd62ca62d2d3ea5f1bb56c6f5c"
+}

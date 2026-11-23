@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET moment_space = NULL WHERE moment_space = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "19dacb4e897bd972acfdce7a2c59dcc3998334b1c60d74418ce2aa2573308510"
+}

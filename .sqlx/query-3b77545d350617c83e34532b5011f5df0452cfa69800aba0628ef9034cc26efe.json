@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE uploads SET folder_id = NULL WHERE folder_id IN (SELECT id FROM folders WHERE trash_op = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3b77545d350617c83e34532b5011f5df0452cfa69800aba0628ef9034cc26efe"
+}

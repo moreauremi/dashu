@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notes SET space_id = ?, folder_id = ?, deleted_at = NULL, deleted_by = NULL,\n                   deleted_via = NULL, trash_op = NULL, trash_root = 0, trash_folder_id = NULL\n                 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "31daaa449121dc21c8e2c261bb6648ee7aef4db8e0f01e5af8c7f4630fa9aaa4"
+}

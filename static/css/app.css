@@ -5059,6 +5059,23 @@ a.cal-allday.is-own:hover {
   color: var(--danger);
 }
 
+/* Page Corbeille (templates/settings/trash.html). */
+.trash-row .trash-actions {
+  display: flex;
+  gap: 6px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.trash-row .trash-actions form {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.trash-list + form {
+  margin-top: 12px;
+}
+
 .auth {
   display: grid;
   place-items: center;

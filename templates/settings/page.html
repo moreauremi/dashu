@@ -350,6 +350,14 @@
   {#- Connexions : jetons d'accès (settings/_connexions.html, déjà rendu). -#}
   {{ connexions_html|safe }}
 
+  <section class="card" id="corbeille" aria-labelledby="s-trash">
+    <header class="card-head"><h2 id="s-trash">Corbeille</h2></header>
+    <div class="card-body">
+      <p class="hint">Ce que tu supprimes (notes, fichiers, dossiers, espaces) reste 30 jours dans la corbeille, d'où tu peux le restaurer.</p>
+      <div><a class="btn" href="/settings/trash">{{ crate::assets::icon("trash")|safe }}{% if trash_count == 0 %}Ouvrir la corbeille (vide){% else if trash_count == 1 %}Ouvrir la corbeille (1 élément){% else %}Ouvrir la corbeille ({{ trash_count }} éléments){% endif %}</a></div>
+    </div>
+  </section>
+
   {#- Google Agenda : les événements créés dans dashu y sont copiés (un seul
       sens). Seulement si Google est configuré sur ce serveur. -#}
   {% if google_enabled %}

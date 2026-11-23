@@ -83,9 +83,13 @@ async fn la_vignette_est_faite_a_l_arrivee_puis_affichee() {
     let small = image::load_from_memory(&thumb.bytes).unwrap();
     assert_eq!((small.width(), small.height()), (256, 171));
 
-    // Supprimer le fichier efface aussi sa vignette.
+    // L'effacer pour de bon (depuis la corbeille) efface aussi sa vignette.
     assert_eq!(app.stored_files().len(), 2);
     alice.post(&format!("/files/{id}/delete"), &[]).await;
+    assert_eq!(app.stored_files().len(), 2);
+    alice
+        .post(&format!("/settings/trash/fichier/{id}/erase"), &[])
+        .await;
     assert!(app.stored_files().is_empty(), "{:?}", app.stored_files());
 }
 

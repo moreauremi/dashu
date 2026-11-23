@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT trash_op AS \"op!: i64\" FROM folders WHERE id = ? AND trash_root = 1\n                     AND trash_op IS NOT NULL\n                     AND space_id IN (SELECT trash_id FROM trash_access WHERE user_id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "op!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "0ae41fd96fb321d758a6e858632dc03bb5475e4b0546a662223de7a6c7315cde"
+}
