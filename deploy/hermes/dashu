@@ -79,6 +79,26 @@ def call(method, path, params=None, body=None):
     return json.loads(raw) if raw else None
 
 
+def quote(slug):
+    """Un slug tel qu'il va dans une adresse."""
+    return urllib.parse.quote(slug, safe="")
+
+
+def fmt_members(d):
+    print(f"Propriétaire : {d['owner']['name']} ({d['owner']['email']})")
+    for m in d["members"]:
+        print(f"#{m['id']} {m['name']} ({m['email']})")
+    for i in d["invitations"]:
+        print(f"invitation #{i['id']} : {i['person']['email']}, en attente")
+
+
+def fmt_settings(s):
+    name = f"{s['first_name']} {s['last_name']}".strip() or "(sans nom)"
+    print(f"{name}, thème {s['theme']}, taille {s['ui_size']}, "
+          f"barre latérale {'détachée' if s['sidebar_floating'] else 'ancrée'}")
+    print(f"Raccourcis : {', '.join(s['mobile_tabs'])} ; espace du moment : {s['moment_space'] or 'aucun'}")
+
+
 def call_raw(method, path, params=None, data=None):
     """Appelle l'API sans JSON : un contenu à envoyer ou à recevoir (fichiers)."""
     url = read_config("url").rstrip("/") + "/api/v1" + path
@@ -271,6 +291,7 @@ def main():
     s.add_argument("id", type=int)
     s.add_argument("--title")
     s.add_argument("--due", help="AAAA-MM-JJ")
+    s.add_argument("--move", help="change la tâche d'espace : " + SPACES)
 
     s = reader("notes", "liste ou recherche des notes")
     s.add_argument("--q", help="recherche plein texte")
@@ -436,6 +457,84 @@ def main():
     s = sub.add_parser("source-rm", help="retire un agenda iCal")
     s.add_argument("id", type=int)
 
+    s = sub.add_parser("space-add", help="crée un espace")
+    s.add_argument("name")
+    s.add_argument("--color")
+    s.add_argument("--icon")
+
+    s = sub.add_parser("space-edit", help="renomme un espace, change sa couleur, son icône ou ses règles")
+    s.add_argument("space", help=SPACES)
+    s.add_argument("--name")
+    s.add_argument("--color")
+    s.add_argument("--icon")
+    s.add_argument("--mp4", choices=["on", "off"], help="règle : vidéo convertie en MP4")
+    s.add_argument("--heic", choices=["on", "off"], help="règle : photo HEIC doublée d'un JPEG")
+
+    s = sub.add_parser("space-archive", help="archive un espace")
+    s.add_argument("space", help=SPACES)
+
+    s = sub.add_parser("space-unarchive", help="remet un espace archivé en service")
+    s.add_argument("space", help=SPACES)
+
+    s = sub.add_parser("space-rm", help="met un espace dans la corbeille")
+    s.add_argument("space", help=SPACES)
+    how = s.add_mutually_exclusive_group(required=True)
+    how.add_argument("--trash", action="store_true", help="le contenu part dans la corbeille avec l'espace")
+    how.add_argument("--to", help="le contenu passe dans cet espace")
+
+    s = reader("members", "membres et invitations d'un espace")
+    s.add_argument("space", help=SPACES)
+
+    s = sub.add_parser("invite", help="invite un compte existant dans un espace")
+    s.add_argument("space", help=SPACES)
+    s.add_argument("email")
+
+    s = sub.add_parser("invite-cancel", help="annule une invitation en attente")
+    s.add_argument("space", help=SPACES)
+    s.add_argument("id", type=int)
+
+    s = sub.add_parser("member-rm", help="retire un membre d'un espace")
+    s.add_argument("space", help=SPACES)
+    s.add_argument("id", type=int, help="identifiant du compte (dashu members)")
+
+    s = sub.add_parser("space-leave", help="quitte un espace partagé")
+    s.add_argument("space", help=SPACES)
+
+    reader("invitations", "invitations reçues")
+
+    s = sub.add_parser("invitation-accept", help="accepte une invitation reçue")
+    s.add_argument("id", type=int)
+
+    s = sub.add_parser("invitation-decline", help="refuse une invitation reçue")
+    s.add_argument("id", type=int)
+
+    s = reader("dashboard", "disposition du tableau de bord d'un espace")
+    s.add_argument("space", help=SPACES)
+
+    s = sub.add_parser("dashboard-set", help="change la disposition du tableau de bord")
+    s.add_argument("space", help=SPACES)
+    what = s.add_mutually_exclusive_group(required=True)
+    what.add_argument("--layout", help="calendar:2x3,tasks:2x2 (vide : aucun widget)")
+    what.add_argument("--default", action="store_true", help="la disposition par défaut")
+
+    reader("settings", "profil et affichage du compte")
+
+    s = sub.add_parser("settings-set", help="change le profil ou l'affichage")
+    s.add_argument("--first-name")
+    s.add_argument("--last-name")
+    s.add_argument("--theme", choices=["dark", "light", "system"])
+    s.add_argument("--size", choices=["small", "normal", "large"])
+    s.add_argument("--sidebar", choices=["anchored", "floating"])
+    s.add_argument("--tabs", help="raccourcis du téléphone, séparés par des virgules")
+    moment = s.add_mutually_exclusive_group()
+    moment.add_argument("--moment", help="espace des jours sans cours")
+    moment.add_argument("--no-moment", action="store_true", help="ouvrir sur le dernier espace utilisé")
+
+    s = sub.add_parser("avatar-set", help="change la photo de profil")
+    s.add_argument("path")
+
+    sub.add_parser("avatar-rm", help="retire la photo de profil")
+
     s = sub.add_parser("admin", help="administration du serveur dashu")
     s.add_argument("action", choices=ADMIN_COMMANDS)
     s.add_argument("lines", nargs="?", type=int, default=50, help="pour logs : nombre de lignes")
@@ -460,8 +559,10 @@ def main():
             body["title"] = args.title
         if args.due:
             body["due_date"] = args.due
+        if args.move:
+            body["space"] = args.move
         if not body:
-            fail("rien à modifier : --title et/ou --due")
+            fail("rien à modifier : --title, --due ou --move")
         print(fmt_task(call("PATCH", f"/tasks/{args.id}", body=body)))
     elif args.cmd == "task-rm":
         call("DELETE", f"/tasks/{args.id}")
@@ -651,6 +752,88 @@ def main():
     elif args.cmd == "source-rm":
         call("DELETE", f"/calendar/sources/{args.id}")
         print(f"Agenda #{args.id} retiré.")
+    elif args.cmd == "space-add":
+        body = {"name": args.name}
+        if args.color:
+            body["color"] = args.color
+        if args.icon:
+            body["icon"] = args.icon
+        e = call("POST", "/spaces", body=body)
+        print(f"Espace « {e['name']} » créé (slug : {e['slug']}).")
+    elif args.cmd == "space-edit":
+        body = {k: v for k, v in {"name": args.name, "color": args.color, "icon": args.icon}.items() if v}
+        if args.mp4:
+            body["auto_mp4"] = args.mp4 == "on"
+        if args.heic:
+            body["auto_heic_jpeg"] = args.heic == "on"
+        if not body:
+            fail("rien à modifier")
+        e = call("PATCH", f"/spaces/{quote(args.space)}", body=body)
+        print(f"Espace {e['slug']} : « {e['name']} », {e['color']}, {e['icon']}.")
+    elif args.cmd == "space-archive":
+        e = call("POST", f"/spaces/{quote(args.space)}/archive")
+        print(f"Espace « {e['name']} » archivé.")
+    elif args.cmd == "space-unarchive":
+        e = call("POST", f"/spaces/{quote(args.space)}/unarchive")
+        print(f"Espace « {e['name']} » de retour.")
+    elif args.cmd == "space-rm":
+        params = {"content": "trash"} if args.trash else {"transfer_to": args.to}
+        call("DELETE", f"/spaces/{quote(args.space)}", params)
+        where = "avec son contenu" if args.trash else f"; son contenu est dans {args.to}"
+        print(f"Espace {args.space} mis dans la corbeille {where} (30 jours pour le restaurer).")
+    elif args.cmd == "members":
+        show(call("GET", f"/spaces/{quote(args.space)}/members"), args, fmt_members)
+    elif args.cmd == "invite":
+        i = call("POST", f"/spaces/{quote(args.space)}/invitations", body={"email": args.email})
+        print(f"Invitation #{i['id']} envoyée à {i['email']}.")
+    elif args.cmd == "invite-cancel":
+        call("DELETE", f"/spaces/{quote(args.space)}/invitations/{args.id}")
+        print(f"Invitation #{args.id} annulée.")
+    elif args.cmd == "member-rm":
+        call("DELETE", f"/spaces/{quote(args.space)}/members/{args.id}")
+        print(f"Membre #{args.id} retiré : plus d'accès à l'espace.")
+    elif args.cmd == "space-leave":
+        call("POST", f"/spaces/{quote(args.space)}/leave")
+        print(f"Espace {args.space} quitté.")
+    elif args.cmd == "invitations":
+        show(call("GET", "/invitations"), args,
+             lambda xs: print("\n".join(f"#{i['id']} {i['space']}, par {i['from']}" for i in xs) or "Aucune invitation."))
+    elif args.cmd == "invitation-accept":
+        e = call("POST", f"/invitations/{args.id}/accept")
+        print(f"Espace « {e['name']} » rejoint (slug : {e['slug']}).")
+    elif args.cmd == "invitation-decline":
+        call("POST", f"/invitations/{args.id}/decline")
+        print(f"Invitation #{args.id} refusée.")
+    elif args.cmd == "dashboard":
+        show(call("GET", f"/spaces/{quote(args.space)}/dashboard"), args,
+             lambda d: print(d["layout"] or "Aucun widget."))
+    elif args.cmd == "dashboard-set":
+        layout = None if args.default else args.layout
+        d = call("PUT", f"/spaces/{quote(args.space)}/dashboard", body={"layout": layout})
+        print(f"Tableau de bord de {d['space']} : {d['layout'] or 'aucun widget'}.")
+    elif args.cmd == "settings":
+        show(call("GET", "/settings"), args, fmt_settings)
+    elif args.cmd == "settings-set":
+        body = {k: v for k, v in {"first_name": args.first_name, "last_name": args.last_name,
+                                  "theme": args.theme, "ui_size": args.size}.items() if v is not None}
+        if args.sidebar:
+            body["sidebar_floating"] = args.sidebar == "floating"
+        if args.tabs:
+            body["mobile_tabs"] = [t.strip() for t in args.tabs.split(",") if t.strip()]
+        if args.moment:
+            body["moment_space"] = args.moment
+        elif args.no_moment:
+            body["moment_space"] = None
+        if not body:
+            fail("rien à modifier")
+        fmt_settings(call("PATCH", "/settings", body=body))
+    elif args.cmd == "avatar-set":
+        with open(os.path.expanduser(args.path), "rb") as f:
+            call_raw("PUT", "/settings/avatar", data=f.read())
+        print("Photo de profil changée.")
+    elif args.cmd == "avatar-rm":
+        call("DELETE", "/settings/avatar")
+        print("Photo de profil retirée.")
     elif args.cmd == "admin":
         admin(args)
 

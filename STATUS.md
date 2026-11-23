@@ -332,6 +332,32 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 - [x] Une source iCal vers une adresse privée, la machine elle-même, un nom local ou en HTTP est refusée ; l'adresse complète n'est jamais redonnée (le domaine seul). Même vérification que Réglages (`settings::add_source`). La première synchronisation part en arrière-plan. Test `sources_ical_adresses_publiques_seulement`.
 - [x] Connecteur Claude : `creer_evenement`, `modifier_evenement`, `supprimer_evenement` (destructeur), `lister_sources_agenda`, `ajouter_source_agenda`, `retirer_source_agenda` (destructeur). Test `les_outils_mcp_de_l_agenda`. Hermès : `event-add`, `event-edit`, `event-rm`, `sources`, `source-add`, `source-rm` ; skill 1.3.0. La décision du 17 novembre « pas d'action API pour créer un événement » est remplacée, comme le dit la spec du 20 novembre.
 
+**Étape 8, API des espaces, des membres et des réglages** (23 novembre 2026). Vérifiée par les tests (`tests/api_espaces.rs`, 8 tests ; ceux du site passent toujours) et, pour la commande d'Hermès, sur un vrai dashu local avec deux comptes et une base jetable. **Pas encore sur le serveur.**
+
+- [x] Espaces : créer, lire, renommer, couleur, icône, règles automatiques, archiver, désarchiver, supprimer (corbeille, ou en transférant le contenu : le choix est obligatoire). Refus : nom vide, pris ou trop long, couleur ou icône inconnue, 9e espace, Perso archivé ou supprimé. Test `espaces_creer_modifier_archiver_supprimer`, `huit_espaces_au_plus`.
+- [x] Membres : voir, inviter, annuler, retirer, quitter ; invitations reçues, accepter, refuser. Un espace d'un autre compte répond 404, une action de propriétaire tentée par un membre 403, même avec une saisie invalide. Un membre ne voit pas les invitations en attente. Test `membres_inviter_accepter_retirer_quitter`.
+- [x] Tableau de bord de chaque espace : lire, remplacer, vider, revenir à la disposition par défaut ; commun dans un espace partagé ; un corps sans `layout` est refusé au lieu de tout effacer. Test `tableau_de_bord_d_un_espace`.
+- [x] Réglages : prénom, nom, avatar, thème, taille, barre latérale, raccourcis du téléphone, espace « moment ». Tout est vérifié avant la première écriture. Un champ inconnu (`password`, `email`) est refusé. Test `reglages_du_compte`, `ce_qui_protege_le_compte_n_a_pas_de_route`.
+- [x] Tâches : changer d'espace (`space` dans `PATCH /tasks/{id}`). Cette ligne du tableau de la spec n'avait pas été faite aux lots précédents. Test `changer_une_tache_d_espace`.
+- [x] Mêmes fonctions que le site : les handlers de `src/spaces/mod.rs`, `src/settings/` et `dashboard::move_task` sont séparés de leur travail, sans changement de comportement (tous les tests du site passent).
+- [x] Connecteur Claude : 20 outils de plus (60 en tout). Archiver, supprimer, inviter, retirer, quitter, refuser et déplacer une tâche sont marqués destructeurs. Test `les_outils_mcp_des_espaces`.
+- [x] Hermès : `space-add`, `space-edit`, `space-archive`, `space-unarchive`, `space-rm`, `members`, `invite`, `invite-cancel`, `member-rm`, `space-leave`, `invitations`, `invitation-accept`, `invitation-decline`, `dashboard`, `dashboard-set`, `settings`, `settings-set`, `avatar-set`, `avatar-rm`, `task-edit --move` ; skill 1.4.0. Chacune jouée contre un dashu local, refus compris. Les commandes des lots 5 à 7 restent vérifiées par une relecture seulement.
+
+**Critères « API » de la spec :**
+
+- [x] Chaque ligne du tableau a sa route et ses tests. Une exception : le téléchargement d'une note en PDF par l'API passe par la fonction du site, mais n'a pas de test d'API (il attend le service de conversion).
+- [x] Les actions « Hors de l'API » n'ont pas de route (tests `supprimer_definitivement_et_vider_sur_le_site_seulement`, `ce_qui_protege_le_compte_n_a_pas_de_route`).
+- [x] Un fichier envoyé par l'API arrive identique ; un fichier téléchargé est servi en pièce jointe (étape 5).
+- [x] Une source iCal vers une adresse privée est refusée (étape 7).
+- [x] La commande `dashu` d'Hermès, son skill et les outils MCP couvrent chaque nouvelle route.
+- [x] STATUS et README à jour à chaque lot.
+
+**Pour qui reprend :**
+
+- **Où en sont les PR** : lots 1 à 7 fusionnés (#63 à #66, #68 à #70). Lot 8 : branche `api-espaces`, partie de `v1`.
+- **Reste** : essayer les lots 4 à 8 sur le serveur après `dashu-update`, avec un vrai Claude et Hermès ; la page d'accueil si Rémi le veut.
+- **Pièges rencontrés** : `cargo test` échoue sur `arguments_de_pandoc` sous Windows seulement (chemin `/j\gabarit.typst`), sans lien avec ce chantier ; sous Windows, un binaire `target/debug/dashu.exe` lancé bloque la compilation (lancer une copie) ; un long script Python passé en heredoc au shell Bash échoue (l'écrire dans un fichier) ; après une requête SQL nouvelle, `cargo sqlx prepare` sur une base jetable (`DATABASE_URL=sqlite://target/prepare.db`), puis versionner `.sqlx/`.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

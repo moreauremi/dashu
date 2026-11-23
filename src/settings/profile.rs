@@ -37,7 +37,7 @@ pub struct ProfileForm {
 }
 
 /// Nom nettoyé : espaces resserrés, pas de caractère de contrôle.
-fn clean(raw: &str) -> Result<String, String> {
+pub(crate) fn clean(raw: &str) -> Result<String, String> {
     let name = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     if name.chars().count() > NAME_MAX_CHARS || name.chars().any(char::is_control) {
         return Err(format!(
@@ -45,6 +45,24 @@ fn clean(raw: &str) -> Result<String, String> {
         ));
     }
     Ok(name)
+}
+
+/// Enregistre le prénom et le nom (déjà nettoyés). Aussi pour l'API.
+pub(crate) async fn store_names(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    first: &str,
+    last: &str,
+) -> AppResult<()> {
+    sqlx::query!(
+        "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
+        first,
+        last,
+        user
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// `POST /settings/profile` : prénom et nom.
@@ -60,14 +78,7 @@ pub async fn save_profile(
             return Ok(see_other(BACK));
         }
     };
-    sqlx::query!(
-        "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
-        first,
-        last,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    store_names(&state.db, ctx.user.id, &first, &last).await?;
     ctx.flash_ok("Profil enregistré").await?;
     Ok(see_other(BACK))
 }
@@ -99,13 +110,9 @@ fn normalize_avatar(bytes: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// `POST /settings/avatar` : la nouvelle photo, en corps brut (image/jpeg
-/// préparée par le navigateur). Répond 204 ; la page se recharge ensuite.
-pub async fn upload_avatar(
-    ctx: Ctx,
-    State(state): State<AppState>,
-    body: Bytes,
-) -> AppResult<Response> {
+/// Relit l'image reçue et en fait la photo du compte (une image illisible
+/// est refusée). Aussi pour l'API.
+pub(crate) async fn store_avatar(db: &sqlx::SqlitePool, user: i64, body: Bytes) -> AppResult<()> {
     if body.is_empty() {
         return Err(AppError::BadRequest("Aucune image reçue.".into()));
     }
@@ -115,22 +122,39 @@ pub async fn upload_avatar(
     sqlx::query!(
         "UPDATE users SET avatar = ?, avatar_version = avatar_version + 1 WHERE id = ?",
         jpeg,
-        ctx.user.id
+        user
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
+    Ok(())
+}
+
+/// `POST /settings/avatar` : la nouvelle photo, en corps brut (image/jpeg
+/// préparée par le navigateur). Répond 204 ; la page se recharge ensuite.
+pub async fn upload_avatar(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    body: Bytes,
+) -> AppResult<Response> {
+    store_avatar(&state.db, ctx.user.id, body).await?;
     ctx.flash_ok("Photo de profil changée").await?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
-/// `POST /settings/avatar/delete` : retour aux initiales.
-pub async fn delete_avatar(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+/// Retire la photo du compte : retour aux initiales. Aussi pour l'API.
+pub(crate) async fn remove_avatar(db: &sqlx::SqlitePool, user: i64) -> AppResult<()> {
     sqlx::query!(
         "UPDATE users SET avatar = NULL, avatar_version = avatar_version + 1 WHERE id = ?",
-        ctx.user.id
+        user
     )
-    .execute(&state.db)
+    .execute(db)
     .await?;
+    Ok(())
+}
+
+/// `POST /settings/avatar/delete` : retour aux initiales.
+pub async fn delete_avatar(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+    remove_avatar(&state.db, ctx.user.id).await?;
     ctx.flash_ok("Photo de profil retirée").await?;
     Ok(see_other(BACK))
 }
@@ -162,25 +186,36 @@ pub struct SizeForm {
     pub(crate) next: Option<String>,
 }
 
+/// Valeur enregistrée pour une taille : `small`, `large`, ou rien pour `normal`.
+pub(crate) fn parse_size(raw: &str) -> Result<Option<&'static str>, String> {
+    match raw {
+        "small" => Ok(Some("small")),
+        "large" => Ok(Some("large")),
+        "normal" => Ok(None),
+        _ => Err("Taille inconnue.".into()),
+    }
+}
+
+/// Enregistre la taille de l'interface sur le compte. Aussi pour l'API.
+pub(crate) async fn store_size(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    size: Option<&str>,
+) -> AppResult<()> {
+    sqlx::query!("UPDATE users SET ui_size = ? WHERE id = ?", size, user)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 /// `POST /settings/size` : taille de l'interface, enregistrée sur le compte.
 pub async fn set_size(
     ctx: Ctx,
     State(state): State<AppState>,
     axum::Form(form): axum::Form<SizeForm>,
 ) -> AppResult<Response> {
-    let size = match form.size.as_str() {
-        "small" => Some("small"),
-        "large" => Some("large"),
-        "normal" => None,
-        _ => return Err(AppError::BadRequest("Taille inconnue.".into())),
-    };
-    sqlx::query!(
-        "UPDATE users SET ui_size = ? WHERE id = ?",
-        size,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    let size = parse_size(&form.size).map_err(AppError::BadRequest)?;
+    store_size(&state.db, ctx.user.id, size).await?;
     Ok(see_other(local_path(form.next.as_deref())))
 }
 
@@ -189,6 +224,22 @@ pub struct SidebarForm {
     /// `1` : détachée (cachée à gauche) ; `0` : ancrée.
     pub(crate) floating: String,
     pub(crate) next: Option<String>,
+}
+
+/// Enregistre la barre latérale, ancrée ou détachée. Aussi pour l'API.
+pub(crate) async fn store_sidebar(
+    db: &sqlx::SqlitePool,
+    user: i64,
+    floating: bool,
+) -> AppResult<()> {
+    sqlx::query!(
+        "UPDATE users SET sidebar_floating = ? WHERE id = ?",
+        floating,
+        user
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// `POST /settings/sidebar` : barre latérale ancrée ou détachée.
@@ -202,13 +253,7 @@ pub async fn set_sidebar(
         "0" => false,
         _ => return Err(AppError::BadRequest("Choix inconnu.".into())),
     };
-    sqlx::query!(
-        "UPDATE users SET sidebar_floating = ? WHERE id = ?",
-        floating,
-        ctx.user.id
-    )
-    .execute(&state.db)
-    .await?;
+    store_sidebar(&state.db, ctx.user.id, floating).await?;
     Ok(see_other(local_path(form.next.as_deref())))
 }
 

@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT email, first_name, last_name, theme, ui_size, mobile_tabs, moment_space,\n                  sidebar_floating AS \"sidebar_floating!: bool\",\n                  avatar IS NOT NULL AS \"has_avatar!: bool\"\n           FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "email",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "first_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "theme",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "ui_size",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "mobile_tabs",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "moment_space",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "sidebar_floating!: bool",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "has_avatar!: bool",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a80ee6407fc822311b12baa7afe829926bdab7509556c89a4204cb579c437b72"
+}
