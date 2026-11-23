@@ -110,8 +110,8 @@ En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu
 | `BASE_URL` | oui | URL publique, sans barre finale (`https://app.dashu.dev`). Sert aussi d'adresse de retour à Google. En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
 | `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; en production `sqlite:///var/lib/dashu/dashu.db` (Docker : `sqlite:///data/dashu.db`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
-| `API_TOKEN` | non | Active l'API JSON (`/api/v1`) : jeton attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API répond 404. |
-| `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit l'API. Doit figurer dans `ALLOWED_EMAILS`. |
+| `API_TOKEN` | non | Jeton fixe de l'API JSON (`/api/v1`), pour Hermès : attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API n'accepte que les jetons personnels (Réglages › Connexions). |
+| `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit `API_TOKEN`. Doit figurer dans `ALLOWED_EMAILS`. |
 | `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
 | `MAX_UPLOAD_MB` | non | Taille maximale d'un fichier, en Mo. 2048 par défaut. |
 | `WORK_DIR` | non | Active la compression : dossier de travail partagé avec le service de conversion (`/srv/dashu/tmp` en production). Demande `FILES_DIR`. |
@@ -170,9 +170,12 @@ Pour se connecter, dashu ne demande à Google que l'identité et l'adresse email
 
 ## API pour un assistant
 
-Une API JSON permet à un programme (par exemple un assistant personnel) de gérer les tâches et les notes et de lire l'agenda. Elle est **désactivée par défaut** : il faut renseigner `API_TOKEN` (par exemple `openssl rand -hex 32`) et `API_USER_EMAIL` dans `.env`, puis redémarrer.
+Une API JSON permet à un programme (un assistant personnel, Claude Code, un script) de gérer les tâches et les notes et de lire l'agenda. Chaque requête porte un jeton dans l'en-tête `Authorization: Bearer <jeton>`. Deux sortes de jetons :
 
-Chaque requête porte l'en-tête `Authorization: Bearer <API_TOKEN>`. Il n'y a ni cookie ni session : la protection CSRF ne s'applique pas, et à l'inverse un cookie de session n'ouvre pas l'API. Les réponses et les erreurs sont en JSON (`{"error": "…"}`).
+- **Un jeton personnel**, créé par chaque compte dans **Réglages › Connexions** : un nom (« Claude Code du Mac ») et une durée (30 jours, 90 jours ou 1 an). Il agit au nom de son compte, avec ses droits : ses espaces et les espaces partagés qu'il a rejoints. Il commence par `dashu_` et ne s'affiche qu'une fois, à sa création ; dashu n'en garde que l'empreinte SHA-256. **Révoquer** le coupe à la requête suivante, **Tout révoquer** coupe d'un coup tous les accès du compte. 20 jetons au plus par compte. Un jeton expiré est refusé et reste dans la liste jusqu'à ce qu'on le supprime. Un compte retiré de `ALLOWED_EMAILS` perd ses jetons à la requête suivante.
+- **`API_TOKEN`**, l'accès d'Hermès : un jeton fixe renseigné sur le serveur (par exemple `openssl rand -hex 32`), avec `API_USER_EMAIL`, le compte au nom duquel il agit. Facultatif.
+
+Il n'y a ni cookie ni session : la protection CSRF ne s'applique pas, et à l'inverse un cookie de session n'ouvre pas l'API. Les réponses et les erreurs sont en JSON (`{"error": "…"}`).
 
 | Méthode et route | Rôle |
 | --- | --- |
@@ -190,7 +193,7 @@ Chaque requête porte l'en-tête `Authorization: Bearer <API_TOKEN>`. Il n'y a n
 Exemple :
 
 ```bash
-curl -s -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+curl -s -H "Authorization: Bearer $DASHU_TOKEN" -H "Content-Type: application/json" \
   -d '{"title": "Réviser le VLAN", "space": "ecole"}' https://app.dashu.dev/api/v1/tasks
 ```
 

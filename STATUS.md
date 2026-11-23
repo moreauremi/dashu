@@ -264,6 +264,19 @@ Demandé par Rémi le 17 novembre 2026, cahier des charges dans `SPEC.md` (« É
 - [x] Essai réel sur le serveur avec le vrai Google, après avoir activé **Google Calendar API** dans le projet Google de dashu (README, « Créer les identifiants Google », étape 5). Fait par Rémi le 23 novembre 2026 : API activée, agenda relié depuis Réglages, l'événement créé dans dashu arrive dans Google Agenda.
 - Migration 0017 (`events`, `google_accounts`, `google_deletions`, vue `agenda_items`). Dépendances : `ring` et `base64` en direct (déjà tirées par rustls et axum), fonction `json` de reqwest. Le champ de date et d'heure suivent maintenant le style des autres champs (16 px sur écran tactile, sinon iOS zoome).
 
+## Connecteur Claude et API complète : avancement
+
+Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« Connecteur Claude (MCP) » et « API complète et corbeille »), livrés une PR par étape.
+
+**Étape 1, jetons par compte** (23 novembre 2026). Vérifiée par les tests (`tests/jetons.rs`, 5 tests ; `tests/api.rs` ; tests unitaires de `src/auth/tokens.rs`) et dans le navigateur, sur une instance locale : carte Connexions, jeton créé et copié, appel de l'API avec lui depuis la page. **Pas encore sur le serveur.**
+
+- [x] Réglages › Connexions crée un jeton (nom, durée de 30 jours, 90 jours ou 1 an), l'affiche une fois avec un bouton Copier et n'en garde que l'empreinte SHA-256 ; un nom vide ou trop long, une durée inconnue ou un 21e jeton sont refusés. Tests `un_jeton_s_affiche_une_fois_et_seule_son_empreinte_est_gardee`, `nom_vide_duree_inconnue_et_vingt_et_unieme_jeton_refuses`.
+- [x] Un jeton agit sur `/api/v1` au nom de son compte : ses espaces et les espaces partagés rejoints, 404 ailleurs. Test `un_jeton_agit_au_nom_de_son_compte`.
+- [x] Jeton révoqué, expiré (toujours listé, « expiré », à supprimer), « Tout révoquer » ou compte retiré de `ALLOWED_EMAILS` : 401 à la requête suivante ; un autre compte ne révoque pas le jeton (404). Test `revoque_expire_tout_revoquer_ou_compte_retire_coupent_l_acces`.
+- [x] `API_TOKEN` d'Hermès marche comme avant (tous les tests de `tests/api.rs`). Sans `API_TOKEN`, l'API n'est plus désactivée : elle n'accepte que les jetons personnels (test `sans_api_token_seuls_les_jetons_personnels_ouvrent_l_api`).
+- Dernière utilisation notée au plus une fois par minute, affichée dans la carte. Les logs disent qu'un jeton a été créé ou révoqué (compte et nom), jamais le jeton.
+- Migration 0018 (`access_tokens`). La colonne `grant_id` servira à l'étape 3 (OAuth).
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

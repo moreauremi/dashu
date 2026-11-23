@@ -261,6 +261,16 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/password", post(settings::set_password))
         .route("/settings/tabs", post(settings::set_tabs))
         .route("/settings/google/unlink", post(settings::unlink_google))
+        // Connexions : jetons d'accès du compte
+        .route("/settings/tokens", post(settings::connexions::create))
+        .route(
+            "/settings/tokens/revoke-all",
+            post(settings::connexions::revoke_all),
+        )
+        .route(
+            "/settings/tokens/{id}/revoke",
+            post(settings::connexions::revoke),
+        )
         .route("/settings/spaces", post(spaces::create))
         .route("/settings/spaces/{id}", post(spaces::update))
         .route("/settings/spaces/{id}/archive", post(spaces::archive))

@@ -51,11 +51,28 @@ async fn un_cookie_de_session_n_ouvre_pas_l_api() {
 }
 
 #[tokio::test]
-async fn api_desactivee_sans_api_token() {
+async fn sans_api_token_seuls_les_jetons_personnels_ouvrent_l_api() {
     let app = TestApp::without_api().await;
     let (status, body) = app.api(Method::GET, "/api/v1/tasks", None, T).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(body["error"].as_str().unwrap().contains("désactivée"));
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(body["error"].as_str().unwrap().contains("jeton"));
+
+    // Un jeton créé dans Réglages › Connexions marche, lui.
+    let mut alice = app.logged_in(ALICE).await;
+    let response = alice
+        .post("/settings/tokens", &[("name", "Script"), ("duree", "30")])
+        .await;
+    let token = common::between(
+        &response.body,
+        "id=\"new-token\" type=\"text\" value=\"",
+        "\"",
+    )
+    .expect("jeton affiché")
+    .to_string();
+    let (status, _) = app
+        .api(Method::GET, "/api/v1/tasks", None, Some(&token))
+        .await;
+    assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]

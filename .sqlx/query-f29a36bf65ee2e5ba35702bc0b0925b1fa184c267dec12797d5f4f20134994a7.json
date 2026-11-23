@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM access_tokens WHERE id = ? AND user_id = ? AND grant_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f29a36bf65ee2e5ba35702bc0b0925b1fa184c267dec12797d5f4f20134994a7"
+}

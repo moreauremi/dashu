@@ -1,0 +1,67 @@
+{#- Carte « Connexions » de Réglages : les jetons qui donnent à un programme
+    (Claude Code, un script…) l'accès au compte. Chaque action remplace la
+    carte (htmx). Le jeton entier ne s'affiche qu'à sa création : la base
+    n'en garde que l'empreinte. -#}
+<section class="card" id="connexions" aria-labelledby="s-connexions">
+  <header class="card-head"><h2 id="s-connexions">Connexions</h2></header>
+  <div class="card-body">
+    <p class="hint">Un jeton donne à un programme l'accès à ton compte, avec tes droits : tes espaces et les espaces partagés que tu as rejoints. Il passe par l'API, dans l'en-tête <code>Authorization: Bearer …</code>.</p>
+
+    {%- if let Some(token) = new_token %}
+    <div class="share-new token-new" role="status">
+      <p>Jeton « {{ new_name }} » créé. Copie-le maintenant : il ne sera plus affiché.</p>
+      <div class="share-copy">
+        <input id="new-token" type="text" value="{{ token }}" readonly aria-label="Nouveau jeton" spellcheck="false">
+        <button class="btn btn-primary" type="button" data-copy="new-token">Copier</button>
+      </div>
+      <p class="hint">Exemple : <code>curl -H "Authorization: Bearer …" {{ api_url }}/spaces</code></p>
+    </div>
+    {%- endif %}
+
+    {%- if let Some(message) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ message }}</span></p>
+    {%- endif %}
+
+    {%- if tokens.is_empty() %}
+    <p class="hint">Aucun accès pour l'instant.</p>
+    {%- else %}
+    <ul class="sources tokens" role="list">
+      {%- for token in tokens %}
+      <li class="source">
+        <div class="source-main">
+          <strong>{{ token.name }}</strong>
+          {%- if token.expired %}<span class="space-tag token-expired">expiré</span>{% endif %}
+        </div>
+        <span class="muted">{{ token.created }} · {{ token.used }}{% if !token.expired %} · {{ token.expires }}{% endif %}</span>
+        <form hx-post="/settings/tokens/{{ token.id }}/revoke" hx-target="#connexions" hx-swap="outerHTML"{% if !token.expired %} hx-confirm="Révoquer le jeton « {{ token.name }} » ? Ce qui s'en sert perdra l'accès tout de suite."{% endif %}>
+          <button class="btn" type="submit">{% if token.expired %}Supprimer{% else %}Révoquer{% endif %}</button>
+        </form>
+      </li>
+      {%- endfor %}
+    </ul>
+    {%- endif %}
+
+    <form class="source-add" hx-post="/settings/tokens" hx-target="#connexions" hx-swap="outerHTML">
+      <label class="field field-grow">
+        <span class="field-label">Nom du jeton</span>
+        <input type="text" name="name" maxlength="{{ name_max }}" required placeholder="Claude Code du Mac" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Durée</span>
+        <select name="duree">
+          {%- for (key, _days, label) in durations %}
+          <option value="{{ key }}"{% if *key == default_duration %} selected{% endif %}>{{ label }}</option>
+          {%- endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">Nouveau jeton</button>
+    </form>
+
+    {%- if !tokens.is_empty() %}
+    <form hx-post="/settings/tokens/revoke-all" hx-target="#connexions" hx-swap="outerHTML" hx-confirm="Tout révoquer ? Chaque programme branché sur ton compte perdra l'accès tout de suite.">
+      <button class="btn btn-danger-outline" type="submit">Tout révoquer</button>
+    </form>
+    {%- endif %}
+    <p class="hint">{{ max_tokens }} jetons au plus. Un jeton expiré ne marche plus ; il reste dans la liste jusqu'à ce que tu le supprimes.</p>
+  </div>
+</section>

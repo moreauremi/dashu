@@ -12,6 +12,7 @@ pub mod google;
 pub mod password;
 pub mod ratelimit;
 pub mod session;
+pub mod tokens;
 
 use askama::Template;
 use axum::extract::{Query, State};

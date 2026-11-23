@@ -1,6 +1,7 @@
 //! Réglages : thème, espaces (gérés par `crate::spaces`), raccourcis du
-//! téléphone, mot de passe, compte Google lié, sources iCal.
+//! téléphone, mot de passe, compte Google lié, sources iCal, connexions.
 
+pub mod connexions;
 pub mod profile;
 
 use std::collections::HashMap;
@@ -63,6 +64,8 @@ struct SettingsPage {
     invitations: Vec<InvitationRow>,
     /// Mention de partage de chaque espace (« Partagé par Alice »).
     shared: HashMap<i64, String>,
+    /// Carte Connexions, déjà rendue (settings/_connexions.html).
+    connexions_html: String,
 }
 
 struct InvitationRow {
@@ -177,6 +180,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         moment_id: ctx.user.moment_space.unwrap_or(0),
         invitations,
         shared,
+        connexions_html: connexions::ConnexionsCard::render_html(&state, ctx.user.id).await?,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),

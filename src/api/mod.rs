@@ -1,8 +1,12 @@
 //! API JSON pour un programme (par exemple un assistant personnel).
 //!
 //! Toutes les routes sont sous `/api/v1` et exigent l'en-tête
-//! `Authorization: Bearer <API_TOKEN>`. L'API agit au nom d'un seul compte,
-//! `API_USER_EMAIL`. Sans `API_TOKEN`, elle est désactivée et répond 404.
+//! `Authorization: Bearer <jeton>`. Deux sortes de jetons :
+//!
+//! * un jeton personnel (`dashu_…`, Réglages › Connexions, voir
+//!   `crate::auth::tokens`), qui agit au nom de son compte ;
+//! * `API_TOKEN`, s'il est renseigné, qui agit au nom de `API_USER_EMAIL`
+//!   (l'accès d'Hermès, inchangé).
 //!
 //! Pas de session ni de cookie ici, donc pas de protection CSRF à prévoir : un
 //! site tiers peut faire envoyer un cookie par le navigateur, pas un en-tête
@@ -30,6 +34,7 @@ use serde_json::json;
 use sqlx::SqlitePool;
 
 use crate::AppState;
+use crate::auth::tokens;
 use crate::calendar::ical;
 use crate::notes::{self, markdown};
 use crate::spaces::{self, Space};
@@ -216,39 +221,39 @@ impl FromRequestParts<AppState> for ApiUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let Some(api) = &state.config.api else {
-            return Err(ApiError::new(
-                StatusCode::NOT_FOUND,
-                "API désactivée : renseigne API_TOKEN et API_USER_EMAIL",
-            ));
-        };
-
-        let presented = parts
-            .headers
-            .get(header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .map(str::trim);
-        let valid = presented.is_some_and(|t| same_secret(t.as_bytes(), api.token.as_bytes()));
-        if !valid {
-            return Err(ApiError::new(
+        let refused = || {
+            ApiError::new(
                 StatusCode::UNAUTHORIZED,
                 "jeton absent ou invalide (en-tête Authorization: Bearer …)",
-            ));
-        }
-
-        let id = sqlx::query_scalar!(
-            r#"SELECT id AS "id!" FROM users WHERE email = ?"#,
-            api.user_email
-        )
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or_else(|| {
-            ApiError::new(
-                StatusCode::CONFLICT,
-                "le compte de API_USER_EMAIL n'existe pas encore : crée-le avec `dashu set-password` ou connecte-toi une fois",
             )
-        })?;
+        };
+        let presented = bearer(parts).ok_or_else(refused)?;
+
+        let id = if presented.starts_with(tokens::PREFIX) {
+            // Jeton personnel. Ceux d'une autorisation OAuth ne valent que
+            // pour /mcp (SPEC, « Connecteur Claude », « Chaque jeton à sa place »).
+            match tokens::authenticate(state, presented).await? {
+                Some(owner) if owner.grant_id.is_none() => owner.user_id,
+                _ => return Err(refused()),
+            }
+        } else {
+            let api = state.config.api.as_ref().ok_or_else(refused)?;
+            if !same_secret(presented.as_bytes(), api.token.as_bytes()) {
+                return Err(refused());
+            }
+            sqlx::query_scalar!(
+                r#"SELECT id AS "id!" FROM users WHERE email = ?"#,
+                api.user_email
+            )
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or_else(|| {
+                ApiError::new(
+                    StatusCode::CONFLICT,
+                    "le compte de API_USER_EMAIL n'existe pas encore : crée-le avec `dashu set-password` ou connecte-toi une fois",
+                )
+            })?
+        };
 
         let mut spaces = spaces::list(&state.db, id).await?;
         if spaces.is_empty() {
@@ -258,6 +263,17 @@ impl FromRequestParts<AppState> for ApiUser {
         }
         Ok(Self { id, spaces })
     }
+}
+
+/// Jeton de l'en-tête `Authorization: Bearer …`, s'il y en a un.
+pub(crate) fn bearer(parts: &Parts) -> Option<&str> {
+    parts
+        .headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
 }
 
 /// Compare deux secrets en temps constant (pour une longueur donnée) : le
