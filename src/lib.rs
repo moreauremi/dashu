@@ -15,6 +15,7 @@ pub mod files;
 pub mod folders;
 pub mod mcp;
 pub mod notes;
+pub mod oauth;
 pub mod settings;
 pub mod spaces;
 pub mod tabbar;
@@ -159,6 +160,8 @@ pub fn build_router(state: AppState) -> Router {
             get(auth::google::callback).layer(login_limit()),
         )
         .route("/logout", post(auth::logout))
+        // Page « Autoriser Claude » (OAuth), avec la session du site
+        .merge(oauth::routes_with_session())
         // Espaces
         .route("/space", post(spaces::switch))
         // Dashboard et ses widgets
@@ -272,6 +275,10 @@ pub fn build_router(state: AppState) -> Router {
             "/settings/tokens/{id}/revoke",
             post(settings::connexions::revoke),
         )
+        .route(
+            "/settings/grants/{id}/revoke",
+            post(settings::connexions::revoke_grant),
+        )
         .route("/settings/spaces", post(spaces::create))
         .route("/settings/spaces/{id}", post(spaces::update))
         .route("/settings/spaces/{id}/archive", post(spaces::archive))
@@ -331,6 +338,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(api::router())
         // Connecteur Claude (MCP) : comme l'API, sans session ni CSRF.
         .merge(mcp::router())
+        // OAuth : découverte, enregistrement, jetons (sans session ni cookie).
+        .merge(oauth::router())
         .layer(from_fn_with_state(
             state.clone(),
             web::headers::security_headers,

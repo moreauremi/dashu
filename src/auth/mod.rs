@@ -37,6 +37,26 @@ struct LoginPage<'a> {
     email: &'a str,
     error: Option<&'a str>,
     google_enabled: bool,
+    /// Application qui attend une autorisation (OAuth) : la page le dit.
+    oauth_client: Option<String>,
+}
+
+/// Où aller après une connexion réussie : la page « Autoriser » si une
+/// application attend une autorisation (OAuth, voir `crate::oauth`), sinon
+/// le dashboard. L'autorisation en attente est gardée dans la session, que
+/// la connexion conserve.
+pub async fn after_sign_in(session: &Session) -> AppResult<&'static str> {
+    Ok(
+        if session
+            .get::<crate::oauth::Pending>(crate::oauth::PENDING)
+            .await?
+            .is_some()
+        {
+            "/oauth/authorize"
+        } else {
+            "/"
+        },
+    )
 }
 
 #[derive(Deserialize)]
@@ -76,11 +96,16 @@ async fn render_login(
         session.set_expiry(Some(Expiry::OnInactivity(Duration::hours(ANONYMOUS_HOURS))));
     }
     let csrf = csrf::token(session).await?;
+    let oauth_client = session
+        .get::<crate::oauth::Pending>(crate::oauth::PENDING)
+        .await?
+        .map(|p| p.client_name().to_string());
     let page = LoginPage {
         csrf: &csrf,
         email,
         error,
         google_enabled: state.google.is_some(),
+        oauth_client,
     };
     Ok((status, web::html(page)).into_response())
 }
@@ -115,7 +140,7 @@ pub async fn login(
         Some(user) if password_ok && allowed => {
             sign_in(&state, &session, user.id).await?;
             tracing::info!(user_id = user.id, "connexion par identifiants");
-            Ok(see_other("/"))
+            Ok(see_other(after_sign_in(&session).await?))
         }
         _ => {
             tracing::warn!("tentative de connexion refusée");

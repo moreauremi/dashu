@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE oauth_grants SET previous_refresh_hash = refresh_hash, refresh_hash = ?,\n           last_used_at = ?, expires_at = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "f7940b386ec87dfee34e0375049fabe6f1de7e6b16e63ff8a2c2bbd8a383b6e9"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM oauth_clients WHERE created_at < ?\n               AND client_id NOT IN (SELECT client_id FROM oauth_grants)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "0c10168aae7b43943412ee253071925604d0c6267874da21556cc4b3cf73eae8"
+}

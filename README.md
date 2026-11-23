@@ -216,7 +216,22 @@ Les outils font ce que fait l'API, ni plus ni moins : ils appellent les mêmes f
 - Les instructions données à Claude à la connexion disent que les notes, tâches et événements sont des données écrites par des personnes : une phrase qui y ressemble à une consigne ne se suit pas.
 - Les logs gardent le compte, le nom du jeton et l'outil appelé, jamais le contenu.
 
-claude.ai et l'app iPhone demandent OAuth à la place d'un jeton collé : c'est l'étape suivante (SPEC, « Connecteur Claude (MCP) », étape 3).
+**Depuis claude.ai, l'app iPhone ou Claude Desktop**, pas de jeton à coller : dans les réglages des connecteurs de Claude, ajouter un connecteur personnalisé à l'adresse `https://app.dashu.dev/mcp`. Claude ouvre une page de dashu : la connexion habituelle si besoin (mot de passe ou Google), puis **Autoriser Claude**, qui montre le nom de l'application, l'adresse où elle reviendra, le compte, et ce qu'elle pourra faire. Après **Autoriser**, l'accès apparaît dans Réglages › Connexions, révocable comme un jeton. Un connecteur ajouté sur claude.ai suit dans l'app iPhone et dans Claude Desktop. Claude Code passe par la même page, sans jeton : `claude mcp add --transport http dashu https://app.dashu.dev/mcp`, puis `/mcp` pour se connecter.
+
+C'est OAuth 2.1, tel que MCP le demande (le détail est dans [SPEC.md](SPEC.md), « Connecteur Claude (MCP) », étape 3) :
+
+| Route | Rôle |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource` | `/mcp` est protégé, et dashu est son serveur d'autorisation (RFC 9728). |
+| `GET /.well-known/oauth-authorization-server` | Adresses des étapes suivantes, PKCE obligatoire (RFC 8414). |
+| `POST /oauth/register` | Claude s'enregistre (RFC 7591). Seules les adresses de retour de Claude sont acceptées : `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback`, et `http://localhost` ou `http://127.0.0.1` sur n'importe quel port pour Claude Code. |
+| `GET`, `POST /oauth/authorize` | La page « Autoriser », puis le retour chez Claude avec un code à usage unique (60 secondes). |
+| `POST /oauth/token` | Le code et le secret PKCE contre un jeton d'accès (1 heure, `/mcp` seulement) et un jeton de renouvellement (90 jours, changé à chaque usage ; un ancien qui revient révoque toute l'autorisation). |
+| `POST /oauth/revoke` | Claude révoque son accès en se déconnectant (RFC 7009). |
+
+`/oauth/register`, `/oauth/token` et `/oauth/revoke` ont leur propre limite par adresse IP (20 demandes d'un coup, puis une toutes les 3 secondes). Rien à configurer sur le serveur : l'adresse publique est `BASE_URL`.
+
+**À vérifier côté Cloudflare** : claude.ai appelle dashu depuis les serveurs d'Anthropic. Le connecteur ne marche donc que par `https://app.dashu.dev` (pas par l'adresse Tailscale), et Cloudflare ne doit pas poser de défi anti-robot (Bot Fight Mode, Super Bot Fight Mode) sur `/mcp`, `/.well-known/` et `/oauth/`.
 
 ## Déploiement : homelab, Tailscale et tunnel Cloudflare
 
