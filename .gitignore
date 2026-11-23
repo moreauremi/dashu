@@ -30,3 +30,6 @@ Thumbs.db
 /fichiers/
 # Dossier de travail local des conversions (WORK_DIR=travail dans .env)
 /travail/
+
+# Cache de Python (commande dashu d'Hermès).
+__pycache__/
