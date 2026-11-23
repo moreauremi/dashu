@@ -294,7 +294,7 @@ Ce qui est installé :
 
 Après une modification de `/etc/dashu/dashu.env` : `systemctl restart dashu`.
 
-Si le shell ouvert par `pct enter` ne trouve pas `dashu-update` ou `dashu-restore`, c'est que `/usr/local/sbin` manque dans son `PATH` : `echo 'export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"' >> ~/.bashrc`, puis rouvrir le shell.
+Si le shell ouvert par `pct enter` ne trouve pas `dashu-update`, `dashu-restore` ou `typst`, c'est que `/usr/local/sbin` ou `/usr/local/bin` manque dans son `PATH` : `echo 'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:$PATH"' >> ~/.bashrc`, puis rouvrir le shell. Les services de dashu ne sont pas concernés : systemd leur donne un `PATH` complet.
 
 ### 3. Tailscale
 
