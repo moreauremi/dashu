@@ -101,7 +101,7 @@ async fn note_pdf(
 pub(crate) struct FileOut {
     id: i64,
     name: String,
-    mime: String,
+    pub(crate) mime: String,
     size: i64,
     /// Espace du fichier ; vide pour un fichier de Temporaire.
     space: String,
@@ -117,7 +117,7 @@ pub(crate) struct FileOut {
 struct FileRow {
     id: i64,
     name: String,
-    mime: String,
+    pub(crate) mime: String,
     size: i64,
     space_id: i64,
     folder_id: Option<i64>,

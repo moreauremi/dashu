@@ -334,7 +334,7 @@ pub struct ConvertForm {
     pub(crate) next: Option<String>,
 }
 
-const IMPOSSIBLE: &str = "Cette conversion n'est pas possible pour ce fichier.";
+pub(crate) const IMPOSSIBLE: &str = "Cette conversion n'est pas possible pour ce fichier.";
 
 /// `POST /files/{id}/convert` : lance une conversion du menu « Convertir ».
 /// Le résultat ira dans le même espace que l'original.
@@ -375,7 +375,7 @@ async fn start(
     to: Conversion,
     pages: Option<(u32, u32)>,
 ) -> AppResult<()> {
-    queue(state, ctx.user.id, id, to, pages).await
+    queue(state, ctx.user.id, id, to, pages).await.map(|_| ())
 }
 
 /// Règles automatiques de l'espace d'un fichier qui vient d'arriver : vidéo
@@ -411,14 +411,15 @@ pub async fn apply_rules(state: &AppState, user_id: i64, file_id: i64) -> AppRes
 }
 
 /// Met en file la conversion `to` d'un fichier accessible à `user_id` (dans un
-/// de ses espaces, ou son Temporaire).
-async fn queue(
+/// de ses espaces, ou son Temporaire). Rend le numéro de la tâche. Aussi
+/// pour l'API.
+pub(crate) async fn queue(
     state: &AppState,
     user_id: i64,
     id: i64,
     to: Conversion,
     pages: Option<(u32, u32)>,
-) -> AppResult<()> {
+) -> AppResult<i64> {
     let (Some(files), Some(work_dir)) = (&state.config.files, &state.config.work_dir) else {
         return Err(AppError::NotFound);
     };
@@ -487,7 +488,7 @@ async fn queue(
             .await?;
         return Err(error.into());
     }
-    Ok(())
+    Ok(job_id)
 }
 
 /// Prépare le dossier d'une tâche : copie du fichier, puis `job.json`.
@@ -1139,7 +1140,7 @@ pub struct JobsPanel {
 }
 
 /// Libellé d'une tâche d'après sa sorte et sa cible.
-fn job_label(kind: &str, target: Option<&str>) -> &'static str {
+pub(crate) fn job_label(kind: &str, target: Option<&str>) -> &'static str {
     match (kind, target.and_then(Conversion::from_key)) {
         ("convert", Some(to)) => to.label(),
         _ => "Compression",
@@ -1274,6 +1275,45 @@ pub async fn replace_original(
     headers: HeaderMap,
     axum::Form(form): axum::Form<ReplaceForm>,
 ) -> AppResult<Response> {
+    let replaced = replace_with_result(&state, crate::trash::Who::site(ctx.user.id), id).await?;
+    let name = &replaced.name;
+    ctx.flash_ok(if replaced.original_in_trash {
+        format!("Original remplacé : il reste « {name} », l'original est dans la corbeille")
+    } else {
+        format!("Original remplacé : il reste « {name} »")
+    })
+    .await?;
+    // Retour à la page d'où vient le clic (la liste des fichiers, l'onglet
+    // Outils…), que htmx nomme dans HX-Current-URL ; sinon l'aperçu de la copie.
+    let back = form
+        .next
+        .as_deref()
+        .map(|next| web::local_path(Some(next)).to_string())
+        .or_else(|| current_path(&headers))
+        .unwrap_or_else(|| format!("/files/{}", replaced.file));
+    Ok(see_other(&back))
+}
+
+/// Ce qu'a donné « Remplacer l'original ».
+pub(crate) struct Replaced {
+    /// Le fichier qui reste (l'ancienne copie), et son nouveau nom.
+    pub file: i64,
+    pub name: String,
+    /// L'original est parti dans la corbeille (sinon, il était dans
+    /// Temporaire et il est effacé).
+    pub original_in_trash: bool,
+}
+
+/// Remplace l'original d'une conversion terminée par son résultat : la copie
+/// prend la place, le dossier et le nom de l'original (avec sa nouvelle
+/// extension). Un original rangé part dans la corbeille. 404 si la tâche
+/// n'est pas au compte, pas terminée, ou si l'original n'est plus
+/// accessible. Aussi pour l'API.
+pub(crate) async fn replace_with_result(
+    state: &AppState,
+    who: crate::trash::Who<'_>,
+    id: i64,
+) -> AppResult<Replaced> {
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
         r#"SELECT src.id AS "source!: i64", src.name AS source_name, src.storage_key AS source_key,
@@ -1288,7 +1328,7 @@ pub async fn replace_original(
                    AND src.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?2))
                   OR (src.expires_at IS NOT NULL AND src.user_id = ?2))"#,
         id,
-        ctx.user.id
+        who.user
     )
     .fetch_optional(&state.db)
     .await?
@@ -1332,26 +1372,15 @@ pub async fn replace_original(
     .await?;
     tx.commit().await?;
     if to_trash {
-        crate::trash::file(&state.db, crate::trash::Who::site(ctx.user.id), row.source).await?;
+        crate::trash::file(&state.db, who, row.source).await?;
     } else {
         files::remove_stored(files, &row.source_key).await;
     }
-
-    ctx.flash_ok(if to_trash {
-        format!("Original remplacé : il reste « {name} », l'original est dans la corbeille")
-    } else {
-        format!("Original remplacé : il reste « {name} »")
+    Ok(Replaced {
+        file: row.result,
+        name,
+        original_in_trash: to_trash,
     })
-    .await?;
-    // Retour à la page d'où vient le clic (la liste des fichiers, l'onglet
-    // Outils…), que htmx nomme dans HX-Current-URL ; sinon l'aperçu de la copie.
-    let back = form
-        .next
-        .as_deref()
-        .map(|next| web::local_path(Some(next)).to_string())
-        .or_else(|| current_path(&headers))
-        .unwrap_or_else(|| format!("/files/{}", row.result));
-    Ok(see_other(&back))
 }
 
 /// Chemin de la page d'où vient une requête htmx (`HX-Current-URL`, une

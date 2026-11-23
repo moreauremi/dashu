@@ -44,12 +44,14 @@ use crate::time;
 use crate::web::AppError;
 
 mod contenu;
+mod outils;
 
 pub(crate) use contenu::{
     FileChanges, FolderChanges, NewUpload, fetch_file, file_delete, file_update, files_list,
     folder_create, folder_delete, folder_update, folders_list, link_create, links_list, stored,
     trash_list, trash_restore, upload_place,
 };
+pub(crate) use outils::{fetch_job, formats, jobs, replace_original, start};
 
 const TASK_MAX_CHARS: usize = 200;
 /// Une note de plus de 200 000 caractères n'a rien à faire dans dashu.
@@ -74,6 +76,7 @@ pub fn router() -> Router<AppState> {
         .route("/calendar", get(calendar))
         .route("/calendar/refresh", post(refresh_calendar))
         .merge(contenu::routes())
+        .merge(outils::routes())
         .fallback(unknown_route)
         .layer(from_fn(json_errors));
     Router::new().nest("/api/v1", v1)
