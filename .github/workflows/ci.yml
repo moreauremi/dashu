@@ -187,6 +187,14 @@ jobs:
           cp -r deploy LICENSE paquet/dashu/
           tar -czf "dashu-${{ matrix.arch }}-linux.tar.gz" -C paquet dashu
           tar -tzf "dashu-${{ matrix.arch }}-linux.tar.gz"
+      # Le script d'installation et dashu-update, pour de vrai, sur cette
+      # machine jetable et avec cette archive : questions dans un terminal
+      # simulé, connexion, mises à jour, retour arrière, archive abîmée.
+      - name: Installation et mises à jour (scripts du serveur)
+        timeout-minutes: 20
+        run: |
+          docker rm -f dashu
+          sudo bash tests/deploy/installation.sh "dashu-${{ matrix.arch }}-linux.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: dashu-${{ matrix.arch }}

@@ -1,19 +1,43 @@
 #!/usr/bin/env bash
-# Met dashu à jour : récupère la branche, recompile, redémarre.
+# Met dashu à jour.
 #
-# - Compilation ratée : rien ne change en service, le lancement suivant réessaie.
+#   dashu-update                         télécharge la dernière version du canal
+#   dashu-update --depuis-les-sources    récupère le code et le compile
+#
+# Le canal (stable ou v1) est noté dans /etc/dashu/branch, le mode dans
+# /etc/dashu/source :
+#   binaire  téléchargement de l'archive publiée par la CI, 1 à 2 minutes ;
+#   sources  compilation du code de la branche, 10 à 20 minutes.
+# Sans ce fichier : « sources » s'il y a un dépôt dans /opt/dashu/src (les
+# installations d'avant les binaires), « binaire » sinon. Pour passer aux
+# binaires : echo binaire > /etc/dashu/source (README, « Mise à jour »).
+#
+# - Archive qui ne correspond pas à son empreinte (SHA256SUMS), ou
+#   compilation ratée : rien ne change en service.
 # - Nouvelle version qui ne démarre pas : retour à l'ancien binaire et à la
 #   base d'avant la mise à jour.
 #
-# La version en service est notée dans /etc/dashu/deployed-commit. On compare
-# à elle, pas au code source : après une compilation ratée, le code est déjà
-# à jour alors que le binaire ne l'est pas.
+# La version en service est notée dans /etc/dashu/deployed-commit (le commit
+# que donne `dashu version`).
+#
+# DASHU_TELECHARGEMENT remplace l'adresse du dossier qui contient les
+# archives et SHA256SUMS (tests de la CI, tests/deploy/installation.sh).
 set -euo pipefail
-export RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo
-export PATH="/opt/rust/cargo/bin:$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
-BRANCH="$(cat /etc/dashu/branch)"
+REPO_URL="https://github.com/moreauremi/dashu"
+CANAL="$(cat /etc/dashu/branch 2>/dev/null || echo stable)"
 DEPLOYED=/etc/dashu/deployed-commit
+SHARE=/opt/dashu/share
+
+if [ -f /etc/dashu/source ]; then
+  MODE="$(cat /etc/dashu/source)"
+elif [ -d /opt/dashu/src/.git ]; then
+  MODE=sources
+else
+  MODE=binaire
+fi
+[ "${1:-}" = --depuis-les-sources ] && MODE=sources
 
 healthy() {
   for _ in $(seq 1 20); do
@@ -23,22 +47,126 @@ healthy() {
   return 1
 }
 
-# Les scripts d'exploitation vivent dans le dépôt (deploy/lxc) : on les remet
-# à jour avec le binaire. Écriture puis renommage, pour ne jamais modifier sur
-# place un script en cours d'exécution (celui-ci compris).
+# Les scripts d'exploitation viennent avec le binaire (dossier en argument) :
+# on les remet à jour avec lui. Écriture puis renommage, pour ne jamais
+# modifier sur place un script en cours d'exécution (celui-ci compris).
 install_scripts() {
   local script
   for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin dashu-compte; do
-    [ -f "deploy/lxc/$script" ] || continue
-    install -m 755 "deploy/lxc/$script" "/usr/local/sbin/.$script.new"
+    [ -f "$1/$script" ] || continue
+    install -m 755 "$1/$script" "/usr/local/sbin/.$script.new"
     mv -f "/usr/local/sbin/.$script.new" "/usr/local/sbin/$script"
   done
 }
 
+# Remplace le binaire en service par celui donné, après un instantané de la
+# base ; si la nouvelle version ne répond pas, remet l'ancien binaire et la
+# base d'avant, et sort en erreur.
+replace_binary() {
+  local snap
+  snap="/var/backups/dashu/avant-maj-$(date +%F_%H%M%S).db"
+  runuser -u dashu -- env DATABASE_URL=sqlite:///var/lib/dashu/dashu.db /usr/local/bin/dashu backup "$snap"
+  cp /usr/local/bin/dashu /usr/local/bin/dashu.prev
+  install -m 755 "$1" /usr/local/bin/.dashu.new
+  mv -f /usr/local/bin/.dashu.new /usr/local/bin/dashu
+  systemctl restart dashu
+  healthy && return 0
+
+  echo "La nouvelle version ne démarre pas : retour à la précédente."
+  systemctl stop dashu
+  install -m 755 /usr/local/bin/dashu.prev /usr/local/bin/dashu
+  rm -f /var/lib/dashu/dashu.db-wal /var/lib/dashu/dashu.db-shm
+  install -o dashu -g dashu -m 640 "$snap" /var/lib/dashu/dashu.db
+  # Les redémarrages ratés de la nouvelle version ont pu épuiser le quota de
+  # systemd (« start request repeated too quickly ») : on le remet à zéro.
+  systemctl reset-failed dashu 2>/dev/null || true
+  systemctl start dashu
+  if healthy; then
+    echo "L'ancienne version répond de nouveau ; la base est celle d'avant la mise à jour."
+  else
+    echo "Attention : l'ancienne version ne répond pas non plus (journalctl -u dashu -n 30)."
+  fi
+  exit 1
+}
+
+# Le service de conversion utilise le même binaire : il repart avec lui.
+# Une conversion en cours est reprise de zéro (src/tools/worker.rs).
+restart_worker() { systemctl try-restart dashu-worker 2>/dev/null || true; }
+
+# ---------- Mode binaire ----------
+
+if [ "$MODE" = binaire ]; then
+  case "$(uname -m)" in
+    x86_64 | amd64) ARCH=x86_64 ;;
+    aarch64 | arm64) ARCH=aarch64 ;;
+    *)
+      echo "Processeur $(uname -m) sans binaire publié : dashu-update --depuis-les-sources."
+      exit 1
+      ;;
+  esac
+  if [ -n "${DASHU_TELECHARGEMENT:-}" ]; then
+    BASE="${DASHU_TELECHARGEMENT%/}"
+  else
+    case "$CANAL" in
+      stable) BASE="$REPO_URL/releases/latest/download" ;;
+      v1) BASE="$REPO_URL/releases/download/canal-v1" ;;
+      *)
+        echo "Canal inconnu dans /etc/dashu/branch : $CANAL (stable ou v1)."
+        exit 1
+        ;;
+    esac
+  fi
+  NAME="dashu-$ARCH-linux.tar.gz"
+  WORK="$(mktemp -d)"
+  trap 'rm -rf "$WORK"' EXIT
+
+  echo "Téléchargement de la version du canal $CANAL..."
+  curl -fsSL --retry 3 -o "$WORK/SHA256SUMS" "$BASE/SHA256SUMS"
+  curl -fsSL --retry 3 -o "$WORK/$NAME" "$BASE/$NAME"
+  if ! (cd "$WORK" && grep "  $NAME\$" SHA256SUMS | sha256sum -c --quiet -); then
+    echo "L'archive ne correspond pas à son empreinte (SHA256SUMS) : la version en service ne change pas."
+    exit 1
+  fi
+  tar -xzf "$WORK/$NAME" -C "$WORK"
+  NEW="$("$WORK/dashu/dashu" version)"
+  # Un binaire d'avant `dashu version` ne sait pas répondre : version inconnue.
+  CURRENT="$(/usr/local/bin/dashu version 2>/dev/null || true)"
+  if [ "$NEW" = "$CURRENT" ]; then
+    echo "Déjà à jour : $CURRENT"
+    exit 0
+  fi
+
+  echo "Mise à jour : ${CURRENT:-version inconnue} -> $NEW"
+  replace_binary "$WORK/dashu/dashu"
+  echo "${NEW##* }" >"$DEPLOYED"
+  # Services, scripts et fichiers d'Hermès de la nouvelle version, remplacés
+  # d'un coup ; puis les scripts d'exploitation.
+  rm -rf "$SHARE.new" "$SHARE.old"
+  cp -a "$WORK/dashu" "$SHARE.new"
+  rm -f "$SHARE.new/dashu"
+  [ -d "$SHARE" ] && mv "$SHARE" "$SHARE.old"
+  mv "$SHARE.new" "$SHARE"
+  rm -rf "$SHARE.old"
+  install_scripts "$SHARE/deploy/lxc"
+  restart_worker
+  echo "Mise à jour terminée : $NEW"
+  exit 0
+fi
+
+# ---------- Mode sources ----------
+
+export RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo
+export PATH="/opt/rust/cargo/bin:$PATH"
+[ -d /opt/dashu/src/.git ] || {
+  echo "Pas de code dans /opt/dashu/src : relance install.sh --depuis-les-sources, ou passe aux binaires."
+  exit 1
+}
 cd /opt/dashu/src
-echo "Récupération de la branche $BRANCH..."
-git fetch -q --depth 1 origin "$BRANCH"
+echo "Récupération de la branche $CANAL..."
+git fetch -q --depth 1 origin "$CANAL"
 TARGET="$(git rev-parse FETCH_HEAD)"
+# On compare à la version en service, pas au code : après une compilation
+# ratée, le code est déjà à jour alors que le binaire ne l'est pas.
 if [ "$TARGET" = "$(cat "$DEPLOYED" 2>/dev/null)" ]; then
   echo "Déjà à jour : $(git log -1 --format='%h %s' "$TARGET")"
   exit 0
@@ -46,31 +174,13 @@ fi
 
 git reset -q --hard "$TARGET"
 echo "Compilation de $(git log -1 --format='%h %s')..."
-if ! nice -n 10 cargo build --release --locked; then
+if ! DASHU_COMMIT="$TARGET" nice -n 10 cargo build --release --locked; then
   echo "La compilation a échoué : la version en service ne change pas."
   exit 1
 fi
 
-SNAP="/var/backups/dashu/avant-maj-$(date +%F_%H%M%S).db"
-runuser -u dashu -- env DATABASE_URL=sqlite:///var/lib/dashu/dashu.db /usr/local/bin/dashu backup "$SNAP"
-cp /usr/local/bin/dashu /usr/local/bin/dashu.prev
-install -m 755 target/release/dashu /usr/local/bin/dashu
-systemctl restart dashu
-
-if healthy; then
-  echo "$TARGET" > "$DEPLOYED"
-  install_scripts
-  # Le service de conversion utilise le même binaire : il repart avec lui.
-  # Une conversion en cours est reprise de zéro (src/tools/worker.rs).
-  systemctl try-restart dashu-worker 2>/dev/null || true
-  echo "Mise à jour terminée : $(git log -1 --format='%h %s')"
-  exit 0
-fi
-
-echo "La nouvelle version ne démarre pas : retour à la précédente."
-systemctl stop dashu
-install -m 755 /usr/local/bin/dashu.prev /usr/local/bin/dashu
-rm -f /var/lib/dashu/dashu.db-wal /var/lib/dashu/dashu.db-shm
-install -o dashu -g dashu -m 640 "$SNAP" /var/lib/dashu/dashu.db
-systemctl start dashu
-exit 1
+replace_binary target/release/dashu
+echo "$TARGET" >"$DEPLOYED"
+install_scripts deploy/lxc
+restart_worker
+echo "Mise à jour terminée : $(git log -1 --format='%h %s')"

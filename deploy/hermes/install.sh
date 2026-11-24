@@ -3,10 +3,13 @@
 # et son skill.
 #
 # À lancer en root sur l'hôte Proxmox, après un dashu-update :
-#   bash <(pct exec <n° du conteneur dashu> -- cat /opt/dashu/src/deploy/hermes/install.sh)
+#   bash <(pct exec <n° du conteneur dashu> -- cat /opt/dashu/share/deploy/hermes/install.sh)
+# (/opt/dashu/src/… à la place de /opt/dashu/share/… sur un serveur qui
+# compile encore dashu lui-même).
 #
-# Les fichiers viennent de la copie du dépôt dans le conteneur dashu
-# (/opt/dashu/src/deploy/hermes), ou du dossier indiqué par SRC=.
+# Les fichiers viennent de la version installée dans le conteneur dashu
+# (/opt/dashu/share/deploy/hermes, ou la copie du dépôt /opt/dashu/src sur un
+# serveur qui compile), ou du dossier indiqué par SRC=.
 # Sans danger à relancer : ce qui est déjà en place n'est pas touché, et la
 # commande comme le skill ne sont remplacés que s'ils ont changé.
 #
@@ -60,9 +63,11 @@ say "Fichiers versionnés"
 if [ -n "${SRC:-}" ]; then
   cp "$SRC/dashu" "$SRC/SKILL.md" "$WORK/"
 else
+  FROM=/opt/dashu/share/deploy/hermes
+  pct exec "$CTID" -- test -f "$FROM/SKILL.md" || FROM=/opt/dashu/src/deploy/hermes
   for f in dashu SKILL.md; do
-    pct exec "$CTID" -- cat "/opt/dashu/src/deploy/hermes/$f" > "$WORK/$f" \
-      || die "/opt/dashu/src/deploy/hermes/$f absent du conteneur $CTID : lance d'abord dashu-update."
+    pct exec "$CTID" -- cat "$FROM/$f" > "$WORK/$f" \
+      || die "$FROM/$f absent du conteneur $CTID : lance d'abord dashu-update."
   done
 fi
 

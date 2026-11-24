@@ -141,9 +141,6 @@ impl Config {
             .map(|e| e.trim().to_lowercase())
             .filter(|e| !e.is_empty())
             .collect();
-        if allowed_emails.is_empty() {
-            tracing::warn!("ALLOWED_EMAILS est vide : personne ne peut se connecter");
-        }
 
         let google = match (env.get("GOOGLE_CLIENT_ID"), env.get("GOOGLE_CLIENT_SECRET")) {
             (Some(client_id), Some(client_secret)) => Some(GoogleConfig {
