@@ -130,8 +130,13 @@ echo "Version essayée : $VERSION"
 
 etape "1. Installation avec les questions"
 # Accès 1 (réseau local), fichiers oui, conversions non. Le compte se crée
-# ensuite dans le navigateur, avec le code affiché à la fin.
-repondre "$TMP/installation.log" 1 o n
+# ensuite dans le navigateur, avec le code affiché à la fin. La session
+# annonce une langue que la machine n'a pas, comme souvent en SSH sur un
+# conteneur neuf : le script ne doit pas laisser apt ni perl s'en plaindre.
+LANG=xx_XX.UTF-8 repondre "$TMP/installation.log" 1 o n
+if grep -qE 'Setting locale failed|Cannot set LC_' "$TMP/installation.log"; then
+  fail "avertissements de langue pendant l'installation"
+fi
 sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | tail -25
 grep -q "C'est prêt" "$TMP/installation.log" || fail "pas de résumé final"
 CODE="$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}' | tail -1)"
@@ -140,6 +145,14 @@ CODE="$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | grep -oE '[2-9A-HJ-N
 [ "$(curl -s -o /dev/null -w '%{redirect_url}' http://127.0.0.1:3000/)" = http://127.0.0.1:3000/setup ] ||
   fail "sans compte, l'accueil doit mener à /setup"
 if grep -q '^ALLOWED_EMAILS=' /etc/dashu/dashu.env; then fail "ALLOWED_EMAILS écrit sans email"; fi
+
+# Changer l'accès avant d'avoir créé le compte : dashu redémarre, son code
+# change, et le menu donne tout de suite le nouveau.
+repondre "$TMP/menu-acces.log" 2 1 6
+NOUVEAU="$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/menu-acces.log" | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}' | tail -1)"
+[ -n "$NOUVEAU" ] || fail "le menu ne redonne pas le code"
+[ "$NOUVEAU" != "$CODE" ] || fail "le menu redonne l'ancien code après le redémarrage"
+CODE="$NOUVEAU"
 premier_lancement "$CODE" "$EMAIL" "$MDP"
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/setup)" = 404 ] || fail "/setup après l'installation"
 [ "$(sqlite3 /var/lib/dashu/dashu.db "SELECT is_admin FROM users WHERE email = '$EMAIL'")" = 1 ] ||

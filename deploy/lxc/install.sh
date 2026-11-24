@@ -47,6 +47,12 @@ TYPST_VERSION=0.11.1
 ENV_FILE=/etc/dashu/dashu.env
 SHARE=/opt/dashu/share
 export DEBIAN_FRONTEND=noninteractive
+# Une langue présente sur toute Debian ou Ubuntu : sur une machine neuve, la
+# session SSH en annonce souvent une que le système n'a pas (en_US.UTF-8,
+# fr_FR.UTF-8), et apt comme perl remplissent alors l'écran d'avertissements
+# (« Setting locale failed ») sans conséquence. Les accents restent justes.
+export LC_ALL=C.UTF-8 LANG=C.UTF-8
+unset LANGUAGE
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 # ---------- Affichage ----------
@@ -305,8 +311,10 @@ configurer_tailscale() {
     curl -fsSL https://tailscale.com/install.sh | sh >/dev/null
   fi
   if ! tailscale status >/dev/null 2>&1; then
-    info "Ouvre le lien qui va s'afficher pour relier cette machine à ton compte Tailscale."
-    tailscale up --hostname dashu
+    # Le nom de la machine (« dashu » sur le serveur, « dashu-test » pour un
+    # essai à côté) : deux installations ne se disputent pas le même nom.
+    info "Ouvre le lien qui va s'afficher pour relier cette machine ($(hostname -s)) à ton compte Tailscale."
+    tailscale up --hostname "$(hostname -s)"
   fi
   TS_NOM="$(tailscale status --json | jq -r '.Self.DNSName // empty' | sed 's/\.$//')"
   [ -n "$TS_NOM" ] || {
@@ -685,8 +693,11 @@ menu_acces() {
   configurer_acces
   if changer_env BASE_URL "$BASE_URL" BIND_ADDR "$BIND_ADDR"; then
     info "Adresse principale : $BASE_URL"
-    [ -n "$(valeur GOOGLE_CLIENT_ID)" ] &&
+    # Un vrai if : « [ … ] && warn » en dernière ligne rendrait une erreur
+    # sans Google, et set -e arrêterait tout le script.
+    if [ -n "$(valeur GOOGLE_CLIENT_ID)" ]; then
       warn "Google : l'URI de redirection doit devenir $BASE_URL/auth/google/callback dans la console Google."
+    fi
   fi
 }
 
@@ -731,11 +742,14 @@ menu() {
   local choix
   BASE_URL="$(valeur BASE_URL)"
   say "dashu est déjà installé ($(dashu version 2>/dev/null || echo 'version inconnue'))"
-  info "Adresse : $BASE_URL"
-  if ! sqlite3 /var/lib/dashu/dashu.db 'SELECT 1 FROM users LIMIT 1' 2>/dev/null | grep -q 1; then
-    info "Pas encore de compte : ouvre $BASE_URL/setup et tape le code $(code_installation)"
-  fi
   while :; do
+    # À chaque tour : un choix du menu a pu changer l'adresse, ou redémarrer
+    # dashu, ce qui change le code d'installation.
+    BASE_URL="$(valeur BASE_URL)"
+    info "Adresse : $BASE_URL"
+    if ! sqlite3 /var/lib/dashu/dashu.db 'SELECT 1 FROM users LIMIT 1' 2>/dev/null | grep -q 1; then
+      info "Pas encore de compte : ouvre $BASE_URL/setup et tape le code $(code_installation)"
+    fi
     cat >/dev/tty <<TEXTE
 
   1) Mettre à jour
