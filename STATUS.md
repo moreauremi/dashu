@@ -401,6 +401,14 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - Sous Windows (développement), dashu ne peut pas se remplacer lui-même : après l'assistant, il s'arrête et demande d'être relancé.
 - Migration 0021 : `instance_settings`, `allowed_emails`, `users.is_admin` (le plus ancien compte devient administrateur).
 
+**Étape 5, carte Instance dans Réglages** (24 novembre 2026). Vérifiée par les tests (`tests/instance.rs`, 4 tests ; toute la suite passe) et dans le navigateur, sur une instance installée par l'assistant : carte en trois parties, adresse autorisée ajoutée, message « redémarre », liste à jour avant même la relance. **Pas encore sur le serveur.**
+
+- [x] La carte n'apparaît que pour l'administrateur ; ses cinq routes répondent 404 aux autres comptes, sans rien changer. Test `seul_l_administrateur_voit_et_change_l_instance`.
+- [x] Adresse, Google et adresses autorisées s'y changent, puis dashu se relance ; après la relance, tout vient de la base et une adresse retirée ne se connecte plus. Une valeur de l'environnement s'affiche verrouillée et ne se change pas (message « défini sur le serveur », rien en base, pas de relance). Tests `adresse_google_et_adresses_se_changent_puis_dashu_se_relance`, `l_environnement_verrouille_ses_reglages`.
+- [x] Ni sa propre adresse, ni celle de l'API, ni la dernière ne se retirent ; adresse, email ou client Google invalides sont refusés sans relance. Test `garde_fous`.
+- [x] Le secret Google n'est jamais réaffiché, ni dans la carte ni dans la page (vérifié par le test), et il est chiffré en base.
+- Sur le serveur de Rémi (tout dans `dashu.env`), la carte est en lecture seule : adresse, Google et adresses « définis sur le serveur ».
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.
