@@ -204,14 +204,12 @@
   <section class="block" id="installer">
     <div class="wrap">
       <h2>Chez soi, sur un vieux PC ou un mini-serveur</h2>
-<pre><span class="c"># Récupérer le code (branche v1) et le configurer</span>
-git clone -b v1 https://github.com/moreauremi/dashu.git &amp;&amp; cd dashu
-cp .env.example .env
+<pre><span class="c"># Linux (Debian, Ubuntu, Raspberry Pi…) : une commande, puis les questions</span>
+curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | sudo bash
 
-<span class="c"># Lancer (Docker) puis créer son compte</span>
-docker compose up -d --build
-docker compose exec dashu /dashu set-password toi@example.com</pre>
-      <p class="after">Variables, installation sans Docker, tunnel Cloudflare et sauvegardes : tout est dans le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a>.</p>
+<span class="c"># Ou n'importe où avec Docker, puis http://localhost:3000</span>
+docker run -d --name dashu -p 3000:3000 -v dashu:/data ghcr.io/moreauremi/dashu</pre>
+      <p class="after">Pas de nom de domaine obligatoire : le script propose le réseau de la maison, Tailscale, Tailscale Funnel ou un tunnel Cloudflare. Le compte et la connexion Google se règlent ensuite dans le navigateur, avec le code d'installation que donne le script (ou <code>docker logs dashu</code>). Tout le détail, sauvegardes comprises, est dans le <a href="https://github.com/moreauremi/dashu/blob/v1/README.md">README</a>. Logiciel libre, sous licence AGPL.</p>
     </div>
   </section>
 
