@@ -1559,6 +1559,11 @@ Pendant la réalisation (24 novembre 2026) :
 - **Archives sans numéro de version** (`dashu-x86_64-linux.tar.gz`) : l'adresse d'un canal ne change jamais, et le canal stable se télécharge par l'adresse « dernière version » de GitHub (`releases/latest/download/…`), qui ignore les pré-versions. La version se lit avec `dashu version`.
 - **La pré-version du canal v1 s'appelle `canal-v1`** : un tag `v1` porterait le même nom que la branche, et git ne saurait plus lequel des deux on désigne.
 - **Le binaire est celui de l'image Docker**, extrait de l'image : un seul build par architecture, testé (taille, `/health`, `dashu version`, binaire statique) avant d'être publié. Le job « image Docker » de la CI devient « binaire et image », une fois par architecture.
+- **Étapes 2 et 3 dans la même PR** : une machine installée par le nouveau script n'a plus le code dans `/opt/dashu/src`, l'ancien `dashu-update` (qui compile) ne pourrait pas la mettre à jour. Le mode de mise à jour est noté dans `/etc/dashu/source` (`binaire` ou `sources`) ; sans ce fichier, un serveur qui a le code reste en `sources` : celui de Rémi ne change qu'au moment de la bascule.
+- **Fichiers toujours dans `/srv/dashu`**, sans question sur le dossier : c'est le chemin que connaît le bac à sable du service (`hardening.conf`, `dashu-worker.service`). Pour un autre disque, on le monte sur `/srv/dashu`. Le service de conversion est installé dès les fichiers (les images se convertissent sans paquet de plus) ; la question « conversions » installe les paquets (ffmpeg, pandoc, Typst…).
+- **Jeton du tunnel Cloudflare dans `/etc/dashu/tunnel.env`** (root seulement), lu par l'unité `dashu-tunnel.service` : `cloudflared service install <jeton>`, la commande proposée par Cloudflare, le mettrait dans la ligne de commande et dans l'unité.
+- **Sans question, deux accès seulement** : `aucun` (dashu n'écoute que sur la machine, comme l'ancien script) et `local`. Tailscale et Cloudflare demandent une connexion à un compte, donc les questions.
+- **Tout le script est dans des fonctions**, appelées par sa dernière ligne : avec `curl … | bash`, bash lit tout le script avant d'exécuter quoi que ce soit, et aucune commande ne peut avaler la suite du téléchargement.
 
 Reste à trancher :
 

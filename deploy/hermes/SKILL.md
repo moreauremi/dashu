@@ -120,7 +120,7 @@ dashu avatar-rm
 dashu admin status        # service, santé, version, disque, dernière sauvegarde
 dashu admin logs [50]     # dernières lignes du journal
 dashu admin restart
-dashu admin update        # récupère la dernière version sur GitHub et recompile (10 à 20 min, en arrière-plan)
+dashu admin update        # installe la dernière version publiée sur GitHub (1 à 2 min, en arrière-plan ; 10 à 20 min si le serveur compile encore)
 dashu admin update-status # où en est la mise à jour
 dashu admin backup        # sauvegarde immédiate de la base
 ```

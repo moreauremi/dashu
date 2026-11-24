@@ -1,0 +1,23 @@
+# Tunnel Cloudflare vers dashu, installé par install.sh (accès « nom de
+# domaine »). Le jeton du tunnel est dans /etc/dashu/tunnel.env, lisible par
+# root seul et lu ici par systemd : il n'apparaît ni dans la liste des
+# processus ni dans ce fichier. La route (nom de domaine vers
+# http://localhost:3000) se règle dans Cloudflare.
+[Unit]
+Description=Tunnel Cloudflare vers dashu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/dashu/tunnel.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

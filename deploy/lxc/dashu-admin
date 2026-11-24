@@ -19,17 +19,26 @@ healthy() {
   return 1
 }
 
-# Version réellement en service (voir dashu-update), et non celle du code source.
+# Version réellement en service (voir dashu-update) : celle que donne le
+# binaire, sinon le commit noté. En mode « sources », on signale aussi un code
+# récupéré mais pas compilé.
 version() {
-  local deployed source
+  local binary deployed source mode
+  binary="$(/usr/local/bin/dashu version 2>/dev/null || true)"
   deployed="$(cat /etc/dashu/deployed-commit 2>/dev/null || true)"
-  source="$(git -C /opt/dashu/src rev-parse HEAD 2>/dev/null || true)"
-  if [ -z "$deployed" ]; then
+  if [ -n "$binary" ]; then
+    echo "version : ${binary#dashu }"
+  elif [ -n "$deployed" ]; then
+    echo "version : $(git -C /opt/dashu/src log -1 --format='%h %s (%cd)' --date=short "$deployed" 2>/dev/null || echo "${deployed:0:7}")"
+  else
     echo "version : inconnue"
     return
   fi
-  echo "version : $(git -C /opt/dashu/src log -1 --format='%h %s (%cd)' --date=short "$deployed" 2>/dev/null || echo "${deployed:0:7}")"
-  if [ -n "$source" ] && [ "$source" != "$deployed" ]; then
+  mode="$(cat /etc/dashu/source 2>/dev/null || { [ -d /opt/dashu/src/.git ] && echo sources; } || echo binaire)"
+  echo "mise à jour par : $mode, canal $(cat /etc/dashu/branch 2>/dev/null || echo stable)"
+  [ "$mode" = sources ] || return 0
+  source="$(git -C /opt/dashu/src rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$source" ] && [ -n "$deployed" ] && [ "$source" != "$deployed" ]; then
     echo "attention : le code ${source:0:7} est récupéré mais pas en service (compilation ratée ?)"
   fi
 }
@@ -58,7 +67,7 @@ case "$ACTION" in
   update)
     if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "Une mise à jour est déjà en cours."; exit 0; fi
     systemd-run --quiet --collect --unit=dashu-update --description="Mise à jour de dashu" /usr/local/sbin/dashu-update
-    echo "Mise à jour lancée en arrière-plan (10 à 20 min s'il faut recompiler). Suivi : update-status."
+    echo "Mise à jour lancée en arrière-plan (1 à 2 min ; 10 à 20 min si le serveur compile encore). Suivi : update-status."
     ;;
   update-status)
     if systemctl is-active --quiet dashu-update 2>/dev/null; then echo "en cours"; else echo "aucune mise à jour en cours"; fi

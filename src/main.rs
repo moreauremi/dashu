@@ -49,6 +49,10 @@ async fn main() -> anyhow::Result<()> {
 async fn serve() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     init_logging(config.log_json);
+    // Après init_logging : avant, l'avertissement se perdait.
+    if config.allowed_emails.is_empty() {
+        tracing::warn!("ALLOWED_EMAILS est vide : personne ne peut se connecter");
+    }
 
     let pool = db::connect(&config.database_url)
         .await

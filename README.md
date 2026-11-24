@@ -9,6 +9,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 ## Sommaire
 
 - [Ce que fait la v1](#ce-que-fait-la-v1)
+- [Installer dashu en une commande](#installer-dashu-en-une-commande)
 - [Installation locale](#installation-locale)
 - [Variables d'environnement](#variables-denvironnement)
 - [Comptes et connexion](#comptes-et-connexion)
@@ -56,6 +57,33 @@ Une suppression demande un second `Entrée`.
 Dans un texte que l'on écrit (titre d'une tâche ou d'une note, tag, recherche, nom d'un espace ou d'un agenda), `#date` devient la date du jour (`13/11/2026`) et `#cours` la matière du cours qui a lieu maintenant : `/add note #cours du #date` crée « MATHS du 13/11/2026 ». Hors d'un cours, `#cours` est refusé. Tout autre `#mot` reste tel quel.
 
 L'historique des commandes (`↑` sur un `/` seul) reste dans le navigateur. Les raccourcis `N` (nouvelle note) et `G` puis `D`, `N`, `F`, `C` ou `O` (Dashboard, Notes, Fichiers, Agenda, Outils) restent aussi. Dans l'éditeur, `Ctrl+S` enregistre tout de suite, `Ctrl+K` ajoute un lien (une adresse, ou le nom d'une note ou d'un fichier), `Ctrl+B`, `Ctrl+I`, `Ctrl+E` et `Ctrl+Maj+S` mettent en gras, en italique, en code ou barré, `Ctrl+Alt+1` à `3` font un titre, `Ctrl+Entrée` coche une case, et `Tab` passe à la cellule suivante d'un tableau (une ligne s'ajoute au bout). Sur Mac, `Cmd` à la place de `Ctrl`.
+
+## Installer dashu en une commande
+
+Sur une machine Linux avec systemd (Debian, Ubuntu et leurs dérivées ; un conteneur LXC de Proxmox convient), en x86_64 ou en ARM 64 bits :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | sudo bash
+```
+
+Le script télécharge le binaire de la dernière version, vérifie son empreinte, puis pose les questions au fur et à mesure :
+
+1. **Comment accéder à dashu.** Un ou plusieurs choix, aucun nom de domaine n'est obligatoire.
+
+   | Accès | Ce qu'il faut | Adresse | À savoir |
+   | --- | --- | --- | --- |
+   | Réseau de la maison | Rien | `http://<ip>:3000` | Pas de chiffrement : le mot de passe passe en clair sur le réseau. Pas de Google |
+   | Tailscale | Un compte Tailscale gratuit | `https://dashu.<réseau>.ts.net` | Seulement tes appareils. Pas de connecteur Claude sur claude.ai |
+   | Tailscale Funnel | Le même compte, Funnel activé | La même adresse, publique | Ouverte à tout Internet |
+   | Nom de domaine | Un domaine chez Cloudflare et un tunnel | `https://app.mondomaine.fr` | Le script demande le jeton du tunnel, sans l'afficher |
+
+2. **Les fichiers** (rangés dans `/srv/dashu`), puis **les conversions** (ffmpeg, pandoc, Typst… environ 600 Mo).
+3. **Le compte** : email et mot de passe, tapé deux fois sans s'afficher.
+4. **Google**, facultatif, si l'adresse est en HTTPS : le script affiche l'adresse de retour à déclarer, puis demande l'identifiant et le secret.
+
+À la fin, il vérifie que dashu répond et affiche l'adresse. **Relancé** sur une machine où dashu est installé, il propose un menu : mettre à jour, changer l'accès, activer les fichiers, régler Google, changer un mot de passe. La base n'est jamais touchée, et un changement qui empêche dashu de démarrer est annulé.
+
+Sans question, pour automatiser : `bash install.sh --non-interactif --email toi@example.com --acces local` (mot de passe dans `DASHU_MOT_DE_PASSE`), et `bash install.sh --help` pour les autres options. Sur macOS, Windows ou un NAS : l'image Docker ([Variante : Docker](#variante--docker)).
 
 ## Installation locale
 
@@ -368,23 +396,22 @@ apt-get update && apt-get install -y curl
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | bash -s -- toi@example.com https://app.dashu.dev
+curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | bash
 ```
 
-[`deploy/lxc/install.sh`](deploy/lxc/install.sh) installe Rust, clone la branche dans `/opt/dashu/src`, compile (10 à 20 minutes sur un vieux processeur), crée l'utilisateur système `dashu`, écrit la configuration dans `/etc/dashu/dashu.env` (un `SESSION_SECRET` est généré), installe le service, la sauvegarde nocturne et les scripts d'exploitation. Il se termine en affichant la commande qui crée le compte :
-
-```bash
-runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu set-password "$0"' toi@example.com
-```
+[`deploy/lxc/install.sh`](deploy/lxc/install.sh) pose les questions décrites dans [Installer dashu en une commande](#installer-dashu-en-une-commande) : pour ce serveur, Tailscale et le nom de domaine (étapes 3 et 4 ci-dessous, que le script fait lui-même). Il télécharge le binaire, crée l'utilisateur système `dashu`, écrit la configuration dans `/etc/dashu/dashu.env` (un `SESSION_SECRET` est généré), installe le service, la sauvegarde nocturne et les scripts d'exploitation, puis crée le compte. L'ancienne forme, sans question, marche toujours : `bash -s -- toi@example.com https://app.dashu.dev` (dashu n'écoute alors que sur la machine, et le compte se crée ensuite avec `dashu-compte mot-de-passe`). `--depuis-les-sources` compile le code au lieu de télécharger le binaire (Rust, 10 à 20 minutes).
 
 Ce qui est installé :
 
 | Élément | Rôle |
 | --- | --- |
 | `/usr/local/bin/dashu` | Le binaire. |
+| `/opt/dashu/share` | Le reste de la version installée : services, scripts, fichiers d'Hermès (`deploy/`), licence. |
 | `/etc/dashu/dashu.env` | Les variables d'environnement (lisible par root et le groupe `dashu` seulement). |
+| `/etc/dashu/branch`, `/etc/dashu/source` | Le canal suivi (`stable` ou `v1`) et le mode de mise à jour (`binaire` ou `sources`). |
 | `/var/lib/dashu/dashu.db` | La base SQLite. |
 | `dashu.service` | Le service, sous l'utilisateur `dashu`, 256 Mo de mémoire au plus, durci (`deploy/lxc/hardening.conf` : système en lecture seule sauf `/var/lib/dashu`, aucune capacité). |
+| `dashu-tunnel.service` | Le tunnel Cloudflare, si cet accès est choisi. Son jeton est dans `/etc/dashu/tunnel.env` (root seulement). |
 | `dashu-backup.timer` | La sauvegarde, chaque nuit à 3 h 30. |
 | `dashu-update`, `dashu-backup`, `dashu-restore`, `dashu-admin`, `dashu-compte` | Les scripts d'exploitation, dans `/usr/local/sbin`. |
 
@@ -423,7 +450,21 @@ tailscale serve --bg 3000
 dashu-update
 ```
 
-Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sauvegarde la base (`avant-maj-*.db`), remplace le binaire et redémarre. Si la nouvelle version ne répond pas sur `/health` dans les 20 secondes, il remet l'ancien binaire et la base d'avant. Si la compilation échoue, rien ne change en service et le lancement suivant réessaie. La version en service est notée dans `/etc/dashu/deployed-commit`. Les scripts de `deploy/lxc/` sont remis à jour en même temps que le binaire. Les migrations de la base s'appliquent au démarrage.
+Le script télécharge la dernière version du canal (noté dans `/etc/dashu/branch` : `stable` ou `v1`), vérifie son empreinte et la compare à `dashu version`. S'il y a du nouveau, il sauvegarde la base (`avant-maj-*.db`), remplace le binaire et redémarre : une à deux minutes. Si la nouvelle version ne répond pas sur `/health` dans les 20 secondes, il remet l'ancien binaire et la base d'avant. Une archive qui ne correspond pas à son empreinte ne change rien en service. La version en service est notée dans `/etc/dashu/deployed-commit`. Les scripts de `deploy/lxc/` et `/opt/dashu/share` sont remis à jour en même temps que le binaire. Les migrations de la base s'appliquent au démarrage.
+
+Le mode est noté dans `/etc/dashu/source`. En mode `sources` (un serveur installé avant les binaires, avec le code dans `/opt/dashu/src`), le script récupère la branche et recompile, comme avant : 10 à 20 minutes ; si la compilation échoue, rien ne change en service. `dashu-update --depuis-les-sources` force ce mode une fois.
+
+**Passer un serveur qui compile aux binaires.** Avant, relever les mesures (temps de réponse et mémoire, comme dans STATUS) pour les comparer après :
+
+```bash
+for i in $(seq 20); do curl -s -o /dev/null -w '%{time_total}\n' http://127.0.0.1:3000/login; done; systemctl show dashu -p MemoryCurrent
+```
+
+```bash
+echo binaire > /etc/dashu/source && dashu-update
+```
+
+La première fois, le binaire téléchargé remplace celui compilé sur place (même retour arrière s'il ne répond pas). Revenir en arrière : `echo sources > /etc/dashu/source && dashu-update`. Une fois validé, Rust et le code ne servent plus : `rm -rf /opt/rust /opt/dashu/src`.
 
 ### 6. Supervision et accès d'un assistant
 
@@ -433,8 +474,10 @@ Le script récupère la branche (notée dans `/etc/dashu/branch`), recompile, sa
 - Côté Hermès, tout est versionné dans [`deploy/hermes/`](deploy/hermes) : la commande `dashu` (Python, sans dépendance) qui appelle l'API avec l'adresse et le jeton rangés dans `~/.config/dashu/`, et le skill qui dit à Hermès quand et comment s'en servir. [`install.sh`](deploy/hermes/install.sh) installe ou met à jour les deux, et met en place l'accès d'admin s'il manque. Sans danger à relancer, il se lance en root sur l'hôte Proxmox après un `dashu-update` (remplacer `<n>` par le numéro du conteneur dashu) :
 
 ```bash
-bash <(pct exec <n> -- cat /opt/dashu/src/deploy/hermes/install.sh)
+bash <(pct exec <n> -- cat /opt/dashu/share/deploy/hermes/install.sh)
 ```
+
+(Sur un serveur qui compile encore dashu lui-même : `/opt/dashu/src/deploy/hermes/install.sh`.)
 
 **Uptime Kuma.** Un outil de supervision (monitoring) : il interroge une adresse à intervalle régulier et envoie une alerte quand elle ne répond plus. Il tourne à part de dashu, dans son propre conteneur : si dashu ou son conteneur tombe, la supervision reste debout. Sur l'hôte Proxmox, un petit conteneur Debian 13 (le numéro 121 et l'adresse sont des exemples) :
 
