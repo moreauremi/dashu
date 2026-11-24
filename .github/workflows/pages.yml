@@ -14,26 +14,33 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  # deploy-pages retrouve le site envoyé par upload-pages-artifact en listant
-  # les fichiers du run : sans ce droit, il n'en voit aucun (« Found 0
-  # artifact(s) »), ce qui fait échouer la publication depuis le 23 novembre.
   actions: read
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
+# Deux jobs, comme le modèle de GitHub : l'un envoie le site, l'autre le
+# publie. Dans un seul job, deploy-pages cherchait le site une seconde après
+# son envoi et ne le trouvait pas encore (« Found 0 artifact(s) ») : la
+# publication échouait depuis le 23 novembre, alors que le site était bien
+# dans le run.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: website
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
