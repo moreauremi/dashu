@@ -1,9 +1,16 @@
 # Intégration continue : à chaque push, on vérifie le formatage, clippy et les
-# tests, puis on construit l'image Docker et on contrôle sa taille.
+# tests, puis on construit le binaire et l'image Docker pour x86_64 et aarch64
+# (taille, démarrage). Sur la branche v1 et sur un tag vX.Y.Z, on publie
+# ensuite la version : archives, SHA256SUMS et image (SPEC, « Installation
+# simple », étape 1).
 name: CI
 
 on:
   push:
+    # « branches » doit être nommé dès qu'on nomme « tags », sinon les push de
+    # branche ne déclenchent plus rien. Les tags ignorent paths-ignore.
+    branches: ["**"]
+    tags: ["v*"]
     paths-ignore:
       - "website/**"
       - ".github/workflows/pages.yml"
@@ -110,10 +117,30 @@ jobs:
             /srv/dashu/tmp/note.pdf
           retention-days: 14
 
-  docker:
-    name: image Docker
-    runs-on: ubuntu-latest
+  # Un job par architecture, chacun sur une machine de la même architecture :
+  # pas de compilation croisée (ring et SQLite contiennent du C) ni
+  # d'émulation. Le binaire est celui de l'image : lié statiquement à musl,
+  # il tourne sur toute distribution Linux.
+  binaires:
+    name: binaire et image (${{ matrix.arch }})
     needs: rust
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+      PUBLIER: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/v1' || startsWith(github.ref, 'refs/tags/v')) }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -121,14 +148,16 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: ${{ matrix.platform }}
           load: true
           tags: dashu:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: DASHU_COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
       - name: Taille de l'image (cible de la spec, moins de 30 Mo)
         run: |
           size=$(docker image inspect dashu:ci --format '{{.Size}}')
-          echo "Image : $((size / 1024 / 1024)) Mo ($size octets)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Image ${{ matrix.arch }} : $((size / 1024 / 1024)) Mo ($size octets)" | tee -a "$GITHUB_STEP_SUMMARY"
           test "$size" -lt $((30 * 1024 * 1024))
       - name: L'image démarre et répond sur /health
         run: |
@@ -144,3 +173,129 @@ jobs:
           curl -fsS http://localhost:3000/health | grep -qx ok
           curl -fsS -o /dev/null http://localhost:3000/login
           docker logs dashu
+      # L'archive d'une version : le binaire, les scripts et services du
+      # serveur (deploy/), la licence. Son nom ne porte pas de numéro de
+      # version, pour que l'adresse de téléchargement ne change jamais.
+      - name: Binaire et archive
+        run: |
+          mkdir -p paquet/dashu
+          id=$(docker create dashu:ci)
+          docker cp "$id:/dashu" paquet/dashu/dashu
+          docker rm "$id"
+          file paquet/dashu/dashu | tee /dev/stderr | grep -q 'statically linked\|static-pie linked'
+          paquet/dashu/dashu version | tee /dev/stderr | grep -qx "dashu [0-9.]* ${{ github.sha }}"
+          cp -r deploy LICENSE paquet/dashu/
+          tar -czf "dashu-${{ matrix.arch }}-linux.tar.gz" -C paquet dashu
+          tar -tzf "dashu-${{ matrix.arch }}-linux.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dashu-${{ matrix.arch }}
+          path: dashu-${{ matrix.arch }}-linux.tar.gz
+          retention-days: 14
+      # Publication : l'image de cette architecture part sur ghcr.io sans
+      # nom de version, désignée par son empreinte ; le job « publier » réunit
+      # ensuite les deux architectures sous les noms v1, X.Y.Z et latest.
+      - name: Connexion à ghcr.io
+        if: env.PUBLIER == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Envoyer l'image
+        id: envoi
+        if: env.PUBLIER == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: DASHU_COMMIT=${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+      - name: Empreinte de l'image
+        if: env.PUBLIER == 'true'
+        run: |
+          mkdir -p empreintes
+          echo "${{ steps.envoi.outputs.digest }}" > "empreintes/${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        if: env.PUBLIER == 'true'
+        with:
+          name: empreinte-${{ matrix.arch }}
+          path: empreintes/${{ matrix.arch }}
+          retention-days: 1
+
+  # Une version publiée (release GitHub) : sur la branche v1, la pré-version
+  # « canal-v1 » est remplacée (son tag ne peut pas s'appeler « v1 », le nom de
+  # la branche) ; sur un tag vX.Y.Z, une vraie version, celle du canal stable.
+  publier:
+    name: publier la version
+    needs: binaires
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/v1' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dashu-*
+          path: versions
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: empreinte-*
+          path: empreintes
+          merge-multiple: true
+      - name: Empreintes des archives
+        working-directory: versions
+        run: |
+          sha256sum dashu-*-linux.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+      - name: Version du canal v1
+        if: github.ref == 'refs/heads/v1'
+        run: |
+          git tag -f canal-v1 "$GITHUB_SHA"
+          git push -f origin refs/tags/canal-v1
+          notes="Canal v1 : la dernière version fusionnée sur la branche v1 (commit $GITHUB_SHA). Les installations du canal stable suivent les versions numérotées."
+          if gh release view canal-v1 >/dev/null 2>&1; then
+            # Les archives d'abord, SHA256SUMS en dernier : pendant l'envoi,
+            # une mise à jour qui lirait l'ancienne empreinte refuse l'archive
+            # au lieu d'installer un mélange.
+            gh release upload canal-v1 versions/dashu-*-linux.tar.gz --clobber
+            gh release upload canal-v1 versions/SHA256SUMS --clobber
+            gh release edit canal-v1 --prerelease --latest=false --notes "$notes"
+          else
+            gh release create canal-v1 versions/dashu-*-linux.tar.gz versions/SHA256SUMS \
+              --prerelease --latest=false --title "Canal v1" --notes "$notes"
+          fi
+      - name: Version numérotée
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          test "v$version" = "$GITHUB_REF_NAME" || {
+            echo "Le tag $GITHUB_REF_NAME ne correspond pas à la version de Cargo.toml ($version)."
+            exit 1
+          }
+          gh release create "$GITHUB_REF_NAME" versions/dashu-*-linux.tar.gz versions/SHA256SUMS \
+            --verify-tag --latest --title "dashu $version" --generate-notes
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image pour les deux architectures
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/v1 ]; then
+            noms="-t $IMAGE:v1"
+          else
+            noms="-t $IMAGE:${GITHUB_REF_NAME#v} -t $IMAGE:latest"
+          fi
+          sources=""
+          for f in empreintes/*; do sources="$sources $IMAGE@$(cat "$f")"; done
+          docker buildx imagetools create $noms $sources
+          docker buildx imagetools inspect "$IMAGE:${noms##*:}"

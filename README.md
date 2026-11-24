@@ -14,6 +14,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 - [Comptes et connexion](#comptes-et-connexion)
 - [Créer les identifiants Google](#créer-les-identifiants-google)
 - [API pour un assistant](#api-pour-un-assistant)
+- [Versions publiées](#versions-publiées)
 - [Déploiement : homelab, Tailscale et tunnel Cloudflare](#déploiement--homelab-tailscale-et-tunnel-cloudflare)
 - [Sauvegardes et restauration](#sauvegardes-et-restauration)
 - [Sécurité](#sécurité)
@@ -259,6 +260,37 @@ C'est OAuth 2.1, tel que MCP le demande (le détail est dans [SPEC.md](SPEC.md),
 `/oauth/register`, `/oauth/token` et `/oauth/revoke` ont leur propre limite par adresse IP (20 demandes d'un coup, puis une toutes les 3 secondes). Rien à configurer sur le serveur : l'adresse publique est `BASE_URL`.
 
 **À vérifier côté Cloudflare** : claude.ai appelle dashu depuis les serveurs d'Anthropic. Le connecteur ne marche donc que par `https://app.dashu.dev` (pas par l'adresse Tailscale), et Cloudflare ne doit pas poser de défi anti-robot (Bot Fight Mode, Super Bot Fight Mode) sur `/mcp`, `/.well-known/` et `/oauth/`.
+
+## Versions publiées
+
+Pas besoin de compiler dashu pour l'installer : la CI publie des binaires tout faits pour Linux, en x86_64 (processeurs Intel et AMD) et en aarch64 (ARM 64 bits : Raspberry Pi 4 et 5, serveurs ARM). Chaque binaire est lié statiquement à **musl**, une bibliothèque C embarquée dans le binaire : il ne dépend pas de celle du système et tourne sur toute distribution Linux.
+
+Deux **canaux**, c'est-à-dire deux suites de versions :
+
+| Canal | Quand il change | Où |
+| --- | --- | --- |
+| `stable` | À chaque tag `vX.Y.Z` (numéro de `Cargo.toml`) | [Dernière version](https://github.com/moreauremi/dashu/releases/latest), image `ghcr.io/moreauremi/dashu:latest` et `:X.Y.Z` |
+| `v1` | À chaque fusion sur la branche `v1` (CI verte) | Pré-version [`canal-v1`](https://github.com/moreauremi/dashu/releases/tag/canal-v1), image `ghcr.io/moreauremi/dashu:v1` |
+
+Chaque version contient `dashu-x86_64-linux.tar.gz`, `dashu-aarch64-linux.tar.gz` et `SHA256SUMS`, l'empreinte SHA-256 de chaque archive, qui permet de vérifier qu'elle est arrivée intacte. Une archive contient le binaire, le dossier `deploy/` (services et scripts du serveur) et la licence. Le nom des archives ne porte pas de numéro : l'adresse de téléchargement d'un canal ne change jamais.
+
+```bash
+curl -fsSLO https://github.com/moreauremi/dashu/releases/latest/download/dashu-x86_64-linux.tar.gz
+```
+
+```bash
+curl -fsSL https://github.com/moreauremi/dashu/releases/latest/download/SHA256SUMS | sha256sum -c --ignore-missing
+```
+
+`dashu version` affiche la version et le commit dont le binaire est issu (`dashu 1.0.0 <commit>`).
+
+**Publier une version stable.** Mettre le numéro à jour dans `Cargo.toml` (par une PR), puis, une fois fusionné sur `v1` :
+
+```bash
+git tag v1.0.0 origin/v1 && git push origin v1.0.0
+```
+
+La CI refuse un tag qui ne correspond pas au numéro de `Cargo.toml`. À la première publication de l'image, la rendre publique une fois pour toutes : sur GitHub, **Packages > dashu > Package settings > Change visibility**.
 
 ## Déploiement : homelab, Tailscale et tunnel Cloudflare
 
@@ -568,7 +600,19 @@ Essai : envoyer un fichier `.md`, « Convertir » > « En PDF ». Si le PDF éch
 
 ### Variante : Docker
 
-Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push. Dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
+Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push et la publie pour x86_64 et ARM (voir [Versions publiées](#versions-publiées)). Pour l'essayer sans rien compiler, sur n'importe quelle machine avec Docker :
+
+```bash
+docker run -d --name dashu -p 3000:3000 -v dashu:/data -e SESSION_SECRET="$(openssl rand -hex 32)" -e ALLOWED_EMAILS=toi@example.com -e BASE_URL=http://localhost:3000 ghcr.io/moreauremi/dashu:latest
+```
+
+```bash
+docker exec -it dashu /dashu set-password toi@example.com
+```
+
+Avant la première version stable, prendre l'image `:v1`. Les outils de conversion (ffmpeg, pandoc…) ne sont pas dans l'image : Fichiers et Outils restent désactivés.
+
+Pour construire l'image soi-même, dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
 
 ```bash
 git clone -b v1 https://github.com/moreauremi/dashu.git /opt/dashu && cd /opt/dashu && cp .env.example .env
@@ -653,7 +697,7 @@ dashu/
 ├── migrations/             schéma SQL, appliqué au démarrage
 ├── .sqlx/                  métadonnées des requêtes (vérification à la compilation sans base)
 ├── src/
-│   ├── main.rs             serveur, set-password, backup, healthcheck
+│   ├── main.rs             serveur, set-password, backup, healthcheck, version
 │   ├── lib.rs              état partagé et routeur
 │   ├── config.rs           variables d'environnement
 │   ├── db.rs               pool SQLite, mode WAL, migrations
@@ -739,4 +783,4 @@ La suite (fichiers, outils PDF, médias, audio, assistant) est décrite dans la 
 
 ## Licence
 
-À choisir avant la première version publique (MIT ou AGPL).
+dashu est un logiciel libre, publié sous licence **AGPL**, version 3 ou ultérieure (fichier [LICENSE](LICENSE)). On peut l'utiliser, le modifier et le redistribuer. Qui le modifie et le propose en ligne à d'autres personnes doit publier ses modifications sous la même licence.
