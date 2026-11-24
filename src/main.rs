@@ -5,6 +5,7 @@
 //!   dashu backup <fichier>       copie à chaud de la base (VACUUM INTO)
 //!   dashu healthcheck            interroge /health (pour le HEALTHCHECK Docker)
 //!   dashu worker                 service de conversion (voir src/tools/worker.rs)
+//!   dashu version                version et commit du binaire (lus par dashu-update)
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -26,9 +27,19 @@ async fn main() -> anyhow::Result<()> {
         ["backup", destination] => backup(destination).await,
         ["healthcheck"] => healthcheck().await,
         ["worker"] => worker().await,
+        ["version"] | ["--version"] => {
+            // Une seule ligne, « dashu <version> <commit> » : dashu-update la
+            // compare à celle de la version à installer.
+            println!(
+                "dashu {} {}",
+                env!("CARGO_PKG_VERSION"),
+                env!("DASHU_COMMIT")
+            );
+            Ok(())
+        }
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
             );
             std::process::exit(2);
         }

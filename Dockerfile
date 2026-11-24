@@ -20,6 +20,10 @@ ENV SQLX_OFFLINE=true
 
 COPY . .
 
+# Commit affiché par `dashu version` (build.rs le lit dans l'environnement).
+# La CI le passe avec --build-arg ; vide, il vaut « inconnu ».
+ARG DASHU_COMMIT=""
+
 # Les deux caches accélèrent les reconstructions sur le serveur
 # (`docker compose up -d --build`) : seules les crates modifiées recompilent.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -31,6 +35,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # ---------- Étape 2 : image finale ----------
 FROM scratch
+
+# Relie l'image publiée (ghcr.io/moreauremi/dashu) au dépôt sur GitHub.
+LABEL org.opencontainers.image.source="https://github.com/moreauremi/dashu" \
+      org.opencontainers.image.description="Hermes Dashboard (dashu) : tâches, notes, fichiers, emploi du temps" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 COPY --from=build /dashu /dashu
 COPY --from=build --chown=10001:10001 /data /data

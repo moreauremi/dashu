@@ -358,6 +358,20 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 - **Reste** : essayer les lots 4 à 8 sur le serveur après `dashu-update`, avec un vrai Claude et Hermès ; la page d'accueil si Rémi le veut.
 - **Pièges rencontrés** : `cargo test` échoue sur `arguments_de_pandoc` sous Windows seulement (chemin `/j\gabarit.typst`), sans lien avec ce chantier ; sous Windows, un binaire `target/debug/dashu.exe` lancé bloque la compilation (lancer une copie) ; un long script Python passé en heredoc au shell Bash échoue (l'écrire dans un fichier) ; après une requête SQL nouvelle, `cargo sqlx prepare` sur une base jetable (`DATABASE_URL=sqlite://target/prepare.db`), puis versionner `.sqlx/`.
 
+## Installation simple : avancement
+
+Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« Installation simple »), livrée une PR par étape.
+
+**Étape 1, binaires publiés** (24 novembre 2026). Vérifiée par la CI de la branche (run 45354327899) et par le test `tests/version.rs`. **La publication elle-même (pré-version `canal-v1`, image sur ghcr.io) ne se voit qu'après la fusion sur `v1`.**
+
+- [x] `LICENSE` contient l'AGPL-3.0 (texte officiel), `Cargo.toml` la déclare (`AGPL-3.0-or-later`), le README le dit.
+- [x] `dashu version` affiche « dashu 1.0.0 <commit> » ; le commit vient de `DASHU_COMMIT` à la compilation, « inconnu » sinon. Test `version_affiche_la_version_et_le_commit` ; en CI, le binaire de l'archive affiche bien le commit du push.
+- [ ] Un push sur `v1` remplace la pré-version `canal-v1` ; un tag `vX.Y.Z` crée une version ; chacune a les archives x86_64 et aarch64 et `SHA256SUMS`. Jobs écrits (`publier la version`), à voir à la première fusion.
+- [x] Le binaire aarch64 est compilé sur un runner ARM, statique (`file` : « ARM aarch64, statically linked »), et son image répond à `/health` et `/login`.
+- [ ] L'image `ghcr.io/moreauremi/dashu` existe pour amd64 et arm64. Construites et testées en CI : 10 Mo (x86_64) et 21 Mo (aarch64), sous les 30 Mo. Leur envoi sur ghcr.io se verra à la fusion.
+- [ ] Le binaire musl mesuré contre le binaire actuel avant la bascule du serveur (commande dans le README, « Mise à jour »).
+- Un test unitaire, `tools::worker::tests::arguments_de_pandoc`, échoue sous Windows (chemins Linux assemblés avec `\`) ; il passe sur la CI Linux. Sans rapport avec cette étape.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

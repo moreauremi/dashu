@@ -26,6 +26,16 @@ fn main() {
     // sqlx::migrate!() lit ce dossier à la compilation.
     println!("cargo:rerun-if-changed=migrations");
 
+    // Commit dont le binaire est issu, affiché par `dashu version`. La CI le
+    // fournit, comme dashu-update quand il compile ; « inconnu » sinon.
+    println!("cargo:rerun-if-env-changed=DASHU_COMMIT");
+    let commit = env::var("DASHU_COMMIT")
+        .ok()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .unwrap_or_else(|| "inconnu".into());
+    println!("cargo:rustc-env=DASHU_COMMIT={commit}");
+
     let grid = grid_css();
     fs::write(out.join("grid.css"), &grid).unwrap();
 

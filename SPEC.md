@@ -1351,9 +1351,9 @@ L'installation s'adresse aussi à d'autres personnes que Rémi. Le travail se fa
 - `dashu version` affiche la version (celle de `Cargo.toml`) et le commit dont le binaire est issu.
 - La CI compile dashu pour Linux, en x86_64 et en aarch64 (ARM 64 bits : Raspberry Pi 4 et 5, serveurs ARM). Les binaires sont liés à **musl**, une bibliothèque C embarquée dans le binaire : il ne dépend pas de celle de la machine et tourne sur toute distribution Linux. L'image Docker l'est déjà.
 - Chaque architecture est compilée sur son propre runner GitHub (la machine qui exécute la CI), x86_64 ou ARM : pas de compilation croisée, que ring et SQLite, écrits en partie en C, compliquent.
-- Une **version publiée** (release GitHub) contient, par architecture, une archive `dashu-<version>-<arch>-linux.tar.gz` : le binaire, `deploy/lxc/` (services et scripts) et `LICENSE`. Le fichier `SHA256SUMS` donne l'empreinte SHA-256 de chaque archive, ce qui permet de vérifier qu'elle est arrivée intacte.
+- Une **version publiée** (release GitHub) contient, par architecture, une archive `dashu-<arch>-linux.tar.gz` : le binaire, `deploy/` (services et scripts) et `LICENSE`. Le fichier `SHA256SUMS` donne l'empreinte SHA-256 de chaque archive, ce qui permet de vérifier qu'elle est arrivée intacte.
 - Deux **canaux**, c'est-à-dire deux suites de versions qu'une installation peut suivre :
-  - `v1` : à chaque push sur la branche `v1`, une fois la CI verte, la pré-version `v1` est remplacée. C'est le canal du serveur de Rémi.
+  - `v1` : à chaque push sur la branche `v1`, une fois la CI verte, la pré-version `canal-v1` est remplacée. C'est le canal du serveur de Rémi.
   - `stable` : chaque tag `vX.Y.Z` crée une version. C'est le canal par défaut des autres installations.
 - **Image Docker** `ghcr.io/moreauremi/dashu`, pour amd64 et arm64, construite à partir des mêmes binaires. Tags : `v1`, `X.Y.Z` et `latest` (la dernière version stable). Elle fait moins de 30 Mo, comme aujourd'hui.
 - Les outils de conversion (ffmpeg, pandoc, Typst, Ghostscript, heif-dec) restent hors du binaire et de l'image : l'installateur les propose.
@@ -1553,6 +1553,12 @@ Par défaut, pour avancer :
 - **Relance de dashu après un changement de configuration**, plutôt qu'une configuration modifiable à chaud : plus simple, quelques secondes de coupure.
 - **Code d'installation de 12 caractères**, écrit dans le journal seulement.
 - **Les unités systemd** ne sont installées que par le script, comme aujourd'hui : `dashu-update` n'y touche pas.
+
+Pendant la réalisation (24 novembre 2026) :
+
+- **Archives sans numéro de version** (`dashu-x86_64-linux.tar.gz`) : l'adresse d'un canal ne change jamais, et le canal stable se télécharge par l'adresse « dernière version » de GitHub (`releases/latest/download/…`), qui ignore les pré-versions. La version se lit avec `dashu version`.
+- **La pré-version du canal v1 s'appelle `canal-v1`** : un tag `v1` porterait le même nom que la branche, et git ne saurait plus lequel des deux on désigne.
+- **Le binaire est celui de l'image Docker**, extrait de l'image : un seul build par architecture, testé (taille, `/health`, `dashu version`, binaire statique) avant d'être publié. Le job « image Docker » de la CI devient « binaire et image », une fois par architecture.
 
 Reste à trancher :
 
