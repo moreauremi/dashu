@@ -106,7 +106,7 @@ repondre "$TMP/installation.log" 1 o n "$EMAIL" "$MDP" "$MDP"
 sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | tail -25
 grep -q "C'est prêt" "$TMP/installation.log" || fail "pas de résumé final"
 if grep -qF "$MDP" "$TMP/installation.log"; then fail "le mot de passe s'est affiché"; fi
-curl -fsS http://127.0.0.1:3000/health | grep -qx ok || fail "/health"
+[ "$(curl -fsS http://127.0.0.1:3000/health)" = ok ] || fail "/health"
 [ "$(dashu version)" = "$VERSION" ] || fail "version installée : $(dashu version)"
 [ "$(stat -c '%a %U %G' /etc/dashu/dashu.env)" = "640 root dashu" ] || fail "droits de dashu.env"
 grep -qx 'BIND_ADDR=0.0.0.0:3000' /etc/dashu/dashu.env || fail "accès local : BIND_ADDR"
@@ -119,7 +119,10 @@ for s in dashu-update dashu-backup dashu-restore dashu-admin dashu-compte; do
   [ -x "/usr/local/sbin/$s" ] || fail "$s non installé"
 done
 [ -f /opt/dashu/share/deploy/hermes/SKILL.md ] || fail "fichiers d'Hermès absents de /opt/dashu/share"
-dashu-admin status | grep -q "version : ${VERSION#dashu }" || fail "dashu-admin status"
+# Sortie lue en entier : un grep -q dans le tube couperait dashu-admin
+# (écriture refusée), et pipefail compterait l'échec.
+STATUT="$(dashu-admin status)"
+grep -qF "version : ${VERSION#dashu }" <<<"$STATUT" || fail "dashu-admin status : $STATUT"
 
 etape "2. Connexion, puis relance sans question"
 connexion "$EMAIL" "$MDP" || fail "connexion avec le compte créé"
@@ -155,7 +158,7 @@ publier "$TMP/casse.tar.gz"
 if dashu-update >"$TMP/maj.log" 2>&1; then fail "une version qui ne démarre pas est restée"; fi
 grep -q "retour à la précédente" "$TMP/maj.log" || fail "pas de retour arrière"
 [ "$(dashu version)" = "dashu 9.9.9 essai" ] || fail "ancienne version non remise"
-curl -fsS http://127.0.0.1:3000/health | grep -qx ok || fail "/health après le retour arrière"
+[ "$(curl -fsS http://127.0.0.1:3000/health)" = ok ] || fail "/health après le retour arrière"
 connexion "$EMAIL" "$MDP" || fail "connexion après le retour arrière"
 
 etape "4. Menu : changer le mot de passe"
