@@ -4,8 +4,10 @@
 #
 #   sudo bash tests/deploy/installation.sh dashu-x86_64-linux.tar.gz
 #
-# 1. Installation avec les questions (dans un terminal simulé par `script`) :
-#    accès local, fichiers, compte. Le mot de passe ne s'affiche pas.
+# 1. Installation avec les questions (dans un terminal simulé, tests/deploy/repondre.py) :
+#    accès local, fichiers. Le script affiche l'adresse et le code
+#    d'installation ; le premier lancement se fait comme dans un navigateur
+#    (code, puis compte), et dashu se relance.
 # 2. Connexion avec ce compte ; ancienne forme du script relancée : la
 #    configuration et la base ne bougent pas.
 # 3. dashu-update : « déjà à jour », archive abîmée refusée, nouvelle version
@@ -81,6 +83,33 @@ connexion() { # connexion <email> <mot de passe>
   [ "$code" = 303 ]
 }
 
+# Premier lancement, comme dans un navigateur : le code, puis le compte.
+premier_lancement() { # premier_lancement <code> <email> <mot de passe>
+  local jar="$TMP/setup" csrf code
+  rm -f "$jar"
+  csrf="$(curl -fsS -c "$jar" -b "$jar" http://127.0.0.1:3000/setup | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)"
+  [ -n "$csrf" ] || fail "pas de jeton CSRF sur /setup"
+  code="$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" -c "$jar" \
+    --data-urlencode "_csrf=$csrf" --data-urlencode "code=$1" http://127.0.0.1:3000/setup/code)"
+  [ "$code" = 303 ] || fail "code d'installation refusé ($code)"
+  csrf="$(curl -fsS -c "$jar" -b "$jar" http://127.0.0.1:3000/setup | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)"
+  code="$(curl -s -o "$TMP/setup.html" -w '%{http_code}' -b "$jar" -c "$jar" \
+    --data-urlencode "_csrf=$csrf" --data-urlencode "email=$2" \
+    --data-urlencode "password=$3" --data-urlencode "password2=$3" http://127.0.0.1:3000/setup)"
+  [ "$code" = 200 ] || {
+    cat "$TMP/setup.html"
+    fail "premier lancement ($code)"
+  }
+  grep -q "C'est prêt" "$TMP/setup.html" || fail "pas de page de fin"
+  # dashu se relance : il cesse de répondre un instant, puis revient.
+  sleep 3
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  fail "dashu ne répond plus après la relance"
+}
+
 # Répond aux questions du script comme une personne au clavier : chaque
 # réponse part quand sa question est affichée (le mot de passe, donc, une
 # fois l'écho coupé). Le script tourne dans un terminal simulé
@@ -100,17 +129,24 @@ VERSION="$(tar -xzOf "$ARCHIVE" dashu/dashu >"$TMP/bin" && chmod +x "$TMP/bin" &
 echo "Version essayée : $VERSION"
 
 etape "1. Installation avec les questions"
-# Accès 1 (réseau local), fichiers oui, conversions non, email, mot de passe
-# deux fois. Pas de question Google : l'adresse locale n'est pas en HTTPS.
-repondre "$TMP/installation.log" 1 o n "$EMAIL" "$MDP" "$MDP"
+# Accès 1 (réseau local), fichiers oui, conversions non. Le compte se crée
+# ensuite dans le navigateur, avec le code affiché à la fin.
+repondre "$TMP/installation.log" 1 o n
 sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | tail -25
 grep -q "C'est prêt" "$TMP/installation.log" || fail "pas de résumé final"
-if grep -qF "$MDP" "$TMP/installation.log"; then fail "le mot de passe s'est affiché"; fi
+CODE="$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/installation.log" | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}' | tail -1)"
+[ -n "$CODE" ] || fail "le code d'installation n'est pas affiché"
 [ "$(curl -fsS http://127.0.0.1:3000/health)" = ok ] || fail "/health"
+[ "$(curl -s -o /dev/null -w '%{redirect_url}' http://127.0.0.1:3000/)" = http://127.0.0.1:3000/setup ] ||
+  fail "sans compte, l'accueil doit mener à /setup"
+if grep -q '^ALLOWED_EMAILS=' /etc/dashu/dashu.env; then fail "ALLOWED_EMAILS écrit sans email"; fi
+premier_lancement "$CODE" "$EMAIL" "$MDP"
+[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/setup)" = 404 ] || fail "/setup après l'installation"
+[ "$(sqlite3 /var/lib/dashu/dashu.db "SELECT is_admin FROM users WHERE email = '$EMAIL'")" = 1 ] ||
+  fail "le compte n'est pas administrateur"
 [ "$(dashu version)" = "$VERSION" ] || fail "version installée : $(dashu version)"
 [ "$(stat -c '%a %U %G' /etc/dashu/dashu.env)" = "640 root dashu" ] || fail "droits de dashu.env"
 grep -qx 'BIND_ADDR=0.0.0.0:3000' /etc/dashu/dashu.env || fail "accès local : BIND_ADDR"
-grep -qx "ALLOWED_EMAILS=$EMAIL" /etc/dashu/dashu.env || fail "ALLOWED_EMAILS"
 grep -qx 'FILES_DIR=/srv/dashu/fichiers' /etc/dashu/dashu.env || fail "fichiers non activés"
 systemctl is-active --quiet dashu-worker || fail "service de conversion arrêté"
 systemctl is-enabled --quiet dashu-backup.timer || fail "sauvegarde nocturne non programmée"

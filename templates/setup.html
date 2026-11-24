@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Installation · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block body %}
+<main class="auth">
+  <div class="auth-card auth-card-wide">
+    <h1 class="wordmark wordmark-lg logo-anim">{{ crate::assets::logo()|safe }}</h1>
+
+    {% if step == "code" %}
+    <p class="muted auth-lead">Bienvenue. Pour commencer, tape le code d'installation que dashu a écrit dans son journal au démarrage.</p>
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ error }}</p>
+    {% endif %}
+    <form class="stack" method="post" action="/setup/code">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label class="field">
+        <span class="field-label">Code d'installation</span>
+        <input type="text" name="code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" required autofocus>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Continuer</button>
+    </form>
+    <p class="muted setup-hint">Où le trouver : <code>journalctl -u dashu</code> sur le serveur, ou <code>docker logs dashu</code> avec Docker. Il change à chaque démarrage.</p>
+
+    {% else if step == "form" %}
+    <p class="muted auth-lead">Trois choses à régler, et c'est prêt.</p>
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ error }}</p>
+    {% endif %}
+    <form class="stack" method="post" action="/setup">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+      <h2 class="setup-step">1. Ton compte</h2>
+      <p class="muted setup-hint">Il sera l'administrateur : lui seul règle l'instance et les personnes autorisées.</p>
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus>
+      </label>
+      <label class="field">
+        <span class="field-label">Mot de passe (12 caractères au moins)</span>
+        <input type="password" name="password" autocomplete="new-password" minlength="12" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Le même, encore une fois</span>
+        <input type="password" name="password2" autocomplete="new-password" minlength="12" required>
+      </label>
+      {% if allowed_locked %}
+      <p class="muted setup-hint">Les adresses autorisées sont fixées sur le serveur (ALLOWED_EMAILS) : prends l'une d'elles.</p>
+      {% endif %}
+
+      <h2 class="setup-step">2. L'adresse de dashu</h2>
+      {% if base_url_locked %}
+      <p class="muted setup-hint">Définie sur le serveur (BASE_URL) : <strong>{{ base_url }}</strong></p>
+      {% else %}
+      <p class="muted setup-hint">Celle que tu tapes pour venir ici. Elle sert aux liens de partage, à Google et au connecteur Claude.</p>
+      <label class="field">
+        <span class="field-label">Adresse</span>
+        <input type="url" name="base_url" value="{{ base_url }}" data-setup-origin inputmode="url" spellcheck="false" required>
+      </label>
+      {% endif %}
+
+      <h2 class="setup-step">3. Connexion avec Google <span class="muted">(facultatif)</span></h2>
+      {% if google_locked %}
+      <p class="muted setup-hint">Réglée sur le serveur (GOOGLE_CLIENT_ID){% if google_ready %} : le bouton « Continuer avec Google » est en place{% endif %}.</p>
+      {% else %}
+      <details class="setup-google">
+        <summary>Activer la connexion avec Google</summary>
+        <ol class="setup-hint">
+          <li>Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">console Google Cloud</a>, crée un projet et l'écran de consentement OAuth (audience « Externe »).</li>
+          <li>Identifiants › Créer des identifiants › ID client OAuth › Application Web.</li>
+          <li>URI de redirection autorisé : <code data-setup-callback>{{ base_url }}/auth/google/callback</code></li>
+        </ol>
+        <label class="field">
+          <span class="field-label">ID client</span>
+          <input type="text" name="google_client_id" autocomplete="off" spellcheck="false" placeholder="….apps.googleusercontent.com">
+        </label>
+        <label class="field">
+          <span class="field-label">Code secret du client</span>
+          <input type="password" name="google_client_secret" autocomplete="off">
+        </label>
+        <p class="muted setup-hint">Tout cela se change ensuite dans Réglages › Instance.</p>
+      </details>
+      {% endif %}
+
+      <button class="btn btn-primary btn-block" type="submit">Terminer l'installation</button>
+    </form>
+
+    {% else %}
+    <p class="auth-lead">C'est prêt. Hermes Dashboard redémarre pour prendre ses réglages, la page se recharge toute seule dans quelques secondes.</p>
+    {% if let Some(warning) = warning %}
+    <p class="alert" role="status">{{ warning }}</p>
+    {% endif %}
+    <p class="muted setup-hint">Compte : {{ email }}<br>Adresse : {{ base_url }}</p>
+    <a class="btn btn-primary btn-block" href="/" data-setup-reload>Ouvrir Hermes Dashboard</a>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

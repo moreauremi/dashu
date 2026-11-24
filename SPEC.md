@@ -1564,6 +1564,11 @@ Pendant la réalisation (24 novembre 2026) :
 - **Jeton du tunnel Cloudflare dans `/etc/dashu/tunnel.env`** (root seulement), lu par l'unité `dashu-tunnel.service` : `cloudflared service install <jeton>`, la commande proposée par Cloudflare, le mettrait dans la ligne de commande et dans l'unité.
 - **Sans question, deux accès seulement** : `aucun` (dashu n'écoute que sur la machine, comme l'ancien script) et `local`. Tailscale et Cloudflare demandent une connexion à un compte, donc les questions.
 - **Tout le script est dans des fonctions**, appelées par sa dernière ligne : avec `curl … | bash`, bash lit tout le script avant d'exécuter quoi que ce soit, et aucune commande ne peut avaler la suite du téléchargement.
+- **L'assistant tient sur une page en trois parties** (compte, adresse, Google) plutôt que trois pages : moins d'allers-retours, et rien n'est enregistré tant que tout n'est pas valable. Le code se donne avant, sur sa propre page.
+- **L'adresse est vérifiée depuis le serveur** (`<adresse>/health`) : si elle ne répond pas, la page de fin le dit, sans bloquer (le réseau du serveur n'est pas celui du navigateur).
+- **La session survit à la relance** tant que l'adresse ne passe pas de http à https : le nom du cookie change alors (`__Host-dashu`), et on se reconnecte une fois.
+- **`dashu-compte`** garde la main sur `ALLOWED_EMAILS` quand la ligne existe ; sans elle, `liste` lit la base, et `ajouter` et `retirer` renvoient vers Réglages › Instance.
+- **Le secret de session** reste dans `dashu.env` pour une installation par le script (il le génère, comme avant) ; le fichier `secret` sert à l'image Docker et à toute installation sans `SESSION_SECRET`.
 
 Reste à trancher :
 

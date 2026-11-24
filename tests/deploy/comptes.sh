@@ -77,4 +77,16 @@ if "$SCRIPT" mot-de-passe inconnu@example.com 2>/dev/null; then fail "mot de pas
 # Commande inconnue : l'aide, et un échec.
 if "$SCRIPT" supprimer-tout 2>/dev/null; then fail "commande inconnue acceptée"; fi
 
+# Sans ALLOWED_EMAILS (installation par l'assistant) : la liste est en base,
+# ajouter et retirer renvoient vers Réglages › Instance sans toucher au fichier.
+grep -v '^ALLOWED_EMAILS=' "$DASHU_ENV_FILE" > "$TMP/sans-liste"
+cat "$TMP/sans-liste" > "$DASHU_ENV_FILE"
+cp -p "$DASHU_ENV_FILE" "$TMP/avant"
+BEFORE_RESTARTS="$(restarts)"
+OUT="$("$SCRIPT" ajouter nouvelle@example.com 2>&1)" && fail "ajout accepté alors que la liste est en base"
+case "$OUT" in *"Réglages › Instance"*) ;; *) fail "pas de renvoi vers Réglages › Instance : $OUT" ;; esac
+if "$SCRIPT" retirer remi@example.com 2>/dev/null; then fail "retrait accepté alors que la liste est en base"; fi
+cmp -s "$DASHU_ENV_FILE" "$TMP/avant" || fail "le fichier a changé"
+[ "$(restarts)" = "$BEFORE_RESTARTS" ] || fail "dashu a redémarré pour rien"
+
 echo "comptes autorisés : ok"

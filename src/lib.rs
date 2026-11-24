@@ -13,10 +13,13 @@ pub mod dashboard;
 pub mod db;
 pub mod files;
 pub mod folders;
+pub mod instance;
 pub mod mcp;
 pub mod notes;
 pub mod oauth;
+pub mod restart;
 pub mod settings;
+pub mod setup;
 pub mod spaces;
 pub mod tabbar;
 pub mod time;
@@ -61,6 +64,13 @@ pub struct AppState {
     /// Un envoi à Google Agenda à la fois : deux envois simultanés créeraient
     /// deux fois le même événement (voir `calendar::google`).
     pub google_push: Arc<tokio::sync::Mutex<()>>,
+    /// Vrai dès qu'un compte existe ; avant, tout mène au premier lancement
+    /// (`setup`).
+    pub installed: Arc<std::sync::atomic::AtomicBool>,
+    /// Code d'installation de ce démarrage (voir `setup::new_code`).
+    pub setup_code: Arc<str>,
+    /// Relance demandée après un changement des réglages de l'instance.
+    pub restart: Arc<restart::Restart>,
 }
 
 impl AppState {
@@ -82,6 +92,9 @@ impl AppState {
             uploads_busy: Default::default(),
             live: Arc::default(),
             google_push: Arc::default(),
+            installed: Arc::default(),
+            setup_code: setup::new_code().into(),
+            restart: Arc::default(),
         })
     }
 }
@@ -147,6 +160,9 @@ pub fn build_router(state: AppState) -> Router {
 
     // --- Routes qui passent par la session et la protection CSRF ----------
     let app = Router::new()
+        // Premier lancement, tant qu'aucun compte n'existe
+        .route("/setup", get(setup::page).post(setup::finish))
+        .route("/setup/code", post(setup::check_code).layer(login_limit()))
         // Authentification
         .route(
             "/login",
@@ -352,6 +368,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(mcp::router())
         // OAuth : découverte, enregistrement, jetons (sans session ni cookie).
         .merge(oauth::router())
+        // Sans compte, tout mène au premier lancement.
+        .layer(from_fn_with_state(state.clone(), setup::guard))
         .layer(from_fn_with_state(
             state.clone(),
             web::headers::security_headers,

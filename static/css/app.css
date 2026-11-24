@@ -5099,6 +5099,43 @@ a.cal-allday.is-own:hover {
   --logo-h: 28px;
 }
 
+/* Premier lancement (/setup) : un peu plus large, en trois parties. */
+.auth-card-wide {
+  max-width: 460px;
+}
+
+.setup-step {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+
+.setup-hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.setup-hint code {
+  word-break: break-all;
+}
+
+ol.setup-hint {
+  padding-left: 1.25em;
+}
+
+.setup-google {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setup-google[open] > summary {
+  margin-bottom: 4px;
+}
+
+.setup-google > summary {
+  cursor: pointer;
+}
+
 /* Connexion : le logo se déplie une fois, de l'icône H/ au mot Hermes/. La
    barre glisse du H jusqu'à sa place pendant que « ermes » apparaît (même
    mouvement que le logo animé, sans le recentrage). Coupé si l'utilisateur

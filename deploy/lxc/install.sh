@@ -8,8 +8,9 @@
 # son empreinte SHA-256, crée l'utilisateur système dashu, sa configuration
 # et ses services, puis rend dashu joignable : sur le réseau de la maison, par
 # Tailscale (privé, ou ouvert à Internet par Funnel), ou par un tunnel
-# Cloudflare vers un nom de domaine. Il crée enfin le compte, et règle la
-# connexion Google si on le souhaite.
+# Cloudflare vers un nom de domaine. Le compte et la connexion Google se
+# règlent ensuite dans le navigateur : le script affiche l'adresse et le code
+# d'installation (src/setup.rs).
 #
 # Relancé sur une machine déjà installée, il propose un menu : mise à jour,
 # accès, fichiers, Google, mot de passe. La base n'est jamais touchée, et un
@@ -24,7 +25,8 @@
 #   --acces aucun|local     aucun : dashu n'écoute que sur la machine (on le
 #                           publie soi-même) ; local : sur le réseau de la maison
 #   --adresse <url>         adresse publique (BASE_URL)
-#   --email <adresse>       compte à créer ; mot de passe lu dans DASHU_MOT_DE_PASSE
+#   --email <adresse>       compte à créer tout de suite, mot de passe lu dans
+#                           DASHU_MOT_DE_PASSE (sinon : assistant du premier lancement)
 #   --fichiers              active les fichiers (dans /srv/dashu)
 #   --conversions           active aussi les outils de conversion (ffmpeg, pandoc…)
 #   --archive <fichier>     installe cette archive au lieu de la télécharger
@@ -408,7 +410,9 @@ ecrire_configuration() {
     umask 027
     {
       echo "SESSION_SECRET=$(aleatoire_hex 32)"
-      echo "ALLOWED_EMAILS=$EMAIL"
+      # Sans email, la liste des adresses autorisées est rangée en base
+      # (assistant du premier lancement, puis Réglages › Instance).
+      if [ -n "$EMAIL" ]; then echo "ALLOWED_EMAILS=$EMAIL"; fi
       echo "BASE_URL=$BASE_URL"
       echo "DATABASE_URL=sqlite:///var/lib/dashu/dashu.db"
       echo "BIND_ADDR=$BIND_ADDR"
@@ -569,7 +573,22 @@ verifier_adresse() {
   fi
 }
 
+# Code d'installation que dashu vient d'écrire dans son journal (dernier
+# démarrage du service seulement).
+code_installation() {
+  local code="" invocation
+  for _ in $(seq 1 10); do
+    invocation="$(systemctl show -p InvocationID --value dashu 2>/dev/null || true)"
+    code="$(journalctl -o cat --no-pager ${invocation:+_SYSTEMD_INVOCATION_ID=$invocation} -u dashu 2>/dev/null |
+      grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}' | tail -1 || true)"
+    [ -n "$code" ] && break
+    sleep 1
+  done
+  printf '%s' "$code"
+}
+
 resume() {
+  local code
   say "${VERT}C'est prêt${NORMAL}"
   info "Adresse        : $BASE_URL"
   [ -n "${ACCES_LOCAL:-}" ] && [ "$BASE_URL" != "http://$(adresse_ip):3000" ] && info "Réseau local   : http://$(adresse_ip):3000"
@@ -590,6 +609,14 @@ resume() {
     info "Cloudflare : désactive l'injection de Web Analytics pour ce domaine (la CSP de dashu bloque"
     info "son script), et ne mets pas de défi anti-robot sur /mcp, /oauth/ et /.well-known/ (README)."
   fi
+  if [ -z "$COMPTE_CREE" ]; then
+    code="$(code_installation)"
+    say "Dernière étape, dans ton navigateur"
+    info "Ouvre  $BASE_URL/setup"
+    info "et tape le code d'installation :  ${GRAS}${code:-(voir journalctl -u dashu)}${NORMAL}"
+    info "Tu y crées ton compte, et la connexion avec Google si tu veux."
+    info "Le code change à chaque démarrage de dashu ; journalctl -u dashu le redonne."
+  fi
 }
 
 # ---------- Installation neuve ----------
@@ -604,8 +631,6 @@ installation_neuve() {
       oui_non "Activer aussi les conversions (vidéos, photos HEIC, PDF, documents ; environ 600 Mo de paquets) ?" n &&
         CONVERSIONS=oui
     fi
-    demander_email
-    demander_mot_de_passe
   else
     case "$ACCES" in
       "" | aucun) ;;
@@ -613,7 +638,6 @@ installation_neuve() {
       *) die "--acces : aucun ou local sans question (Tailscale et Cloudflare demandent les questions)." ;;
     esac
     [ -z "$EMAIL" ] || email_valide "$EMAIL" || die "Adresse email invalide : $EMAIL"
-    [ -n "$EMAIL" ] || die "--email est nécessaire pour une installation neuve."
     MOT_DE_PASSE="${DASHU_MOT_DE_PASSE:-}"
     unset DASHU_MOT_DE_PASSE
   fi
@@ -632,14 +656,12 @@ installation_neuve() {
   [ "$CONVERSIONS" = oui ] && installer_conversions
   installer_services
 
-  if [ -n "$MOT_DE_PASSE" ]; then
+  if [ -n "$EMAIL" ] && [ -n "$MOT_DE_PASSE" ]; then
     definir_mot_de_passe "$EMAIL" "$MOT_DE_PASSE"
     MOT_DE_PASSE=""
+    COMPTE_CREE=1
     info "Compte $EMAIL créé."
-  elif [ -n "$EMAIL" ]; then
-    info "Pour créer le compte : sudo dashu-compte mot-de-passe $EMAIL"
   fi
-  [ -n "$INTERACTIF" ] && configurer_google
   verifier_adresse
   resume
 }
@@ -688,10 +710,15 @@ menu_fichiers() {
 menu_mot_de_passe() {
   local autorisees
   demander_email
-  autorisees="$(valeur ALLOWED_EMAILS | tr ',' '\n' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-  if ! grep -qxF "$EMAIL" <<<"$autorisees"; then
-    oui_non "$EMAIL n'est pas autorisée à se connecter. L'ajouter ?" o || return 0
-    dashu-compte ajouter "$EMAIL" >/dev/null || return 0
+  # Liste dans dashu.env : on peut y ajouter l'adresse. Sinon, elle est en
+  # base et se gère dans Réglages › Instance ; dashu set-password dira si
+  # l'adresse n'y est pas.
+  if [ -n "$(valeur ALLOWED_EMAILS)" ]; then
+    autorisees="$(valeur ALLOWED_EMAILS | tr ',' '\n' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    if ! grep -qxF "$EMAIL" <<<"$autorisees"; then
+      oui_non "$EMAIL n'est pas autorisée à se connecter. L'ajouter ?" o || return 0
+      dashu-compte ajouter "$EMAIL" >/dev/null || return 0
+    fi
   fi
   demander_mot_de_passe
   if definir_mot_de_passe "$EMAIL" "$MOT_DE_PASSE"; then
@@ -705,6 +732,9 @@ menu() {
   BASE_URL="$(valeur BASE_URL)"
   say "dashu est déjà installé ($(dashu version 2>/dev/null || echo 'version inconnue'))"
   info "Adresse : $BASE_URL"
+  if ! sqlite3 /var/lib/dashu/dashu.db 'SELECT 1 FROM users LIMIT 1' 2>/dev/null | grep -q 1; then
+    info "Pas encore de compte : ouvre $BASE_URL/setup et tape le code $(code_installation)"
+  fi
   while :; do
     cat >/dev/tty <<TEXTE
 
@@ -742,7 +772,7 @@ usage() {
 main() {
   INTERACTIF=1 CANAL=stable CANAL_DONNE="" ACCES="" ADRESSE="" EMAIL="" FICHIERS="" CONVERSIONS=""
   ARCHIVE="" SOURCES="" BRANCHE="" MOT_DE_PASSE=""
-  ACCES_LOCAL="" ACCES_TS="" ACCES_FUNNEL="" ACCES_CF="" CF_NOM="" CF_JETON="" TS_NOM=""
+  ACCES_LOCAL="" ACCES_TS="" ACCES_FUNNEL="" ACCES_CF="" CF_NOM="" CF_JETON="" TS_NOM="" COMPTE_CREE=""
 
   # Ancienne forme : install.sh <email> <adresse> [branche]. Sans question,
   # dashu n'écoute que sur la machine, et les fichiers suivent /srv/dashu

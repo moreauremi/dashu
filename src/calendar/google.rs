@@ -79,7 +79,7 @@ pub fn open(state: &AppState, sealed: &[u8]) -> Option<String> {
 }
 
 /// Chiffre : nonce aléatoire de 12 octets, puis le texte chiffré et son tag.
-fn seal_with(secret: &str, plain: &str) -> Vec<u8> {
+pub(crate) fn seal_with(secret: &str, plain: &str) -> Vec<u8> {
     let mut nonce = [0u8; 12];
     SystemRandom::new()
         .fill(&mut nonce)
@@ -97,7 +97,7 @@ fn seal_with(secret: &str, plain: &str) -> Vec<u8> {
     out
 }
 
-fn open_with(secret: &str, sealed: &[u8]) -> Option<String> {
+pub(crate) fn open_with(secret: &str, sealed: &[u8]) -> Option<String> {
     if sealed.len() < 12 + 16 {
         return None;
     }

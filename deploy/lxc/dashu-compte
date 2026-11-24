@@ -19,6 +19,11 @@
 # l'API (API_USER_EMAIL) ne se retire pas : dashu ne démarrerait plus. La
 # dernière adresse non plus : plus personne ne pourrait se connecter.
 #
+# Sans ligne ALLOWED_EMAILS dans dashu.env (installation par l'assistant du
+# premier lancement), la liste est rangée dans la base : elle se gère dans
+# Réglages › Instance. « liste » la lit, « ajouter » et « retirer » y
+# renvoient, « mot-de-passe » marche partout.
+#
 # Hermès n'y a pas accès : dashu-admin garde ses six actions.
 # Le fichier, le redémarrage et le contrôle se changent par l'environnement
 # (tests de la CI, tests/deploy/comptes.sh).
@@ -27,6 +32,7 @@ set -euo pipefail
 ENV_FILE="${DASHU_ENV_FILE:-/etc/dashu/dashu.env}"
 RESTART="${DASHU_RESTART:-systemctl restart dashu}"
 CHECK="${DASHU_CHECK:-}"
+DB="${DASHU_DB:-/var/lib/dashu/dashu.db}"
 
 usage() {
   cat >&2 <<'TEXTE'
@@ -67,6 +73,15 @@ emails() {
 allowed() { grep -qxF "$1" <<<"$(emails)"; }
 
 api_email() { value API_USER_EMAIL | tr -d '[:space:]' | lower; }
+
+# Vrai si les adresses autorisées sont dans la base, pas dans dashu.env.
+in_base() { ! grep -q '^ALLOWED_EMAILS=' "$ENV_FILE"; }
+
+base_only() {
+  echo "Les adresses autorisées de cette instance sont rangées dans la base (pas de ALLOWED_EMAILS dans $ENV_FILE) :" >&2
+  echo "elles se gèrent dans Réglages › Instance, avec le compte administrateur." >&2
+  exit 2
+}
 
 # dashu répond-il après le redémarrage ?
 healthy() {
@@ -136,6 +151,12 @@ email_arg() {
 
 case "${1:-}" in
   liste)
+    if in_base; then
+      echo "(rangées dans la base, gérées dans Réglages › Instance)"
+      sqlite3 "$DB" 'SELECT email FROM allowed_emails ORDER BY added_at, email' 2>/dev/null ||
+        echo "Base illisible : $DB" >&2
+      exit 0
+    fi
     api="$(api_email)"
     found=0
     while IFS= read -r email; do
@@ -147,6 +168,7 @@ case "${1:-}" in
 
   ajouter)
     email="$(email_arg "${2:-}")"
+    in_base && base_only
     if allowed "$email"; then
       echo "$email est déjà autorisée."
       exit 0
@@ -164,6 +186,7 @@ case "${1:-}" in
 
   retirer)
     email="$(email_arg "${2:-}")"
+    in_base && base_only
     if ! allowed "$email"; then
       echo "$email n'est pas autorisée : rien à faire."
       exit 0
@@ -185,7 +208,8 @@ case "${1:-}" in
 
   mot-de-passe)
     email="$(email_arg "${2:-}")"
-    if ! allowed "$email"; then
+    # Liste en base : dashu set-password vérifie lui-même l'adresse.
+    if ! in_base && ! allowed "$email"; then
       echo "$email n'est pas autorisée : d'abord dashu-compte ajouter $email" >&2
       exit 2
     fi

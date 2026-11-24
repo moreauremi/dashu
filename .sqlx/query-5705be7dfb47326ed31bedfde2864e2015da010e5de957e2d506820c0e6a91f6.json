@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET is_admin = 1\n         WHERE id = (SELECT MIN(id) FROM users)\n           AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "5705be7dfb47326ed31bedfde2864e2015da010e5de957e2d506820c0e6a91f6"
+}
