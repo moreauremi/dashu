@@ -5122,14 +5122,13 @@ ol.setup-hint {
   padding-left: 1.25em;
 }
 
-.setup-google {
+/* Le contenu d'un <details> ne se range pas en flex de façon fiable selon
+   les navigateurs : il est enveloppé dans un bloc qui, lui, l'est. */
+.setup-google-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.setup-google[open] > summary {
-  margin-bottom: 4px;
+  margin-top: 12px;
 }
 
 .setup-google > summary {
