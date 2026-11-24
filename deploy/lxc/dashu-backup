@@ -17,6 +17,13 @@ STAMP="$(date +%F_%H%M%S)"
 DEST="$DIR/dashu-$STAMP.db"
 
 runuser -u dashu -- env DATABASE_URL=sqlite:///var/lib/dashu/dashu.db /usr/local/bin/dashu backup "$DEST"
+# Secret de session créé par dashu quand SESSION_SECRET n'est pas dans
+# dashu.env (installation par l'assistant) : sans lui, une base restaurée
+# sur une autre machine aurait ses jetons Google illisibles. Une seule copie,
+# lisible par root seul.
+if [ -f /var/lib/dashu/secret ]; then
+  install -m 600 /var/lib/dashu/secret "$DIR/secret"
+fi
 find "$DIR" -name 'dashu-*.db' -mtime +14 -delete
 find "$DIR" \( -name 'avant-maj-*.db' -o -name 'avant-restauration-*.db' \) -mtime +30 -delete
 echo "$DEST"

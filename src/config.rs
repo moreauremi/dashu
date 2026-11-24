@@ -1,13 +1,26 @@
-//! Configuration lue dans les variables d'environnement.
+//! Configuration : les variables d'environnement d'abord, puis les réglages
+//! de l'instance rangés en base (SPEC, « Installation simple », étape 4).
 //!
 //! En local, un fichier `.env` à la racine est lu en complément (les vraies
-//! variables d'environnement gardent la priorité). En production c'est Docker
-//! Compose qui les fournit. Voir `.env.example`.
+//! variables d'environnement gardent la priorité). En production, c'est
+//! `/etc/dashu/dashu.env` (systemd) ou Docker qui les fournit. Voir
+//! `.env.example`.
+//!
+//! Une installation par l'assistant du premier lancement n'a pas besoin de
+//! ce fichier : l'adresse publique, la connexion Google et les adresses
+//! autorisées viennent de la base (`crate::instance`), et le secret de
+//! session d'un fichier `secret` créé à côté de la base. Une variable
+//! d'environnement l'emporte toujours, et la valeur ne se change alors pas
+//! depuis le site (`FromEnv`).
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::{Context, bail};
+use sqlx::SqlitePool;
+use sqlx::sqlite::SqliteConnectOptions;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -34,7 +47,24 @@ pub struct Config {
     /// Dossier de travail partagé avec le service de conversion
     /// (`/srv/dashu/tmp`). `None` : pas de compression (bouton absent).
     pub work_dir: Option<std::path::PathBuf>,
+    /// Réglages de l'instance donnés par l'environnement : ils ne se changent
+    /// pas depuis le site (Réglages › Instance les montre verrouillés).
+    pub from_env: FromEnv,
 }
+
+/// Quels réglages de l'instance viennent de l'environnement.
+#[derive(Debug, Clone, Default)]
+pub struct FromEnv {
+    /// `BASE_URL`.
+    pub base_url: bool,
+    /// `GOOGLE_CLIENT_ID` ou `GOOGLE_CLIENT_SECRET`.
+    pub google: bool,
+    /// `ALLOWED_EMAILS`.
+    pub allowed_emails: bool,
+}
+
+/// Adresse publique par défaut, sans `BASE_URL` ni réglage en base.
+pub const DEFAULT_BASE_URL: &str = "http://localhost:3000";
 
 /// Stockage des fichiers envoyés (v2).
 #[derive(Debug, Clone)]
@@ -118,38 +148,74 @@ impl GoogleEndpoints {
 }
 
 impl Config {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let env = Env::load();
+    /// Ouvre la base (migrations comprises) et lit la configuration :
+    /// l'environnement, puis les réglages rangés en base.
+    pub async fn load(env: &Env) -> anyhow::Result<(Self, SqlitePool)> {
+        let database_url = env
+            .get("DATABASE_URL")
+            .unwrap_or_else(|| "sqlite://dashu.db".into());
+        let db = crate::db::connect(&database_url)
+            .await
+            .context("ouverture de la base SQLite")?;
+        let session_secret = match env.get("SESSION_SECRET") {
+            Some(secret) => secret,
+            None => secret_file(&database_url)?,
+        };
+        let stored = crate::instance::load(&db, &session_secret).await?;
+        let config = Self::build(env, database_url, session_secret, stored)?;
+        Ok((config, db))
+    }
 
-        let session_secret = env.require("SESSION_SECRET")?;
+    fn build(
+        env: &Env,
+        database_url: String,
+        session_secret: String,
+        stored: crate::instance::Stored,
+    ) -> anyhow::Result<Self> {
         if session_secret.len() < 64 {
             bail!(
                 "SESSION_SECRET doit faire au moins 64 caractères (génère-le avec : openssl rand -hex 32)"
             );
         }
 
+        let from_env = FromEnv {
+            base_url: env.get("BASE_URL").is_some(),
+            google: env.get("GOOGLE_CLIENT_ID").is_some()
+                || env.get("GOOGLE_CLIENT_SECRET").is_some(),
+            allowed_emails: env.get("ALLOWED_EMAILS").is_some(),
+        };
+
         let base_url = env
             .get("BASE_URL")
-            .unwrap_or_else(|| "http://localhost:3000".into())
+            .or(stored.base_url)
+            .unwrap_or_else(|| DEFAULT_BASE_URL.into())
             .trim_end_matches('/')
             .to_string();
 
-        let allowed_emails: Vec<String> = env
-            .get("ALLOWED_EMAILS")
-            .unwrap_or_default()
-            .split(',')
-            .map(|e| e.trim().to_lowercase())
-            .filter(|e| !e.is_empty())
-            .collect();
-
-        let google = match (env.get("GOOGLE_CLIENT_ID"), env.get("GOOGLE_CLIENT_SECRET")) {
-            (Some(client_id), Some(client_secret)) => Some(GoogleConfig {
-                client_id,
-                client_secret,
-                endpoints: GoogleEndpoints::default(),
-            }),
-            _ => None,
+        let allowed_emails: Vec<String> = if from_env.allowed_emails {
+            env.get("ALLOWED_EMAILS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|e| e.trim().to_lowercase())
+                .filter(|e| !e.is_empty())
+                .collect()
+        } else {
+            stored.allowed_emails
         };
+
+        let google = if from_env.google {
+            match (env.get("GOOGLE_CLIENT_ID"), env.get("GOOGLE_CLIENT_SECRET")) {
+                (Some(client_id), Some(client_secret)) => Some((client_id, client_secret)),
+                _ => None,
+            }
+        } else {
+            stored.google
+        }
+        .map(|(client_id, client_secret)| GoogleConfig {
+            client_id,
+            client_secret,
+            endpoints: GoogleEndpoints::default(),
+        });
 
         let api = match env.get("API_TOKEN") {
             None => None,
@@ -166,7 +232,9 @@ impl Config {
                     .trim()
                     .to_lowercase();
                 if !allowed_emails.contains(&user_email) {
-                    bail!("API_USER_EMAIL ({user_email}) doit figurer dans ALLOWED_EMAILS");
+                    bail!(
+                        "API_USER_EMAIL ({user_email}) doit être une adresse autorisée (ALLOWED_EMAILS)"
+                    );
                 }
                 Some(ApiConfig { token, user_email })
             }
@@ -192,9 +260,7 @@ impl Config {
         };
 
         Ok(Self {
-            database_url: env
-                .get("DATABASE_URL")
-                .unwrap_or_else(|| "sqlite://dashu.db".into()),
+            database_url,
             base_url,
             bind_addr: env
                 .get("BIND_ADDR")
@@ -212,6 +278,7 @@ impl Config {
                 .and(env.get("WORK_DIR"))
                 .map(|dir| dir.trim().into()),
             files,
+            from_env,
         })
     }
 
@@ -226,13 +293,68 @@ impl Config {
     }
 }
 
+/// Secret de session gardé dans un fichier `secret` à côté de la base, créé
+/// au premier démarrage quand `SESSION_SECRET` n'est pas donné (image Docker,
+/// installation par l'assistant). Lisible par dashu seul ; dashu-backup le
+/// sauvegarde avec la base. Le perdre déconnecte tout le monde et rend
+/// illisibles les jetons de Google Agenda et le secret Google rangé en base.
+fn secret_file(database_url: &str) -> anyhow::Result<String> {
+    let options = SqliteConnectOptions::from_str(database_url)
+        .with_context(|| format!("DATABASE_URL invalide : {database_url}"))?;
+    let path: PathBuf = match options.get_filename().parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.join("secret"),
+        _ => PathBuf::from("secret"),
+    };
+    let read = |path: &PathBuf| -> anyhow::Result<String> {
+        let secret = std::fs::read_to_string(path)
+            .with_context(|| format!("lecture de {}", path.display()))?
+            .trim()
+            .to_string();
+        if secret.len() < 64 {
+            bail!(
+                "{} : secret trop court (64 caractères au moins)",
+                path.display()
+            );
+        }
+        Ok(secret)
+    };
+    if path.exists() {
+        return read(&path);
+    }
+
+    let secret = crate::web::csrf::random_token();
+    let mut open = std::fs::OpenOptions::new();
+    open.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        open.mode(0o600);
+    }
+    match open.open(&path) {
+        Ok(mut file) => {
+            use std::io::Write;
+            writeln!(file, "{secret}")
+                .and_then(|()| file.sync_all())
+                .with_context(|| format!("écriture de {}", path.display()))?;
+            tracing::info!(fichier = %path.display(), "secret de session créé");
+            Ok(secret)
+        }
+        // Créé entre-temps par un autre processus : c'est le sien qui compte.
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => read(&path),
+        Err(e) => Err(e).with_context(|| format!("création de {}", path.display())),
+    }
+}
+
 /// Variables d'environnement, complétées par le fichier `.env` s'il existe.
-struct Env {
+pub struct Env {
     dotenv: HashMap<String, String>,
+    /// Faux pour les tests : seules les paires données comptent.
+    real: bool,
 }
 
 impl Env {
-    fn load() -> Self {
+    /// Les variables du processus, complétées par `.env`.
+    pub fn load() -> Self {
         let mut dotenv = HashMap::new();
         if let Ok(text) = std::fs::read_to_string(".env") {
             for line in text.lines() {
@@ -246,13 +368,26 @@ impl Env {
                 }
             }
         }
-        Self { dotenv }
+        Self { dotenv, real: true }
+    }
+
+    /// Seulement ces variables (tests).
+    pub fn from_pairs<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+        let dotenv = pairs
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        Self {
+            dotenv,
+            real: false,
+        }
     }
 
     /// Valeur non vide de la variable, ou `None`.
-    fn get(&self, key: &str) -> Option<String> {
-        std::env::var(key)
-            .ok()
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.real
+            .then(|| std::env::var(key).ok())
+            .flatten()
             .or_else(|| self.dotenv.get(key).cloned())
             .filter(|v| !v.trim().is_empty())
     }

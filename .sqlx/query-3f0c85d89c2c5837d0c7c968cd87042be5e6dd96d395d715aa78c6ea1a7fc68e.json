@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT key AS \"key!\", value FROM instance_settings",
+  "describe": {
+    "columns": [
+      {
+        "name": "key!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "3f0c85d89c2c5837d0c7c968cd87042be5e6dd96d395d715aa78c6ea1a7fc68e"
+}

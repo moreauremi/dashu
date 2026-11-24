@@ -82,6 +82,39 @@
     updateClock();
     updateNowLine();
     pdfViewer();
+    setupPage();
+  }
+
+  // Premier lancement (/setup, src/setup.rs). L'adresse proposée est celle
+  // que le navigateur utilise vraiment (le serveur ne voit que l'en-tête
+  // Host, pas toujours le bon protocole), et l'adresse de retour de Google la
+  // suit. À la fin, dashu se relance : on attend qu'il réponde de nouveau
+  // pour ouvrir l'accueil.
+  function setupPage() {
+    const origin = $("[data-setup-origin]");
+    const callback = $("[data-setup-callback]");
+    if (origin) {
+      if (!origin.dataset.touched) origin.value = location.origin;
+      const sync = () => {
+        if (callback) callback.textContent = origin.value.replace(/\/+$/, "") + "/auth/google/callback";
+      };
+      origin.addEventListener("input", () => {
+        origin.dataset.touched = "1";
+        sync();
+      });
+      sync();
+    }
+    const reload = $("[data-setup-reload]");
+    if (reload) {
+      let tries = 0;
+      const wait = () => {
+        tries += 1;
+        fetch("/health", { cache: "no-store" })
+          .then((r) => (r.ok ? location.assign("/") : Promise.reject()))
+          .catch(() => tries < 60 && setTimeout(wait, 1000));
+      };
+      setTimeout(wait, 2500);
+    }
   }
 
   // Lecteur de PDF (static/js/pdf.js, source dans frontend/pdf.js) : chargé

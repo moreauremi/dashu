@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT email AS \"email!\" FROM allowed_emails ORDER BY added_at, email",
+  "describe": {
+    "columns": [
+      {
+        "name": "email!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fba480f6afcc1014c059140870ca5f85e8a6e5dc7e1bb505dfe80614e2663e87"
+}

@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use dashu::config::{ApiConfig, Config, FilesConfig, GoogleConfig, GoogleEndpoints};
+use dashu::config::{ApiConfig, Config, Env, FilesConfig, FromEnv, GoogleConfig, GoogleEndpoints};
 use dashu::{AppState, auth, build_router, db};
 use tower::ServiceExt;
 
@@ -85,6 +85,43 @@ impl TestApp {
         Self::build(api, true, None).await
     }
 
+    /// Premier lancement : ni compte, ni adresse autorisée, ni réglage venu de
+    /// l'environnement (installation par l'assistant ou l'image Docker).
+    pub async fn first_launch() -> Self {
+        Self::build_with(None, true, None, |config| {
+            config.allowed_emails = Vec::new();
+            config.from_env = FromEnv::default();
+        })
+        .await
+    }
+
+    /// La même application après une relance : la configuration est relue
+    /// comme au démarrage (`Config::load`), sur la même base, avec ces seules
+    /// variables d'environnement en plus de DATABASE_URL et SESSION_SECRET.
+    pub async fn restarted(&self, env: &[(&str, &str)]) -> Self {
+        let database_url = self.state.config.database_url.clone();
+        let secret = self.state.config.session_secret.clone();
+        let mut pairs: Vec<(&str, &str)> =
+            vec![("DATABASE_URL", &database_url), ("SESSION_SECRET", &secret)];
+        pairs.extend_from_slice(env);
+        let (config, pool) = Config::load(&Env::from_pairs(pairs))
+            .await
+            .expect("configuration relue");
+        let state = AppState::new(config, pool).expect("état relancé");
+        // Les dossiers restent ceux de l'application d'origine, qui les
+        // nettoie : ceux-ci ne doivent rien effacer en partant.
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let gone =
+            std::env::temp_dir().join(format!("dashu-test-{}-{n}-relance", std::process::id()));
+        Self {
+            router: build_router(state.clone()),
+            state,
+            db_path: gone.join("base.db"),
+            files_dir: gone.join("fichiers"),
+            work_dir: gone.join("travail"),
+        }
+    }
+
     /// Comme [`TestApp::new`], avec Google configuré et ses adresses sous
     /// `base` : un faux Google local (Google Agenda, voir
     /// tests/agenda_evenements.rs).
@@ -108,6 +145,15 @@ impl TestApp {
     }
 
     async fn build(api: Option<ApiConfig>, files: bool, google: Option<GoogleConfig>) -> Self {
+        Self::build_with(api, files, google, |_| {}).await
+    }
+
+    async fn build_with(
+        api: Option<ApiConfig>,
+        files: bool,
+        google: Option<GoogleConfig>,
+        tweak: impl FnOnce(&mut Config),
+    ) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let db_path =
             std::env::temp_dir().join(format!("dashu-test-{}-{n}.db", std::process::id()));
@@ -119,7 +165,14 @@ impl TestApp {
             std::env::temp_dir().join(format!("dashu-test-{}-{n}-travail", std::process::id()));
         let _ = std::fs::remove_dir_all(&work_dir);
 
-        let config = Config {
+        // Comme le serveur de Rémi : adresse, comptes et Google viennent de
+        // l'environnement.
+        let from_env = FromEnv {
+            base_url: true,
+            google: google.is_some(),
+            allowed_emails: true,
+        };
+        let mut config = Config {
             database_url: format!("sqlite://{}", db_path.display()),
             base_url: "http://localhost:3000".into(),
             bind_addr: "127.0.0.1:0".parse().unwrap(),
@@ -133,7 +186,9 @@ impl TestApp {
                 max_upload_bytes: MAX_UPLOAD,
             }),
             work_dir: files.then(|| work_dir.clone()),
+            from_env,
         };
+        tweak(&mut config);
         let pool = db::connect(&config.database_url)
             .await
             .expect("base de test");

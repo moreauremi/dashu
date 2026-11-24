@@ -11,8 +11,10 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use dashu::config::Config;
-use dashu::{AppState, auth, build_router, calendar, db, files, tools, trash};
+use dashu::config::{Config, Env};
+use dashu::{
+    AppState, auth, build_router, calendar, db, files, instance, restart, setup, tools, trash,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower_sessions::ExpiredDeletion;
 
@@ -47,21 +49,20 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn serve() -> anyhow::Result<()> {
-    let config = Config::from_env()?;
-    init_logging(config.log_json);
-    // Après init_logging : avant, l'avertissement se perdait.
-    if config.allowed_emails.is_empty() {
-        tracing::warn!("ALLOWED_EMAILS est vide : personne ne peut se connecter");
-    }
-
-    let pool = db::connect(&config.database_url)
-        .await
-        .context("ouverture de la base SQLite")?;
+    // Les logs d'abord : la lecture de la configuration peut déjà avertir.
+    let env = Env::load();
+    init_logging(env.get("LOG_FORMAT").as_deref() == Some("json"));
+    let (config, pool) = Config::load(&env).await?;
     let bind_addr = config.bind_addr;
     if let Some(files) = &config.files {
         files::prepare_storage(files);
     }
     let state = AppState::new(config, pool.clone())?;
+    if state.config.allowed_emails.is_empty() && setup::installed(&state).await? {
+        tracing::warn!("aucune adresse autorisée : personne ne peut se connecter");
+    }
+    // Sans compte : l'adresse du premier lancement et son code, dans le journal.
+    setup::announce(&state).await?;
 
     // Tâches de fond, toutes les heures : synchro des agendas, purge des
     // sessions expirées et des envois de fichiers abandonnés.
@@ -90,10 +91,15 @@ async fn serve() -> anyhow::Result<()> {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal())
+    .with_graceful_shutdown(shutdown_signal(state.restart.clone()))
     .await?;
 
     pool.close().await;
+    if state.restart.asked() {
+        // Nouvelle configuration (premier lancement, Réglages › Instance) :
+        // dashu se remplace par une nouvelle copie de lui-même.
+        return Err(restart::exec());
+    }
     tracing::info!("dashu arrêté proprement");
     Ok(())
 }
@@ -115,8 +121,9 @@ fn init_logging(json: bool) {
     }
 }
 
-/// Attend Ctrl+C ou SIGTERM (`docker stop`) pour finir les requêtes en cours.
-async fn shutdown_signal() {
+/// Attend Ctrl+C, SIGTERM (`docker stop`) ou une demande de relance, pour
+/// finir les requêtes en cours.
+async fn shutdown_signal(restart: std::sync::Arc<restart::Restart>) {
     let ctrl_c = async {
         let _ = tokio::signal::ctrl_c().await;
     };
@@ -134,15 +141,18 @@ async fn shutdown_signal() {
     tokio::select! {
         () = ctrl_c => {},
         () = terminate => {},
+        () = restart.wait() => {},
     }
 }
 
 /// `dashu set-password <email>` : le mot de passe est lu sur l'entrée
 /// standard, pour ne jamais apparaître dans l'historique du shell.
 async fn set_password(email: &str) -> anyhow::Result<()> {
-    let config = Config::from_env()?;
+    let (config, pool) = Config::load(&Env::load()).await?;
     if !config.is_allowed(email) {
-        bail!("{email} n'est pas dans ALLOWED_EMAILS : ce compte ne pourrait pas se connecter");
+        bail!(
+            "{email} n'est pas une adresse autorisée (ALLOWED_EMAILS, ou Réglages › Instance) : ce compte ne pourrait pas se connecter"
+        );
     }
 
     eprint!("Mot de passe pour {email} (12 caractères minimum) : ");
@@ -151,8 +161,9 @@ async fn set_password(email: &str) -> anyhow::Result<()> {
     std::io::stdin().read_line(&mut line)?;
     let password = line.trim_end_matches(['\r', '\n']).to_string();
 
-    let pool = db::connect(&config.database_url).await?;
     auth::set_password(&pool, email, password).await?;
+    // Le premier compte de l'instance en devient l'administrateur.
+    instance::ensure_admin(&pool).await?;
     pool.close().await;
     eprintln!("Mot de passe enregistré pour {email}.");
     Ok(())

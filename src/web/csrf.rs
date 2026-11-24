@@ -102,7 +102,7 @@ pub async fn protect(session: Session, request: Request, next: Next) -> AppResul
 
 /// Comparaison en temps constant : le temps de réponse ne révèle pas combien
 /// de caractères du jeton étaient corrects.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }

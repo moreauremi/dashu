@@ -388,6 +388,19 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - [ ] Le serveur de Rémi est passé aux binaires ; STATUS relevé. Il reste en mode `sources` tant que la bascule n'est pas faite (README, « Mise à jour »).
 - Trouvé en route : l'ancien `dashu-update` ne vérifiait pas que l'ancienne version répondait après un retour arrière ; c'est corrigé dans les deux modes.
 
+**Étape 4, premier lancement dans le navigateur** (24 novembre 2026). Vérifiée par les tests (`tests/installation.rs`, 7 tests ; tests unitaires de `src/setup.rs`), par la CI de la branche (run 45370406005 : installation, code lu dans ce qu'affiche le script, assistant joué comme un navigateur, relance par re-exec sous systemd, connexion, sur x86_64 et ARM) et dans le navigateur sur une base neuve, sous Windows. **Pas encore essayé avec l'image Docker publiée ni sur une Debian neuve.**
+
+- [x] Sans compte, toute page mène à `/setup` ; l'API, `/mcp` et OAuth répondent 503 en JSON ; sans le bon code, rien ne se crée ; le formulaire final sans code renvoie au code ; les essais sont limités (429 après 5). Tests `sans_compte_tout_mene_au_premier_lancement`, `sans_le_bon_code_rien_ne_se_cree`.
+- [x] Le code n'apparaît ni dans la page ni dans une adresse (il se tape dans un formulaire avec jeton CSRF ; `?code=` ne compte pas) ; il change à chaque démarrage (test `le_code_change_a_chaque_demarrage`). Il n'est écrit que dans le journal du service.
+- [x] L'assistant crée le compte administrateur, enregistre l'adresse et Google (secret chiffré, vérifié en base), ouvre la session et demande la relance ; après la relance, la configuration vient de la base et le compte se connecte. Test `l_assistant_cree_l_administrateur_et_relance_dashu`. Dans le navigateur : la session a survécu à la relance (tableau de bord de Perso), adresse proposée d'après `location.origin`, adresse de retour Google à jour, aucune erreur de CSP.
+- [x] Une fois un compte créé, `/setup` et `/setup/code` répondent 404, l'API reste ouverte. Test `une_fois_un_compte_cree_setup_repond_404`, et en CI.
+- [x] Sans `SESSION_SECRET`, le secret est créé une fois (fichier `secret`, 600), gardé au redémarrage ; une variable donnée l'emporte sans toucher au fichier. Test `sans_session_secret_le_secret_est_cree_une_fois`. `dashu-backup` le copie avec la base (relu, pas essayé).
+- [x] Une variable d'environnement prime sur la base (adresse, adresses autorisées, Google). Test `l_environnement_prime_sur_la_base`. Tous les tests existants, écrits comme le serveur de Rémi (tout dans l'environnement), passent sans changement.
+- [ ] `docker run` de l'image mène au même assistant : à vérifier sur l'image publiée (le binaire est le même que celui testé).
+- [x] L'installateur ne pose plus que les questions du système, puis affiche l'adresse et le code (vérifié en CI, le code est lu dans ce qu'il affiche).
+- Sous Windows (développement), dashu ne peut pas se remplacer lui-même : après l'assistant, il s'arrête et demande d'être relancé.
+- Migration 0021 : `instance_settings`, `allowed_emails`, `users.is_admin` (le plus ancien compte devient administrateur).
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

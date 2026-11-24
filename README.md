@@ -78,12 +78,10 @@ Le script télécharge le binaire de la dernière version, vérifie son empreint
    | Nom de domaine | Un domaine chez Cloudflare et un tunnel | `https://app.mondomaine.fr` | Le script demande le jeton du tunnel, sans l'afficher |
 
 2. **Les fichiers** (rangés dans `/srv/dashu`), puis **les conversions** (ffmpeg, pandoc, Typst… environ 600 Mo).
-3. **Le compte** : email et mot de passe, tapé deux fois sans s'afficher.
-4. **Google**, facultatif, si l'adresse est en HTTPS : le script affiche l'adresse de retour à déclarer, puis demande l'identifiant et le secret.
 
-À la fin, il vérifie que dashu répond et affiche l'adresse. **Relancé** sur une machine où dashu est installé, il propose un menu : mettre à jour, changer l'accès, activer les fichiers, régler Google, changer un mot de passe. La base n'est jamais touchée, et un changement qui empêche dashu de démarrer est annulé.
+À la fin, il vérifie que dashu répond et affiche l'adresse avec le **code d'installation** : le compte et la connexion Google se règlent dans le navigateur ([Premier lancement](#premier-lancement)). **Relancé** sur une machine où dashu est installé, il propose un menu : mettre à jour, changer l'accès, activer les fichiers, régler Google, changer un mot de passe. La base n'est jamais touchée, et un changement qui empêche dashu de démarrer est annulé.
 
-Sans question, pour automatiser : `bash install.sh --non-interactif --email toi@example.com --acces local` (mot de passe dans `DASHU_MOT_DE_PASSE`), et `bash install.sh --help` pour les autres options. Sur macOS, Windows ou un NAS : l'image Docker ([Variante : Docker](#variante--docker)).
+Sans question, pour automatiser : `bash install.sh --non-interactif --acces local` (et `--email toi@example.com` avec le mot de passe dans `DASHU_MOT_DE_PASSE` pour créer le compte sans passer par le navigateur), et `bash install.sh --help` pour les autres options. Sur macOS, Windows ou un NAS : l'image Docker ([Variante : Docker](#variante--docker)).
 
 ## Installation locale
 
@@ -132,13 +130,15 @@ cargo test
 
 En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu/dashu.env`, que systemd transmet au service (ou `.env` avec Docker). Ces fichiers ne sont jamais versionnés, seul `.env.example` l'est.
 
+Aucune n'est obligatoire : sans elles, l'[assistant du premier lancement](#premier-lancement) règle l'essentiel dans le navigateur et le range dans la base. Une variable donnée l'emporte toujours sur ce qui est en base, et ne se change alors pas depuis le site (Réglages › Instance l'affiche « définie sur le serveur »).
+
 | Variable | Obligatoire | Rôle |
 | --- | --- | --- |
-| `SESSION_SECRET` | oui | Clé de signature du cookie de session, 64 caractères minimum. La changer déconnecte tout le monde. |
-| `ALLOWED_EMAILS` | oui | Emails autorisés, séparés par des virgules. Retirer un email coupe l'accès de ce compte immédiatement. Sur le serveur, `dashu-compte` l'ajoute ou le retire sans ouvrir le fichier (voir « Comptes et connexion »). |
-| `BASE_URL` | oui | URL publique, sans barre finale (`https://app.dashu.dev`). Sert aussi d'adresse de retour à Google. En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. |
+| `SESSION_SECRET` | non | Clé de signature du cookie de session, 64 caractères minimum. La changer déconnecte tout le monde. Sans elle, dashu en crée une au premier démarrage, dans un fichier `secret` à côté de la base (lisible par dashu seul, sauvegardé par `dashu-backup`). |
+| `ALLOWED_EMAILS` | non | Emails autorisés, séparés par des virgules. Retirer un email coupe l'accès de ce compte immédiatement. Sur le serveur, `dashu-compte` l'ajoute ou le retire sans ouvrir le fichier (voir « Comptes et connexion »). Sans elle, la liste est rangée dans la base : l'assistant du premier lancement y met le premier compte, Réglages › Instance la tient à jour. |
+| `BASE_URL` | non | URL publique, sans barre finale (`https://app.dashu.dev`). Sert aussi d'adresse de retour à Google. En `https`, le cookie devient `Secure` et l'en-tête HSTS est envoyé. Sans elle : l'adresse donnée au premier lancement (Réglages › Instance), sinon `http://localhost:3000`. |
 | `DATABASE_URL` | non | Emplacement de la base. Par défaut `sqlite://dashu.db` ; en production `sqlite:///var/lib/dashu/dashu.db` (Docker : `sqlite:///data/dashu.db`). |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | non | Identifiants OAuth de Google. Sans eux, le bouton « Continuer avec Google » n'est pas affiché, sauf s'ils sont donnés au premier lancement ou dans Réglages › Instance (rangés en base, le secret chiffré). |
 | `API_TOKEN` | non | Jeton fixe de l'API JSON (`/api/v1`), pour Hermès : attendu dans `Authorization: Bearer …`, 32 caractères minimum. Sans lui, l'API n'accepte que les jetons personnels (Réglages › Connexions). |
 | `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit `API_TOKEN`. Doit figurer dans `ALLOWED_EMAILS`. |
 | `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
@@ -152,10 +152,22 @@ En local elles sont lues dans le fichier `.env` ; en production dans `/etc/dashu
 
 ## Comptes et connexion
 
-Il n'y a volontairement **pas de page d'inscription**. Un compte se crée de deux façons :
+### Premier lancement
 
-1. **Par Google** : la première connexion d'un email présent dans `ALLOWED_EMAILS` crée le compte. Un mot de passe peut ensuite être défini dans Réglages.
-2. **En ligne de commande**, sur le serveur : `dashu set-password <email>` crée le compte ou remplace son mot de passe (c'est aussi la procédure en cas d'oubli).
+Tant qu'aucun compte n'existe, toute page mène à `/setup`. L'assistant demande d'abord le **code d'installation** que dashu écrit dans son journal au démarrage (`journalctl -u dashu` sur le serveur, `docker logs dashu` avec Docker ; l'installateur l'affiche aussi). Ce code change à chaque démarrage : sans lui, le premier venu qui tomberait sur la page ne prend pas l'instance. Puis, sur une page :
+
+1. **Le compte** : email et mot de passe. Il devient l'administrateur de l'instance.
+2. **L'adresse de dashu**, proposée d'après celle du navigateur (sauf si `BASE_URL` est donnée).
+3. **La connexion avec Google**, facultative : l'adresse de retour à déclarer s'affiche, puis l'identifiant et le secret.
+
+dashu enregistre, ouvre la session et se relance pour prendre ces réglages (quelques secondes). Dès qu'un compte existe, `/setup` répond 404 pour de bon. Pendant le premier lancement, l'API, le connecteur Claude et OAuth répondent 503.
+
+### Créer un compte ensuite
+
+Il n'y a volontairement **pas de page d'inscription**. Après le premier compte, un compte se crée de deux façons :
+
+1. **Par Google** : la première connexion d'une adresse autorisée crée le compte. Un mot de passe peut ensuite être défini dans Réglages.
+2. **En ligne de commande**, sur le serveur : `dashu set-password <email>` crée le compte ou remplace son mot de passe (c'est aussi la procédure en cas d'oubli). L'adresse doit être autorisée (`ALLOWED_EMAILS`, ou la liste de Réglages › Instance).
 
 Pourquoi : un formulaire d'inscription sans vérification d'email laisserait quiconque connaît une adresse autorisée créer le compte avant son propriétaire. Google prouve que l'adresse appartient au visiteur ; la ligne de commande prouve qu'on a la main sur le serveur.
 
@@ -399,7 +411,7 @@ apt-get update && apt-get install -y curl
 curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | bash
 ```
 
-[`deploy/lxc/install.sh`](deploy/lxc/install.sh) pose les questions décrites dans [Installer dashu en une commande](#installer-dashu-en-une-commande) : pour ce serveur, Tailscale et le nom de domaine (étapes 3 et 4 ci-dessous, que le script fait lui-même). Il télécharge le binaire, crée l'utilisateur système `dashu`, écrit la configuration dans `/etc/dashu/dashu.env` (un `SESSION_SECRET` est généré), installe le service, la sauvegarde nocturne et les scripts d'exploitation, puis crée le compte. L'ancienne forme, sans question, marche toujours : `bash -s -- toi@example.com https://app.dashu.dev` (dashu n'écoute alors que sur la machine, et le compte se crée ensuite avec `dashu-compte mot-de-passe`). `--depuis-les-sources` compile le code au lieu de télécharger le binaire (Rust, 10 à 20 minutes).
+[`deploy/lxc/install.sh`](deploy/lxc/install.sh) pose les questions décrites dans [Installer dashu en une commande](#installer-dashu-en-une-commande) : pour ce serveur, Tailscale et le nom de domaine (étapes 3 et 4 ci-dessous, que le script fait lui-même). Il télécharge le binaire, crée l'utilisateur système `dashu`, écrit la configuration dans `/etc/dashu/dashu.env` (un `SESSION_SECRET` est généré), installe le service, la sauvegarde nocturne et les scripts d'exploitation, puis affiche l'adresse et le code du [premier lancement](#premier-lancement), où se crée le compte. L'ancienne forme, sans question, marche toujours : `bash -s -- toi@example.com https://app.dashu.dev` (dashu n'écoute alors que sur la machine, `ALLOWED_EMAILS` contient cette adresse, et le compte se crée au premier lancement ou avec `dashu-compte mot-de-passe`). `--depuis-les-sources` compile le code au lieu de télécharger le binaire (Rust, 10 à 20 minutes).
 
 Ce qui est installé :
 
@@ -646,14 +658,14 @@ Essai : envoyer un fichier `.md`, « Convertir » > « En PDF ». Si le PDF éch
 Le dépôt contient aussi un `Dockerfile` (image `scratch` de 7 Mo : le binaire seul) et un `docker-compose.yml` qui lance dashu et `cloudflared` côte à côte. La CI construit l'image à chaque push et la publie pour x86_64 et ARM (voir [Versions publiées](#versions-publiées)). Pour l'essayer sans rien compiler, sur n'importe quelle machine avec Docker :
 
 ```bash
-docker run -d --name dashu -p 3000:3000 -v dashu:/data -e SESSION_SECRET="$(openssl rand -hex 32)" -e ALLOWED_EMAILS=toi@example.com -e BASE_URL=http://localhost:3000 ghcr.io/moreauremi/dashu:latest
+docker run -d --name dashu -p 3000:3000 -v dashu:/data ghcr.io/moreauremi/dashu:latest
 ```
 
 ```bash
-docker exec -it dashu /dashu set-password toi@example.com
+docker logs dashu
 ```
 
-Avant la première version stable, prendre l'image `:v1`. Les outils de conversion (ffmpeg, pandoc…) ne sont pas dans l'image : Fichiers et Outils restent désactivés.
+Le journal donne l'adresse et le code d'installation : ouvrir `http://localhost:3000/setup` et suivre le [premier lancement](#premier-lancement). Le secret de session est créé dans le volume (`/data/secret`) : sauvegarder le volume entier. Avant la première version stable, prendre l'image `:v1`. Les outils de conversion (ffmpeg, pandoc…) ne sont pas dans l'image : Fichiers et Outils restent désactivés.
 
 Pour construire l'image soi-même, dans un conteneur LXC avec Docker (options `nesting=1` et `keyctl=1`) :
 
