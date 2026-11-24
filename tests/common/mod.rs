@@ -223,6 +223,27 @@ impl TestApp {
         auth::set_password(&self.state.db, email, PASSWORD.into())
             .await
             .expect("création du compte");
+        // Le premier compte devient l'administrateur, comme au démarrage.
+        dashu::instance::ensure_admin(&self.state.db)
+            .await
+            .expect("administrateur");
+    }
+
+    /// Instance installée par l'assistant du premier lancement : rien ne
+    /// vient de l'environnement, Alice (administratrice) et Bob sont
+    /// autorisés en base et inscrits.
+    pub async fn by_wizard() -> Self {
+        let app = Self::build_with(None, true, None, |config| {
+            config.from_env = FromEnv::default();
+        })
+        .await;
+        for email in [ALICE, BOB] {
+            dashu::instance::allow(&app.state.db, email, None)
+                .await
+                .expect("adresse autorisée");
+            app.add_user(email).await;
+        }
+        app
     }
 
     /// Sert l'application sur un vrai port local (127.0.0.1, port libre), pour

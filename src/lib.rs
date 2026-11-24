@@ -280,6 +280,27 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/size", post(settings::profile::set_size))
         .route("/settings/sidebar", post(settings::profile::set_sidebar))
         .route("/settings/password", post(settings::set_password))
+        // Réglages › Instance, pour l'administrateur
+        .route(
+            "/settings/instance/address",
+            post(settings::instance::set_address),
+        )
+        .route(
+            "/settings/instance/google",
+            post(settings::instance::set_google),
+        )
+        .route(
+            "/settings/instance/google/remove",
+            post(settings::instance::remove_google),
+        )
+        .route(
+            "/settings/instance/emails",
+            post(settings::instance::add_email),
+        )
+        .route(
+            "/settings/instance/emails/remove",
+            post(settings::instance::remove_email),
+        )
         .route("/settings/tabs", post(settings::set_tabs))
         .route("/settings/google/unlink", post(settings::unlink_google))
         // Connexions : jetons d'accès du compte

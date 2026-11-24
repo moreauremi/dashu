@@ -291,7 +291,7 @@
       {#- Départ vers Google : une vraie navigation, pas une requête htmx. -#}
       <div><a class="btn" href="/auth/google" hx-boost="false">{{ crate::assets::icon("link")|safe }}Lier mon compte Google</a></div>
       {% else %}
-      <p class="hint">La connexion Google n'est pas configurée sur ce serveur (variables <code>GOOGLE_CLIENT_ID</code> et <code>GOOGLE_CLIENT_SECRET</code>).</p>
+      <p class="hint">La connexion Google n'est pas configurée sur ce serveur : l'administrateur la règle dans Réglages › Instance (ou les variables <code>GOOGLE_CLIENT_ID</code> et <code>GOOGLE_CLIENT_SECRET</code>).</p>
       {% endif %}
     </div>
   </section>
@@ -349,6 +349,9 @@
 
   {#- Connexions : jetons d'accès (settings/_connexions.html, déjà rendu). -#}
   {{ connexions_html|safe }}
+
+  {#- Instance : réglages du serveur, pour l'administrateur (settings/_instance.html). -#}
+  {{ instance_html|safe }}
 
   <section class="card" id="corbeille" aria-labelledby="s-trash">
     <header class="card-head"><h2 id="s-trash">Corbeille</h2></header>

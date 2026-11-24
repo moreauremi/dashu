@@ -173,6 +173,16 @@ Pourquoi : un formulaire d'inscription sans vérification d'email laisserait qui
 
 Les deux méthodes mènent au même compte : Google est rattaché par l'email vérifié qu'il renvoie.
 
+### Réglages › Instance
+
+L'administrateur (le compte créé au premier lancement ; sur une base plus ancienne, le plus ancien compte) a une carte de plus dans Réglages :
+
+- **l'adresse publique** ;
+- **la connexion avec Google** : l'identifiant et le secret du client, avec l'adresse de retour à déclarer. Le secret est chiffré en base et n'est jamais réaffiché. On peut le remplacer ou retirer la connexion ;
+- **les adresses autorisées** : en ajouter, en retirer. Ni sa propre adresse, ni celle de l'API, ni la dernière ne se retirent. Une adresse retirée perd l'accès, ses données restent.
+
+Un changement est rangé en base, puis dashu se relance pour le prendre : quelques secondes de coupure. Une valeur donnée par l'environnement (`BASE_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`) s'affiche « définie sur le serveur » et ne se change pas depuis le site : c'est le cas du serveur de Rémi, configuré par `dashu.env`. Les autres comptes ne voient pas la carte, et ses adresses leur répondent 404.
+
 **Ajouter quelqu'un.** Chaque adresse autorisée a son propre compte, ses espaces, ses notes, ses fichiers et son agenda ; il ne voit rien des autres (isolement testé), sauf les espaces qu'on partage avec lui (voir plus bas). Il partage en revanche le disque (pas de quota par compte) et les sauvegardes. Sur le serveur, en root dans le conteneur, [`dashu-compte`](deploy/lxc/dashu-compte) tient la liste à jour sans ouvrir `/etc/dashu/dashu.env` :
 
 ```bash

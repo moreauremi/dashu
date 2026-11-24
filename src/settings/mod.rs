@@ -2,6 +2,7 @@
 //! téléphone, mot de passe, compte Google lié, sources iCal, connexions.
 
 pub mod connexions;
+pub mod instance;
 pub mod profile;
 
 use std::collections::HashMap;
@@ -66,6 +67,9 @@ struct SettingsPage {
     shared: HashMap<i64, String>,
     /// Carte Connexions, déjà rendue (settings/_connexions.html).
     connexions_html: String,
+    /// Carte Instance (settings/_instance.html), déjà rendue ; vide sauf
+    /// pour l'administrateur.
+    instance_html: String,
     /// Éléments dans la corbeille.
     trash_count: usize,
 }
@@ -192,6 +196,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         invitations,
         shared,
         connexions_html: connexions::ConnexionsCard::render_html(&state, ctx.user.id).await?,
+        instance_html: instance::InstanceCard::render_html(&state, &ctx).await?,
         trash_count: crate::trash::page::count(&state.db, ctx.user.id).await?,
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,

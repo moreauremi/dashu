@@ -5136,6 +5136,30 @@ ol.setup-hint {
   cursor: pointer;
 }
 
+/* Réglages › Instance */
+.instance-title {
+  margin: 8px 0 0;
+  font-size: 0.9375rem;
+}
+
+.instance-emails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.instance-emails li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
 /* Connexion : le logo se déplie une fois, de l'icône H/ au mot Hermes/. La
    barre glisse du H jusqu'à sa place pendant que « ermes » apparaît (même
    mouvement que le logo animé, sans le recentrage). Coupé si l'utilisateur
