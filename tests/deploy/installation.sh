@@ -157,6 +157,7 @@ archive_modifiee "9.9.10 casse" non "$TMP/casse.tar.gz"
 publier "$TMP/casse.tar.gz"
 if dashu-update >"$TMP/maj.log" 2>&1; then fail "une version qui ne démarre pas est restée"; fi
 grep -q "retour à la précédente" "$TMP/maj.log" || fail "pas de retour arrière"
+grep -q "L'ancienne version répond de nouveau" "$TMP/maj.log" || fail "dashu-update ne dit pas que l'ancienne version répond"
 [ "$(dashu version)" = "dashu 9.9.9 essai" ] || fail "ancienne version non remise"
 [ "$(curl -fsS http://127.0.0.1:3000/health)" = ok ] || fail "/health après le retour arrière"
 connexion "$EMAIL" "$MDP" || fail "connexion après le retour arrière"

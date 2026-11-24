@@ -77,7 +77,15 @@ replace_binary() {
   install -m 755 /usr/local/bin/dashu.prev /usr/local/bin/dashu
   rm -f /var/lib/dashu/dashu.db-wal /var/lib/dashu/dashu.db-shm
   install -o dashu -g dashu -m 640 "$snap" /var/lib/dashu/dashu.db
+  # Les redémarrages ratés de la nouvelle version ont pu épuiser le quota de
+  # systemd (« start request repeated too quickly ») : on le remet à zéro.
+  systemctl reset-failed dashu 2>/dev/null || true
   systemctl start dashu
+  if healthy; then
+    echo "L'ancienne version répond de nouveau ; la base est celle d'avant la mise à jour."
+  else
+    echo "Attention : l'ancienne version ne répond pas non plus (journalctl -u dashu -n 30)."
+  fi
   exit 1
 }
 
