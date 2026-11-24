@@ -66,6 +66,8 @@ Sur une machine Linux avec systemd (Debian, Ubuntu et leurs dérivées ; un cont
 curl -fsSL https://raw.githubusercontent.com/moreauremi/dashu/v1/deploy/lxc/install.sh | sudo bash
 ```
 
+Dans un conteneur tout neuf où l'on est déjà root, sans `sudo` ni `curl` (un LXC Debian de Proxmox, par exemple) : `apt-get update && apt-get install -y curl`, puis la même commande avec `| bash` à la fin.
+
 Le script télécharge le binaire de la dernière version, vérifie son empreinte, puis pose les questions au fur et à mesure :
 
 1. **Comment accéder à dashu.** Un ou plusieurs choix, aucun nom de domaine n'est obligatoire.
