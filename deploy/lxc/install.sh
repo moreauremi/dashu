@@ -693,8 +693,11 @@ menu_acces() {
   configurer_acces
   if changer_env BASE_URL "$BASE_URL" BIND_ADDR "$BIND_ADDR"; then
     info "Adresse principale : $BASE_URL"
-    [ -n "$(valeur GOOGLE_CLIENT_ID)" ] &&
+    # Un vrai if : « [ … ] && warn » en dernière ligne rendrait une erreur
+    # sans Google, et set -e arrêterait tout le script.
+    if [ -n "$(valeur GOOGLE_CLIENT_ID)" ]; then
       warn "Google : l'URI de redirection doit devenir $BASE_URL/auth/google/callback dans la console Google."
+    fi
   fi
 }
 
