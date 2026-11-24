@@ -372,6 +372,22 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - [ ] Le binaire musl mesuré contre le binaire actuel avant la bascule du serveur (commande dans le README, « Mise à jour »).
 - Un test unitaire, `tools::worker::tests::arguments_de_pandoc`, échoue sous Windows (chemins Linux assemblés avec `\`) ; il passe sur la CI Linux. Sans rapport avec cette étape.
 
+**Étapes 2 et 3, installateur et mise à jour par binaires** (24 novembre 2026), dans la même PR. Vérifiées par la CI de la branche (run 45370369395), qui installe dashu pour de vrai sur une machine x86_64 et une machine ARM avec l'archive qu'elle vient de construire (`tests/deploy/installation.sh`) : questions dans un terminal simulé (`tests/deploy/repondre.py`), connexion, relance, mises à jour, retour arrière, menu. **Pas encore essayé sur une Debian neuve, ni sur le serveur.**
+
+- [ ] Sur une Debian 13 neuve, `curl … | sudo bash` installe dashu en posant les questions, sans rien compiler. Vérifié sur les machines Ubuntu de la CI (accès local, fichiers) ; reste une Debian neuve, après la première version stable.
+- [ ] Chaque mode d'accès marche de bout en bout. Le mode local est vérifié en CI ; Tailscale, Funnel et Cloudflare demandent un compte, à essayer à la main.
+- [x] Le mot de passe ne s'affiche pas : la CI tape les réponses quand les questions sont posées et vérifie que le mot de passe n'apparaît pas dans ce qui s'affiche. Il passe à dashu par un tube (`printf`, commande interne de bash), jamais en argument ; le jeton du tunnel va dans `/etc/dashu/tunnel.env` (root seulement), lu par l'unité `dashu-tunnel.service`.
+- [x] Une archive dont l'empreinte ne correspond pas est refusée, et rien ne change (test « archive abîmée » de la CI).
+- [x] Relancé, le script ne touche ni à la base ni à `dashu.env` (empreinte du fichier comparée en CI) ; le menu change le mot de passe (vérifié en CI) ; un changement de configuration qui empêche dashu de démarrer est annulé (`changer_env`, même mécanisme que `dashu-compte`).
+- [x] `install.sh <email> <adresse>` marche comme avant (relance sans question en CI) ; `--non-interactif` installe sans question.
+- [x] x86_64 et aarch64 : toute la séquence passe sur les deux machines de la CI. Typst est choisi selon l'architecture (archive `aarch64-unknown-linux-musl` vérifiée sur GitHub), mais les conversions ne sont pas installées en CI (600 Mo).
+- [x] `tests/deploy/installation.sh` tourne dans la CI, avec une limite de 20 minutes.
+- [x] `dashu-update` télécharge, vérifie et installe la version du canal ; « déjà à jour » si rien n'a changé ; une version qui ne démarre pas est remplacée par l'ancienne, base restaurée, et il attend que l'ancienne réponde (vérifié en CI avec une fausse version qui s'arrête aussitôt). Le temps (1 à 2 minutes) est à mesurer sur le serveur.
+- [x] `dashu-admin` garde exactement ses six actions ; `status` donne la version du binaire et le mode de mise à jour (vérifié en CI).
+- [ ] Hermès met à jour dashu comme avant ; son installation lit `/opt/dashu/share` (relu, pas essayé : il faut l'hôte Proxmox).
+- [ ] Le serveur de Rémi est passé aux binaires ; STATUS relevé. Il reste en mode `sources` tant que la bascule n'est pas faite (README, « Mise à jour »).
+- Trouvé en route : l'ancien `dashu-update` ne vérifiait pas que l'ancienne version répondait après un retour arrière ; c'est corrigé dans les deux modes.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.
