@@ -1,6 +1,6 @@
 # État de la v1
 
-Mis à jour le 24 novembre 2026, branche `v1`. Version en service sur le serveur : 3316ca1 (PR #77), relevée le 24 novembre 2026 par `dashu-admin status` (compilée sur place, mode `sources`, canal `v1`). Tout ce qui est fusionné dans `v1` est donc en service ; « pas encore essayé » veut dire qu'il reste à s'en servir en vrai.
+Mis à jour le 24 novembre 2026, branche `v1`. Version en service sur le serveur : 93d540a (PR #79), relevée le 24 novembre 2026 par `dashu-admin status` : binaire téléchargé (mode `binaire`, canal `v1`). Tout ce qui est fusionné dans `v1` est donc en service ; « pas encore essayé » veut dire qu'il reste à s'en servir en vrai.
 
 **En bref.** La v1 est terminée : **tous les critères d'acceptation sont vérifiés**, la plupart sur le serveur réel. dashu tourne sur le homelab, dans un conteneur LXC Debian du serveur Proxmox, joignable sur `https://app.dashu.dev` (tunnel Cloudflare) et sur le réseau Tailscale. Il sert au quotidien, sur ordinateur et sur iPhone (en app sur l'écran d'accueil). La CI GitHub tourne à chaque PR.
 
@@ -362,15 +362,24 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 
 Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« Installation simple »), livrée une PR par étape.
 
-**Étape 1, binaires publiés** (24 novembre 2026). Vérifiée par la CI de la branche (run 45354327899), par le test `tests/version.rs`, puis par la première publication après la fusion (run 45400215372 sur `v1`, commit 3316ca1). **Pas encore de version stable (tag `v1.0.0`).**
+**Étape 1, binaires publiés** (24 novembre 2026). Vérifiée par la CI de la branche (run 45354327899), par le test `tests/version.rs`, puis par la première publication après la fusion (run 45400215372 sur `v1`, commit 3316ca1) et par la bascule du serveur.
 
 - [x] `LICENSE` contient l'AGPL-3.0 (texte officiel), `Cargo.toml` la déclare (`AGPL-3.0-or-later`), le README le dit.
 - [x] `dashu version` affiche « dashu 1.0.0 <commit> » ; le commit vient de `DASHU_COMMIT` à la compilation, « inconnu » sinon. Test `version_affiche_la_version_et_le_commit` ; en CI, le binaire de l'archive affiche bien le commit du push.
 - [x] Un push sur `v1` crée ou remplace la pré-version `canal-v1` : archives x86_64 (10,8 Mo) et aarch64 (10,1 Mo), `SHA256SUMS`. Archive x86_64 retéléchargée depuis l'adresse publique : l'empreinte correspond.
-- [ ] Un tag `vX.Y.Z` crée une version (canal stable) : pas encore de tag.
+- [x] Un tag `vX.Y.Z` crée une version (canal stable) : `v1.0.0`, le 24 novembre (run 45405233082), marquée « dernière version » ; `releases/latest/download/…` sert ses archives (empreinte de l'archive aarch64 vérifiée), et les images `:1.0.0` et `:latest` se lisent sans identifiant.
 - [x] Le binaire aarch64 est compilé sur un runner ARM, statique (`file` : « ARM aarch64, statically linked »), et son image répond à `/health` et `/login`.
-- [x] L'image `ghcr.io/moreauremi/dashu:v1` existe pour amd64 et arm64 (une image par architecture, réunies sous un même nom). Construites et testées en CI : 10 Mo (x86_64) et 21 Mo (aarch64), sous les 30 Mo. Reste à la rendre publique (README, « Versions publiées »).
-- [ ] Le binaire musl mesuré contre le binaire actuel avant la bascule du serveur (commande dans le README, « Mise à jour »). Avant, le 24 novembre, binaire compilé sur place (glibc) : `/login` en 0,56 ms en moyenne sur 20 requêtes depuis le conteneur (le pire à 0,70 ms), 10,4 Mo de mémoire. Après : à relever une fois le binaire téléchargé en service.
+- [x] L'image `ghcr.io/moreauremi/dashu:v1` existe pour amd64 et arm64 (une image par architecture, réunies sous un même nom). Construites et testées en CI : 10 Mo (x86_64) et 21 Mo (aarch64), sous les 30 Mo. Rendue publique le 24 novembre : son manifeste se lit sans identifiant (amd64 et arm64).
+- [x] Le binaire musl mesuré contre le binaire compilé, le 24 novembre, sur le serveur, `/login` interrogé 20 fois depuis le conteneur (commande du README, « Mise à jour ») :
+
+  | | Compilé sur place (glibc) | Téléchargé (musl) |
+  | --- | --- | --- |
+  | Médiane | 0,55 ms | 0,66 ms |
+  | Moyenne | 0,56 ms | 0,93 ms |
+  | Pire | 0,70 ms | 3,3 ms (la première requête après le démarrage : 2,7 ms) |
+  | Mémoire | 10,4 Mo (après 11 min) | 5,8 Mo (juste après le démarrage) |
+
+  Environ 0,1 ms de plus en médiane, attendu avec musl (allocateur de mémoire plus simple) ; plus de 20 fois sous la cible de 20 ms. Binaire téléchargé gardé. La mémoire est à remesurer après quelques heures de marche pour une comparaison juste.
 - Un test unitaire, `tools::worker::tests::arguments_de_pandoc`, échoue sous Windows (chemins Linux assemblés avec `\`) ; il passe sur la CI Linux. Sans rapport avec cette étape.
 
 **Étapes 2 et 3, installateur et mise à jour par binaires** (24 novembre 2026), dans la même PR. Vérifiées par la CI de la branche (run 45370369395), qui installe dashu pour de vrai sur une machine x86_64 et une machine ARM avec l'archive qu'elle vient de construire (`tests/deploy/installation.sh`) : questions dans un terminal simulé (`tests/deploy/repondre.py`), connexion, relance, mises à jour, retour arrière, menu. **Pas encore essayé sur une Debian neuve, ni sur le serveur.**
@@ -385,8 +394,8 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - [x] `tests/deploy/installation.sh` tourne dans la CI, avec une limite de 20 minutes.
 - [x] `dashu-update` télécharge, vérifie et installe la version du canal ; « déjà à jour » si rien n'a changé ; une version qui ne démarre pas est remplacée par l'ancienne, base restaurée, et il attend que l'ancienne réponde (vérifié en CI avec une fausse version qui s'arrête aussitôt). Le temps (1 à 2 minutes) est à mesurer sur le serveur.
 - [x] `dashu-admin` garde exactement ses six actions ; `status` donne la version du binaire et le mode de mise à jour (vérifié en CI).
-- [ ] Hermès met à jour dashu comme avant ; son installation lit `/opt/dashu/share` (relu, pas essayé : il faut l'hôte Proxmox).
-- [ ] Le serveur de Rémi est passé aux binaires ; STATUS relevé. Il reste en mode `sources` tant que la bascule n'est pas faite (README, « Mise à jour »).
+- [x] Hermès met à jour dashu comme avant ; son installation lit `/opt/dashu/share` : relancée le 24 novembre depuis l'hôte Proxmox, commande et skill réinstallés, API et `dashu-admin status` vérifiés depuis le compte d'Hermès.
+- [x] Le serveur de Rémi est passé aux binaires le 24 novembre : `echo binaire > /etc/dashu/source && dashu-update` a téléchargé `canal-v1` (93d540a), vérifié son empreinte, fait l'instantané de la base (27 notes) et installé le binaire. Avant, deux mises à jour compilées (504a4c5, puis 3316ca1 avec le nouveau `dashu-update`, qui note le commit). Rust et `/opt/dashu/src` restent en place quelques jours, au cas où.
 - Trouvé en route : l'ancien `dashu-update` ne vérifiait pas que l'ancienne version répondait après un retour arrière ; c'est corrigé dans les deux modes.
 
 **Étape 4, premier lancement dans le navigateur** (24 novembre 2026). Vérifiée par les tests (`tests/installation.rs`, 7 tests ; tests unitaires de `src/setup.rs`), par la CI de la branche (run 45370406005 : installation, code lu dans ce qu'affiche le script, assistant joué comme un navigateur, relance par re-exec sous systemd, connexion, sur x86_64 et ARM) et dans le navigateur sur une base neuve, sous Windows. **Pas encore essayé avec l'image Docker publiée ni sur une Debian neuve.**
@@ -409,6 +418,11 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - [x] Ni sa propre adresse, ni celle de l'API, ni la dernière ne se retirent ; adresse, email ou client Google invalides sont refusés sans relance. Test `garde_fous`.
 - [x] Le secret Google n'est jamais réaffiché, ni dans la carte ni dans la page (vérifié par le test), et il est chiffré en base.
 - Sur le serveur de Rémi (tout dans `dashu.env`), la carte est en lecture seule : adresse, Google et adresses « définis sur le serveur ».
+
+**Étape 6, page d'accueil** (24 novembre 2026, PR #78 vers `main`). La section Installer de dashu.dev donne la commande du script et l'image Docker, avec le premier lancement et la licence.
+
+- [x] Publiée sur dashu.dev (vérifié en ligne). La publication échouait depuis le 23 novembre : `deploy-pages` ne retrouvait plus le site envoyé dans le même job (« Found 0 artifact(s) »), alors qu'il était bien dans le run. Corrigé en deux jobs, envoi puis publication, comme le modèle de GitHub (PR #81) ; le droit `actions: read` ajouté avant (PR #80) ne suffisait pas.
+- [ ] La commande et l'image de la page marchent telles quelles chez un visiteur : la version stable existe (ce qu'elles téléchargent répond) ; reste un essai sur une machine neuve.
 
 ## Écarts par rapport au cahier des charges
 
