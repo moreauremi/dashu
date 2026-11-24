@@ -63,6 +63,7 @@
       {% else %}
       <details class="setup-google">
         <summary>Activer la connexion avec Google</summary>
+        <div class="setup-google-body">
         <ol class="setup-hint">
           <li>Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">console Google Cloud</a>, crée un projet et l'écran de consentement OAuth (audience « Externe »).</li>
           <li>Identifiants › Créer des identifiants › ID client OAuth › Application Web.</li>
@@ -77,6 +78,7 @@
           <input type="password" name="google_client_secret" autocomplete="off">
         </label>
         <p class="muted setup-hint">Tout cela se change ensuite dans Réglages › Instance.</p>
+        </div>
       </details>
       {% endif %}
 
