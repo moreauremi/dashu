@@ -191,6 +191,7 @@ jobs:
       # machine jetable et avec cette archive : questions dans un terminal
       # simulé, connexion, mises à jour, retour arrière, archive abîmée.
       - name: Installation et mises à jour (scripts du serveur)
+        timeout-minutes: 20
         run: |
           docker rm -f dashu
           sudo bash tests/deploy/installation.sh "dashu-${{ matrix.arch }}-linux.tar.gz"

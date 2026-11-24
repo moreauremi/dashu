@@ -81,24 +81,16 @@ connexion() { # connexion <email> <mot de passe>
   [ "$code" = 303 ]
 }
 
-# Répond aux questions du script, une ligne toutes les deux secondes : chaque
-# réponse arrive quand sa question est posée (le mot de passe, donc, une fois
-# l'écho coupé). Le script tourne dans un terminal simulé (`script`), dont
-# l'entrée reste ouverte jusqu'à la fin : une entrée fermée pourrait
-# l'interrompre.
+# Répond aux questions du script comme une personne au clavier : chaque
+# réponse part quand sa question est affichée (le mot de passe, donc, une
+# fois l'écho coupé). Le script tourne dans un terminal simulé
+# (tests/deploy/repondre.py) ; une question imprévue fait échouer le test.
 repondre() { # repondre <journal> <réponses…>
   local journal="$1" code=0
   shift
-  script -qfec "bash '$INSTALL'" /dev/null >"$journal" 2>&1 < <(
-    for r in "$@"; do
-      sleep 2
-      printf '%s\n' "$r"
-    done
-    exec sleep 1800
-  ) || code=$?
-  kill "$!" 2>/dev/null || true
+  python3 "$ICI/tests/deploy/repondre.py" "$journal" "$@" -- bash "$INSTALL" || code=$?
   if [ "$code" != 0 ]; then
-    sed 's/\x1b\[[0-9;]*m//g' "$journal"
+    sed 's/\x1b\[[0-9;]*m//g' "$journal" | tail -40
     fail "le script s'est arrêté en erreur ($code)"
   fi
 }
