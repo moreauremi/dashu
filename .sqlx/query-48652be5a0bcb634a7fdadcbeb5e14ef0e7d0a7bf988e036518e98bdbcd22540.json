@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT lower(email) AS \"email!: String\" FROM users",
+  "describe": {
+    "columns": [
+      {
+        "name": "email!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "48652be5a0bcb634a7fdadcbeb5e14ef0e7d0a7bf988e036518e98bdbcd22540"
+}

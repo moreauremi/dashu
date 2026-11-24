@@ -1569,6 +1569,7 @@ Pendant la réalisation (24 novembre 2026) :
 - **La session survit à la relance** tant que l'adresse ne passe pas de http à https : le nom du cookie change alors (`__Host-dashu`), et on se reconnecte une fois.
 - **`dashu-compte`** garde la main sur `ALLOWED_EMAILS` quand la ligne existe ; sans elle, `liste` lit la base, et `ajouter` et `retirer` renvoient vers Réglages › Instance.
 - **Le secret de session** reste dans `dashu.env` pour une installation par le script (il le génère, comme avant) ; le fichier `secret` sert à l'image Docker et à toute installation sans `SESSION_SECRET`.
+- **Carte Instance** : sa propre adresse ne se retire pas non plus (l'administrateur perdrait l'accès). Un changement range la valeur en base et relance dashu ; la carte lit la base, pas la configuration du démarrage, et montre donc le changement avant même la relance. Les routes de la carte répondent 404 à un compte qui n'est pas administrateur, comme le prévoit la sécurité.
 
 Reste à trancher :
 

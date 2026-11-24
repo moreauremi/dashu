@@ -1,0 +1,77 @@
+<section class="card" id="instance" aria-labelledby="s-instance">
+  <header class="card-head"><h2 id="s-instance">Instance</h2></header>
+  <div class="card-body">
+    <p class="hint">Les réglages de ce serveur, visibles par toi seul (administrateur). Un changement relance Hermes Dashboard : quelques secondes de coupure.</p>
+
+    <h3 class="instance-title">Adresse</h3>
+    {% if base_url_locked %}
+    <p class="hint">Définie sur le serveur (<code>BASE_URL</code>) : <strong>{{ base_url }}</strong></p>
+    {% else %}
+    <form class="stack form-narrow" method="post" action="/settings/instance/address">
+      <label class="field">
+        <span class="field-label">Adresse publique</span>
+        <input type="url" name="base_url" value="{{ base_url }}" inputmode="url" spellcheck="false" required aria-describedby="instance-address-hint">
+        <span id="instance-address-hint" class="hint">Celle que tu tapes pour venir ici. Elle sert aux liens de partage, à Google et au connecteur Claude.</span>
+      </label>
+      <div><button class="btn" type="submit">Enregistrer l'adresse</button></div>
+    </form>
+    {% endif %}
+
+    <h3 class="instance-title">Connexion avec Google</h3>
+    {% if google_locked %}
+    <p class="hint">Réglée sur le serveur (<code>GOOGLE_CLIENT_ID</code>){% if let Some(id) = google_id %} : {{ id }}{% endif %}.</p>
+    {% else %}
+    {% if let Some(id) = google_id %}
+    <p class="with-icon status-ok">{{ crate::assets::icon("check")|safe }}Client Google : {{ id }}</p>
+    <form method="post" action="/settings/instance/google/remove">
+      <button class="btn" type="submit">Retirer la connexion avec Google</button>
+    </form>
+    {% endif %}
+    <form class="stack form-narrow" method="post" action="/settings/instance/google">
+      <p class="hint">Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">console Google Cloud</a> : un ID client OAuth de type « Application Web », avec l'URI de redirection <code>{{ base_url }}/auth/google/callback</code>. Le secret n'est jamais réaffiché.</p>
+      <label class="field">
+        <span class="field-label">ID client</span>
+        <input type="text" name="client_id" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Code secret du client</span>
+        <input type="password" name="client_secret" autocomplete="off" required>
+      </label>
+      <div><button class="btn" type="submit">{% if google_id.is_some() %}Remplacer{% else %}Activer la connexion avec Google{% endif %}</button></div>
+    </form>
+    {% endif %}
+
+    <h3 class="instance-title">Adresses autorisées</h3>
+    {% if emails_locked %}
+    <p class="hint">Fixées sur le serveur (<code>ALLOWED_EMAILS</code>, <code>dashu-compte</code>) :</p>
+    {% else %}
+    <p class="hint">Chaque adresse a son propre compte, qui naît à sa première connexion (Google, ou <code>dashu-compte mot-de-passe</code> sur le serveur). Retirer une adresse coupe son accès ; ses données restent.</p>
+    {% endif %}
+    <ul class="instance-emails">
+      {% for row in emails %}
+      <li>
+        <span>{{ row.email }}{% if !row.has_account %} <span class="muted">(pas encore de compte)</span>{% endif %}</span>
+        {% if !emails_locked %}
+        {% if let Some(why) = row.kept %}
+        <span class="muted">{{ why }}</span>
+        {% else %}
+        <form method="post" action="/settings/instance/emails/remove">
+          <input type="hidden" name="email" value="{{ row.email }}">
+          <button class="btn btn-danger-outline" type="submit">Retirer</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if !emails_locked %}
+    <form class="stack form-narrow" method="post" action="/settings/instance/emails">
+      <label class="field">
+        <span class="field-label">Autoriser une adresse</span>
+        <input type="email" name="email" autocomplete="off" required>
+      </label>
+      <div><button class="btn" type="submit">Autoriser</button></div>
+    </form>
+    {% endif %}
+  </div>
+</section>
