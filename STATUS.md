@@ -1,6 +1,6 @@
 # État de la v1
 
-Mis à jour le 23 novembre 2026, branche `v1`. Version en service sur le serveur : 61c8738 (PR #61), relevée le 23 novembre 2026 par `dashu-admin status`. Tout ce qui est fusionné dans `v1` est donc en service ; « pas encore essayé » veut dire qu'il reste à s'en servir en vrai.
+Mis à jour le 24 novembre 2026, branche `v1`. Version en service sur le serveur : 3316ca1 (PR #77), relevée le 24 novembre 2026 par `dashu-admin status` (compilée sur place, mode `sources`, canal `v1`). Tout ce qui est fusionné dans `v1` est donc en service ; « pas encore essayé » veut dire qu'il reste à s'en servir en vrai.
 
 **En bref.** La v1 est terminée : **tous les critères d'acceptation sont vérifiés**, la plupart sur le serveur réel. dashu tourne sur le homelab, dans un conteneur LXC Debian du serveur Proxmox, joignable sur `https://app.dashu.dev` (tunnel Cloudflare) et sur le réseau Tailscale. Il sert au quotidien, sur ordinateur et sur iPhone (en app sur l'écran d'accueil). La CI GitHub tourne à chaque PR.
 
@@ -362,14 +362,15 @@ Demandés par Rémi le 20 novembre 2026, cahiers des charges dans `SPEC.md` (« 
 
 Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« Installation simple »), livrée une PR par étape.
 
-**Étape 1, binaires publiés** (24 novembre 2026). Vérifiée par la CI de la branche (run 45354327899) et par le test `tests/version.rs`. **La publication elle-même (pré-version `canal-v1`, image sur ghcr.io) ne se voit qu'après la fusion sur `v1`.**
+**Étape 1, binaires publiés** (24 novembre 2026). Vérifiée par la CI de la branche (run 45354327899), par le test `tests/version.rs`, puis par la première publication après la fusion (run 45400215372 sur `v1`, commit 3316ca1). **Pas encore de version stable (tag `v1.0.0`).**
 
 - [x] `LICENSE` contient l'AGPL-3.0 (texte officiel), `Cargo.toml` la déclare (`AGPL-3.0-or-later`), le README le dit.
 - [x] `dashu version` affiche « dashu 1.0.0 <commit> » ; le commit vient de `DASHU_COMMIT` à la compilation, « inconnu » sinon. Test `version_affiche_la_version_et_le_commit` ; en CI, le binaire de l'archive affiche bien le commit du push.
-- [ ] Un push sur `v1` remplace la pré-version `canal-v1` ; un tag `vX.Y.Z` crée une version ; chacune a les archives x86_64 et aarch64 et `SHA256SUMS`. Jobs écrits (`publier la version`), à voir à la première fusion.
+- [x] Un push sur `v1` crée ou remplace la pré-version `canal-v1` : archives x86_64 (10,8 Mo) et aarch64 (10,1 Mo), `SHA256SUMS`. Archive x86_64 retéléchargée depuis l'adresse publique : l'empreinte correspond.
+- [ ] Un tag `vX.Y.Z` crée une version (canal stable) : pas encore de tag.
 - [x] Le binaire aarch64 est compilé sur un runner ARM, statique (`file` : « ARM aarch64, statically linked »), et son image répond à `/health` et `/login`.
-- [ ] L'image `ghcr.io/moreauremi/dashu` existe pour amd64 et arm64. Construites et testées en CI : 10 Mo (x86_64) et 21 Mo (aarch64), sous les 30 Mo. Leur envoi sur ghcr.io se verra à la fusion.
-- [ ] Le binaire musl mesuré contre le binaire actuel avant la bascule du serveur (commande dans le README, « Mise à jour »).
+- [x] L'image `ghcr.io/moreauremi/dashu:v1` existe pour amd64 et arm64 (une image par architecture, réunies sous un même nom). Construites et testées en CI : 10 Mo (x86_64) et 21 Mo (aarch64), sous les 30 Mo. Reste à la rendre publique (README, « Versions publiées »).
+- [ ] Le binaire musl mesuré contre le binaire actuel avant la bascule du serveur (commande dans le README, « Mise à jour »). Avant, le 24 novembre, binaire compilé sur place (glibc) : `/login` en 0,56 ms en moyenne sur 20 requêtes depuis le conteneur (le pire à 0,70 ms), 10,4 Mo de mémoire. Après : à relever une fois le binaire téléchargé en service.
 - Un test unitaire, `tools::worker::tests::arguments_de_pandoc`, échoue sous Windows (chemins Linux assemblés avec `\`) ; il passe sur la CI Linux. Sans rapport avec cette étape.
 
 **Étapes 2 et 3, installateur et mise à jour par binaires** (24 novembre 2026), dans la même PR. Vérifiées par la CI de la branche (run 45370369395), qui installe dashu pour de vrai sur une machine x86_64 et une machine ARM avec l'archive qu'elle vient de construire (`tests/deploy/installation.sh`) : questions dans un terminal simulé (`tests/deploy/repondre.py`), connexion, relance, mises à jour, retour arrière, menu. **Pas encore essayé sur une Debian neuve, ni sur le serveur.**
