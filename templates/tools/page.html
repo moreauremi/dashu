@@ -18,6 +18,19 @@
 </div>
 {% else %}
 <p class="tools-intro muted">Un fichier déposé ici reste 24 heures hors de tes espaces : convertis-le, puis garde-le dans un espace ou télécharge-le. Pour un fichier déjà rangé, le menu « Convertir » est sur sa ligne.</p>
+{% if downloader %}
+<section class="link-box" aria-labelledby="link-title">
+  <h2 id="link-title" class="link-title">Depuis un lien</h2>
+  {% if let Some(note) = downloader_note %}
+  <p class="link-note muted" role="status">{{ note }}</p>
+  {% endif %}
+  <form class="link-form" method="post" action="/tools/download">
+    <input type="url" name="url" required inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lien YouTube, Instagram ou TikTok" aria-label="Lien YouTube, Instagram ou TikTok">
+    <button class="btn" type="submit" name="to" value="mp4">{{ crate::assets::icon("download")|safe }}<span>Vidéo MP4</span></button>
+    <button class="btn" type="submit" name="to" value="mp3">{{ crate::assets::icon("download")|safe }}<span>Son MP3</span></button>
+  </form>
+</section>
+{% endif %}
 <div class="dropzone" data-dropzone data-tools data-max="{{ max_bytes }}" data-max-label="{{ max_size }}">
   {{ crate::assets::icon("upload")|safe }}
   <p>Glisse des fichiers ici</p>

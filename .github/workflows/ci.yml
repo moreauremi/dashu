@@ -116,6 +116,23 @@ jobs:
             /srv/dashu/tmp/document.pdf
             /srv/dashu/tmp/note.pdf
           retention-days: 14
+      # Le téléchargeur de liens (deploy/lxc/dashu-download.service) a
+      # Internet mais pas le réseau de la maison, par IPAddressDeny, et vérifie
+      # lui-même que ce filtre est appliqué. On rejoue ses deux cas avec le
+      # filtre de son unité : présent, la vérification passe ; absent, elle
+      # échoue (le service ne téléchargerait alors rien).
+      - name: Pare-feu du téléchargeur de liens
+        run: |
+          deny=$(sed -n 's/^IPAddressDeny=//p' deploy/lxc/dashu-download.service)
+          test -n "$deny"
+          sudo systemd-run --wait --pipe --collect \
+            -p "IPAddressDeny=$deny" \
+            -p RestrictAddressFamilies="AF_INET AF_INET6 AF_UNIX AF_NETLINK" \
+            "$PWD/target/debug/dashu" download --check
+          if sudo systemd-run --wait --pipe --collect "$PWD/target/debug/dashu" download --check; then
+            echo "Sans filtre, la vérification aurait dû échouer." >&2
+            exit 1
+          fi
 
   # Un job par architecture, chacun sur une machine de la même architecture :
   # pas de compilation croisée (ring et SQLite contiennent du C) ni

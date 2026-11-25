@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT expires_at, space_id, folder_id FROM files WHERE id = ?",
+  "query": "SELECT expires_at, space_id, folder_id, from_link AS \"from_link!: bool\"\n                   FROM files WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "name": "folder_id",
         "ordinal": 2,
         "type_info": "Integer"
+      },
+      {
+        "name": "from_link!: bool",
+        "ordinal": 3,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -25,8 +30,9 @@
     "nullable": [
       true,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "96616ee3b097f235a53e086a157c690b20d2deeac78308ee06332136d99c9660"
+  "hash": "91b35f49c9a3daee5d5913e51f0ca9297c10f568373f323635b95993eae89d46"
 }

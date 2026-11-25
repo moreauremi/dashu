@@ -496,7 +496,7 @@ installer_conversions() {
 
 installer_scripts() {
   local script
-  for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin dashu-compte; do
+  for script in dashu-update dashu-backup dashu-backup-files dashu-restore dashu-admin dashu-compte dashu-telechargeur; do
     [ -f "$SHARE/deploy/lxc/$script" ] || continue
     install -m 755 "$SHARE/deploy/lxc/$script" "/usr/local/sbin/.$script.new"
     mv -f "/usr/local/sbin/.$script.new" "/usr/local/sbin/$script"

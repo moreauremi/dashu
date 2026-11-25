@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1))",
+  "query": "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at,\n                  from_link AS \"from_link!: bool\"\n           FROM files WHERE id = ?2\n           AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))\n           OR (expires_at IS NOT NULL AND user_id = ?1))",
   "describe": {
     "columns": [
       {
@@ -52,6 +52,11 @@
         "name": "expires_at",
         "ordinal": 9,
         "type_info": "Integer"
+      },
+      {
+        "name": "from_link!: bool",
+        "ordinal": 10,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -67,8 +72,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "05629e09ae5c0c8fcf99f11c814453ebf13ea6a1ea222c4fa9b3330ac3949abd"
+  "hash": "ce74fccbcdc21cc82e3c786af7aa13581d7852dc436071a37045353730b8c841"
 }

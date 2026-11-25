@@ -137,6 +137,10 @@ pub(crate) struct NewLink {
     pub expires_at: i64,
 }
 
+/// Refus de partager un fichier venu du téléchargeur de liens.
+pub(crate) const FROM_LINK: &str =
+    "Un fichier venu du téléchargeur de liens ne se partage pas par lien.";
+
 /// Crée un lien vers un fichier rangé et accessible (404 sinon), pour une
 /// durée de `DURATIONS` (`1h`, `1j`, `7j`). Aussi pour l'API.
 pub(crate) async fn create_link(
@@ -146,6 +150,17 @@ pub(crate) async fn create_link(
     duration: &str,
 ) -> AppResult<NewLink> {
     ensure_shareable(&state.db, user, id).await?;
+    // Un fichier venu du téléchargeur de liens ne se partage jamais par lien
+    // (SPEC v2, « Outils : téléchargeur de liens »), ni ses conversions.
+    let from_link = sqlx::query_scalar!(
+        r#"SELECT from_link AS "from_link!: bool" FROM files WHERE id = ?"#,
+        id
+    )
+    .fetch_one(&state.db)
+    .await?;
+    if from_link {
+        return Err(AppError::BadRequest(FROM_LINK.into()));
+    }
     let (_, seconds, label) = DURATIONS
         .iter()
         .find(|(key, _, _)| *key == duration)

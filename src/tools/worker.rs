@@ -108,17 +108,22 @@ fn is_video_compression(dir: &Path) -> bool {
 /// repartiront de zéro. Interrompue deux fois, une tâche est abandonnée :
 /// sinon un fichier qui fait tomber le service le ferait tomber en boucle.
 pub fn recover(jobs: &Path) {
+    recover_with(
+        jobs,
+        "Conversion interrompue deux fois : fichier trop lourd pour le serveur ?",
+    );
+}
+
+/// [`recover`], avec le message d'une tâche abandonnée (le téléchargeur de
+/// liens a le sien).
+pub(crate) fn recover_with(jobs: &Path, abandoned: &str) {
     for dir in job_dirs(jobs) {
         let finished = dir.join("done").exists() || dir.join("error").exists();
         if !dir.join("started").exists() || finished {
             continue;
         }
         if dir.join("attempts").exists() {
-            write_atomic(
-                &dir,
-                "error",
-                "Conversion interrompue deux fois : fichier trop lourd pour le serveur ?",
-            );
+            write_atomic(&dir, "error", abandoned);
             tracing::warn!(job = %dir.display(), "tâche interrompue deux fois, abandonnée");
             continue;
         }
@@ -130,7 +135,7 @@ pub fn recover(jobs: &Path) {
     }
 }
 
-fn job_dirs(jobs: &Path) -> Vec<PathBuf> {
+pub(crate) fn job_dirs(jobs: &Path) -> Vec<PathBuf> {
     let mut dirs: Vec<(u64, PathBuf)> = fs::read_dir(jobs)
         .into_iter()
         .flatten()
@@ -147,7 +152,7 @@ fn job_dirs(jobs: &Path) -> Vec<PathBuf> {
 /// Dossiers prêts et pas encore pris, les plus anciens d'abord, sauf les PDF
 /// demandés au téléchargement d'une note, en tête : quelqu'un les attend
 /// devant son écran (voir [`super::EXPORT_BASE`]).
-fn ready_jobs(jobs: &Path) -> Vec<PathBuf> {
+pub(crate) fn ready_jobs(jobs: &Path) -> Vec<PathBuf> {
     let mut ready: Vec<PathBuf> = job_dirs(jobs)
         .into_iter()
         .filter(|dir| dir.join("job.json").exists() && !dir.join("started").exists())
@@ -166,7 +171,7 @@ fn is_export(dir: &Path) -> bool {
 }
 
 /// Prend une tâche : `started` créé de façon exclusive.
-fn claim(dir: &Path) -> bool {
+pub(crate) fn claim(dir: &Path) -> bool {
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -199,7 +204,7 @@ pub fn process_job(dir: &Path, convert: Convert<'_>) {
 
 /// Écrit un petit fichier d'état d'un coup (écriture puis renommage) : dashu
 /// ne lit jamais un fichier à moitié écrit.
-fn write_atomic(dir: &Path, name: &str, content: &str) {
+pub(crate) fn write_atomic(dir: &Path, name: &str, content: &str) {
     let tmp = dir.join(format!(".{name}.tmp"));
     if fs::write(&tmp, content).is_ok() {
         let _ = fs::rename(&tmp, dir.join(name));
@@ -660,21 +665,47 @@ fn probe(input: &Path) -> Result<Probe, String> {
     Ok(probe)
 }
 
+/// Pourquoi un outil n'a pas abouti.
+#[derive(Debug)]
+pub(crate) enum ToolError {
+    /// Absent du serveur (le nom du programme).
+    Missing(String),
+    /// Arrêté au bout de sa limite de temps.
+    Timeout,
+    /// Son état n'a pas pu être lu.
+    Lost,
+    /// Sorti en erreur : la fin de sa sortie d'erreur.
+    Failed(String),
+}
+
 /// Lance un outil avec une limite de temps. `on_line` reçoit chaque ligne de
 /// sa sortie standard (la progression de ffmpeg) ; la sortie d'erreur part
 /// dans les logs en cas d'échec.
-fn run_tool(
+fn run_tool(cmd: Command, timeout: Duration, on_line: impl FnMut(&str)) -> Result<(), String> {
+    run_command(cmd, timeout, on_line).map_err(|error| match error {
+        ToolError::Missing(program) => {
+            format!("Outil de conversion absent du serveur ({program}).")
+        }
+        ToolError::Timeout => "Trop long : la conversion a été arrêtée.".into(),
+        ToolError::Lost => "La conversion a échoué.".into(),
+        ToolError::Failed(_) => "La conversion a échoué : fichier illisible ou abîmé.".into(),
+    })
+}
+
+/// [`run_tool`], avec la raison de l'échec plutôt qu'un message : le
+/// téléchargeur de liens en tire le sien.
+pub(crate) fn run_command(
     mut cmd: Command,
     timeout: Duration,
     mut on_line: impl FnMut(&str),
-) -> Result<(), String> {
+) -> Result<(), ToolError> {
     let program = cmd.get_program().to_string_lossy().into_owned();
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd
         .spawn()
-        .map_err(|_| format!("Outil de conversion absent du serveur ({program})."))?;
+        .map_err(|_| ToolError::Missing(program.clone()))?;
 
     let (tx, rx) = mpsc::channel::<String>();
     if let Some(stdout) = child.stdout.take() {
@@ -708,10 +739,10 @@ fn run_tool(
             Ok(None) if Instant::now() > deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("Trop long : la conversion a été arrêtée.".into());
+                return Err(ToolError::Timeout);
             }
             Ok(None) => {}
-            Err(_) => return Err("La conversion a échoué.".into()),
+            Err(_) => return Err(ToolError::Lost),
         }
     };
     while let Ok(line) = rx.try_recv() {
@@ -722,7 +753,7 @@ fn run_tool(
     }
     let detail = stderr.and_then(|h| h.join().ok()).unwrap_or_default();
     tracing::warn!(%program, %status, %detail, "outil de conversion en échec");
-    Err("La conversion a échoué : fichier illisible ou abîmé.".into())
+    Err(ToolError::Failed(detail))
 }
 
 /// Photo : orientation EXIF appliquée, 2560 px au plus sur le grand côté,

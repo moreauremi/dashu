@@ -13,6 +13,7 @@
 //!   3. dashu relève le résultat toutes les 2 secondes ([`spawn_collector`]),
 //!      le range parmi les fichiers de l'espace et efface le dossier.
 
+pub mod telechargeur;
 pub mod worker;
 
 use std::path::{Path as FsPath, PathBuf};
@@ -738,25 +739,28 @@ async fn remove_orphan_dirs(state: &AppState, work_dir: &FsPath) -> anyhow::Resu
     .await?
     .into_iter()
     .collect();
-    let Ok(mut entries) = tokio::fs::read_dir(work_dir.join("jobs")).await else {
-        return Ok(());
-    };
     let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
-    while let Some(entry) = entries.next_entry().await? {
-        let Some(id) = entry
-            .file_name()
-            .to_str()
-            .and_then(|n| n.parse::<i64>().ok())
-        else {
+    // Les conversions, puis les téléchargements de liens.
+    for sub in ["jobs", telechargeur::DIR] {
+        let Ok(mut entries) = tokio::fs::read_dir(work_dir.join(sub)).await else {
             continue;
         };
-        let aged = entry
-            .metadata()
-            .await
-            .and_then(|m| m.modified())
-            .is_ok_and(|modified| modified < old);
-        if !live.contains(&id) && aged {
-            let _ = tokio::fs::remove_dir_all(entry.path()).await;
+        while let Some(entry) = entries.next_entry().await? {
+            let Some(id) = entry
+                .file_name()
+                .to_str()
+                .and_then(|n| n.parse::<i64>().ok())
+            else {
+                continue;
+            };
+            let aged = entry
+                .metadata()
+                .await
+                .and_then(|m| m.modified())
+                .is_ok_and(|modified| modified < old);
+            if !live.contains(&id) && aged {
+                let _ = tokio::fs::remove_dir_all(entry.path()).await;
+            }
         }
     }
     Ok(())
@@ -861,14 +865,19 @@ pub async fn collect(state: &AppState) -> anyhow::Result<()> {
         return Ok(());
     };
     let jobs = sqlx::query!(
-        r#"SELECT id AS "id!", user_id, space_id, kind, file_id, source_name, source_size, status, progress, created_at
+        r#"SELECT id AS "id!", user_id, space_id, kind, target, file_id, source_name, source_size, status, progress, created_at
            FROM jobs WHERE status IN ('queued', 'running')"#
     )
     .fetch_all(&state.db)
     .await?;
 
     for job in jobs {
-        let dir = job_dir(work_dir, job.id);
+        let download = job.kind == "download";
+        let dir = if download {
+            telechargeur::job_dir(work_dir, job.id)
+        } else {
+            job_dir(work_dir, job.id)
+        };
         let pending = Pending {
             id: job.id,
             user_id: job.user_id,
@@ -898,6 +907,30 @@ pub async fn collect(state: &AppState) -> anyhow::Result<()> {
                 fail(state, job.id, "La vignette n'a pas pu être rangée.").await?;
             }
             let _ = tokio::fs::remove_dir_all(&dir).await;
+        } else if download && dir.join("done").exists() {
+            if let Err(error) = telechargeur::import(
+                state,
+                files,
+                work_dir,
+                &dir,
+                &pending,
+                job.target.as_deref(),
+            )
+            .await
+            {
+                tracing::warn!(
+                    error = format!("{error:#}"),
+                    job = job.id,
+                    "import d'un téléchargement"
+                );
+                fail(
+                    state,
+                    job.id,
+                    "Le fichier téléchargé n'a pas pu être rangé.",
+                )
+                .await?;
+            }
+            let _ = tokio::fs::remove_dir_all(&dir).await;
         } else if dir.join("done").exists() {
             if let Err(error) = import(state, files, &dir, &pending).await {
                 tracing::warn!(
@@ -911,7 +944,12 @@ pub async fn collect(state: &AppState) -> anyhow::Result<()> {
         } else if !dir.exists() {
             fail(state, job.id, "Dossier de travail introuvable.").await?;
         } else if time::now() - job.created_at > STALE_JOB_SECONDS {
-            fail(state, job.id, "Le service de conversion n'a pas répondu.").await?;
+            let silent = if download {
+                "Le service de téléchargement n'a pas répondu."
+            } else {
+                "Le service de conversion n'a pas répondu."
+            };
+            fail(state, job.id, silent).await?;
             let _ = tokio::fs::remove_dir_all(&dir).await;
         } else if dir.join("started").exists() {
             let progress = read_small(&dir.join("progress"))
@@ -984,7 +1022,8 @@ async fn import(
     let source = match job.file_id {
         Some(source) => {
             sqlx::query!(
-                "SELECT expires_at, space_id, folder_id FROM files WHERE id = ?",
+                r#"SELECT expires_at, space_id, folder_id, from_link AS "from_link!: bool"
+                   FROM files WHERE id = ?"#,
                 source
             )
             .fetch_optional(&state.db)
@@ -993,6 +1032,9 @@ async fn import(
         None => None,
     };
     let expires_at = source.as_ref().and_then(|s| s.expires_at);
+    // La conversion d'un fichier venu du téléchargeur de liens en hérite la
+    // marque : elle ne se partage pas non plus.
+    let from_link = source.as_ref().is_some_and(|s| s.from_link);
     let folder_id = source
         .as_ref()
         .filter(|s| s.space_id == job.space_id)
@@ -1000,8 +1042,8 @@ async fn import(
     let saved: anyhow::Result<i64> = async {
         let mut tx = state.db.begin().await?;
         let file_id = sqlx::query!(
-            "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, from_link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             job.user_id,
             job.space_id,
             folder_id,
@@ -1011,6 +1053,7 @@ async fn import(
             sha256,
             key,
             expires_at,
+            from_link,
             now,
             now
         )
@@ -1141,8 +1184,12 @@ pub struct JobsPanel {
 
 /// Libellé d'une tâche d'après sa sorte et sa cible.
 pub(crate) fn job_label(kind: &str, target: Option<&str>) -> &'static str {
-    match (kind, target.and_then(Conversion::from_key)) {
-        ("convert", Some(to)) => to.label(),
+    match (kind, target) {
+        ("download", Some(target)) => telechargeur::Format::from_key(target)
+            .map_or("Téléchargement", telechargeur::Format::label),
+        ("convert", Some(target)) => {
+            Conversion::from_key(target).map_or("Conversion", Conversion::label)
+        }
         _ => "Compression",
     }
 }
@@ -1159,7 +1206,7 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
            FROM jobs j
            LEFT JOIN files f ON f.id = j.result_file_id
            WHERE j.user_id = ?1 AND (?2 IS NULL AND j.space_id NOT IN (SELECT id FROM spaces WHERE archived_at IS NOT NULL OR deleted_at IS NOT NULL) OR j.space_id = ?2)
-             AND j.kind IN ('compress', 'convert')
+             AND j.kind IN ('compress', 'convert', 'download')
              AND (j.status IN ('queued', 'running') OR j.updated_at > ?3)
            ORDER BY j.id DESC
            LIMIT 20"#,
@@ -1181,7 +1228,7 @@ pub async fn panel(state: &AppState, user_id: i64, space: Option<i64>) -> AppRes
                 (format!("{} %", row.progress), Some(row.progress), false)
             }
             "running" => ("En cours".to_string(), None, true),
-            "done" if row.kind == "convert" => (
+            "done" if row.kind != "compress" => (
                 format!("Prêt · {}", human_size(row.result_size.unwrap_or(0))),
                 None,
                 false,
@@ -1402,10 +1449,10 @@ fn current_path(headers: &HeaderMap) -> Option<String> {
 pub async fn active_jobs(db: &sqlx::SqlitePool, user_id: i64) -> AppResult<(i64, bool)> {
     let row = sqlx::query!(
         r#"SELECT count(*) AS "n!: i64",
-                  coalesce(max(f.expires_at IS NOT NULL), 0) AS "tools!: bool"
+                  coalesce(max(f.expires_at IS NOT NULL OR j.kind = 'download'), 0) AS "tools!: bool"
            FROM jobs j
            LEFT JOIN files f ON f.id = j.file_id
-           WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')
+           WHERE j.user_id = ? AND j.kind IN ('compress', 'convert', 'download')
              AND j.status IN ('queued', 'running')"#,
         user_id
     )
@@ -1444,12 +1491,12 @@ pub async fn indicator(
     let mut done = None;
     if active == 0 && query.active > 0 {
         let last = sqlx::query!(
-            r#"SELECT j.status, j.source_name, j.result_file_id, f.name AS "result_name?: String",
+            r#"SELECT j.status, j.kind, j.source_name, j.result_file_id, f.name AS "result_name?: String",
                       src.expires_at AS "source_expires?: i64"
                FROM jobs j
                LEFT JOIN files f ON f.id = j.result_file_id
                LEFT JOIN files src ON src.id = j.file_id
-               WHERE j.user_id = ? AND j.kind IN ('compress', 'convert')
+               WHERE j.user_id = ? AND j.kind IN ('compress', 'convert', 'download')
                  AND j.status IN ('done', 'failed')
                ORDER BY j.updated_at DESC, j.id DESC
                LIMIT 1"#,
@@ -1466,7 +1513,7 @@ pub async fn indicator(
             _ => Finished {
                 ok: false,
                 text: format!("Échec : {}", last.source_name),
-                href: if last.source_expires.is_some() {
+                href: if last.source_expires.is_some() || last.kind == "download" {
                     "/tools".into()
                 } else {
                     "/files".into()
@@ -1511,6 +1558,10 @@ struct ToolsPage {
     items: Vec<ToolItem>,
     jobs: JobsPanel,
     spaces: Vec<crate::spaces::Space>,
+    /// Le téléchargeur de liens, pour le seul compte de `DOWNLOADER_EMAIL`.
+    downloader: bool,
+    /// Pourquoi il ne peut pas télécharger en ce moment, s'il ne le peut pas.
+    downloader_note: Option<&'static str>,
 }
 
 /// Temps restant avant une échéance : « 23 h », « 40 min » (arrondi au-dessus).
@@ -1562,8 +1613,15 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     } else {
         Vec::new()
     };
+    let downloader = enabled && telechargeur::allowed(&state, &ctx.user.email);
+    let downloader_note = match (&state.config.work_dir, downloader) {
+        (Some(work_dir), true) => telechargeur::note(work_dir).await,
+        _ => None,
+    };
     let page = ToolsPage {
         shell: ctx.shell("tools").await?,
+        downloader,
+        downloader_note,
         enabled,
         max_size: files
             .map(|f| human_size(i64::try_from(f.max_upload_bytes).unwrap_or(i64::MAX)))

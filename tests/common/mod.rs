@@ -81,6 +81,24 @@ impl TestApp {
         app
     }
 
+    /// Comme [`TestApp::new`], avec le téléchargeur de liens réservé à Alice
+    /// (`DOWNLOADER_EMAIL`).
+    pub async fn with_downloader() -> Self {
+        let app = Self::build_with(
+            Some(ApiConfig {
+                token: API_TOKEN.into(),
+                user_email: ALICE.into(),
+            }),
+            true,
+            None,
+            |config| config.downloader_email = Some(ALICE.into()),
+        )
+        .await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
     async fn with_api(api: Option<ApiConfig>) -> Self {
         Self::build(api, true, None).await
     }
@@ -186,6 +204,7 @@ impl TestApp {
                 max_upload_bytes: MAX_UPLOAD,
             }),
             work_dir: files.then(|| work_dir.clone()),
+            downloader_email: None,
             from_env,
         };
         tweak(&mut config);

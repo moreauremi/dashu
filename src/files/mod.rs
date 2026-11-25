@@ -1774,9 +1774,11 @@ pub async fn view(
     let depuis = valid_origin(query.depuis.as_deref());
     let files = state.config.files.as_ref().ok_or(AppError::NotFound)?;
     let row = sqlx::query!(
-        "SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at FROM files WHERE id = ?2
+        r#"SELECT space_id, folder_id, name, mime, size, storage_key, updated_at, thumb, preview, expires_at,
+                  from_link AS "from_link!: bool"
+           FROM files WHERE id = ?2
            AND ((expires_at IS NULL AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1))
-           OR (expires_at IS NOT NULL AND user_id = ?1))",
+           OR (expires_at IS NOT NULL AND user_id = ?1))"#,
         ctx.user.id,
         id
     )
@@ -1873,7 +1875,9 @@ pub async fn view(
         stem: split_name(&row.name).0.to_string(),
         ext: split_name(&row.name).1.to_string(),
         tags: tags::tags_of(&state.db, ctx.user.id, id).await?,
-        share_html: if row.expires_at.is_none() {
+        // Pas de bloc « Partager » pour un fichier de Temporaire, ni pour un
+        // fichier venu du téléchargeur de liens.
+        share_html: if row.expires_at.is_none() && !row.from_link {
             share::ShareFragment::load(&state.db, ctx.user.id, id)
                 .await?
                 .render()

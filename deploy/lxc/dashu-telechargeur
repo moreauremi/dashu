@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# Téléchargeur de liens de dashu (SPEC v2, « Outils : téléchargeur de liens »),
+# en root dans le conteneur :
+#
+#   dashu-telechargeur activer <email>   installe yt-dlp et Deno, le service et
+#                                        sa minuterie, et réserve l'outil à ce compte
+#   dashu-telechargeur desactiver        arrête le service et retire l'outil
+#   dashu-telechargeur mettre-a-jour     yt-dlp à sa dernière version (chaque
+#                                        semaine, par dashu-telechargeur-maj.timer)
+#   dashu-telechargeur etat              versions, service, pare-feu
+#
+# Un lien YouTube, Instagram ou TikTok devient un MP4 ou un MP3, dans l'onglet
+# Outils du seul compte DOWNLOADER_EMAIL. Les conditions d'utilisation de ces
+# plateformes interdisent le téléchargement : l'outil reste à ce compte, un
+# résultat ne se partage pas par lien, et install.sh ne le propose pas.
+#
+# Il faut les fichiers et les conversions (ffmpeg) : install.sh, choix 3.
+# yt-dlp (binaire officiel) et Deno (le moteur JavaScript que YouTube impose à
+# yt-dlp) viennent de GitHub et sont vérifiés par leur empreinte SHA-256.
+#
+# Instagram et TikTok demandent souvent d'être connecté : le cookie de session
+# d'un compte (fichier au format Netscape) se dépose dans
+# /etc/dashu-telechargeur/cookies.txt, lisible par le service seul (README).
+#
+# Hermès n'y a pas accès : dashu-admin garde ses six actions.
+set -euo pipefail
+
+ENV_FILE=/etc/dashu/dashu.env
+SHARE=/opt/dashu/share
+CONF=/etc/dashu-telechargeur
+DOWNLOADS=/srv/dashu/tmp/downloads
+# Version de Deno, figée comme celle de Typst (install.sh) : 2.3 au moins
+# pour yt-dlp.
+DENO_VERSION=2.9.8
+YTDLP_URL="${DASHU_YTDLP_URL:-https://github.com/yt-dlp/yt-dlp/releases/latest/download}"
+DENO_URL="${DASHU_DENO_URL:-https://github.com/denoland/deno/releases/download/v$DENO_VERSION}"
+UNITS="dashu-download.service dashu-telechargeur-maj.service dashu-telechargeur-maj.timer"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+export LC_ALL=C.UTF-8 LANG=C.UTF-8
+
+usage() {
+  sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//' >&2
+  exit 2
+}
+
+die() {
+  echo "erreur : $*" >&2
+  exit 1
+}
+
+info() { echo "    $*"; }
+
+[ "$(id -u)" -eq 0 ] || die "à lancer en root dans le conteneur."
+
+# Dossier de téléchargement, effacé à la sortie quoi qu'il arrive.
+TRAVAIL="$(mktemp -d)"
+trap 'rm -rf "$TRAVAIL"' EXIT
+
+# Valeur d'une variable de dashu.env, sans guillemets autour.
+valeur() {
+  local ligne
+  ligne="$(grep "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 || true)"
+  ligne="${ligne#"$1"=}"
+  ligne="${ligne#\"}"
+  printf '%s' "${ligne%\"}"
+}
+
+architecture() {
+  case "$(uname -m)" in
+    x86_64 | amd64) YTDLP=yt-dlp_linux DENO=deno-x86_64-unknown-linux-gnu.zip ;;
+    aarch64 | arm64) YTDLP=yt-dlp_linux_aarch64 DENO=deno-aarch64-unknown-linux-gnu.zip ;;
+    *) die "architecture $(uname -m) non prise en charge (x86_64 ou aarch64)." ;;
+  esac
+}
+
+# verifier <fichier> <empreinte attendue>
+verifier() {
+  [ -n "$2" ] || die "empreinte introuvable pour $(basename "$1")."
+  echo "$2  $1" | sha256sum -c --status || die "l'empreinte de $(basename "$1") ne correspond pas : rien n'est installé."
+}
+
+# Dernière version de yt-dlp, vérifiée, à la place de l'ancienne (seulement si
+# elle a changé).
+installer_ytdlp() {
+  local tmp="$TRAVAIL/yt-dlp" attendu
+  mkdir -p "$tmp"
+  curl -fsSL --retry 2 -o "$tmp/SHA2-256SUMS" "$YTDLP_URL/SHA2-256SUMS"
+  attendu="$(awk -v f="$YTDLP" '$2 == f || $2 == "*" f { print $1 }' "$tmp/SHA2-256SUMS" | head -1)"
+  if [ -x /usr/local/bin/yt-dlp ] && [ -n "$attendu" ] &&
+    echo "$attendu  /usr/local/bin/yt-dlp" | sha256sum -c --status; then
+    info "yt-dlp déjà à sa dernière version ($(/usr/local/bin/yt-dlp --version))."
+    return
+  fi
+  curl -fsSL --retry 2 -o "$tmp/$YTDLP" "$YTDLP_URL/$YTDLP"
+  verifier "$tmp/$YTDLP" "$attendu"
+  install -m 755 "$tmp/$YTDLP" /usr/local/bin/.yt-dlp.new
+  mv -f /usr/local/bin/.yt-dlp.new /usr/local/bin/yt-dlp
+  info "yt-dlp $(/usr/local/bin/yt-dlp --version) installé."
+}
+
+installer_deno() {
+  local tmp="$TRAVAIL/deno" attendu actuelle
+  actuelle="$(deno --version 2>/dev/null | awk 'NR == 1 { print $2 }' || true)"
+  if [ "$actuelle" = "$DENO_VERSION" ]; then
+    info "Deno $actuelle déjà installé."
+    return
+  fi
+  command -v unzip >/dev/null || apt-get install -y -q unzip >/dev/null
+  mkdir -p "$tmp"
+  curl -fsSL --retry 2 -o "$tmp/$DENO" "$DENO_URL/$DENO"
+  curl -fsSL --retry 2 -o "$tmp/$DENO.sha256sum" "$DENO_URL/$DENO.sha256sum"
+  attendu="$(grep -oiE '[0-9a-f]{64}' "$tmp/$DENO.sha256sum" | head -1 | tr '[:upper:]' '[:lower:]')"
+  verifier "$tmp/$DENO" "$attendu"
+  unzip -q -o "$tmp/$DENO" -d "$tmp/zip"
+  install -m 755 "$tmp/zip/deno" /usr/local/bin/.deno.new
+  mv -f /usr/local/bin/.deno.new /usr/local/bin/deno
+  info "$(deno --version | head -1) installé."
+}
+
+# Les unités du dépôt (déposées par dashu-update dans $SHARE), installées si
+# elles ont changé. Rend vrai si l'une a changé.
+installer_unites() {
+  local unite change=1
+  for unite in $UNITS; do
+    [ -f "$SHARE/deploy/lxc/$unite" ] || die "$SHARE/deploy/lxc/$unite introuvable : lance d'abord dashu-update."
+    if ! cmp -s "$SHARE/deploy/lxc/$unite" "/etc/systemd/system/$unite"; then
+      install -m 644 "$SHARE/deploy/lxc/$unite" /etc/systemd/system/
+      change=0
+    fi
+  done
+  [ "$change" -eq 0 ] && systemctl daemon-reload
+  return "$change"
+}
+
+# Ce que le service écrit au démarrage : « actif » (pare-feu en place) ou
+# « sans pare-feu ». Attend qu'il l'ait écrit.
+pare_feu() {
+  local etat=""
+  for _ in $(seq 1 15); do
+    etat="$(cat "$DOWNLOADS/service" 2>/dev/null || true)"
+    [ -n "$etat" ] && break
+    sleep 1
+  done
+  printf '%s' "$etat"
+}
+
+# DOWNLOADER_EMAIL=<valeur> dans dashu.env (rien : la ligne part), puis
+# redémarrage de dashu ; l'ancien fichier revient si dashu ne répond plus.
+changer_compte() {
+  local avant tmp
+  avant="$(mktemp /etc/dashu/.dashu.env.avant.XXXXXX)"
+  tmp="$(mktemp /etc/dashu/.dashu.env.XXXXXX)"
+  cp -p "$ENV_FILE" "$avant"
+  cp -p "$ENV_FILE" "$tmp"
+  VAL="$1" awk '
+    index($0, "DOWNLOADER_EMAIL=") == 1 { if (!fait && ENVIRON["VAL"] != "") print "DOWNLOADER_EMAIL=" ENVIRON["VAL"]; fait = 1; next }
+    { print }
+    END { if (!fait && ENVIRON["VAL"] != "") print "DOWNLOADER_EMAIL=" ENVIRON["VAL"] }
+  ' "$ENV_FILE" >"$tmp"
+  mv -f "$tmp" "$ENV_FILE"
+  systemctl restart dashu
+  for _ in $(seq 1 20); do
+    if curl -fsS --max-time 2 http://127.0.0.1:3000/health >/dev/null 2>&1; then
+      rm -f "$avant"
+      return 0
+    fi
+    sleep 1
+  done
+  mv -f "$avant" "$ENV_FILE"
+  systemctl restart dashu || true
+  die "dashu ne repart pas : l'ancienne configuration est remise (journalctl -u dashu -n 30)."
+}
+
+activer() {
+  local email etat
+  email="$(printf '%s' "${1:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  [[ "$email" =~ ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$ ]] || usage
+  [ -f "$ENV_FILE" ] || die "$ENV_FILE introuvable : dashu n'est pas installé ici."
+  [ -n "$(valeur FILES_DIR)" ] && [ -n "$(valeur WORK_DIR)" ] ||
+    die "les fichiers ne sont pas activés : relance install.sh, choix 3."
+  command -v ffmpeg >/dev/null ||
+    die "il faut les outils de conversion (ffmpeg) : relance install.sh, choix 3."
+  getent group dashu-jobs >/dev/null || die "groupe dashu-jobs absent : relance install.sh, choix 3."
+  if [ -n "$(valeur ALLOWED_EMAILS)" ] &&
+    ! valeur ALLOWED_EMAILS | tr ',' '\n' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | grep -xF "$email" >/dev/null; then
+    echo "attention : $email n'est pas dans ALLOWED_EMAILS (dashu-compte ajouter $email)." >&2
+  fi
+
+  echo "==> yt-dlp et Deno"
+  architecture
+  installer_ytdlp
+  installer_deno
+
+  echo "==> Compte et dossiers du service"
+  id dashu-download >/dev/null 2>&1 ||
+    useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid dashu-jobs dashu-download
+  install -d -o dashu -g dashu-jobs -m 2770 "$DOWNLOADS"
+  install -d -m 755 "$CONF"
+  # Résolveurs publics : celui de la maison est une adresse locale, bloquée.
+  printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\nnameserver 2606:4700:4700::1111\n' >"$CONF/resolv.conf"
+  chmod 644 "$CONF/resolv.conf"
+  if [ -f "$CONF/cookies.txt" ]; then
+    chown dashu-download:root "$CONF/cookies.txt"
+    chmod 400 "$CONF/cookies.txt"
+    info "Cookie de session trouvé ($CONF/cookies.txt), lisible par le service seul."
+  fi
+
+  echo "==> Services"
+  installer_unites || true
+  systemctl enable --now dashu-telechargeur-maj.timer >/dev/null 2>&1
+  systemctl enable dashu-download >/dev/null 2>&1
+  rm -f "$DOWNLOADS/service"
+  systemctl restart dashu-download
+  etat="$(pare_feu)"
+  case "$etat" in
+    actif) info "Pare-feu du service vérifié : ni la machine, ni le réseau de la maison, ni Tailscale." ;;
+    "sans pare-feu")
+      echo "attention : systemd n'applique pas IPAddressDeny dans ce conteneur ; le téléchargeur refusera" >&2
+      echo "tout téléchargement tant qu'il manque (README, « Téléchargeur de liens »)." >&2
+      ;;
+    *) echo "attention : le service ne répond pas (journalctl -u dashu-download -n 30)." >&2 ;;
+  esac
+
+  echo "==> Compte"
+  changer_compte "$email"
+  info "Le téléchargeur est dans l'onglet Outils de $email."
+}
+
+desactiver() {
+  systemctl disable --now dashu-download dashu-telechargeur-maj.timer >/dev/null 2>&1 || true
+  [ -f "$ENV_FILE" ] && changer_compte ""
+  echo "Téléchargeur arrêté et retiré de l'onglet Outils (yt-dlp et Deno restent installés)."
+}
+
+mettre_a_jour() {
+  architecture
+  installer_ytdlp
+  installer_deno
+  if installer_unites && systemctl is-enabled --quiet dashu-download 2>/dev/null; then
+    systemctl restart dashu-download
+    info "Service remis à jour et relancé."
+  fi
+}
+
+etat() {
+  local compte
+  compte="$(valeur DOWNLOADER_EMAIL)"
+  echo "Compte    : ${compte:-aucun (outil désactivé)}"
+  echo "yt-dlp    : $(/usr/local/bin/yt-dlp --version 2>/dev/null || echo absent)"
+  echo "Deno      : $(deno --version 2>/dev/null | head -1 || echo absent)"
+  echo "Service   : $(systemctl is-active dashu-download 2>/dev/null || true)"
+  echo "Pare-feu  : $(cat "$DOWNLOADS/service" 2>/dev/null || echo 'inconnu (service arrêté ?)')"
+  echo "Cookie    : $([ -f "$CONF/cookies.txt" ] && echo présent || echo aucun)"
+  echo "Minuterie : $(systemctl list-timers dashu-telechargeur-maj.timer --no-legend 2>/dev/null | awk '{print $1, $2, $3}' || true)"
+}
+
+case "${1:-}" in
+  activer) activer "${2:-}" ;;
+  desactiver) desactiver ;;
+  mettre-a-jour) mettre_a_jour ;;
+  etat) etat ;;
+  *) usage ;;
+esac
