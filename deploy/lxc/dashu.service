@@ -12,6 +12,10 @@ ExecStart=/usr/local/bin/dashu
 Restart=on-failure
 RestartSec=3
 MemoryMax=256M
+# Avant la limite dure, une limite douce : au-delà, le noyau récupère la
+# mémoire de dashu (pages de fichiers comprises) et le ralentit, au lieu de
+# le tuer en arrivant à MemoryMax.
+MemoryHigh=192M
 
 [Install]
 WantedBy=multi-user.target
