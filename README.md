@@ -435,12 +435,14 @@ Ce qui est installé :
 | `/etc/dashu/dashu.env` | Les variables d'environnement (lisible par root et le groupe `dashu` seulement). |
 | `/etc/dashu/branch`, `/etc/dashu/source` | Le canal suivi (`stable` ou `v1`) et le mode de mise à jour (`binaire` ou `sources`). |
 | `/var/lib/dashu/dashu.db` | La base SQLite. |
-| `dashu.service` | Le service, sous l'utilisateur `dashu`, 256 Mo de mémoire au plus, durci (`deploy/lxc/hardening.conf` : système en lecture seule sauf `/var/lib/dashu`, aucune capacité). |
+| `dashu.service` | Le service, sous l'utilisateur `dashu`, 256 Mo de mémoire au plus (ralenti au-delà de 192 Mo plutôt que tué), durci (`deploy/lxc/hardening.conf` : système en lecture seule sauf `/var/lib/dashu`, aucune capacité). |
 | `dashu-tunnel.service` | Le tunnel Cloudflare, si cet accès est choisi. Son jeton est dans `/etc/dashu/tunnel.env` (root seulement). |
 | `dashu-backup.timer` | La sauvegarde, chaque nuit à 3 h 30. |
 | `dashu-update`, `dashu-backup`, `dashu-restore`, `dashu-admin`, `dashu-compte` | Les scripts d'exploitation, dans `/usr/local/sbin`. |
 
 Après une modification de `/etc/dashu/dashu.env` : `systemctl restart dashu`.
+
+`dashu-update` remplace le binaire et les scripts, pas les fichiers `.service` déjà installés. Sur un serveur installé avant le 25 novembre 2026, la limite douce de 192 Mo se pose une fois, à chaud et sans redémarrage : `systemctl set-property dashu MemoryHigh=192M` (systemd la garde dans `/etc/systemd/system.control/`).
 
 Si le shell ouvert par `pct enter` ne trouve pas `dashu-update`, `dashu-restore` ou `typst`, c'est que `/usr/local/sbin` ou `/usr/local/bin` manque dans son `PATH` : `echo 'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:$PATH"' >> ~/.bashrc`, puis rouvrir le shell. Les services de dashu ne sont pas concernés : systemd leur donne un `PATH` complet.
 
