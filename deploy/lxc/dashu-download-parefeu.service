@@ -1,0 +1,17 @@
+[Unit]
+Description=dashu : pare-feu du téléchargeur de liens (nftables, compte dashu-download)
+Before=dashu-download.service
+
+# Les règles de deploy/lxc/dashu-telechargeur.nft, copiées par
+# « dashu-telechargeur activer ». Le téléchargeur ne démarre pas sans elles
+# (Requires= dans dashu-download.service), et vérifie en plus lui-même qu'un
+# envoi vers le réseau de la maison est refusé.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/dashu-telechargeur/pare-feu.nft
+ExecStop=-/usr/sbin/nft delete table inet dashu_telechargeur
+
+[Install]
+WantedBy=multi-user.target

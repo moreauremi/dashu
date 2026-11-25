@@ -677,11 +677,13 @@ Un lien YouTube, Instagram ou TikTok devient une vidéo MP4 ou un son MP3, depui
 **Pourquoi un service à part.** yt-dlp va chercher des fichiers sur Internet à partir d'une adresse tapée dans dashu. Mal isolé, il pourrait servir à joindre le homelab. C'est donc `dashu download`, lancé par [`dashu-download.service`](deploy/lxc/dashu-download.service), qui fait le travail, dans `WORK_DIR/downloads/<id>/` :
 
 - son propre compte (`dashu-download`), 1 Go de mémoire au plus, priorité basse ;
-- Internet, mais ni la machine elle-même, ni le réseau de la maison, ni Tailscale (`IPAddressDeny`) ;
-- ses propres résolveurs DNS (publics, dans `/etc/dashu-telechargeur/resolv.conf`), car celui de la maison est une adresse locale, que ce filtre bloque ;
+- Internet, mais ni la machine elle-même, ni le réseau de la maison, ni Tailscale (pare-feu, ci-dessous) ;
+- ses propres résolveurs DNS (publics, dans `/etc/dashu-telechargeur/resolv.conf`), car celui de la maison est une adresse locale, que ce pare-feu bloque ;
 - il ne voit que son dossier : ni la base, ni `dashu.env`, ni les fichiers rangés, ni les conversions.
 
-Dans un conteneur, systemd peut ignorer `IPAddressDeny` et lancer le service sans filtre. Le service vérifie donc lui-même, au démarrage et avant chaque téléchargement, qu'un envoi (UDP) vers `127.0.0.1`, `192.168.0.1` et `100.100.100.100` est refusé sur-le-champ. Sinon il ne télécharge rien, et l'onglet Outils le dit. La CI rejoue cette vérification avec et sans le filtre.
+**Le pare-feu, en deux couches.** `IPAddressDeny`, dans l'unité, là où systemd sait le poser (machine virtuelle, machine nue). Dans un conteneur LXC non privilégié, comme celui du serveur, systemd l'ignore : des règles [nftables](deploy/lxc/dashu-telechargeur.nft) (le pare-feu de Linux) font la même chose pour le seul compte `dashu-download`, dans le réseau propre au conteneur. dashu, Tailscale et le tunnel ne sont pas touchés. `dashu-download-parefeu.service` les charge, et le téléchargeur ne démarre pas sans elles.
+
+Le service vérifie en plus lui-même, au démarrage et avant chaque téléchargement, qu'un envoi (UDP) vers `127.0.0.1`, `192.168.0.1` et `100.100.100.100` est refusé sur-le-champ. Sinon il ne télécharge rien, et l'onglet Outils le dit. La CI rejoue cette vérification avec et sans `IPAddressDeny`, puis avec les règles nftables, pour leur compte et pour un autre.
 
 YouTube impose désormais à yt-dlp un moteur JavaScript, et Deno est celui qu'il recommande. Les deux viennent de GitHub, en binaires officiels vérifiés par leur empreinte SHA-256 : yt-dlp en dernière version, Deno en version figée dans le script. Chaque semaine, la minuterie `dashu-telechargeur-maj.timer` remet yt-dlp à jour, de la même façon : il casse quand les plateformes changent.
 
@@ -691,13 +693,13 @@ YouTube impose désormais à yt-dlp un moteur JavaScript, et Deno est celui qu'i
 dashu-telechargeur activer toi@example.com
 ```
 
-Il installe yt-dlp et Deno, le compte et le dossier du service, le service et sa minuterie, vérifie le pare-feu, puis pose `DOWNLOADER_EMAIL` et redémarre dashu (l'ancienne configuration revient si dashu ne repart pas). Pour vérifier ensuite :
+Il installe yt-dlp et Deno, le compte et le dossier du service, nftables et ses règles, le service et sa minuterie, vérifie le pare-feu, puis pose `DOWNLOADER_EMAIL` et redémarre dashu (l'ancienne configuration revient si dashu ne repart pas). Pour vérifier ensuite :
 
 ```bash
 dashu-telechargeur etat
 ```
 
-La ligne « Pare-feu » doit dire `actif`. Si elle dit `sans pare-feu`, systemd n'applique pas `IPAddressDeny` dans ce conteneur : le téléchargeur refuse alors tout, et `journalctl -u dashu-download -n 20` le dit aussi. `dashu-telechargeur desactiver` arrête le service et retire l'outil.
+La ligne « Pare-feu » doit dire `actif`, et « Règles » `chargées (nftables)`. Si elle dit `sans pare-feu`, ni `IPAddressDeny` ni les règles ne s'appliquent : le téléchargeur refuse alors tout. `journalctl -u dashu-download-parefeu -n 20` dit pourquoi les règles n'ont pas été chargées. Un serveur où l'outil était déjà activé reprend la commande `activer` après la mise à jour qui apporte les règles. `dashu-telechargeur desactiver` arrête le service et retire l'outil.
 
 **Cookie de session.** Instagram et TikTok, et parfois YouTube (« confirm you're not a bot »), demandent d'être connecté. Exporter les cookies du site depuis un navigateur connecté (format Netscape, `cookies.txt`, par une extension), de préférence avec un compte secondaire : ce fichier donne accès au compte. Puis, en root :
 

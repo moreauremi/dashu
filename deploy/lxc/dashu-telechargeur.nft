@@ -1,0 +1,40 @@
+#!/usr/sbin/nft -f
+# Pare-feu du téléchargeur de liens (deploy/lxc/dashu-download.service),
+# chargé par dashu-download-parefeu.service.
+#
+# Dans un conteneur LXC non privilégié, systemd ne peut pas poser le filtre
+# IPAddressDeny de l'unité. Ces règles font la même chose avec nftables, le
+# pare-feu de Linux, dans le réseau propre au conteneur : pour le seul compte
+# dashu-download, rien ne part vers la machine elle-même, le réseau de la
+# maison, Tailscale, les adresses locales et de diffusion. Le reste du
+# conteneur (dashu, Tailscale, le tunnel) n'est pas touché.
+#
+# Un paquet jeté ici fait échouer l'envoi sur-le-champ (EPERM) : c'est ce que
+# vérifie le service avant chaque téléchargement (src/tools/telechargeur.rs).
+# Mêmes plages que IPAddressDeny dans l'unité.
+
+# Rechargé autant de fois qu'on veut : la table est recréée, jamais empilée.
+table inet dashu_telechargeur
+delete table inet dashu_telechargeur
+
+table inet dashu_telechargeur {
+	set interdites4 {
+		type ipv4_addr
+		flags interval
+		elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8,
+			     169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16,
+			     198.18.0.0/15, 224.0.0.0/4 }
+	}
+
+	set interdites6 {
+		type ipv6_addr
+		flags interval
+		elements = { ::1/128, fc00::/7, fe80::/10, ff00::/8 }
+	}
+
+	chain sortie {
+		type filter hook output priority 0; policy accept;
+		meta skuid "dashu-download" ip daddr @interdites4 drop
+		meta skuid "dashu-download" ip6 daddr @interdites6 drop
+	}
+}

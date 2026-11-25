@@ -1,17 +1,24 @@
 [Unit]
 Description=dashu : téléchargeur de liens (YouTube, Instagram, TikTok), sans accès au réseau de la maison
 Wants=network-online.target
-After=network-online.target local-fs.target
+After=network-online.target local-fs.target dashu-download-parefeu.service
+Requires=dashu-download-parefeu.service
 
 # Le téléchargeur va chercher des vidéos sur Internet avec yt-dlp, à partir
 # d'un lien collé dans dashu. Il est isolé comme le service de conversion,
 # avec en plus un pare-feu : Internet oui, le reste non.
 #   * son propre utilisateur, sans shell ;
-#   * IPAddressDeny : ni la machine elle-même, ni le réseau de la maison, ni
-#     Tailscale (100.64.0.0/10, fd7a::/16 dans fc00::/7). Il ne peut donc pas
-#     servir à atteindre le homelab. Le service vérifie lui-même que ce
-#     filtre est appliqué (src/tools/telechargeur.rs), et ne télécharge rien
-#     sinon : dans un conteneur, systemd peut l'ignorer ;
+#   * un pare-feu, en deux couches : ni la machine elle-même, ni le réseau de
+#     la maison, ni Tailscale (100.64.0.0/10, fd7a::/16 dans fc00::/7). Il ne
+#     peut donc pas servir à atteindre le homelab.
+#       - IPAddressDeny, ci-dessous, là où systemd peut le poser (une machine
+#         virtuelle, une machine nue) ;
+#       - des règles nftables pour ce seul compte (dashu-telechargeur.nft,
+#         chargées par dashu-download-parefeu.service), qui marchent aussi
+#         dans un conteneur LXC non privilégié, où systemd ignore
+#         IPAddressDeny (essayé sur le serveur le 25 novembre 2026).
+#     Le service vérifie lui-même qu'un envoi vers ces adresses est refusé
+#     (src/tools/telechargeur.rs), et ne télécharge rien sinon ;
 #   * ses propres résolveurs DNS (publics), car celui de la maison est une
 #     adresse locale, bloquée par le pare-feu ;
 #   * il ne voit que /srv/dashu/tmp/downloads : ni la base, ni la
