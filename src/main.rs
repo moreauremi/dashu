@@ -5,6 +5,7 @@
 //!   dashu backup <fichier>       copie à chaud de la base (VACUUM INTO)
 //!   dashu healthcheck            interroge /health (pour le HEALTHCHECK Docker)
 //!   dashu worker                 service de conversion (voir src/tools/worker.rs)
+//!   dashu download [--check]     téléchargeur de liens (voir src/tools/telechargeur.rs)
 //!   dashu version                version et commit du binaire (lus par dashu-update)
 
 use std::net::SocketAddr;
@@ -29,6 +30,19 @@ async fn main() -> anyhow::Result<()> {
         ["backup", destination] => backup(destination).await,
         ["healthcheck"] => healthcheck().await,
         ["worker"] => worker().await,
+        ["download"] => download().await,
+        ["download", "--check"] => {
+            // Pour la CI et dashu-telechargeur : le pare-feu du service est-il là ?
+            if tools::telechargeur::firewall_active() {
+                println!(
+                    "pare-feu actif : la machine, le réseau local et Tailscale sont injoignables"
+                );
+                Ok(())
+            } else {
+                println!("pare-feu absent : le téléchargeur joindrait le réseau local");
+                std::process::exit(1);
+            }
+        }
         ["version"] | ["--version"] => {
             // Une seule ligne, « dashu <version> <commit> » : dashu-update la
             // compare à celle de la version à installer.
@@ -41,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
         }
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu download [--check]     téléchargeur de liens (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
             );
             std::process::exit(2);
         }
@@ -226,6 +240,26 @@ async fn worker() -> anyhow::Result<()> {
         .context("WORK_DIR manquant : dossier de travail partagé avec dashu")?;
     tokio::task::spawn_blocking(move || tools::worker::run(std::path::Path::new(dir.trim())))
         .await?
+}
+
+/// `dashu download` : le téléchargeur de liens, service à part
+/// (`dashu-download`). Comme le service de conversion, il ne lit que
+/// `WORK_DIR`, plus le cookie de session des plateformes s'il existe
+/// (`DOWNLOAD_COOKIES`).
+async fn download() -> anyhow::Result<()> {
+    init_logging(std::env::var("LOG_FORMAT").as_deref() == Ok("json"));
+    let dir = std::env::var("WORK_DIR")
+        .ok()
+        .filter(|d| !d.trim().is_empty())
+        .context("WORK_DIR manquant : dossier de travail partagé avec dashu")?;
+    let cookies = std::env::var("DOWNLOAD_COOKIES")
+        .ok()
+        .filter(|c| !c.trim().is_empty())
+        .map(|c| std::path::PathBuf::from(c.trim()));
+    tokio::task::spawn_blocking(move || {
+        tools::telechargeur::run(std::path::Path::new(dir.trim()), cookies)
+    })
+    .await?
 }
 
 /// `dashu healthcheck` : l'image Docker finale ne contient ni curl ni wget,

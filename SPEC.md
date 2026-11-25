@@ -352,7 +352,7 @@ Les règles de la v1 restent valables : stack, sécurité, cibles de performance
    - la base (premier disque) est sauvegardée chaque nuit sur le second disque (`mp1`), comme le demandait déjà la v1 ;
    - les fichiers (second disque) sont copiés chaque nuit sur le premier disque, dans un volume dédié créé à l'étape 6 (50 Go au plus, autant que les fichiers). La copie est incrémentale : un fichier inchangé n'est pas recopié, et 14 jours d'historique sont gardés.
 3. **Mémoire** du conteneur : de 2 à 4 Go (`pct set <n> --memory 4096`). L'hôte en a 16 ; gratuit.
-4. **Paquets** : ffmpeg, pandoc, poppler-utils, qpdf, ghostscript, libheif-examples ; Typst et yt-dlp en binaires officiels (trop anciens ou absents dans Debian). Pas de LibreOffice. `deploy/lxc/install.sh` et le README sont mis à jour.
+4. **Paquets** : ffmpeg, pandoc, poppler-utils, qpdf, ghostscript, libheif-examples ; Typst, yt-dlp et Deno en binaires officiels (trop anciens ou absents dans Debian). Pas de LibreOffice. `deploy/lxc/install.sh` et le README sont mis à jour.
 
 ## Fichiers
 
@@ -436,8 +436,19 @@ En dernier, une fois le reste en service.
 - Un lien YouTube, Instagram ou TikTok devient un MP4 ou un MP3, avec yt-dlp et ffmpeg. Seuls ces trois sites sont acceptés, après lecture de l'adresse (pas une simple recherche de texte).
 - Service séparé `dashu-download`. Il a besoin d'Internet, mais il lui est interdit de joindre le réseau local, Tailscale et la machine elle-même (`IPAddressDeny`), ce qui empêche de s'en servir pour atteindre le homelab.
 - yt-dlp est mis à jour chaque semaine par une minuterie : il casse quand les plateformes changent.
-- Instagram et TikTok demandent souvent un cookie de session. C'est un secret : fichier dans `/etc/dashu/`, lisible par ce service seul, jamais affiché.
+- Instagram et TikTok demandent souvent un cookie de session. C'est un secret : fichier dans `/etc/dashu-telechargeur/`, lisible par ce service seul, jamais affiché.
 - **Cadre** : les conditions d'utilisation des trois plateformes interdisent le téléchargement. L'outil est donc réservé au compte de Rémi (`DOWNLOADER_EMAIL`), un résultat ne se partage jamais par lien, et l'outil ne figure pas dans le portfolio.
+
+Précisions du 25 novembre 2026, avant de l'écrire :
+
+- **Où** : un formulaire en haut de l'onglet Outils (le lien, puis « Vidéo MP4 » ou « Son MP3 »), visible seulement pour `DOWNLOADER_EMAIL`. Pour tout autre compte, l'outil n'existe pas : pas de formulaire, et sa route répond 404. Il n'est ni dans l'API ni dans le connecteur Claude (« Hors de l'API »).
+- **Adresses acceptées** : `https`, sans identifiant ni port, sur `youtube.com`, `www.`, `m.`, `music.youtube.com`, `youtu.be`, `instagram.com`, `www.instagram.com`, `tiktok.com`, `www.`, `m.`, `vm.`, `vt.tiktok.com`. L'adresse est lue (hôte exact, pas une recherche de texte), puis réécrite avant de partir vers yt-dlp. Le service la revérifie.
+- **Le résultat** arrive dans Temporaire, comme un fichier déposé dans l'onglet Outils : 24 heures pour le garder dans un espace ou le télécharger. Son nom est le titre de la vidéo, nettoyé comme un nom envoyé. Il est marqué « venu d'un lien » (`files.from_link`) : il ne se partage jamais par lien, et une conversion de ce fichier hérite de la marque.
+- **Limites** : la taille maximale des envois (2 Go par défaut), 30 minutes par téléchargement, un seul à la fois, trois en attente au plus. Une seule vidéo par lien (pas de liste de lecture), pas de direct. Vidéo en MP4 H.264 de 1080p au plus quand la plateforme le propose ; son en MP3.
+- **yt-dlp et Deno** : YouTube impose depuis 2025 un moteur JavaScript à yt-dlp, et Deno est celui qu'il recommande. Le binaire officiel `yt-dlp_linux` (ou `_aarch64`) et Deno (version figée, comme Typst) sont téléchargés depuis GitHub et vérifiés par leur empreinte SHA-256. La minuterie de la semaine remet yt-dlp à sa dernière version, vérifiée de la même façon.
+- **Pare-feu vérifié** : dans un conteneur LXC, systemd peut ignorer `IPAddressDeny` et lancer le service sans filtre. Le service vérifie donc au démarrage, et avant chaque téléchargement, qu'une connexion vers la machine elle-même, le réseau de la maison et Tailscale est bien refusée. Sinon il ne télécharge rien, et l'onglet Outils le dit.
+- **DNS** : le serveur DNS de la maison est une adresse locale, que le pare-feu bloque. Le service a donc son propre `resolv.conf`, vers des résolveurs publics.
+- **Activation** : par la commande `dashu-telechargeur activer <email>`, en root sur le serveur. L'installateur ne le propose pas : l'outil n'est pas destiné aux autres installations. Il faut les fichiers et les conversions (ffmpeg).
 
 ## API (en option)
 

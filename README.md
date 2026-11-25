@@ -146,6 +146,7 @@ Aucune n'est obligatoire : sans elles, l'[assistant du premier lancement](#premi
 | `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
 | `MAX_UPLOAD_MB` | non | Taille maximale d'un fichier, en Mo. 2048 par défaut. |
 | `WORK_DIR` | non | Active la compression : dossier de travail partagé avec le service de conversion (`/srv/dashu/tmp` en production). Demande `FILES_DIR`. |
+| `DOWNLOADER_EMAIL` | non | Le seul compte qui a le téléchargeur de liens (onglet Outils). Sans elle, l'outil n'existe pas. Posée par `dashu-telechargeur activer` (voir « Téléchargeur de liens »). Demande `FILES_DIR` et `WORK_DIR`. |
 | `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
 | `BACKUP_DIR` | Docker seulement | Dossier de l'hôte où vont les sauvegardes. |
 | `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut ; `127.0.0.1:3000` en production. |
@@ -664,6 +665,47 @@ apt-get install -y fonts-inter
 ```
 
 Essai : envoyer un fichier `.md`, « Convertir » > « En PDF ». Si le PDF échoue (`journalctl -u dashu-worker -n 20` montre l'erreur de Typst), c'est sans doute l'écart de version entre pandoc et Typst : essayer une autre version de Typst dans la commande ci-dessus.
+
+### 9. Téléchargeur de liens (v2)
+
+Un lien YouTube, Instagram ou TikTok devient une vidéo MP4 ou un son MP3, depuis le haut de l'onglet Outils. Les conditions d'utilisation de ces plateformes interdisent le téléchargement. L'outil est donc réservé à un seul compte (`DOWNLOADER_EMAIL`) : pour les autres, il n'existe pas, et il n'est ni dans l'API ni dans le connecteur Claude. Un fichier qui en vient, et toute conversion de ce fichier, ne se partage jamais par lien. `install.sh` ne le propose pas, et la page d'accueil n'en parle pas.
+
+- Seuls les liens `https` vers `youtube.com` (`www.`, `m.`, `music.`), `youtu.be`, `instagram.com` (`www.`) et `tiktok.com` (`www.`, `m.`, `vm.`, `vt.`) sont acceptés. dashu lit l'adresse (l'hôte exact, sans identifiant ni port), la réécrit, et le service la revérifie.
+- Le résultat arrive dans Temporaire, avec le titre de la vidéo pour nom : 24 heures pour le garder dans un espace ou le télécharger.
+- Une seule vidéo par lien (pas de liste de lecture), pas de direct, la taille maximale des envois, 30 minutes au plus, un téléchargement à la fois et trois en attente au plus. La vidéo est en H.264, en 1080p au plus quand la plateforme le propose.
+
+**Pourquoi un service à part.** yt-dlp va chercher des fichiers sur Internet à partir d'une adresse tapée dans dashu. Mal isolé, il pourrait servir à joindre le homelab. C'est donc `dashu download`, lancé par [`dashu-download.service`](deploy/lxc/dashu-download.service), qui fait le travail, dans `WORK_DIR/downloads/<id>/` :
+
+- son propre compte (`dashu-download`), 1 Go de mémoire au plus, priorité basse ;
+- Internet, mais ni la machine elle-même, ni le réseau de la maison, ni Tailscale (`IPAddressDeny`) ;
+- ses propres résolveurs DNS (publics, dans `/etc/dashu-telechargeur/resolv.conf`), car celui de la maison est une adresse locale, que ce filtre bloque ;
+- il ne voit que son dossier : ni la base, ni `dashu.env`, ni les fichiers rangés, ni les conversions.
+
+Dans un conteneur, systemd peut ignorer `IPAddressDeny` et lancer le service sans filtre. Le service vérifie donc lui-même, au démarrage et avant chaque téléchargement, qu'une connexion vers `127.0.0.1`, `192.168.0.1` et `100.100.100.100` est refusée sur-le-champ. Sinon il ne télécharge rien, et l'onglet Outils le dit. La CI rejoue cette vérification avec et sans le filtre.
+
+YouTube impose désormais à yt-dlp un moteur JavaScript, et Deno est celui qu'il recommande. Les deux viennent de GitHub, en binaires officiels vérifiés par leur empreinte SHA-256 : yt-dlp en dernière version, Deno en version figée dans le script. Chaque semaine, la minuterie `dashu-telechargeur-maj.timer` remet yt-dlp à jour, de la même façon : il casse quand les plateformes changent.
+
+**Activer**, en root dans le conteneur, après le `dashu-update` qui apporte cette version (il faut les fichiers et les conversions : `install.sh`, choix 3) :
+
+```bash
+dashu-telechargeur activer toi@example.com
+```
+
+Il installe yt-dlp et Deno, le compte et le dossier du service, le service et sa minuterie, vérifie le pare-feu, puis pose `DOWNLOADER_EMAIL` et redémarre dashu (l'ancienne configuration revient si dashu ne repart pas). Pour vérifier ensuite :
+
+```bash
+dashu-telechargeur etat
+```
+
+La ligne « Pare-feu » doit dire `actif`. Si elle dit `sans pare-feu`, systemd n'applique pas `IPAddressDeny` dans ce conteneur : le téléchargeur refuse alors tout, et `journalctl -u dashu-download -n 20` le dit aussi. `dashu-telechargeur desactiver` arrête le service et retire l'outil.
+
+**Cookie de session.** Instagram et TikTok, et parfois YouTube (« confirm you're not a bot »), demandent d'être connecté. Exporter les cookies du site depuis un navigateur connecté (format Netscape, `cookies.txt`, par une extension), de préférence avec un compte secondaire : ce fichier donne accès au compte. Puis, en root :
+
+```bash
+install -m 400 -o dashu-download cookies.txt /etc/dashu-telechargeur/cookies.txt && systemctl restart dashu-download
+```
+
+Le service n'en lit qu'une copie, le temps d'un téléchargement ; dashu ne le voit pas et ne l'affiche jamais.
 
 ### Variante : Docker
 

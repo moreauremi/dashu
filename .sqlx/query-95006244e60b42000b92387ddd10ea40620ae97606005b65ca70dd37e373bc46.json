@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT from_link AS \"from_link!: bool\" FROM files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "from_link!: bool",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "95006244e60b42000b92387ddd10ea40620ae97606005b65ca70dd37e373bc46"
+}

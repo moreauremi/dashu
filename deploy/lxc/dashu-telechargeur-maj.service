@@ -1,0 +1,12 @@
+[Unit]
+Description=dashu : yt-dlp remis à sa dernière version (téléchargeur de liens)
+Wants=network-online.target
+After=network-online.target
+
+# yt-dlp casse quand YouTube, Instagram ou TikTok changent : sa dernière
+# version est téléchargée chaque semaine, et vérifiée par son empreinte
+# SHA-256 avant de remplacer l'ancienne (dashu-telechargeur-maj.timer).
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dashu-telechargeur mettre-a-jour

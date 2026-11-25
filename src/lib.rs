@@ -241,6 +241,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/files/jobs/{id}/replace", post(tools::replace_original))
         .route("/jobs/indicator", get(tools::indicator))
         .route("/tools", get(tools::page))
+        // Téléchargeur de liens : réservé à DOWNLOADER_EMAIL (404 sinon)
+        .route("/tools/download", post(tools::telechargeur::start))
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))

@@ -2297,6 +2297,32 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   margin-bottom: 16px;
 }
 
+/* Téléchargeur de liens (un seul compte) : le lien, puis MP4 ou MP3. */
+.link-box {
+  margin-bottom: 20px;
+}
+
+.link-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.link-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.link-form input {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.link-note {
+  margin: 0 0 8px;
+}
+
 .tool-list {
   display: flex;
   flex-direction: column;

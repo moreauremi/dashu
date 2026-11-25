@@ -47,6 +47,10 @@ pub struct Config {
     /// Dossier de travail partagé avec le service de conversion
     /// (`/srv/dashu/tmp`). `None` : pas de compression (bouton absent).
     pub work_dir: Option<std::path::PathBuf>,
+    /// `DOWNLOADER_EMAIL` : le seul compte qui a le téléchargeur de liens
+    /// (SPEC v2, « Outils : téléchargeur de liens »). `None` : l'outil
+    /// n'existe pas sur ce serveur.
+    pub downloader_email: Option<String>,
     /// Réglages de l'instance donnés par l'environnement : ils ne se changent
     /// pas depuis le site (Réglages › Instance les montre verrouillés).
     pub from_env: FromEnv,
@@ -277,6 +281,10 @@ impl Config {
                 .as_ref()
                 .and(env.get("WORK_DIR"))
                 .map(|dir| dir.trim().into()),
+            downloader_email: env
+                .get("DOWNLOADER_EMAIL")
+                .map(|email| email.trim().to_lowercase())
+                .filter(|email| !email.is_empty()),
             files,
             from_env,
         })

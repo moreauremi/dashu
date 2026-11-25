@@ -1,0 +1,56 @@
+[Unit]
+Description=dashu : téléchargeur de liens (YouTube, Instagram, TikTok), sans accès au réseau de la maison
+Wants=network-online.target
+After=network-online.target local-fs.target
+
+# Le téléchargeur va chercher des vidéos sur Internet avec yt-dlp, à partir
+# d'un lien collé dans dashu. Il est isolé comme le service de conversion,
+# avec en plus un pare-feu : Internet oui, le reste non.
+#   * son propre utilisateur, sans shell ;
+#   * IPAddressDeny : ni la machine elle-même, ni le réseau de la maison, ni
+#     Tailscale (100.64.0.0/10, fd7a::/16 dans fc00::/7). Il ne peut donc pas
+#     servir à atteindre le homelab. Le service vérifie lui-même que ce
+#     filtre est appliqué (src/tools/telechargeur.rs), et ne télécharge rien
+#     sinon : dans un conteneur, systemd peut l'ignorer ;
+#   * ses propres résolveurs DNS (publics), car celui de la maison est une
+#     adresse locale, bloquée par le pare-feu ;
+#   * il ne voit que /srv/dashu/tmp/downloads : ni la base, ni la
+#     configuration, ni les fichiers rangés, ni les conversions ;
+#   * 1 Go de mémoire au plus, priorité basse.
+# Installé et activé par « dashu-telechargeur activer » (pas par install.sh).
+
+[Service]
+User=dashu-download
+Group=dashu-jobs
+Environment=WORK_DIR=/srv/dashu/tmp
+Environment=DOWNLOAD_COOKIES=/run/dashu-download/cookies.txt
+# yt-dlp (binaire PyInstaller) et Deno écrivent leurs caches dans /tmp, privé.
+Environment=HOME=/tmp XDG_CACHE_HOME=/tmp/cache DENO_DIR=/tmp/deno
+ExecStart=/usr/local/bin/dashu download
+Restart=on-failure
+RestartSec=10
+UMask=0007
+
+MemoryMax=1G
+TasksMax=128
+Nice=10
+CPUWeight=20
+IOWeight=20
+
+IPAddressDeny=localhost link-local multicast 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 fc00::/7
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+BindReadOnlyPaths=/etc/dashu-telechargeur/resolv.conf:/etc/resolv.conf
+BindReadOnlyPaths=-/etc/dashu-telechargeur/cookies.txt:/run/dashu-download/cookies.txt
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/srv/dashu/tmp/downloads
+InaccessiblePaths=-/var/lib/dashu -/etc/dashu -/srv/dashu/fichiers -/srv/dashu/tmp/jobs -/var/backups/dashu -/var/backups/dashu-fichiers
+CapabilityBoundingSet=
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
