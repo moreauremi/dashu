@@ -49,6 +49,17 @@
   {% endif %}
 </header>
 
+{% if let Some(usage) = quota %}
+{#- Quota du compte, tous espaces confondus. Une barre native (<progress>) :
+    pas de largeur calculée, donc rien à contourner dans la CSP. Rechargée
+    avec la liste après un envoi (files.js, refreshList). Aucun bouton : le
+    plafond ne se change que sur le serveur (dashu quota). -#}
+<div id="quota-gauge" class="quota{% if usage.alert() %} is-alert{% endif %}">
+  <progress class="quota-bar" value="{{ usage.bar() }}" max="{{ usage.cap }}" aria-label="Espace utilisé">{{ usage.percent() }} %</progress>
+  <span class="quota-label">{{ usage.label() }}</span>
+</div>
+{% endif %}
+
 {% if !enabled %}
 <div class="empty-state">
   <p>Les fichiers ne sont pas activés sur ce serveur</p>

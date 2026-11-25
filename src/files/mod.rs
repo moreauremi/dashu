@@ -11,6 +11,7 @@
 //! * L'accès se décide par l'espace (vue `space_access`), sauf pour Temporaire,
 //!   qui reste à son auteur (`user_id`).
 
+pub mod quota;
 pub mod share;
 pub mod tags;
 
@@ -177,6 +178,9 @@ struct ListPage {
     chips: Vec<crate::notes::TagChip>,
     /// La même adresse, sans le filtre par tag.
     clear_tag_href: String,
+    /// Jauge du quota du compte : « 12,4 Go / 30 Go ». Rien d'autre : le
+    /// plafond ne se change pas depuis le site (`dashu quota`).
+    quota: Option<quota::Usage>,
 }
 
 #[derive(Deserialize)]
@@ -536,6 +540,10 @@ pub async fn list(
         _ => None,
     };
     let files = state.config.files.as_ref();
+    let quota = match files {
+        Some(f) => Some(quota::usage(&state.db, user, f.default_quota_bytes).await?),
+        None => None,
+    };
     let page = ListPage {
         shell: ctx.shell("files").await?,
         enabled: files.is_some(),
@@ -568,6 +576,7 @@ pub async fn list(
         dossier,
         search_label,
         chips,
+        quota,
     };
     Ok(web::html(page))
 }
@@ -707,7 +716,7 @@ pub async fn keep(
 ) -> AppResult<Response> {
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
-    let folder = keep_in(&state.db, ctx.user.id, id, target.id, folder).await?;
+    let folder = keep_in(&state, ctx.user.id, id, target.id, folder).await?;
     let place = place_label(&ctx, &state.db, target, folder).await?;
     ctx.flash_ok(format!("Fichier gardé dans {place}")).await?;
     Ok(see_other(match form.next.as_deref() {
@@ -717,17 +726,39 @@ pub async fn keep(
 }
 
 /// Garde dans un espace accessible (et un dossier) un fichier de Temporaire.
-/// 404 si le fichier n'est pas un fichier de Temporaire du compte. Rend le
-/// dossier. Aussi pour l'API.
+/// 404 si le fichier n'est pas un fichier de Temporaire du compte ; 413 s'il
+/// ne tient pas dans le quota (il se met à compter en quittant Temporaire).
+/// Rend le dossier. Aussi pour l'API et le connecteur Claude.
 pub(crate) async fn keep_in(
-    db: &SqlitePool,
+    state: &AppState,
     user: i64,
     id: i64,
     space: i64,
     folder: Option<i64>,
 ) -> AppResult<Option<i64>> {
+    let db = &state.db;
     let folder = crate::folders::target(db, user, space, folder).await?;
-    let kept = sqlx::query!(
+    let default_quota = state
+        .config
+        .files
+        .as_ref()
+        .map_or(crate::config::DEFAULT_QUOTA_BYTES, |f| {
+            f.default_quota_bytes
+        });
+    let mut tx = quota::begin(db).await?;
+    let size = sqlx::query_scalar!(
+        "SELECT size FROM files WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
+        id,
+        user
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AppError::NotFound)?;
+    let usage = quota::usage(&mut *tx, user, default_quota).await?;
+    if !usage.fits(size) {
+        return Err(usage.full());
+    }
+    sqlx::query!(
         "UPDATE files SET space_id = ?, folder_id = ?, expires_at = NULL
          WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
         space,
@@ -735,12 +766,9 @@ pub(crate) async fn keep_in(
         id,
         user
     )
-    .execute(db)
-    .await?
-    .rows_affected();
-    if kept == 0 {
-        return Err(AppError::NotFound);
-    }
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
     Ok(folder)
 }
 
@@ -1013,6 +1041,15 @@ pub(crate) async fn open_upload(
         return Err(too_large(files.max_upload_bytes));
     }
     let size = i64::try_from(size).map_err(|_| too_large(files.max_upload_bytes))?;
+    // Quota : refus tout de suite si la taille annoncée ne tient pas dans la
+    // place restante. Un fichier de l'onglet Outils ne compte pas tant qu'il
+    // n'est pas gardé (vérifié à ce moment-là, voir `keep_in`).
+    if !for_tools {
+        let usage = quota::usage(&state.db, user, files.default_quota_bytes).await?;
+        if !usage.fits(size) {
+            return Err(usage.full());
+        }
+    }
     let name = clean_name(raw_name);
 
     let id = web::csrf::random_token();
@@ -1136,9 +1173,39 @@ pub(crate) async fn receive(
     }
 
     let room = (size - received).min(CHUNK_MAX_BYTES);
-    let written = match append(body, &mut out, room).await {
+    // Quota : les octets sont comptés pendant la réception (jamais d'après
+    // Content-Length). D'autres envois ont pu se terminer depuis l'ouverture :
+    // la place restante est relue à chaque morceau, octets déjà reçus de cet
+    // envoi compris.
+    let for_tools = upload.for_tools == 1;
+    let quota_room = if for_tools {
+        None
+    } else {
+        let usage = quota::usage(&state.db, user, files.default_quota_bytes).await?;
+        Some((
+            usage,
+            u64::try_from(usage.room() - received as i64).unwrap_or(0),
+        ))
+    };
+    let limit = match quota_room {
+        Some((_, left)) => room.min(left),
+        None => room,
+    };
+    let written = match append(body, &mut out, limit).await {
         Ok(written) => written,
         Err(error) => {
+            if let (Receive::TooLarge, Some((usage, left))) = (&error, quota_room)
+                && left < room
+            {
+                // Plafond dépassé : l'envoi s'arrête là, et son fichier
+                // partiel disparaît.
+                drop(out);
+                let _ = tokio::fs::remove_file(&part).await;
+                sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
+                    .execute(&state.db)
+                    .await?;
+                return Err(usage.full());
+            }
             let _ = out.set_len(received).await;
             return Err(match error {
                 Receive::TooLarge if room < CHUNK_MAX_BYTES => {
@@ -1198,7 +1265,7 @@ pub(crate) async fn receive(
         (upload.space_id, upload.folder_id),
         &upload.name,
         user,
-        upload.for_tools == 1,
+        for_tools,
     )
     .await?;
     Ok(Received::Done(file_id))
@@ -1235,7 +1302,15 @@ async fn finish(
     // Onglet Outils : pas encore rangé, effacé au bout de 24 heures.
     let expires_at = for_tools.then_some(now + crate::tools::TOOLS_KEEP_SECONDS);
     let saved = async {
-        let mut tx = state.db.begin().await?;
+        // Verrou d'écriture pris d'entrée : l'usage relu ici ne peut pas
+        // changer avant l'enregistrement (deux envois en parallèle).
+        let mut tx = quota::begin(&state.db).await?;
+        if !for_tools {
+            let usage = quota::usage(&mut *tx, user_id, files.default_quota_bytes).await?;
+            if !usage.fits(size) {
+                return Ok(Err(usage));
+            }
+        }
         let file_id = sqlx::query!(
             "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1257,11 +1332,20 @@ async fn finish(
         sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
             .execute(&mut *tx)
             .await?;
-        tx.commit().await.map(|()| file_id)
+        tx.commit().await.map(|()| Ok(file_id))
     }
     .await;
     match saved {
-        Ok(file_id) => {
+        Ok(Err(usage)) => {
+            // Refusé par le quota au dernier moment : rien ne reste, ni le
+            // fichier ni l'envoi.
+            let _ = tokio::fs::remove_file(&dest).await;
+            sqlx::query!("DELETE FROM uploads WHERE id = ?", id)
+                .execute(&state.db)
+                .await?;
+            Err(usage.full())
+        }
+        Ok(Ok(file_id)) => {
             // La vignette se fait ensuite, sans faire attendre l'envoi.
             if let Err(error) = crate::tools::enqueue_thumbnail(state, file_id).await {
                 tracing::warn!(error = format!("{error:#}"), "demande de vignette");

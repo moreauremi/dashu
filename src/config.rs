@@ -77,10 +77,25 @@ pub struct FilesConfig {
     pub dir: std::path::PathBuf,
     /// Taille maximale d'un fichier, en octets.
     pub max_upload_bytes: u64,
+    /// Plafond de stockage d'un compte sans plafond à lui (`FILES_QUOTA`), en
+    /// octets. Un plafond personnel ne se change que par `dashu quota`.
+    pub default_quota_bytes: u64,
 }
 
 /// Taille maximale d'un fichier par défaut : 2 Go.
 pub const DEFAULT_MAX_UPLOAD_MB: u64 = 2048;
+/// Plafond de stockage par défaut d'un compte : 30 Gio (30 × 1024³ octets).
+pub const DEFAULT_QUOTA_BYTES: u64 = 30 * 1024 * 1024 * 1024;
+
+/// Plafond par défaut des comptes : `FILES_QUOTA` (« 30G », « 500M »…), ou
+/// [`DEFAULT_QUOTA_BYTES`]. Aussi lu par `dashu quota`.
+pub fn default_quota(env: &Env) -> anyhow::Result<u64> {
+    match env.get("FILES_QUOTA") {
+        None => Ok(DEFAULT_QUOTA_BYTES),
+        Some(value) => crate::files::quota::parse_size(&value)
+            .map_err(|error| anyhow::anyhow!("FILES_QUOTA : {error}")),
+    }
+}
 
 /// Accès à l'API JSON (`/api/v1`) par un programme, par exemple un assistant.
 #[derive(Clone)]
@@ -259,6 +274,7 @@ impl Config {
                 Some(FilesConfig {
                     dir: dir.trim().into(),
                     max_upload_bytes: max_mb * 1024 * 1024,
+                    default_quota_bytes: default_quota(env)?,
                 })
             }
         };

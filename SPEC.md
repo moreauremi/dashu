@@ -364,6 +364,8 @@ Les règles de la v1 restent valables : stack, sécurité, cibles de performance
 | `files_fts` | table virtuelle FTS5 sur name | Tenue à jour par des triggers, comme les notes |
 | `file_tags` | file\_id, tag\_id | Mêmes tags que les notes |
 | `share_links` | id, file\_id, token\_hash, expires\_at, revoked\_at, created\_at | Le lien en clair n'est jamais stocké |
+| `users.quota_bytes` | plafond de stockage du compte, en octets | NULL = la valeur par défaut (`FILES_QUOTA`) ; écrit seulement par `dashu quota` |
+| `quota_changes` | id, email, before\_bytes, after\_bytes, changed\_at | Journal des changements de plafond |
 
 Sur le disque, un fichier vit dans `/srv/dashu/fichiers/<2 premiers caractères de la clé>/<clé>`. Le nom choisi par l'utilisateur n'apparaît jamais dans un chemin, ce qui ferme la porte aux noms piégés (`../`).
 
@@ -404,6 +406,43 @@ Un fichier envoyé est une donnée, jamais une page. Toute réponse qui sert un 
 - Le lien contient 32 octets aléatoires ; seule leur empreinte SHA-256 est en base.
 - La page publique `/s/<jeton>` ne montre que le nom et la taille, et télécharge le fichier. Elle est limitée en nombre de requêtes, comme le login.
 - Lien expiré, révoqué ou inconnu : même page « lien invalide », sans dire lequel des trois.
+
+### Quota de stockage
+
+Ajouté le 25 novembre 2026, à la demande de Rémi.
+
+**Règle**
+
+- Chaque compte a un plafond de stockage : **30 Gio par défaut** (30 × 1024³ octets). La valeur par défaut est une constante de la configuration du serveur (`FILES_QUOTA`, 30G sans elle), pas un réglage de l'interface.
+- Le plafond d'un compte (colonne `users.quota_bytes`, NULL = la valeur par défaut) ne se change **que par la commande `dashu quota`**, sur le serveur. Aucune route HTTP, aucun écran de réglages, aucune action de l'API ni du connecteur Claude (donc d'Hermès) ne le change, même pour l'administrateur connecté au site. Changer la valeur par défaut s'applique à tous les comptes sans plafond à eux.
+
+**Commande** (dans le binaire, comme `dashu backup` ; `dashu-quota` la lance sous l'utilisateur dashu, avec sa configuration)
+
+- `dashu quota list` : chaque compte avec utilisé, plafond et pourcentage ; puis le total des plafonds attribués, les fichiers déjà stockés et la place libre sur le disque des fichiers.
+- `dashu quota show <email>` : usage, plafond et derniers changements du compte.
+- `dashu quota set <email> <taille>` : accepte 50G, 500M, 1,5T (unités binaires). Affiche l'ancien et le nouveau plafond, et journalise le changement (table `quota_changes` : date, compte, avant, après).
+- `dashu quota reset <email>` : retour à la valeur par défaut, journalisé de même.
+- Avertissement, sans rien bloquer, quand la somme des plafonds dépasse la place réelle du disque (fichiers déjà stockés + place libre).
+- Refus propre, sans rien écrire : taille négative, nulle, sans unité ou d'un format inconnu ; compte inexistant.
+
+**Ce qui compte**
+
+- Tous les fichiers du compte (`files.user_id`, celui qui les a envoyés), tous espaces confondus, espaces partagés compris : fichiers envoyés, images collées et pièces jointes des notes, résultats de conversion rangés. Le contenu de la corbeille compte jusqu'à la suppression définitive.
+- Ne comptent pas : les fichiers de l'onglet Outils pas encore gardés (Temporaire, effacés après 24 heures), les sauvegardes, les liens de partage (ils désignent un fichier déjà compté), les vignettes et aperçus.
+- L'usage est la somme des tailles enregistrées en base, jamais un parcours du disque.
+
+**À l'envoi**
+
+- Refus immédiat si la taille annoncée dépasse la place restante : HTTP 413, « Espace plein : 29,6 Go utilisés sur 30 Go. Supprime des fichiers ou demande à l'administrateur d'augmenter ton plafond. »
+- Les octets sont comptés pendant la réception, jamais d'après `Content-Length` : l'envoi est coupé dès le plafond franchi, et son fichier partiel supprimé.
+- Le quota est revérifié dans la transaction SQLite qui enregistre le fichier, ouverte avec le verrou d'écriture (`BEGIN IMMEDIATE`) : deux envois en parallèle ne dépassent pas le plafond à eux deux.
+- Un plafond baissé sous l'usage ne supprime rien : seuls les nouveaux envois sont refusés.
+- Même quota pour l'envoi par l'API (Hermès) et par le connecteur Claude, pour un fichier de Temporaire qu'on garde dans un espace (il se met à compter), et pour le résultat d'une conversion rangé dans un espace (la tâche échoue avec le même message).
+
+**Interface**
+
+- Une jauge sur la page Fichiers, « 12,4 Go / 30 Go », en couleur d'alerte à partir de 90 %.
+- Aucun bouton ni formulaire pour changer le plafond.
 
 ## Outils : conversions
 
@@ -487,6 +526,19 @@ La v2 est terminée quand toutes les cases sont cochées sur le serveur réel.
 - [ ] Un second compte ne peut ni voir, ni télécharger, ni partager les fichiers du premier (tests)
 - [ ] Restauration réelle : un fichier supprimé revient à partir de la sauvegarde de la nuit
 
+**Quota de stockage**
+
+- [ ] Un envoi qui dépasse la place restante est refusé à l'ouverture (413, message « Espace plein… »), sans rien laisser sur le disque (test)
+- [ ] Un envoi pile à la limite passe ; un octet de plus est refusé (test)
+- [ ] Un envoi dont le contenu dépasse la taille annoncée est coupé au plafond, fichier partiel supprimé (test)
+- [ ] Deux envois en parallèle ne dépassent pas le plafond à eux deux (test)
+- [ ] Un plafond baissé sous l'usage ne supprime rien et bloque les nouveaux envois, y compris garder un fichier de Temporaire (test)
+- [ ] L'envoi par l'API respecte le même quota (test)
+- [ ] La corbeille compte jusqu'à la suppression définitive (test)
+- [ ] `dashu quota set` refuse une taille invalide ou un compte inconnu sans rien écrire ; un changement valide est journalisé ; `reset` revient au défaut (tests)
+- [ ] `dashu quota list` avertit quand les plafonds dépassent la place du disque, sur le serveur réel
+- [ ] La jauge de la page Fichiers passe en alerte à 90 % ; aucune page ni route ne change le plafond (tests)
+
 **Outils**
 
 - [ ] Chaque ligne du tableau des conversions produit un fichier valide (tests avec des fichiers d'exemple)
@@ -531,6 +583,10 @@ Prises le 11 novembre 2026 :
 - **Second disque** : il contenait une ancienne installation de Proxmox ; il est vidé entièrement. dashu n'en utilise que 50 Go.
 - **LibreOffice** : non. Les DOCX et PPTX ne sont pas convertis en PDF.
 - **Gros fichiers** : envoi par morceaux de 50 Mo (limite de Cloudflare), puis compression à la demande, avancée de l'étape 7.
+
+Prises le 25 novembre 2026 :
+
+- **Quota de stockage** : 30 Gio par compte par défaut, changé seulement par `dashu quota` sur le serveur. Les plafonds peuvent promettre plus que le disque n'en a (le volume des fichiers fait 45 Go : deux comptes à 30 Gio le dépassent déjà) ; `dashu quota` avertit sans bloquer. La place réelle comparée aux plafonds est « fichiers stockés + place libre », pas la place libre seule, qui compterait deux fois ce qui est déjà rangé.
 
 Reste à trancher, dans la PR concernée :
 
