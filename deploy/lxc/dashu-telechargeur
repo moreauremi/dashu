@@ -2,8 +2,9 @@
 # Téléchargeur de liens de dashu (SPEC v2, « Outils : téléchargeur de liens »),
 # en root dans le conteneur :
 #
-#   dashu-telechargeur activer <email>   installe yt-dlp et Deno, le service et
-#                                        sa minuterie, et réserve l'outil à ce compte
+#   dashu-telechargeur activer <email>   installe yt-dlp et Deno, le pare-feu
+#                                        (nftables), le service et sa minuterie,
+#                                        et réserve l'outil à ce compte
 #   dashu-telechargeur desactiver        arrête le service et retire l'outil
 #   dashu-telechargeur mettre-a-jour     yt-dlp à sa dernière version (chaque
 #                                        semaine, par dashu-telechargeur-maj.timer)
@@ -34,7 +35,7 @@ DOWNLOADS=/srv/dashu/tmp/downloads
 DENO_VERSION=2.9.8
 YTDLP_URL="${DASHU_YTDLP_URL:-https://github.com/yt-dlp/yt-dlp/releases/latest/download}"
 DENO_URL="${DASHU_DENO_URL:-https://github.com/denoland/deno/releases/download/v$DENO_VERSION}"
-UNITS="dashu-download.service dashu-telechargeur-maj.service dashu-telechargeur-maj.timer"
+UNITS="dashu-download-parefeu.service dashu-download.service dashu-telechargeur-maj.service dashu-telechargeur-maj.timer"
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 export LC_ALL=C.UTF-8 LANG=C.UTF-8
 
@@ -132,6 +133,33 @@ installer_unites() {
   return "$change"
 }
 
+# Les règles nftables du compte dashu-download (deploy/lxc/dashu-telechargeur.nft),
+# copiées dans $CONF si elles ont changé et vérifiées par nft. Rend vrai si
+# elles ont changé. Le compte doit exister : nft lit son nom.
+installer_regles() {
+  local source="$SHARE/deploy/lxc/dashu-telechargeur.nft"
+  [ -f "$source" ] || die "$source introuvable : lance d'abord dashu-update."
+  command -v nft >/dev/null || apt-get install -y -q nftables >/dev/null
+  nft -c -f "$source" || die "nft refuse les règles de $source."
+  if cmp -s "$source" "$CONF/pare-feu.nft"; then
+    return 1
+  fi
+  install -m 644 "$source" "$CONF/pare-feu.nft"
+}
+
+# Charge les règles (dashu-download-parefeu.service) ; rend faux si le
+# conteneur les refuse.
+charger_regles() {
+  systemctl enable dashu-download-parefeu >/dev/null 2>&1
+  if systemctl restart dashu-download-parefeu; then
+    info "Règles nftables chargées pour le compte dashu-download."
+    return 0
+  fi
+  echo "attention : nftables refuse les règles dans ce conteneur (journalctl -u dashu-download-parefeu -n 20) ;" >&2
+  echo "le téléchargeur ne démarre pas sans elles." >&2
+  return 1
+}
+
 # Ce que le service écrit au démarrage : « actif » (pare-feu en place) ou
 # « sans pare-feu ». Attend qu'il l'ait écrit.
 pare_feu() {
@@ -181,9 +209,11 @@ activer() {
   command -v ffmpeg >/dev/null ||
     die "il faut les outils de conversion (ffmpeg) : relance install.sh, choix 3."
   getent group dashu-jobs >/dev/null || die "groupe dashu-jobs absent : relance install.sh, choix 3."
-  if [ -n "$(valeur ALLOWED_EMAILS)" ] &&
-    ! valeur ALLOWED_EMAILS | tr ',' '\n' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | grep -xF "$email" >/dev/null; then
-    echo "attention : $email n'est pas dans ALLOWED_EMAILS (dashu-compte ajouter $email)." >&2
+  # La liste vient de dashu-compte, qui lit dashu.env comme dashu (guillemets
+  # compris) ou la base.
+  if command -v dashu-compte >/dev/null &&
+    ! dashu-compte liste 2>/dev/null | awk '{ print tolower($1) }' | grep -xF "$email" >/dev/null; then
+    echo "attention : $email n'est pas dans les adresses autorisées (dashu-compte liste)." >&2
   fi
 
   echo "==> yt-dlp et Deno"
@@ -205,18 +235,20 @@ activer() {
     info "Cookie de session trouvé ($CONF/cookies.txt), lisible par le service seul."
   fi
 
-  echo "==> Services"
+  echo "==> Pare-feu et services"
+  installer_regles || true
   installer_unites || true
   systemctl enable --now dashu-telechargeur-maj.timer >/dev/null 2>&1
+  charger_regles || true
   systemctl enable dashu-download >/dev/null 2>&1
   rm -f "$DOWNLOADS/service"
-  systemctl restart dashu-download
+  systemctl restart dashu-download || true
   etat="$(pare_feu)"
   case "$etat" in
     actif) info "Pare-feu du service vérifié : ni la machine, ni le réseau de la maison, ni Tailscale." ;;
     "sans pare-feu")
-      echo "attention : systemd n'applique pas IPAddressDeny dans ce conteneur ; le téléchargeur refusera" >&2
-      echo "tout téléchargement tant qu'il manque (README, « Téléchargeur de liens »)." >&2
+      echo "attention : le pare-feu du service manque (ni IPAddressDeny, ni les règles nftables) ; le" >&2
+      echo "téléchargeur refusera tout tant qu'il manque (README, « Téléchargeur de liens »)." >&2
       ;;
     *) echo "attention : le service ne répond pas (journalctl -u dashu-download -n 30)." >&2 ;;
   esac
@@ -227,18 +259,23 @@ activer() {
 }
 
 desactiver() {
-  systemctl disable --now dashu-download dashu-telechargeur-maj.timer >/dev/null 2>&1 || true
+  systemctl disable --now dashu-download dashu-telechargeur-maj.timer dashu-download-parefeu >/dev/null 2>&1 || true
   [ -f "$ENV_FILE" ] && changer_compte ""
   echo "Téléchargeur arrêté et retiré de l'onglet Outils (yt-dlp et Deno restent installés)."
 }
 
 mettre_a_jour() {
+  local change=1
   architecture
   installer_ytdlp
   installer_deno
-  if installer_unites && systemctl is-enabled --quiet dashu-download 2>/dev/null; then
+  # Règles et unités venues de la dernière version de dashu (dashu-update).
+  if id dashu-download >/dev/null 2>&1 && installer_regles; then change=0; fi
+  if installer_unites; then change=0; fi
+  if [ "$change" -eq 0 ] && systemctl is-enabled --quiet dashu-download 2>/dev/null; then
+    charger_regles || true
     systemctl restart dashu-download
-    info "Service remis à jour et relancé."
+    info "Pare-feu et service remis à jour, service relancé."
   fi
 }
 
@@ -250,6 +287,7 @@ etat() {
   echo "Deno      : $(deno --version 2>/dev/null | head -1 || echo absent)"
   echo "Service   : $(systemctl is-active dashu-download 2>/dev/null || true)"
   echo "Pare-feu  : $(cat "$DOWNLOADS/service" 2>/dev/null || echo 'inconnu (service arrêté ?)')"
+  echo "Règles    : $(nft list table inet dashu_telechargeur >/dev/null 2>&1 && echo 'chargées (nftables)' || echo absentes)"
   echo "Cookie    : $([ -f "$CONF/cookies.txt" ] && echo présent || echo aucun)"
   echo "Minuterie : $(systemctl list-timers dashu-telechargeur-maj.timer --no-legend 2>/dev/null | awk '{print $1, $2, $3}' || true)"
 }

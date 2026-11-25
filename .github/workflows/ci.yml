@@ -133,6 +133,29 @@ jobs:
             echo "Sans filtre, la vérification aurait dû échouer." >&2
             exit 1
           fi
+      # Dans un conteneur LXC non privilégié, systemd ne pose pas IPAddressDeny
+      # (vu sur le serveur) : des règles nftables pour le seul compte du
+      # téléchargeur prennent le relais (deploy/lxc/dashu-telechargeur.nft).
+      # On les charge pour de vrai : la vérification passe pour ce compte, pas
+      # pour un autre, et un second chargement remplace la table sans
+      # l'empiler.
+      - name: Pare-feu nftables du téléchargeur de liens
+        run: |
+          sudo apt-get install -y -q nftables
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin dashu-download
+          sudo nft -c -f deploy/lxc/dashu-telechargeur.nft
+          sudo nft -f deploy/lxc/dashu-telechargeur.nft
+          sudo nft -f deploy/lxc/dashu-telechargeur.nft
+          test "$(sudo nft list table inet dashu_telechargeur | grep -c ' drop')" -eq 2
+          # Hors de /home, que l'autre compte ne peut pas lire.
+          sudo install -m 755 target/debug/dashu /usr/local/bin/dashu-ci
+          sudo systemd-run --wait --pipe --collect -p User=dashu-download \
+            /usr/local/bin/dashu-ci download --check
+          if sudo systemd-run --wait --pipe --collect -p User=nobody /usr/local/bin/dashu-ci download --check; then
+            echo "Les règles ne devaient viser que le compte dashu-download." >&2
+            exit 1
+          fi
+          sudo nft delete table inet dashu_telechargeur
 
   # Un job par architecture, chacun sur une machine de la même architecture :
   # pas de compilation croisée (ring et SQLite contiennent du C) ni
