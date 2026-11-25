@@ -1039,8 +1039,17 @@ async fn import(
         .as_ref()
         .filter(|s| s.space_id == job.space_id)
         .and_then(|s| s.folder_id);
-    let saved: anyhow::Result<i64> = async {
-        let mut tx = state.db.begin().await?;
+    // Quota : un résultat rangé (pas dans Temporaire) compte comme un envoi,
+    // vérifié dans la transaction qui l'enregistre.
+    let saved: anyhow::Result<Result<i64, files::quota::Usage>> = async {
+        let mut tx = files::quota::begin(&state.db).await?;
+        if expires_at.is_none() {
+            let usage =
+                files::quota::usage(&mut *tx, job.user_id, files.default_quota_bytes).await?;
+            if !usage.fits(size) {
+                return Ok(Err(usage));
+            }
+        }
         let file_id = sqlx::query!(
             "INSERT INTO files (user_id, space_id, folder_id, name, mime, size, sha256, storage_key, expires_at, from_link, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1069,11 +1078,15 @@ async fn import(
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(file_id)
+        Ok(Ok(file_id))
     }
     .await;
     match saved {
-        Ok(file_id) => {
+        Ok(Err(usage)) => {
+            let _ = tokio::fs::remove_file(&dest).await;
+            fail(state, job.id, &usage.full_message()).await
+        }
+        Ok(Ok(file_id)) => {
             if let Err(error) = enqueue_thumbnail(state, file_id).await {
                 tracing::warn!(
                     error = format!("{error:#}"),

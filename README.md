@@ -145,6 +145,7 @@ Aucune n'est obligatoire : sans elles, l'[assistant du premier lancement](#premi
 | `API_USER_EMAIL` | avec `API_TOKEN` | Compte au nom duquel agit `API_TOKEN`. Doit figurer dans `ALLOWED_EMAILS`. |
 | `FILES_DIR` | non | Active les fichiers : dossier où dashu range leur contenu (`/srv/dashu/fichiers` en production). Sans lui, la page Fichiers l'indique et n'accepte aucun envoi. |
 | `MAX_UPLOAD_MB` | non | Taille maximale d'un fichier, en Mo. 2048 par défaut. |
+| `FILES_QUOTA` | non | Plafond de stockage d'un compte sans plafond à lui : `30G` par défaut (30 × 1024³ octets), ou `500M`, `1T`… Un plafond personnel se change avec `dashu-quota` sur le serveur (voir « 7. Fichiers (v2) »). |
 | `WORK_DIR` | non | Active la compression : dossier de travail partagé avec le service de conversion (`/srv/dashu/tmp` en production). Demande `FILES_DIR`. |
 | `DOWNLOADER_EMAIL` | non | Le seul compte qui a le téléchargeur de liens (onglet Outils). Sans elle, l'outil n'existe pas. Posée par `dashu-telechargeur activer` (voir « Téléchargeur de liens »). Demande `FILES_DIR` et `WORK_DIR`. |
 | `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
@@ -564,6 +565,25 @@ Le contenu des fichiers va dans `FILES_DIR`, sur le second disque (`/srv/dashu/f
 - **Aperçu** (`/files/{id}`, en cliquant sur le nom) : la photo en grand, la vidéo ou le son avec un lecteur, le PDF en entier, le texte d'un fichier texte (le Markdown mis en forme et nettoyé comme une note). Seuls les types sans code (images bitmap, vidéos, sons) sont servis tels quels au navigateur (`/files/{id}/raw`), avec les demandes partielles (`Range`) qui permettent à Safari de lire une vidéo et d'avancer dedans. Un HTML ou un SVG s'affiche comme du texte, jamais comme une page.
 - **Lecteur de PDF** : toutes les pages l'une sous l'autre, dessinées dans la page par pdf.js, la bibliothèque de Mozilla (celle du lecteur de Firefox), avec une barre qui reste visible : numéro de la page, zoom (de 50 à 400 %, et « ajuster à la largeur », le zoom d'ouverture). Le texte se sélectionne et se copie. Le PDF n'est pas affiché par le navigateur lui-même : `/files/{id}/raw` l'envoie comme une simple donnée (`application/octet-stream`, `attachment`, CSP `sandbox`), que pdf.js lit dans un worker (un fil d'exécution à part). pdf.js ne lance pas le JavaScript d'un PDF ni ses formulaires XFA, et la CSP de dashu lui interdit `eval` et WebAssembly. Seules les pages proches de l'écran sont dessinées, pour qu'un long PDF tienne dans la mémoire d'un iPhone. Le tout (environ 1,8 Mo, 0,5 Mo compressé) n'est chargé qu'à l'ouverture d'un PDF, puis gardé en cache. Le service de conversion n'y est pour rien : la première page en image (le grand aperçu ci-dessus) n'est plus montrée que le temps que le lecteur se charge. Limites connues : les liens d'un PDF ne sont pas cliquables, et un PDF chinois, japonais ou coréen sans ses polices peut mal s'afficher (les tables de caractères de pdf.js ne sont pas embarquées).
 
+**Quota de stockage.** Chaque compte a un plafond : 30 Gio par défaut (`FILES_QUOTA`). Il compte tous ses fichiers, tous espaces confondus : envoyés, collés dans une note, résultats de conversion rangés, et ceux de la corbeille jusqu'à leur suppression définitive. Il ne compte pas les fichiers de Temporaire (onglet Outils) tant qu'ils ne sont pas gardés, ni les sauvegardes, ni les liens de partage. L'usage est la somme des tailles en base : le disque n'est jamais parcouru. Un envoi trop gros pour la place restante est refusé à l'ouverture (413, « Espace plein : … ») ; les octets sont aussi comptés pendant la réception, et le quota revérifié dans la transaction qui enregistre le fichier, pour que deux envois en parallèle ne dépassent pas le plafond. La page Fichiers montre une jauge (« 12,4 Go / 30 Go »), rouge à partir de 90 %.
+
+Le plafond d'un compte ne se change **que sur le serveur**, en root dans le conteneur, par [`dashu-quota`](deploy/lxc/dashu-quota) : il lance `dashu quota` sous l'utilisateur dashu, avec sa configuration. Ni le site, ni l'API, ni Hermès ne peuvent le changer.
+
+```bash
+dashu-quota list
+```
+
+```bash
+dashu-quota set toi@example.com 50G
+```
+
+- `list` : usage, plafond et pourcentage de chaque compte ; puis le total des plafonds, les fichiers stockés et la place libre du disque des fichiers, avec un avertissement (sans rien bloquer) si les plafonds dépassent la place réelle (stocké + libre). Avec le volume de 45 Go du serveur, deux comptes à 30 Gio le dépassent déjà.
+- `show <email>` : usage, plafond et dix derniers changements.
+- `set <email> <taille>` : `50G`, `500M`, `1,5T` (unités binaires ; l'unité est obligatoire). Affiche l'ancien et le nouveau plafond. Un plafond baissé sous l'usage ne supprime rien : seuls les nouveaux envois sont refusés.
+- `reset <email>` : retour à la valeur par défaut.
+
+Chaque changement est journalisé dans la table `quota_changes` (date, compte, avant, après). Hors du conteneur (installation locale), la commande est `cargo run -- quota list`, qui lit `.env`.
+
 `install.sh` crée le dossier et renseigne `FILES_DIR` quand `/srv/dashu` est monté. Sur un serveur déjà installé, en root dans le conteneur :
 
 ```bash
@@ -808,7 +828,7 @@ dashu/
 ├── migrations/             schéma SQL, appliqué au démarrage
 ├── .sqlx/                  métadonnées des requêtes (vérification à la compilation sans base)
 ├── src/
-│   ├── main.rs             serveur, set-password, backup, healthcheck, version
+│   ├── main.rs             serveur, set-password, backup, quota, healthcheck, version
 │   ├── lib.rs              état partagé et routeur
 │   ├── config.rs           variables d'environnement
 │   ├── db.rs               pool SQLite, mode WAL, migrations
@@ -817,7 +837,7 @@ dashu/
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets
-│   ├── files/              fichiers : envoi, liste, téléchargement (v2)
+│   ├── files/              fichiers : envoi, liste, téléchargement, quota (v2)
 │   ├── folders/            dossiers des fichiers et des notes, fenêtre « Ranger »
 │   ├── tools/              compression : tâches (mod.rs) et service de conversion (worker.rs)
 │   ├── notes/              liste, éditeur, tags, rendu Markdown, téléchargement (.md, PDF)
