@@ -17,6 +17,7 @@ pub mod instance;
 pub mod mcp;
 pub mod notes;
 pub mod oauth;
+pub mod registry;
 pub mod restart;
 pub mod settings;
 pub mod setup;
@@ -322,6 +323,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/settings/spaces", post(spaces::create))
         .route("/settings/spaces/{id}", post(spaces::update))
         .route("/settings/spaces/{id}/archive", post(spaces::archive))
+        // Outils affichés dans un espace (registre : src/registry.rs)
+        .route(
+            "/settings/spaces/{id}/tools/{tool}",
+            post(settings::space_tools::set),
+        )
         .route("/settings/spaces/{id}/restore", post(spaces::restore))
         .route("/settings/moment", post(settings::set_moment))
         .route("/settings/spaces/{id}/members", get(spaces::members_page))

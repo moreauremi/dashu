@@ -1,0 +1,17 @@
+{#- Outils de la barre latérale pour l'espace actif, dans l'ordre du registre
+    (src/registry.rs). Inclus par layout.html, et renvoyé seul (hx-swap-oob)
+    quand on affiche ou masque un outil dans Réglages : la barre suit sans
+    recharger la page.
+    Variables : nav_base (« /e/ecole »), nav_current (entrée mise en avant),
+    nav_tools (outils affichés), nav_oob. -#}
+<div id="nav-tools" class="nav-tools"{% if nav_oob %} hx-swap-oob="true"{% endif %}>
+  <ul class="nav" role="list">
+    {% for tool in nav_tools %}
+    <li><a href="{% if tool.scoped %}{{ nav_base }}{% endif %}{{ tool.route }}"{% if !tool.key.is_empty() %} data-key="{{ tool.key }}"{% endif %}{% if crate::registry::is_current(nav_current, tool) %} aria-current="page"{% endif %} data-tool="{{ tool.id }}">{{ crate::assets::icon(tool.icon)|safe }}<span>{{ tool.name }}</span></a></li>
+    {% endfor %}
+  </ul>
+  {#- « Nouvelle note » suit Notes. -#}
+  {% if crate::registry::contains(nav_tools, "notes") %}
+  <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
+  {% endif %}
+</div>

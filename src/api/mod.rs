@@ -59,10 +59,10 @@ pub(crate) use contenu::{
     trash_list, trash_restore, upload_place,
 };
 pub(crate) use espaces::{
-    DashboardBody, NewInvitation, NewSpace, SpaceChanges, SpaceRemoval, dashboard_read,
+    DashboardBody, NewInvitation, NewSpace, SpaceChanges, SpaceRemoval, ToolsBody, dashboard_read,
     dashboard_write, invitation_accept, invitation_cancel, invitations_list, member_invite,
     member_remove, members_list, settings_read, settings_update, space_archive, space_create,
-    space_delete, space_leave, space_unarchive, space_update, spaces_out,
+    space_delete, space_leave, space_unarchive, space_update, spaces_out, tools_read, tools_write,
 };
 pub(crate) use outils::{fetch_job, formats, jobs, replace_original, start};
 

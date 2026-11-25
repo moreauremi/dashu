@@ -1606,7 +1606,7 @@ Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers,
 
 ## Fonctionnement : outils par espace (PR 1)
 
-- **Un registre unique** (`src/registry.rs`) déclare chaque outil : identifiant, nom, icône, adresse, raccourci clavier, mot de la barre de commandes, affiché par défaut ou non, masquable ou non, réservé ou non. La barre latérale, la barre de commandes (`/go`), la barre de raccourcis du téléphone, les réglages et l'API en sont tirés. Ajouter un outil = ajouter une entrée, plus ses pages.
+- **Un registre unique** (`src/registry.rs`) déclare chaque outil : identifiant, nom, icône, adresse, raccourci clavier, mot de la barre de commandes, affiché par défaut ou non, masquable ou non, réservé ou non. La barre latérale, la barre de commandes (`/go`), les réglages et l'API en sont tirés ; la barre de raccourcis du téléphone le suit. Ajouter un outil = ajouter une entrée, plus ses pages.
 - **Réglages › Espaces** : dans chaque espace, la liste des outils, avec un interrupteur affiché / masqué pour chacun. Le changement s'enregistre tout de suite (htmx), sans bouton « Enregistrer », et la barre latérale suit.
 - **Le Dashboard (l'accueil de l'espace) et les Réglages ne se masquent pas.**
 - **Un outil masqué** disparaît, dans cet espace seulement, de la barre latérale, de `/go` dans la barre de commandes et de la barre de raccourcis du téléphone (« Nouvelle note » suit Notes).
@@ -1614,7 +1614,7 @@ Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers,
 - **Masquer ne supprime rien.** Notes, fichiers et événements restent en base, et réapparaissent quand on réaffiche l'outil.
 - **C'est un réglage d'affichage, pas une permission.** Une note ou un fichier s'ouvre toujours par son adresse, par `/open` ou depuis Perso ; l'API, le connecteur Claude et Hermès travaillent sur tous les outils, même masqués. Les widgets du dashboard ne changent pas : ils se retirent dans la disposition du dashboard.
 - **Le réglage est propre à chaque compte.** Dans un espace partagé, chaque membre choisit ses outils, sans changer ceux des autres.
-- **API** : `GET /api/v1/spaces/{slug}/tools` lit le réglage, `PUT` le change (`{"files": false}`), avec l'outil MCP et la commande d'Hermès qui vont avec, comme pour la disposition du dashboard.
+- **API** : `GET /api/v1/spaces/{slug}/tools` lit le réglage, `PUT` le change (`{"tools": {"files": false}}`), avec l'outil MCP et la commande d'Hermès qui vont avec, comme pour la disposition du dashboard.
 
 ## Fonctionnement : 1Life, outil réservé (PR 2)
 

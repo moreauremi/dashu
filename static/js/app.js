@@ -65,10 +65,12 @@
     }
     syncThemeColor();
 
-    // Message flash : visible 4 secondes.
+    // Message flash : visible 4 secondes, 8 s'il porte un lien (le temps
+    // de le suivre).
     $$("[data-toast]").forEach((toast) => {
-      setTimeout(() => toast.classList.add("is-leaving"), 4000);
-      setTimeout(() => toast.remove(), 4300);
+      const delay = toast.querySelector("a") ? 8000 : 4000;
+      setTimeout(() => toast.classList.add("is-leaving"), delay);
+      setTimeout(() => toast.remove(), delay + 300);
     });
 
     // Agenda sur petit écran : la semaine défile horizontalement, on amène

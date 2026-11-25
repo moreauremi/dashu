@@ -4,6 +4,7 @@
 pub mod connexions;
 pub mod instance;
 pub mod profile;
+pub mod space_tools;
 
 use std::collections::HashMap;
 
@@ -16,6 +17,7 @@ use crate::AppState;
 use crate::auth::password;
 use crate::auth::session::{Ctx, Shell};
 use crate::calendar::sync;
+use crate::registry::{self, Shown};
 use crate::spaces::{self, person_name};
 use crate::tabbar::{self, Tab};
 use crate::time;
@@ -72,6 +74,8 @@ struct SettingsPage {
     instance_html: String,
     /// Éléments dans la corbeille.
     trash_count: usize,
+    /// Outils de chaque espace en service : réglables, et affichés ou non.
+    space_tools: HashMap<i64, Shown>,
 }
 
 pub(crate) struct InvitationRow {
@@ -181,8 +185,17 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         shared.insert(count.space_id, label);
     }
 
+    let mut space_tools = HashMap::new();
+    for space in &ctx.spaces {
+        space_tools.insert(
+            space.id,
+            registry::load(&state.db, ctx.user.id, space.id).await?,
+        );
+    }
+
     let (new_color, new_icon) = spaces::suggestion(&ctx.spaces);
     let page = SettingsPage {
+        space_tools,
         first_name: ctx.user.first_name.clone(),
         last_name: ctx.user.last_name.clone(),
         profile_max: profile::NAME_MAX_CHARS,

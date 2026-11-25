@@ -706,6 +706,27 @@ const TOOLS: &[Tool] = &[
         required: &["space", "layout"],
     },
     Tool {
+        name: "lire_outils_espace",
+        title: "Lire les outils d'un espace",
+        description: "Les outils de la barre latérale dans un espace (notes, fichiers, agenda, outils…), et s'ils y sont affichés. Masquer un outil ne change que l'affichage du site : son contenu reste lisible et modifiable par l'API.",
+        kind: Kind::Read,
+        properties: || json!({ "space": space_prop("concerné") }),
+        required: &["space"],
+    },
+    Tool {
+        name: "modifier_outils_espace",
+        title: "Afficher ou masquer des outils",
+        description: "Affiche (true) ou masque (false) des outils dans la barre latérale d'un espace, par exemple {\"files\": false}. Les outils absents gardent leur réglage ; le dashboard ne se masque pas. Rien n'est supprimé.",
+        kind: Kind::Write,
+        properties: || {
+            json!({
+                "space": space_prop("concerné"),
+                "tools": { "type": "object", "additionalProperties": { "type": "boolean" }, "description": "Identifiant de l'outil -> affiché" },
+            })
+        },
+        required: &["space", "tools"],
+    },
+    Tool {
         name: "lire_reglages",
         title: "Lire les réglages",
         description: "Profil et affichage du compte : prénom, nom, thème, taille de l'interface, barre latérale, raccourcis du téléphone, espace du moment.",
@@ -1198,6 +1219,14 @@ async fn run(
         "modifier_tableau_de_bord" => {
             let edit: InSpace<api::DashboardBody> = args(arguments)?;
             to_value(api::dashboard_write(state, user, &edit.space, edit.rest).await?)
+        }
+        "lire_outils_espace" => {
+            let BySpace { space } = args(arguments)?;
+            to_value(api::tools_read(state, user, &space).await?)
+        }
+        "modifier_outils_espace" => {
+            let edit: InSpace<api::ToolsBody> = args(arguments)?;
+            to_value(api::tools_write(state, user, &edit.space, edit.rest).await?)
         }
         "lire_reglages" => to_value(api::settings_read(state, user).await?),
         "modifier_reglages" => to_value(api::settings_update(state, user, args(arguments)?).await?),

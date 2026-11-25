@@ -120,26 +120,33 @@ pub async fn tree(ctx: &Ctx, state: &AppState, opened: &Opened) -> AppResult<Vec
         Node::group(
             "go",
             "Aller à une page",
-            vec![
-                Node::new("dashboard", "Dashboard", Action::GoPage("/")).aliases(&["accueil"]),
-                Node::new("notes", "Notes", Action::GoPage("/notes")),
-                Node::new("fichiers", "Fichiers", Action::GoPage("/files")).aliases(&["files"]),
-                Node::new("agenda", "Agenda", Action::GoAgenda)
-                    .aliases(&["calendar", "calendrier"])
-                    .arg(
-                        Arg::new(
-                            Mode::Free,
-                            "[jour|semaine] [quand : demain, lundi, 14/11]",
-                            false,
+            // Les outils affichés dans l'espace, tirés du registre
+            // (src/registry.rs) : un outil masqué n'est ni proposé ni compris.
+            ctx.tools
+                .visible()
+                .map(|tool| {
+                    let node = if tool.id == "calendar" {
+                        // L'agenda prend un jour : `/go agenda demain`.
+                        Node::new(tool.command, tool.name, Action::GoAgenda).arg(
+                            Arg::new(
+                                Mode::Free,
+                                "[jour|semaine] [quand : demain, lundi, 14/11]",
+                                false,
+                            )
+                            .values(agenda_words.clone()),
                         )
-                        .values(agenda_words),
-                    ),
-                Node::new("outils", "Outils", Action::GoPage("/tools")).aliases(&["tools"]),
-                Node::new("reglages", "Réglages", Action::GoPage("/settings"))
-                    .aliases(&["settings", "parametres"]),
-                Node::new("guide", "Guide de style", Action::GoPage("/styleguide"))
-                    .aliases(&["styleguide"]),
-            ],
+                    } else {
+                        Node::new(tool.command, tool.name, Action::GoPage(tool.route))
+                    };
+                    node.aliases(tool.aliases)
+                })
+                .chain([
+                    Node::new("reglages", "Réglages", Action::GoPage("/settings"))
+                        .aliases(&["settings", "parametres"]),
+                    Node::new("guide", "Guide de style", Action::GoPage("/styleguide"))
+                        .aliases(&["styleguide"]),
+                ])
+                .collect(),
         ),
         Node::new("open", "Ouvrir une note ou un fichier", Action::Open).arg(Arg::new(
             Mode::Remote,

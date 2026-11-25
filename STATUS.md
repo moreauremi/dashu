@@ -425,6 +425,20 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 - [x] Publiée sur dashu.dev (vérifié en ligne). La publication échouait depuis le 23 novembre : `deploy-pages` ne retrouvait plus le site envoyé dans le même job (« Found 0 artifact(s) »), alors qu'il était bien dans le run. Corrigé en deux jobs, envoi puis publication, comme le modèle de GitHub (PR #81) ; le droit `actions: read` ajouté avant (PR #80) ne suffisait pas.
 - [ ] La commande et l'image de la page marchent telles quelles chez un visiteur : la version stable existe (ce qu'elles téléchargent répond) ; reste un essai sur une machine neuve.
 
+## Outils par espace : avancement
+
+Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi le 25 novembre 2026. PR 1 (outils par espace) : branche `outils-par-espace`, partie de `v1`, **pas encore fusionnée ni essayée sur le serveur**. PR 2 (1Life) : à venir.
+
+- [x] Registre unique `src/registry.rs` : la barre latérale, `/go`, les réglages et l'API en sont tirés ; la barre du téléphone le suit. Tests unitaires `registre_coherent`, `valeurs_par_defaut_et_reglages`, et test `chaque_outil_du_registre_apparait_partout`, qui parcourt le registre.
+- [x] Masquer Fichiers dans École le retire de la barre latérale et de `/go` d'École seulement ; réaffiché, il revient avec ses fichiers. Test `masquer_puis_reafficher_un_outil_sans_rien_perdre`. Notes masqué retire aussi « Nouvelle note » et les raccourcis du téléphone qui en dépendent : `notes_masquees_retirent_aussi_les_raccourcis_qui_en_dependent`.
+- [x] Adresse d'un outil masqué : retour à l'accueil de l'espace, message « Cet outil est masqué dans cet espace. » et lien vers les réglages (le message reste 8 secondes au lieu de 4 quand il porte un lien). Test `adresse_d_un_outil_masque_ramene_a_l_accueil`.
+- [x] Réglages indépendants d'un espace à l'autre et d'un compte à l'autre, espace partagé compris : `reglages_independants_d_un_espace_et_d_un_compte_a_l_autre`.
+- [x] Le dashboard ne se masque pas, un outil inconnu est refusé : `l_accueil_ne_se_masque_pas_et_un_outil_inconnu_est_refuse`. Interrupteur htmx (bloc de l'espace et barre latérale par `hx-swap-oob`) : `interrupteur_htmx_renvoie_le_bloc_et_la_barre_laterale`.
+- [x] Migration 0023 (`space_tools`) : elle n'écrit rien, tout reste affiché. Test `la_migration_ne_masque_rien`.
+- [x] API : notes créées et listées dans un espace où Notes est masqué ; `GET` et `PUT /api/v1/spaces/{slug}/tools`, refus sans rien écrire. Test `l_api_travaille_sur_un_outil_masque_et_regle_les_outils`. Connecteur Claude : `lire_outils_espace`, `modifier_outils_espace` (62 outils en tout), test `le_connecteur_claude_lit_et_regle_les_outils`. Hermès : `tools`, `tools-set`, skill 1.5.0, vérifiés par une relecture seulement.
+- [x] Vu dans le navigateur, sur ordinateur, avec une copie locale du binaire : l'interrupteur s'enregistre, la barre latérale perd Fichiers sans rechargement, `/e/perso/files` ramène à l'accueil avec le message et son lien, aucune erreur dans la console.
+- [ ] Sur iPhone, et sur le serveur après `dashu-update`.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

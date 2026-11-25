@@ -32,11 +32,12 @@ pub fn valid_slug(slug: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-/// Pages d'un espace, dont l'adresse prend le préfixe : le dashboard, les
-/// notes, les fichiers, l'agenda (avec ou sans paramètres).
+/// Pages d'un espace, dont l'adresse prend le préfixe : celles des outils
+/// du registre qui le demandent (dashboard, notes, fichiers, agenda…), avec
+/// ou sans paramètres.
 pub fn is_scoped(path: &str) -> bool {
     let path = path.split(['?', '#']).next().unwrap_or(path);
-    matches!(path, "/" | "/notes" | "/files" | "/calendar")
+    crate::registry::is_scoped_route(path)
 }
 
 /// Adresse d'une page dans un espace : « /notes?q=x » -> « /e/ecole/notes?q=x ».

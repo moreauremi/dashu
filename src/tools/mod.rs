@@ -1625,6 +1625,10 @@ pub fn time_left(expires_at: i64, now: i64) -> String {
 /// garder dans un espace ou le télécharger. Ce qui n'est pas gardé disparaît
 /// au bout de 24 heures.
 pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
+    // Outil masqué dans cet espace : retour à l'accueil (SPEC, « Outils par espace »).
+    if let Some(back) = crate::registry::guard(&ctx, "tools").await? {
+        return Ok(back);
+    }
     let files = state.config.files.as_ref();
     let enabled = files.is_some() && state.config.work_dir.is_some();
     let now = time::now();

@@ -1,0 +1,9 @@
+{#- Réponse à un interrupteur d'outil : le bloc de l'espace, et la barre
+    latérale si c'est l'espace actif (hx-swap-oob). -#}
+{% include "settings/_space_tools.html" %}
+{% if let Some(nav_tools) = nav %}
+{% let nav_base = base.as_str() %}
+{% let nav_current = "settings" %}
+{% let nav_oob = true %}
+{% include "_nav_tools.html" %}
+{% endif %}

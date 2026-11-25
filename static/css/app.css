@@ -667,6 +667,12 @@ html {
   gap: 8px;
 }
 
+/* Enveloppe des outils (_nav_tools.html), remplacée d'un bloc quand le
+   réglage change : sans effet sur la mise en page. */
+.nav-tools {
+  display: contents;
+}
+
 /* 11 px + 1 px de bordure : l'icône tombe dans la colonne des autres. */
 .search-btn {
   display: flex;
@@ -2432,6 +2438,86 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+}
+
+/* Outils affichés dans un espace : un interrupteur par outil (Réglages › Espaces). */
+.space-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.space-tools legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tool-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.switch-row > .i {
+  color: var(--text-2);
+}
+
+/* Interrupteur : une case à cocher redessinée, gardée pour le clavier et
+   les lecteurs d'écran (role="switch"). */
+.switch {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  appearance: none;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-2);
+  content: "";
+  transition: translate var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.switch:checked {
+  border-color: transparent;
+  background: var(--accent);
+}
+
+.switch:checked::after {
+  translate: 14px 0;
+  background: var(--on-accent);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .space-archived-title {

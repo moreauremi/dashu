@@ -74,6 +74,10 @@ pub async fn page(
     State(state): State<AppState>,
     Query(query): Query<PageQuery>,
 ) -> AppResult<Response> {
+    // Outil masqué dans cet espace : retour à l'accueil (SPEC, « Outils par espace »).
+    if let Some(back) = crate::registry::guard(&ctx, "calendar").await? {
+        return Ok(back);
+    }
     let now = time::now();
     let today = time::paris_date(now);
     let date = query

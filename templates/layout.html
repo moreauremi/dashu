@@ -77,15 +77,13 @@
         <kbd>/</kbd>
       </button>
 
-      <ul class="nav" role="list">
-        <li><a href="{{ shell.base }}/" data-key="g d"{% if shell.nav == "dashboard" %} aria-current="page"{% endif %}>{{ crate::assets::icon("dashboard")|safe }}<span>Dashboard</span></a></li>
-        <li><a href="{{ shell.base }}/notes" data-key="g n"{% if shell.nav == "notes" %} aria-current="page"{% endif %}>{{ crate::assets::icon("notes")|safe }}<span>Notes</span></a></li>
-        <li><a href="{{ shell.base }}/files" data-key="g f"{% if shell.nav == "files" %} aria-current="page"{% endif %}>{{ crate::assets::icon("files")|safe }}<span>Fichiers</span></a></li>
-        <li><a href="{{ shell.base }}/calendar" data-key="g c"{% if shell.nav == "calendar" %} aria-current="page"{% endif %}>{{ crate::assets::icon("calendar")|safe }}<span>Agenda</span></a></li>
-        <li><a href="/tools" data-key="g o"{% if shell.nav == "tools" %} aria-current="page"{% endif %}>{{ crate::assets::icon("tools")|safe }}<span>Outils</span></a></li>
-      </ul>
-
-      <a class="btn btn-block new-note" href="/notes/new" data-key="n">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span><kbd>N</kbd></a>
+      {#- Les outils affichés dans cet espace, tirés du registre
+          (src/registry.rs) et réglés dans Réglages › Espaces. -#}
+      {% let nav_base = shell.base.as_str() %}
+      {% let nav_current = shell.nav %}
+      {% let nav_tools = shell.tools.as_slice() %}
+      {% let nav_oob = false %}
+      {% include "_nav_tools.html" %}
     </div>
 
     {#- En bas : les réglages, la taille de l'interface, le compte. Le thème
@@ -117,7 +115,7 @@
 
   <main id="main" class="main" tabindex="-1">
     {% if let Some(flash) = shell.flash %}
-    <p class="toast toast-{{ flash.kind }}" role="status" data-toast>{{ flash.text }}</p>
+    <p class="toast toast-{{ flash.kind }}" role="status" data-toast>{{ flash.text }}{% if let Some((href, label)) = flash.link %} <a href="{{ href }}">{{ label }}</a>{% endif %}</p>
     {% endif %}
     {#- Rappel de l'espace au-dessus du titre (le dashboard le dit déjà sous
         la date). -#}

@@ -10,6 +10,8 @@
 //! Rien ici ne touche à ce qui protège le compte : ni mot de passe, ni
 //! liaison Google, ni jetons (`SettingsChanges` refuse tout champ inconnu).
 
+use std::collections::BTreeMap;
+
 use axum::body::Bytes;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
@@ -22,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use super::{ApiError, ApiResult, ApiUser, contenu};
 use crate::AppState;
 use crate::dashboard::layout;
+use crate::registry;
 use crate::settings::{self, profile};
 use crate::spaces::{self, Person, Space, SpaceForm};
 use crate::tabbar;
@@ -39,6 +42,7 @@ pub fn routes() -> Router<AppState> {
             "/spaces/{slug}/dashboard",
             get(read_dashboard).put(write_dashboard),
         )
+        .route("/spaces/{slug}/tools", get(read_tools).put(write_tools))
         .route("/spaces/{slug}/members", get(list_members))
         .route("/spaces/{slug}/members/{user}", delete(remove_member))
         .route("/spaces/{slug}/invitations", post(invite))
@@ -401,6 +405,103 @@ pub(crate) async fn dashboard_write(
         None => layout::save(&state.db, user.id, space.id, None).await?,
     }
     dashboard_read(state, user, slug).await
+}
+
+// ---------------------------------------------------------------------
+// Outils affichés dans un espace (SPEC, « Outils par espace »)
+// ---------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub(crate) struct ToolOut {
+    tool: &'static str,
+    name: &'static str,
+    shown: bool,
+    /// Faux pour le dashboard, qui reste toujours.
+    maskable: bool,
+}
+
+#[derive(Serialize)]
+pub(crate) struct ToolsOut {
+    space: String,
+    tools: Vec<ToolOut>,
+}
+
+/// `GET /api/v1/spaces/{slug}/tools`
+async fn read_tools(
+    user: ApiUser,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> ApiResult<Json<ToolsOut>> {
+    Ok(Json(tools_read(&state, &user, &slug).await?))
+}
+
+/// Réglage du compte dans l'espace : les outils qu'il peut régler (un
+/// outil réservé n'y est que pour un compte autorisé).
+pub(crate) async fn tools_read(
+    state: &AppState,
+    user: &ApiUser,
+    slug: &str,
+) -> ApiResult<ToolsOut> {
+    let space = user.space_at(slug)?;
+    let shown = registry::load(&state.db, user.id, space.id).await?;
+    Ok(ToolsOut {
+        space: space.slug.clone(),
+        tools: shown
+            .tools
+            .iter()
+            .map(|(tool, shown)| ToolOut {
+                tool: tool.id,
+                name: tool.name,
+                shown: *shown,
+                maskable: tool.maskable,
+            })
+            .collect(),
+    })
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ToolsBody {
+    /// `{"files": false, "notes": true}` : les outils à changer, les
+    /// autres gardent leur réglage.
+    tools: BTreeMap<String, bool>,
+}
+
+/// `PUT /api/v1/spaces/{slug}/tools` `{"tools": {"files": false}}`
+async fn write_tools(
+    user: ApiUser,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    payload: Result<Json<ToolsBody>, JsonRejection>,
+) -> ApiResult<Json<ToolsOut>> {
+    let Json(body) = payload?;
+    Ok(Json(tools_write(&state, &user, &slug, body).await?))
+}
+
+pub(crate) async fn tools_write(
+    state: &AppState,
+    user: &ApiUser,
+    slug: &str,
+    body: ToolsBody,
+) -> ApiResult<ToolsOut> {
+    let space = user.space_at(slug)?;
+    // Tout se vérifie avant d'écrire : une erreur ne laisse rien à moitié.
+    // Un outil réservé à d'autres comptes répond comme un outil inconnu.
+    let current = registry::load(&state.db, user.id, space.id).await?;
+    for id in body.tools.keys() {
+        match current.tool(id) {
+            None => return Err(ApiError::bad_request(format!("outil inconnu : {id}"))),
+            Some(tool) if !tool.maskable => {
+                return Err(ApiError::bad_request(format!(
+                    "{id} ne se masque pas : c'est l'accueil de l'espace"
+                )));
+            }
+            Some(_) => {}
+        }
+    }
+    for (id, shown) in &body.tools {
+        settings::space_tools::set_tool(state, user.id, space.id, id, *shown).await?;
+    }
+    tools_read(state, user, slug).await
 }
 
 // ---------------------------------------------------------------------
