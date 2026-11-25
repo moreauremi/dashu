@@ -20,7 +20,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, UdpSocket};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Command;
 use std::thread;
@@ -516,19 +516,22 @@ async fn store(
 // ---------------------------------------------------------------------
 
 /// Adresses que le service ne doit jamais joindre : la machine elle-même, le
-/// réseau de la maison, Tailscale. Avec le pare-feu, la connexion est
-/// refusée sur-le-champ (EPERM) ; sans lui, elle est refusée par la cible,
-/// aboutit, ou n'aboutit pas à temps.
-const PROBES: [&str; 3] = ["127.0.0.1:9", "192.168.0.1:9", "100.100.100.100:53"];
+/// réseau de la maison, Tailscale (port 9, « discard » : rien n'y répond).
+const PROBES: [&str; 3] = ["127.0.0.1:9", "192.168.0.1:9", "100.100.100.100:9"];
 
-/// Vrai si le pare-feu du service est en place.
+/// Vrai si le pare-feu du service est en place. Un octet part en UDP vers
+/// chaque adresse : le filtre de systemd (`IPAddressDeny`) refuse l'envoi
+/// sur-le-champ (EPERM) ; sans lui, l'envoi part. Pas de TCP : le filtre y
+/// jette le paquet sans refuser la connexion, qui attend alors son délai
+/// comme vers une adresse muette (la CI l'a montré).
 pub fn firewall_active() -> bool {
     PROBES.iter().all(|probe| {
-        let Ok(address) = probe.parse::<SocketAddr>() else {
+        let (Ok(address), Ok(socket)) = (probe.parse::<SocketAddr>(), UdpSocket::bind("0.0.0.0:0"))
+        else {
             return false;
         };
         matches!(
-            TcpStream::connect_timeout(&address, Duration::from_secs(1)),
+            socket.send_to(&[0], address),
             Err(error) if error.kind() == ErrorKind::PermissionDenied
         )
     })

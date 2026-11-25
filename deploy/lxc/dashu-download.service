@@ -37,7 +37,11 @@ Nice=10
 CPUWeight=20
 IOWeight=20
 
-IPAddressDeny=localhost link-local multicast 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 fc00::/7
+# Des plages, pas les mots « localhost », « link-local », « multicast » :
+# systemd-run ne les comprend pas, et la CI rejoue cette ligne avec lui.
+# Dans l'ordre : la machine, la maison, Tailscale, les adresses locales et
+# de diffusion, en IPv4 puis en IPv6.
+IPAddressDeny=0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 ::1/128 fc00::/7 fe80::/10 ff00::/8
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 BindReadOnlyPaths=/etc/dashu-telechargeur/resolv.conf:/etc/resolv.conf
 BindReadOnlyPaths=-/etc/dashu-telechargeur/cookies.txt:/run/dashu-download/cookies.txt

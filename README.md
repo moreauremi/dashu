@@ -681,7 +681,7 @@ Un lien YouTube, Instagram ou TikTok devient une vidéo MP4 ou un son MP3, depui
 - ses propres résolveurs DNS (publics, dans `/etc/dashu-telechargeur/resolv.conf`), car celui de la maison est une adresse locale, que ce filtre bloque ;
 - il ne voit que son dossier : ni la base, ni `dashu.env`, ni les fichiers rangés, ni les conversions.
 
-Dans un conteneur, systemd peut ignorer `IPAddressDeny` et lancer le service sans filtre. Le service vérifie donc lui-même, au démarrage et avant chaque téléchargement, qu'une connexion vers `127.0.0.1`, `192.168.0.1` et `100.100.100.100` est refusée sur-le-champ. Sinon il ne télécharge rien, et l'onglet Outils le dit. La CI rejoue cette vérification avec et sans le filtre.
+Dans un conteneur, systemd peut ignorer `IPAddressDeny` et lancer le service sans filtre. Le service vérifie donc lui-même, au démarrage et avant chaque téléchargement, qu'un envoi (UDP) vers `127.0.0.1`, `192.168.0.1` et `100.100.100.100` est refusé sur-le-champ. Sinon il ne télécharge rien, et l'onglet Outils le dit. La CI rejoue cette vérification avec et sans le filtre.
 
 YouTube impose désormais à yt-dlp un moteur JavaScript, et Deno est celui qu'il recommande. Les deux viennent de GitHub, en binaires officiels vérifiés par leur empreinte SHA-256 : yt-dlp en dernière version, Deno en version figée dans le script. Chaque semaine, la minuterie `dashu-telechargeur-maj.timer` remet yt-dlp à jour, de la même façon : il casse quand les plateformes changent.
 
