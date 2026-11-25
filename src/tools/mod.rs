@@ -507,7 +507,7 @@ async fn prepare_job(
     // Une copie, pas un lien : le service de conversion n'a aucun droit sur
     // les fichiers rangés.
     let input = dir.join(&spec.input);
-    tokio::fs::copy(source, &input)
+    copy_file(source, &input)
         .await
         .context("copie du fichier à traiter")?;
     publish_job(&dir, &input, spec).await
@@ -804,12 +804,59 @@ async fn move_file(from: &FsPath, to: &FsPath) -> std::io::Result<()> {
     if error.kind() == std::io::ErrorKind::NotFound {
         return Err(error);
     }
-    if let Err(error) = tokio::fs::copy(from, to).await {
+    if let Err(error) = copy_file(from, to).await {
         let _ = tokio::fs::remove_file(to).await;
         return Err(error);
     }
     let _ = tokio::fs::remove_file(from).await;
     Ok(())
+}
+
+/// Taille des morceaux d'une copie.
+const COPY_CHUNK: usize = 1 << 20;
+/// Écriture forcée sur le disque tous les tant d'octets copiés.
+const COPY_SYNC_EVERY: u64 = 32 << 20;
+
+/// Copie un fichier par morceaux de 1 Mo, en forçant l'écriture sur le disque
+/// tous les 32 Mo.
+///
+/// dashu est limité à 256 Mo de mémoire (`MemoryMax`), et les pages écrites
+/// mais pas encore parties sur le disque comptent dedans. Le 25 novembre 2026,
+/// une vidéo de 160 Mo venue du téléchargeur de liens, copiée d'un coup vers
+/// les fichiers puis vers le dossier de sa vignette, a fait tuer dashu par le
+/// noyau (« oom-kill »). Écrites au fur et à mesure, ces pages deviennent
+/// récupérables, et la mémoire de dashu ne dépend plus de la taille du fichier.
+pub(crate) async fn copy_file(from: &FsPath, to: &FsPath) -> std::io::Result<u64> {
+    let (from, to) = (from.to_path_buf(), to.to_path_buf());
+    tokio::task::spawn_blocking(move || copy_file_blocking(&from, &to))
+        .await
+        .map_err(std::io::Error::other)?
+}
+
+fn copy_file_blocking(from: &FsPath, to: &FsPath) -> std::io::Result<u64> {
+    use std::io::{Read, Write};
+    let mut source = std::fs::File::open(from)?;
+    let mut dest = std::fs::File::create(to)?;
+    let mut buffer = vec![0u8; COPY_CHUNK];
+    let (mut total, mut unsynced) = (0u64, 0u64);
+    loop {
+        let read = match source.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        dest.write_all(&buffer[..read])?;
+        let read = read as u64;
+        total += read;
+        unsynced += read;
+        if unsynced >= COPY_SYNC_EVERY {
+            dest.sync_data()?;
+            unsynced = 0;
+        }
+    }
+    dest.sync_data()?;
+    Ok(total)
 }
 
 /// Extension du fichier d'entrée, réduite à des lettres et chiffres : elle
@@ -1895,6 +1942,29 @@ mod tests {
         move_file(&dir.join("output.mp4"), &dest).await.unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), b"plus leger");
         assert!(!dir.join("output.mp4").exists());
+    }
+
+    /// La copie par morceaux rend le fichier à l'identique, au-delà d'un
+    /// morceau et d'une écriture forcée, et remplace une copie précédente.
+    #[tokio::test]
+    async fn copie_par_morceaux() {
+        let dir = std::env::temp_dir().join(format!("dashu-copie-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (from, to) = (dir.join("source"), dir.join("copie"));
+
+        // Assez pour plusieurs morceaux et une écriture forcée en route.
+        let size = usize::try_from(COPY_SYNC_EVERY).unwrap() + 3 * COPY_CHUNK + 12_345;
+        let content: Vec<u8> = (0..size).map(|i| (i * 31 % 251) as u8).collect();
+        std::fs::write(&from, &content).unwrap();
+        std::fs::write(&to, b"ancienne copie, plus longue que rien").unwrap();
+        assert_eq!(copy_file(&from, &to).await.unwrap(), size as u64);
+        assert!(std::fs::read(&to).unwrap() == content);
+
+        std::fs::write(&from, b"").unwrap();
+        assert_eq!(copy_file(&from, &to).await.unwrap(), 0);
+        assert!(std::fs::read(&to).unwrap().is_empty());
+        assert!(copy_file(&dir.join("absent"), &to).await.is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// PDF à la demande : les quatre fins possibles de l'attente.
