@@ -1682,7 +1682,7 @@ Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers,
   Aucune route HTTP, aucun écran, aucune action de l'API ni du connecteur ne donne ou ne retire cet accès.
 - **Contrôle côté serveur sur toutes les routes `/1life/*`** : un compte non autorisé reçoit une 404, la même que pour une adresse qui n'existe pas (pas une 403, qui dirait que l'outil existe). Sans session aussi : 404, et non la page de connexion.
 - **Une fois autorisé**, 1Life se règle par espace comme les autres outils, **masqué par défaut**. Masqué dans l'espace actif, ses pages ramènent à l'accueil de l'espace, comme les autres outils. Retirer l'autorisation le fait disparaître partout ; ses réglages par espace restent, pour une autorisation future.
-- **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée.
+- **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée. *Clients est fait depuis le 26 novembre 2026 : voir « 1Life — Clients ».*
 - **Aucune logique métier pour l'instant** : pas de table pour les modules, pas d'appel à une IA, pas d'action dans l'API ni pour Hermès.
 
 ## Modèle de données
@@ -1870,3 +1870,63 @@ Prises le 26 novembre 2026, par défaut, pour avancer (Rémi a demandé les cinq
 - **La limite est dans le code**, sans migration : changer de limite plus tard ne demande qu'une constante.
 - **Le sélecteur de l'éditeur reste au premier niveau** : il serait trop long avec quatre niveaux ; « Voir plus… » montre tout.
 - **Les tests de l'ancienne règle changent** : ceux qui vérifiaient le refus d'un troisième niveau (`tests/dossiers.rs`, `tests/api_contenu.rs`) vérifient maintenant ce que la nouvelle règle permet ; la limite elle-même est éprouvée dans `tests/dossiers_cinq_niveaux.rs`.
+
+---
+
+# dashu — 1Life — Clients
+
+Nov 26, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 26 novembre 2026. Premier module de 1Life à sortir du squelette (« Outils par espace », PR 2) : la carte « Clients » n'est plus « Bientôt ». C'est un carnet de clients de travail, volontairement simple : retrouver un client, ses coordonnées et ce qu'on sait de lui. Compte rendu et Audit restent « Bientôt ».
+
+## Fonctionnement
+
+- **Liste** (`/1life/clients`) : les clients actifs du compte, par nom (majuscules et accents mis à part). Chaque ligne montre le nom, le contact, l'e-mail et le téléphone. Deux filtres, « Actifs » et « Archivés » (`?archives=1`), avec leur nombre.
+- **Recherche** (`?q=`, au fil de la frappe) dans le nom, le contact, l'e-mail et le téléphone, accents et majuscules ignorés (« elan » trouve « Atelier Élan »).
+- **Fiche** : un formulaire, pour créer et pour modifier.
+  - **Nom** : obligatoire, 80 caractères au plus, unique dans le compte, majuscules et accents compris (« Atelier Élan » et « atelier elan » sont le même).
+  - **Contact** : la personne à joindre, facultatif, 80 caractères au plus.
+  - **E-mail** : facultatif, une adresse plausible (une `@`, un domaine avec un point), 254 caractères au plus. Un lien « Écrire à… » quand elle est valide.
+  - **Téléphone** : facultatif, chiffres, espaces et `+ . - ( )`, six chiffres au moins, 30 caractères au plus. Un lien « Appeler le… ».
+  - **Notes** : texte brut, retours à la ligne gardés, 4000 caractères au plus. Pas de Markdown : rien n'est interprété.
+- **Une saisie refusée** réaffiche le formulaire avec ce qui a été tapé et le message (422), sans rien écrire.
+- **Archiver** retire le client de la liste sans l'effacer ; « Remettre dans la liste » le ramène. **Supprimer** demande une confirmation et efface la fiche pour de bon : la corbeille ne garde que les notes, les fichiers, les dossiers et les espaces.
+- **Les clients sont au compte**, pas à un espace : 1Life est un outil réservé, ses clients le suivent dans tous les espaces où il est affiché. Ils n'apparaissent ni dans Perso, ni dans la recherche des notes, ni dans la barre de commandes, ni sur le dashboard.
+- **Hors de l'API**, comme le reste de 1Life : pas de route `/api/v1`, pas d'outil du connecteur Claude, pas de commande d'Hermès.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `onelife_clients` | id, user\_id, name, contact, email, phone, notes, archived, created\_at, updated\_at | Index unique (`user_id`, `name` NOCASE) ; le code compare aussi les accents. Migration 0026 |
+
+## Sécurité
+
+- **Toutes les adresses de Clients passent par le contrôle de 1Life**, à chaque requête : un compte non autorisé, ou sans session, reçoit la même 404 qu'une adresse qui n'existe pas, pour les pages comme pour les formulaires. Le contrôle passe avant la lecture du numéro et du formulaire : une erreur 400 ou 422 dirait que l'outil existe. Masqué dans l'espace actif, Clients ramène à l'accueil de l'espace.
+- **Une fiche n'est lue, modifiée, archivée ou supprimée que par son compte** : celle d'un autre compte répond 404, même s'il est autorisé à 1Life.
+- **Texte brut** : tout est échappé à l'affichage (askama), rien n'est interprété (ni Markdown ni HTML). Les liens `mailto:` et `tel:` ne sont construits que d'une adresse ou d'un numéro valides.
+- Tout `POST` porte le jeton CSRF.
+- **Dépôt public** : aucun vrai nom de client dans le code, les tests ou les docs ; les tests utilisent des noms inventés.
+
+## Critères d'acceptation
+
+- [ ] Un compte autorisé crée un client, le retrouve dans la liste (par nom) et par la recherche (accents et majuscules ignorés, aussi dans le contact, l'e-mail et le téléphone), puis le modifie
+- [ ] Un nom vide ou déjà pris (majuscules et accents compris), un e-mail ou un téléphone invalide, un nom ou des notes trop longs sont refusés : le formulaire revient avec ce qui a été tapé et le message, rien n'est écrit
+- [ ] Archiver retire le client de la liste, « Archivés » le montre, on le remet ; la suppression demande une confirmation et efface la fiche
+- [ ] Un compte non autorisé, ou sans session, reçoit 404 sur toutes les adresses de Clients (pages et formulaires, avec ou sans l'espace dans l'adresse, numéro illisible compris) ; masqué dans l'espace actif, Clients ramène à l'accueil de l'espace sans rien écrire
+- [ ] Un second compte autorisé ne voit, ne modifie, n'archive ni ne supprime les clients du premier ; il peut avoir un client du même nom
+- [ ] Le nom et les notes d'un client sont affichés comme du texte, sans HTML interprété
+- [ ] L'accueil de 1Life ne marque plus Clients « Bientôt » ; Clients n'est ni dans l'API, ni dans le connecteur, ni dans la barre de commandes, ni dans Hermès
+- [ ] STATUS et README à jour ; aucun vrai nom de client
+
+## Décisions
+
+Prises le 26 novembre 2026, par défaut, pour avancer (Rémi a demandé le module et m'a laissé rédiger la section) :
+
+- **Une fiche simple** : nom, contact, e-mail, téléphone, notes, archivé. Pas d'adresse postale, de SIRET, de pièces jointes ni de lien vers les notes et les fichiers : à ajouter plus tard si le besoin se montre.
+- **Clients au compte**, pas à l'espace : 1Life n'a qu'un utilisateur, et un client ne change pas d'espace.
+- **Supprimer efface pour de bon**, après confirmation ; archiver est le geste réversible.
+- **Hors de l'API**, comme le reste de 1Life. À revoir si Rémi veut que Claude ou Hermès lisent ses clients.
+- **Le test du squelette change** : `un_compte_autorise_active_1life_par_espace` attendait Clients « Bientôt » ; il vérifie maintenant que Clients ouvre la liste, et que les deux autres modules restent « Bientôt ».

@@ -247,6 +247,32 @@ pub fn build_router(state: AppState) -> Router {
         .route("/tools/download", post(tools::telechargeur::start))
         // 1Life : outil réservé, 404 pour tout compte non autorisé
         .route("/1life", get(onelife::home).fallback(web::error::not_found))
+        // 1Life › Clients : mêmes contrôles ; une autre méthode répond 404,
+        // comme une adresse qui n'existe pas.
+        .route(
+            "/1life/clients",
+            get(onelife::clients::list)
+                .post(onelife::clients::create)
+                .fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/new",
+            get(onelife::clients::new_page).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}",
+            get(onelife::clients::show)
+                .post(onelife::clients::update)
+                .fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}/archive",
+            post(onelife::clients::archive).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}/delete",
+            post(onelife::clients::delete).fallback(web::error::not_found),
+        )
         .route(
             "/1life/{module}",
             get(onelife::module).fallback(web::error::not_found),

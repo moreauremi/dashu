@@ -179,7 +179,7 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 
 ### Outils réservés
 
-Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi (pour l'instant trois modules vides). Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
+Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi. Son module **Clients** (`/1life/clients`) est un carnet de clients : nom, contact, e-mail, téléphone et notes en texte brut, recherche (accents et majuscules ignorés), archivage, et suppression pour de bon (la corbeille ne garde pas les fiches). Les clients sont au compte, pas à un espace, et restent hors de l'API, du connecteur et d'Hermès. Les modules Compte rendu et Audit sont encore vides. Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
 
 L'accès se donne **seulement en ligne de commande, sur le serveur**. Aucune page, aucune route de l'API ni du connecteur ne le permet, et Hermès n'a pas cette action.
 
@@ -858,7 +858,7 @@ dashu/
 │   ├── assets.rs           fichiers statiques embarqués
 │   ├── time.rs             Europe/Paris, dates en français
 │   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace, outils réservés
-│   ├── onelife/            1Life, outil réservé : accueil et modules (squelette)
+│   ├── onelife/            1Life, outil réservé : accueil, module Clients, modules à venir
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets
