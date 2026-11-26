@@ -259,6 +259,10 @@ pub async fn service_state(work_dir: &FsPath) -> ServiceState {
 /// Ce que l'onglet Outils dit au-dessus du formulaire quand le service ne
 /// peut pas télécharger, ou rien.
 pub async fn note(work_dir: &FsPath) -> Option<&'static str> {
+    // Démo statique (dashu.dev/demo) : l'outil est montré, jamais lancé.
+    if crate::DEMO {
+        return Some("Disponible dans la version complète.");
+    }
     match service_state(work_dir).await {
         ServiceState::Ready => None,
         ServiceState::NoFirewall => Some(NO_FIREWALL_MESSAGE),

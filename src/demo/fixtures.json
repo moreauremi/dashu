@@ -1,0 +1,216 @@
+{
+  "_lisez_moi": "Données de la démo (dashu.dev/demo). Tout est inventé : personnes, entreprises, adresses. Les dates sont relatives au jour de la construction : jours (days) comptés depuis aujourd'hui, jour de la semaine (weekday, 1 = lundi) pour l'emploi du temps.",
+  "user": {
+    "email": "camille@demo.invalid",
+    "first_name": "Camille",
+    "last_name": "Laurent"
+  },
+  "spaces": [
+    {
+      "slug": "perso",
+      "tools": { "notes": true, "calendar": true, "files": true, "tools": false }
+    },
+    {
+      "slug": "ecole",
+      "tools": { "notes": true, "calendar": true, "files": true, "tools": true }
+    },
+    {
+      "slug": "taff",
+      "tools": { "notes": true, "calendar": true, "files": true, "tools": true }
+    }
+  ],
+  "folders": [
+    { "key": "bts", "name": "BTS SIO", "space": "ecole" },
+    { "key": "reseaux", "name": "Réseaux", "parent": "bts" },
+    { "key": "cyber", "name": "Cybersécurité", "parent": "bts" },
+    { "key": "stage", "name": "Stage", "space": "ecole" },
+    { "key": "clients", "name": "Clients", "space": "taff" },
+    { "key": "valtaine", "name": "Menuiserie Valtaine", "parent": "clients" },
+    { "key": "orsoy", "name": "Cabinet Orsoy Conseil", "parent": "clients" },
+    { "key": "quenardel", "name": "Transports Quenardel", "parent": "clients" },
+    { "key": "admin", "name": "Administratif", "space": "taff" },
+    { "key": "voyage", "name": "Voyage à Lisbonne", "space": "perso" },
+    { "key": "maison", "name": "Maison", "space": "perso" }
+  ],
+  "notes": [
+    {
+      "title": "Suivi clients — tableau général",
+      "space": "taff",
+      "folder": "clients",
+      "tags": ["Client", "Suivi"],
+      "pinned": true,
+      "days_ago": 0,
+      "body_md": "Vue d'ensemble des clients en cours. Chaque client a son dossier dans **Clients**.\n\n| Client | Contact | Statut | Prochaine étape |\n| --- | --- | --- | --- |\n| Menuiserie Valtaine | Hélène Garnaud, gérante | Devis signé | Installation du NAS jeudi |\n| Cabinet Orsoy Conseil | Bastien Rocheval, associé | Audit en cours | Restitution de l'audit |\n| Transports Quenardel | Sylvie Marquant, responsable administrative | Prospect | Rappeler pour le devis Wi-Fi |\n| Clinique vétérinaire du Val Ormel | Yanis Ourdi, vétérinaire | Maintenance | Contrôle trimestriel des sauvegardes |\n\n## À relancer\n\n- [ ] Transports Quenardel : envoyer le devis Wi-Fi\n- [ ] Clinique du Val Ormel : facture du trimestre\n- [x] Menuiserie Valtaine : acompte reçu\n"
+    },
+    {
+      "title": "CR — Menuiserie Valtaine, réunion de lancement",
+      "space": "taff",
+      "folder": "valtaine",
+      "tags": ["CR", "Client"],
+      "days_ago": 6,
+      "body_md": "**Présents** : Hélène Garnaud (gérante), Lucas Benhamed (atelier), Camille Laurent.\n\n## Besoins\n\n- Partager les plans entre le bureau et l'atelier sans clé USB.\n- Sauvegarder les devis et la comptabilité chaque nuit.\n- Un Wi-Fi invité pour les clients du showroom, séparé du réseau interne.\n\n## Décisions\n\n1. NAS deux disques en miroir, au bureau.\n2. Sauvegarde nocturne du NAS vers un disque externe, rotation chaque semaine.\n3. Deux réseaux Wi-Fi : interne et invité (VLAN 20).\n\n## Suite\n\n- [x] Envoyer le devis\n- [ ] Commander le NAS et les disques\n- [ ] Installation sur place\n"
+    },
+    {
+      "title": "Audit — postes du Cabinet Orsoy Conseil",
+      "space": "taff",
+      "folder": "orsoy",
+      "tags": ["Audit", "Client"],
+      "days_ago": 2,
+      "body_md": "Audit de 8 postes et d'une imprimante réseau, à la demande de Bastien Rocheval.\n\n## Constats\n\n| Poste | Système | Mises à jour | Sauvegarde | Remarque |\n| --- | --- | --- | --- | --- |\n| ORS-01 | Windows 11 | À jour | Oui | RAS |\n| ORS-02 | Windows 10 | 3 mois de retard | Non | Fin de support : à remplacer |\n| ORS-03 | Windows 11 | À jour | Non | Activer la sauvegarde |\n| ORS-04 | macOS 15 | À jour | Oui | RAS |\n\n## Points d'attention\n\n- Mot de passe Wi-Fi inchangé depuis l'installation.\n- Compte administrateur partagé entre deux associés.\n- Imprimante accessible depuis le Wi-Fi invité.\n\n> Priorité : séparer le Wi-Fi invité et créer un compte par personne.\n"
+    },
+    {
+      "title": "CR — appel Transports Quenardel",
+      "space": "taff",
+      "folder": "quenardel",
+      "tags": ["CR", "Client"],
+      "days_ago": 4,
+      "body_md": "Appel avec Sylvie Marquant, responsable administrative.\n\n- Entrepôt de 1 200 m², Wi-Fi qui décroche au fond du bâtiment.\n- Douze scanners de quai à connecter.\n- Budget à valider par la direction avant la fin du mois.\n\n**À faire** : visite technique, puis devis avec trois bornes et un contrôleur.\n"
+    },
+    {
+      "title": "Procédure — sauvegarde mensuelle des clients",
+      "space": "taff",
+      "folder": "admin",
+      "tags": ["Procédure"],
+      "days_ago": 12,
+      "body_md": "Chaque premier lundi du mois, pour chaque client sous contrat :\n\n1. Vérifier le rapport de la dernière sauvegarde.\n2. Restaurer un fichier au hasard, pour de vrai.\n3. Noter le résultat dans la note du client.\n\n```text\nClient        Dernière restauration testée\nValtaine      plans/atelier/escalier-chêne.pdf\nVal Ormel    compta/2026/octobre.xlsx\n```\n"
+    },
+    {
+      "title": "Idées pour l'offre maintenance",
+      "space": "taff",
+      "tags": ["Idée"],
+      "days_ago": 9,
+      "body_md": "- Forfait mensuel par poste, sauvegardes comprises.\n- Un rapport trimestriel d'une page, lisible par un gérant.\n- Intervention sous 48 h ouvrées.\n"
+    },
+    {
+      "title": "Cours — VLAN et routage inter-VLAN",
+      "space": "ecole",
+      "folder": "reseaux",
+      "tags": ["Cours", "Réseaux"],
+      "pinned": true,
+      "days_ago": 1,
+      "body_md": "## VLAN\n\nUn VLAN découpe un switch en plusieurs réseaux logiques. Une trame porte l'étiquette 802.1Q de son VLAN sur les liens *trunk*.\n\n```text\ninterface GigabitEthernet0/1\n switchport mode trunk\n switchport trunk allowed vlan 10,20,30\n```\n\n## Routage inter-VLAN\n\n- **Router on a stick** : une sous-interface par VLAN sur le routeur.\n- **Switch de niveau 3** : une interface SVI par VLAN.\n\n> À retenir : le VLAN natif n'est pas étiqueté. On le change pour éviter le *VLAN hopping*.\n"
+    },
+    {
+      "title": "TP 6 — configuration OSPF",
+      "space": "ecole",
+      "folder": "reseaux",
+      "tags": ["TP", "Réseaux"],
+      "days_ago": 3,
+      "body_md": "Topologie : trois routeurs, aire 0.\n\n- [x] Adressage des liens\n- [x] `router ospf 1` sur R1 et R2\n- [ ] Vérifier les voisins avec `show ip ospf neighbor`\n- [ ] Compte rendu à rendre\n"
+    },
+    {
+      "title": "Fiche — authentification et MFA",
+      "space": "ecole",
+      "folder": "cyber",
+      "tags": ["Cours", "Cyber"],
+      "days_ago": 5,
+      "body_md": "Trois facteurs : ce que je **sais**, ce que je **possède**, ce que je **suis**.\n\n| Méthode | Facteur | Résiste au hameçonnage |\n| --- | --- | --- |\n| Mot de passe | Savoir | Non |\n| Code SMS | Possession | Faiblement |\n| Application TOTP | Possession | Non |\n| Clé FIDO2 | Possession | Oui |\n"
+    },
+    {
+      "title": "Stage — journal de bord",
+      "space": "ecole",
+      "folder": "stage",
+      "tags": ["Stage"],
+      "days_ago": 8,
+      "body_md": "**Semaine 1** : découverte du parc, inventaire des postes avec GLPI.\n\n**Semaine 2** : déploiement de 15 postes par image, création des comptes.\n\n**Semaine 3** : mise en place d'une supervision des imprimantes.\n"
+    },
+    {
+      "title": "Révisions E5 — plan",
+      "space": "ecole",
+      "tags": ["Révisions"],
+      "days_ago": 0,
+      "body_md": "- [ ] Relire les fiches réseau\n- [ ] Refaire le TP DHCP\n- [ ] Préparer le portfolio\n- [ ] Oral blanc avec Inès\n"
+    },
+    {
+      "title": "Lisbonne — itinéraire",
+      "space": "perso",
+      "folder": "voyage",
+      "tags": ["Voyage"],
+      "pinned": true,
+      "days_ago": 2,
+      "body_md": "## Jour 1\n\nAlfama à pied, miradouro de Santa Luzia au coucher du soleil.\n\n## Jour 2\n\nBelém le matin, LX Factory l'après-midi.\n\n## Jour 3\n\nSintra en train, départ tôt.\n\n## Budget\n\n| Poste | Prévu |\n| --- | --- |\n| Train et avion | 180 € |\n| Logement (3 nuits) | 210 € |\n| Sur place | 150 € |\n"
+    },
+    {
+      "title": "Recette — gratin de courge et noisettes",
+      "space": "perso",
+      "folder": "maison",
+      "tags": ["Recette"],
+      "days_ago": 15,
+      "body_md": "Pour 4 personnes.\n\n- 1 courge butternut\n- 20 cl de crème\n- 80 g de comté râpé\n- Une poignée de noisettes concassées\n\n1. Couper la courge en fines tranches.\n2. Alterner courge, crème et fromage.\n3. 40 min à 190 °C, noisettes 5 min avant la fin.\n"
+    },
+    {
+      "title": "Liste de courses",
+      "space": "perso",
+      "tags": ["Maison"],
+      "days_ago": 0,
+      "body_md": "- [ ] Pain\n- [ ] Lait d'avoine\n- [x] Café\n- [ ] Ampoules E27\n"
+    },
+    {
+      "title": "Livres à lire",
+      "space": "perso",
+      "tags": ["Idée"],
+      "days_ago": 20,
+      "body_md": "- Un roman policier pour le train\n- Un livre sur l'histoire d'Internet\n- La bande dessinée conseillée par Inès\n"
+    }
+  ],
+  "tasks": [
+    { "title": "Rendre le compte rendu du TP OSPF", "space": "ecole", "days": 0 },
+    { "title": "Réviser la fiche MFA", "space": "ecole", "days": 1 },
+    { "title": "Envoyer la convention de stage signée", "space": "ecole", "days": 3 },
+    { "title": "Relire le chapitre VLAN", "space": "ecole", "days": -1, "done": true },
+    { "title": "Envoyer le devis Wi-Fi à Transports Quenardel", "space": "taff", "days": 0 },
+    { "title": "Commander le NAS de la Menuiserie Valtaine", "space": "taff", "days": 1 },
+    { "title": "Préparer la restitution de l'audit Orsoy", "space": "taff", "days": 2 },
+    { "title": "Facturer le trimestre de la clinique du Val Ormel", "space": "taff", "days": 4 },
+    { "title": "Mettre à jour le tableau de suivi clients", "space": "taff", "days": -1, "done": true },
+    { "title": "Réserver le logement à Lisbonne", "space": "perso", "days": 0 },
+    { "title": "Appeler le garage pour le contrôle technique", "space": "perso", "days": 2 },
+    { "title": "Rendre les livres à la médiathèque", "space": "perso", "days": 5 },
+    { "title": "Payer la cotisation du club d'escalade", "space": "perso", "days": -2, "done": true }
+  ],
+  "events": [
+    { "title": "Installation du NAS — Menuiserie Valtaine", "space": "taff", "days": 1, "start": "17:30", "end": "19:00", "location": "Atelier Valtaine" },
+    { "title": "Restitution de l'audit — Cabinet Orsoy", "space": "taff", "days": 2, "start": "18:00", "end": "19:00", "location": "Visioconférence" },
+    { "title": "Visite technique — Transports Quenardel", "space": "taff", "days": 5, "start": "09:30", "end": "11:00", "location": "Entrepôt Quenardel" },
+    { "title": "Contrôle des sauvegardes — Val Ormel", "space": "taff", "days": 8, "start": "17:30", "end": "18:30", "location": "Clinique du Val Ormel" },
+    { "title": "Oral blanc E5", "space": "ecole", "days": 6, "start": "14:00", "end": "15:00", "location": "Salle B204" },
+    { "title": "Escalade", "space": "perso", "days": 0, "start": "19:30", "end": "21:00", "location": "Salle de bloc" },
+    { "title": "Dîner chez Inès", "space": "perso", "days": 3, "start": "20:00", "end": "23:00" },
+    { "title": "Escalade", "space": "perso", "days": 7, "start": "19:30", "end": "21:00", "location": "Salle de bloc" },
+    { "title": "Départ pour Lisbonne", "space": "perso", "days": 12, "all_day": true }
+  ],
+  "timetable": {
+    "space": "ecole",
+    "name": "Pronote — BTS SIO 2",
+    "weeks_before": 3,
+    "weeks_after": 6,
+    "courses": [
+      { "weekday": 1, "start": "08:00", "end": "09:55", "title": "RESEAUX - VERNAY P. - SIO2", "location": "B204" },
+      { "weekday": 1, "start": "10:10", "end": "12:05", "title": "ANGLAIS - HOLLOWAY K. - SIO2", "location": "A012" },
+      { "weekday": 1, "start": "13:30", "end": "15:25", "title": "CYBERSECURITE - DESCAMPS L. - SIO2", "location": "B206" },
+      { "weekday": 2, "start": "08:00", "end": "12:05", "title": "ATELIER PRO - VERNAY P. - SIO2", "location": "B204" },
+      { "weekday": 2, "start": "13:30", "end": "15:25", "title": "MATHS - ROUSSEL N. - SIO2", "location": "A105" },
+      { "weekday": 3, "start": "08:00", "end": "09:55", "title": "CULTURE GENERALE - FAUCHER M. - SIO2", "location": "A110" },
+      { "weekday": 3, "start": "10:10", "end": "12:05", "title": "DROIT - BELKACEM S. - SIO2", "location": "A110" },
+      { "weekday": 4, "start": "08:00", "end": "09:55", "title": "SYSTEMES - CAZENAVE R. - SIO2", "location": "B206" },
+      { "weekday": 4, "start": "10:10", "end": "12:05", "title": "CYBERSECURITE - DESCAMPS L. - SIO2", "location": "B206" },
+      { "weekday": 4, "start": "13:30", "end": "15:25", "title": "ANGLAIS - HOLLOWAY K. - SIO2", "location": "A012" },
+      { "weekday": 5, "start": "08:00", "end": "09:55", "title": "MATHS - ROUSSEL N. - SIO2", "location": "A105" },
+      { "weekday": 5, "start": "10:10", "end": "12:05", "title": "RESEAUX - VERNAY P. - SIO2", "location": "B204" }
+    ]
+  },
+  "files": [
+    { "name": "schema-reseau-salle-b204.png", "space": "ecole", "folder": "reseaux", "tags": ["Réseaux"], "kind": "diagram" },
+    { "name": "tp6-ospf-enonce.pdf", "space": "ecole", "folder": "reseaux", "tags": ["TP"], "kind": "pdf", "lines": ["TP 6 - Configuration OSPF", "", "Objectif : relier trois routeurs dans l'aire 0.", "1. Adresser les liens point a point.", "2. Activer OSPF sur chaque routeur.", "3. Verifier la table de routage.", "", "Document fictif de la demo."] },
+    { "name": "fiche-mfa.md", "space": "ecole", "folder": "cyber", "tags": ["Cyber"], "kind": "text", "text": "# MFA\n\nTrois facteurs : savoir, posséder, être.\nUne clé FIDO2 résiste au hameçonnage.\n" },
+    { "name": "convention-de-stage.pdf", "space": "ecole", "folder": "stage", "tags": ["Stage"], "kind": "pdf", "lines": ["Convention de stage", "", "Stagiaire : Camille Laurent", "Etablissement : Lycee fictif de la demo", "Duree : 6 semaines", "", "Document fictif de la demo."] },
+    { "name": "devis-2026-041-valtaine.pdf", "space": "taff", "folder": "valtaine", "tags": ["Client", "Devis"], "kind": "pdf", "lines": ["Devis 2026-041", "", "Client : Menuiserie Valtaine (fictif)", "NAS deux disques en miroir ........ 640 EUR", "Disques 4 To x 2 .................. 210 EUR", "Installation et reglages .......... 280 EUR", "", "Total HT : 1 130 EUR"] },
+    { "name": "photo-baie-atelier.jpg", "space": "taff", "folder": "valtaine", "tags": ["Client"], "kind": "rack" },
+    { "name": "inventaire-postes-orsoy.csv", "space": "taff", "folder": "orsoy", "tags": ["Audit"], "kind": "text", "text": "poste;systeme;mises_a_jour;sauvegarde\nORS-01;Windows 11;oui;oui\nORS-02;Windows 10;non;non\nORS-03;Windows 11;oui;non\nORS-04;macOS 15;oui;oui\n" },
+    { "name": "plan-entrepot-quenardel.png", "space": "taff", "folder": "quenardel", "tags": ["Client"], "kind": "diagram" },
+    { "name": "lisbonne-miradouro.jpg", "space": "perso", "folder": "voyage", "tags": ["Voyage"], "kind": "landscape" },
+    { "name": "billets-train.pdf", "space": "perso", "folder": "voyage", "tags": ["Voyage"], "kind": "pdf", "lines": ["Billet fictif", "", "Trajet : aller-retour", "Passager : Camille Laurent", "", "Document fictif de la demo."] },
+    { "name": "coucher-de-soleil.jpg", "space": "perso", "tags": ["Photo"], "kind": "landscape" },
+    { "name": "notes-de-la-semaine.txt", "space": "perso", "folder": "maison", "kind": "text", "text": "Arroser les plantes mardi.\nRelever le compteur d'eau.\n" }
+  ]
+}

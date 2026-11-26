@@ -9,6 +9,7 @@
 //!   dashu download [--check]     téléchargeur de liens (voir src/tools/telechargeur.rs)
 //!   dashu version                version et commit du binaire (lus par dashu-update)
 //!   dashu tools list|grant|revoke   accès aux outils réservés (voir src/registry.rs)
+//!   dashu demo-export <dossier>  démo statique (feature `demo`, voir src/demo)
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -50,6 +51,12 @@ async fn main() -> anyhow::Result<()> {
         ["tools", "list"] => tools_list().await,
         ["tools", "grant", email, tool] => tools_grant(email, tool, true).await,
         ["tools", "revoke", email, tool] => tools_grant(email, tool, false).await,
+        #[cfg(feature = "demo")]
+        ["demo-export", out] => dashu::demo::export(std::path::Path::new(out), "/demo").await,
+        #[cfg(feature = "demo")]
+        ["demo-export", out, "--base", base] => {
+            dashu::demo::export(std::path::Path::new(out), base).await
+        }
         ["version"] | ["--version"] => {
             // Une seule ligne, « dashu <version> <commit> » : dashu-update la
             // compare à celle de la version à installer.
@@ -73,7 +80,8 @@ async fn main() -> anyhow::Result<()> {
   dashu healthcheck            vérifie que le serveur répond
   dashu worker                 service de conversion (lit WORK_DIR)
   dashu download [--check]     téléchargeur de liens (lit WORK_DIR)
-  dashu version                affiche la version et le commit"
+  dashu version                affiche la version et le commit
+  dashu demo-export <dossier> [--base /demo]   démo statique (binaire construit avec --features demo)"
             );
             std::process::exit(2);
         }

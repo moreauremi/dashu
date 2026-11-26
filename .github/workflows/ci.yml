@@ -44,6 +44,12 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: cargo test
         run: cargo test --locked
+      # Démo statique de dashu.dev/demo (src/demo) : compilée seulement avec
+      # la feature `demo`, jamais dans le binaire du serveur.
+      - name: Démo statique (clippy et export)
+        run: |
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --locked --features demo --test demo
       # Script du serveur (deploy/lxc/dashu-backup-files) : instantanés
       # incrémentaux, purge, restauration d'un fichier supprimé.
       - name: Sauvegarde des fichiers (script du serveur)
@@ -347,3 +353,18 @@ jobs:
           for f in empreintes/*; do sources="$sources $IMAGE@$(cat "$f")"; done
           docker buildx imagetools create $noms $sources
           docker buildx imagetools inspect "$IMAGE:${noms##*:}"
+
+  # La démo de dashu.dev/demo sort de v1 : après une fusion, on relance
+  # « Publier dashu.dev » (pages.yml, sur main) pour qu'elle suive.
+  demo:
+    name: Démo de dashu.dev
+    needs: rust
+    if: github.event_name == 'push' && github.ref == 'refs/heads/v1'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Relancer la publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"

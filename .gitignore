@@ -33,3 +33,6 @@ Thumbs.db
 
 # Cache de Python (commande dashu d'Hermès).
 __pycache__/
+
+# Démo statique construite en local (dashu demo-export out/demo)
+/out/

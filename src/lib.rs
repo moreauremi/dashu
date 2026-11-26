@@ -11,6 +11,8 @@ pub mod commands;
 pub mod config;
 pub mod dashboard;
 pub mod db;
+#[cfg(feature = "demo")]
+pub mod demo;
 pub mod files;
 pub mod folders;
 pub mod instance;
@@ -28,6 +30,10 @@ pub mod time;
 pub mod tools;
 pub mod trash;
 pub mod web;
+
+/// Vrai dans le binaire de la démo statique (feature `demo`) : les gabarits
+/// ajoutent le bandeau et `demo.js`.
+pub const DEMO: bool = cfg!(feature = "demo");
 
 use std::sync::Arc;
 use std::time::Duration;
