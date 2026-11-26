@@ -66,6 +66,8 @@ svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-widt
 /* Sur téléphone : seuls GitHub et Captures restent, en icône sous 520 px. */
 @media (max-width:719px){.nav .link:not(.gh):not(.shots){display:none}}
 @media (max-width:519px){.link-label{display:none}}
+/* « Tester » (démo, /demo) : sur téléphone, le bouton du titre suffit. */
+@media (max-width:599px){.nav .nav-demo{display:none}}
 
 /* Hero */
 .hero{padding-block:72px 40px}

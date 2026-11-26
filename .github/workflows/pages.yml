@@ -1,5 +1,12 @@
-# Publie le dossier website/ sur GitHub Pages à chaque push sur main.
+# Publie dashu.dev sur GitHub Pages : la page d'accueil (dossier website/)
+# et, sous /demo, la démo statique de l'application (bouton « Tester »).
 # Réglage à faire une fois : Settings > Pages > Source = « GitHub Actions ».
+#
+# La démo sort de la branche v1 : `dashu demo-export` (feature `demo`, voir
+# src/demo et le README de v1) démarre l'application avec des données
+# fictives et en écrit les pages. Ses dates partent du jour de la
+# construction : le site est reconstruit chaque nuit, et la CI de v1 relance
+# ce workflow après chaque fusion.
 name: Publier dashu.dev
 
 on:
@@ -8,6 +15,8 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -28,8 +37,29 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      # Requêtes SQL vérifiées à partir du dossier .sqlx de v1, sans base.
+      SQLX_OFFLINE: "true"
     steps:
+      # Le workflow tourne toujours depuis main (cron, lancement à la main) :
+      # main pour le site, v1 pour la démo.
       - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/checkout@v7
+        with:
+          ref: v1
+          path: app
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      # Binaire de debug (dépendances optimisées, voir Cargo.toml de v1) :
+      # bien plus rapide à construire qu'en release, assez pour l'export.
+      - name: Démo statique
+        working-directory: app
+        run: cargo run --locked --features demo -- demo-export ../website/demo
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
