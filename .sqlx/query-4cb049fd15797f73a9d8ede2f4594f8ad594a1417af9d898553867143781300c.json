@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tool FROM tool_grants WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "tool",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4cb049fd15797f73a9d8ede2f4594f8ad594a1417af9d898553867143781300c"
+}

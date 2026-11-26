@@ -194,7 +194,23 @@ for (const [name, file] of Object.entries(icons)) {
     .trim();
   sprite += `<symbol id="${name}" viewBox="0 0 24 24">${inner}</symbol>`;
 }
+// Icônes propres à dashu, hors Lucide, dessinées comme elles : grille de 24,
+// traits ronds sans remplissage (le style vient de .i dans app.css).
+const own = {
+  // Logo de 1Life, outil réservé (src/onelife) : les deux traits du logo,
+  // suivis en leur milieu.
+  "1life": {
+    viewBox: "0 0 24 24",
+    inner:
+      '<path d="M6.77 6.04 11.31 21"/>' +
+      '<path d="M6.77 6.04C6.98 10.09 5.3 13.44 3.15 15.11"/>' +
+      '<path d="M11.7 3 15.05 13.2C15.6 14.87 16.56 15.66 18.28 15.66H20.84"/>',
+  },
+};
+for (const [name, { viewBox, inner }] of Object.entries(own)) {
+  sprite += `<symbol id="${name}" viewBox="${viewBox}">${inner}</symbol>`;
+}
 sprite += "</svg>\n";
 await writeFile(out("icons.svg"), sprite);
 
-console.log(`sprite : ${Object.keys(icons).length} icônes`);
+console.log(`sprite : ${Object.keys(icons).length + Object.keys(own).length} icônes`);

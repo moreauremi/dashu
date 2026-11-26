@@ -30,7 +30,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 | Authentification | Email + mot de passe (Argon2id) ou Google, sur le même compte. Inscription fermée : seuls les emails de `ALLOWED_EMAILS` entrent. |
 | Espaces | Perso, École et Taff au départ. Dans Réglages, on en crée (8 au plus), on change leur nom, leur couleur et leur icône, on les archive (cachés du sélecteur, contenu toujours cherchable, restaurables) et on les supprime : le contenu passe alors dans un autre espace, ou disparaît avec lui après une alerte. Chaque contenu appartient à un espace ; on le choisit à la création (tâche, envoi de fichier) et on le corrige après (« Déplacer vers… » pour une tâche, la fenêtre « Ranger » pour une note, un fichier ou un dossier). Perso est la vue d'ensemble : son dashboard, ses notes et son agenda réunissent tous les espaces (filtre « Seulement Perso »), et l'onglet Fichiers s'y ouvre sur la racine, où chaque espace a son dossier. Les pages d'un espace ont une adresse qui le nomme (`/e/ecole/notes`), et chaque onglet garde le sien. L'espace se voit dans le titre de l'onglet, au-dessus du titre des pages et dans un liseré de sa couleur. Réglage optionnel : ouvrir l'app sur l'espace du cours en cours. Dans Réglages › Espaces, chaque espace choisit ses outils (Notes, Fichiers, Agenda, Outils) : un interrupteur par outil, enregistré tout de suite. Un outil masqué quitte la barre latérale, `/go` et la barre du téléphone de cet espace ; son adresse ramène à l'accueil. Masquer ne supprime rien, et l'API travaille toujours sur tous les outils. Le réglage est propre à chaque compte, même dans un espace partagé. |
 | Dashboard | Grille bento modulaire, propre à chaque espace : widgets Agenda (calendrier en grille comme la page Agenda : aujourd'hui, trois jours ou la semaine selon la largeur ; prochains cours), Tâches du jour, Notes, Fichiers récents et Réglages rapides. Bouton « Modifier » : on déplace un widget en le glissant (ou aux flèches du clavier), on change sa taille (S, M, L d'un clic, ou n'importe quelle taille par le coin, jusqu'à 4 × 4 cases), on en ajoute, on en retire. Chaque widget se charge indépendamment et ne défile jamais : ce qui ne tient pas à sa taille est retiré, avec un « + N de plus ». Sur téléphone, la grille passe à 2 colonnes. |
-| Profil et affichage | Prénom, nom et photo de profil (recadrée et réduite dans le navigateur, réenregistrée par le serveur en JPEG de 256 px) ; sans photo, les initiales sur un fond tiré au hasard. Thème dans Réglages ; taille de l'interface (petite, normale, grande) en bas de la barre latérale. La barre latérale reste ancrée ou se détache : cachée à gauche, elle glisse par-dessus la page au survol du bord de l'écran. |
+| Profil et affichage | Prénom, nom et photo de profil (recadrée et réduite dans le navigateur, réenregistrée par le serveur en JPEG de 256 px) ; sans photo, les initiales sur un fond tiré au hasard. Thème dans Réglages ; taille de l'interface (petite, normale, grande) en bas de la barre latérale. La barre latérale reste ancrée ou se détache : cachée à gauche, elle glisse par-dessus la page au survol du bord de l'écran. Son en-tête montre le logo en icône, « H/ » ; le mot entier reste sur les pages de connexion. |
 | Notes | Éditeur en une seule vue, comme une page Notion : le texte se met en forme pendant qu'on écrit. `/` ouvre le menu des blocs (texte, titres 1 à 3, listes à puces, numérotées ou à cocher, tableau, citation, séparateur, bloc de code, lien vers une adresse, une note ou un fichier, image, fichier, date du jour) ; les raccourcis Markdown marchent aussi pendant la frappe (`#`, `-`, `1.`, `[]`, `>`, ```` ``` ````, `---`, `**gras**`, `*italique*`, `~~barré~~`). Une sélection montre une barre de mise en forme (gras, italique, barré, code, lien). Le Markdown reste le format enregistré : recherche, API et extraits n'en voient pas d'autre. Sauvegarde automatique, tags, recherche plein texte, épinglage. À côté des tags, le sélecteur « Dossier » range la note dans un dossier de son espace ; « Voir plus… » ouvre l'arborescence complète, pour un sous-dossier ou un autre espace. La liste des notes est regroupée par dossier. Le bouton « Télécharger » de l'éditeur donne la note en Markdown (`.md`, son titre en tête) ou en PDF (même mise en page que « Convertir › En PDF », par le service de conversion ; sans lui, le Markdown seulement). Pour le PDF : la taille du texte (80 à 150 %) et, coché d'office, « Garder les titres avec leur texte ». |
 | Agenda | Import d'un flux iCal (Pronote) par URL, synchro toutes les heures, vues jour et semaine. Événements ajoutés dans dashu (« Nouvel événement »), copiés dans Google Agenda si on le relie dans Réglages. |
 | Fichiers (v2, en cours) | **Dossiers.** Une arborescence : à la racine, un dossier par espace (créé, renommé et supprimé avec lui) et Temporaire, les fichiers de l'onglet Outils pas encore rangés. Dans un espace, des dossiers et des sous-dossiers, trois niveaux au plus (Espace / Dossier / Sous-dossier), qui rangent les fichiers et les notes. Un dossier se crée, se renomme, se déplace avec tout son contenu (dans un autre dossier ou un autre espace) et se supprime ; s'il n'est pas vide, une fenêtre d'avertissement propose de transférer son contenu dans le dossier du dessus ou de tout supprimer. Les dossiers n'existent que dans la base : rien ne bouge sur le disque. **Ranger.** Une fenêtre montre tous les espaces et leurs dossiers ; à la souris, on glisse un fichier, une note ou un dossier sur un dossier (ou sur un pas du chemin en haut de la page). « Nouvelle note » crée une note dans le dossier ouvert. **Envoi** par glisser-déposer (sur n'importe quelle page ; sur la page Fichiers, dans le dossier ouvert, ou sur le dossier où on les lâche) ou par bouton, plusieurs fichiers à la fois, puis téléchargement, renommage (la partie avant l'extension : l'extension, et donc le type du fichier, ne change pas) et suppression. Dans la liste, ces actions passent par un seul bouton « … » par ligne, dont le menu les présente en icône et texte. Le lien de retour de la page d'un fichier ramène là où on l'a ouverte (dossier, recherche, tag, racine de Perso, dashboard, note), au même défilement, comme le retour du navigateur. Une image collée dans une note y est rangée et insérée. **Lecture.** Un PDF se lit en entier dans la page du fichier, avec zoom et texte sélectionnable. **Conversions.** Menu « Convertir » par fichier : compression, photo en JPEG, PNG ou WebP, vidéo en MP4, son en MP3, pages d'un PDF ; puis « Remplacer l'original » si on veut. Règles par espace (vidéos en MP4, HEIC doublées d'un JPEG à l'arrivée). Onglet Outils : un fichier déposé y reste 24 heures hors des espaces, le temps de le convertir et de le garder ou le télécharger. Les conversions en cours se voient dans la barre latérale de toutes les pages. Voir [Fichiers](#7-fichiers-v2) et [Compression](#8-compression-v2). |
@@ -176,6 +176,26 @@ Il n'y a volontairement **pas de page d'inscription**. Après le premier compte,
 Pourquoi : un formulaire d'inscription sans vérification d'email laisserait quiconque connaît une adresse autorisée créer le compte avant son propriétaire. Google prouve que l'adresse appartient au visiteur ; la ligne de commande prouve qu'on a la main sur le serveur.
 
 Les deux méthodes mènent au même compte : Google est rattaché par l'email vérifié qu'il renvoie.
+
+### Outils réservés
+
+Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi (pour l'instant trois modules vides). Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
+
+L'accès se donne **seulement en ligne de commande, sur le serveur**. Aucune page, aucune route de l'API ni du connecteur ne le permet, et Hermès n'a pas cette action.
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools list'
+```
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools grant "$0" 1life' toi@example.com
+```
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools revoke "$0" 1life' toi@example.com
+```
+
+`runuser` lance la commande sous le compte `dashu`, propriétaire de la base, avec sa configuration (`DATABASE_URL`). Le compte doit s'être connecté au moins une fois. Une fois autorisé, l'outil apparaît dans Réglages › Espaces, **masqué** : on l'affiche dans l'espace voulu (Taff, par exemple). Retirer l'accès le fait disparaître partout ; ses réglages par espace restent pour une autorisation future.
 
 ### Réglages › Instance
 
@@ -831,13 +851,14 @@ dashu/
 ├── migrations/             schéma SQL, appliqué au démarrage
 ├── .sqlx/                  métadonnées des requêtes (vérification à la compilation sans base)
 ├── src/
-│   ├── main.rs             serveur, set-password, backup, quota, healthcheck, version
+│   ├── main.rs             serveur, set-password, backup, quota, tools, healthcheck, version
 │   ├── lib.rs              état partagé et routeur
 │   ├── config.rs           variables d'environnement
 │   ├── db.rs               pool SQLite, mode WAL, migrations
 │   ├── assets.rs           fichiers statiques embarqués
 │   ├── time.rs             Europe/Paris, dates en français
-│   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace
+│   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace, outils réservés
+│   ├── onelife/            1Life, outil réservé : accueil et modules (squelette)
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets

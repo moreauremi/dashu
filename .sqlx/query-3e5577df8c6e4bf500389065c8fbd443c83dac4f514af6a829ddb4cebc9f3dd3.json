@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM tool_grants WHERE user_id = ? AND tool = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "3e5577df8c6e4bf500389065c8fbd443c83dac4f514af6a829ddb4cebc9f3dd3"
+}
