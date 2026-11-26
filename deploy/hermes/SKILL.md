@@ -1,7 +1,7 @@
 ---
 name: dashu
 description: "Tâches, notes, fichiers, dossiers, emploi du temps, espaces, membres et réglages de Rémi dans son dashboard dashu (corbeille comprise), plus l'admin du serveur dashu."
-version: 1.4.0
+version: 1.5.0
 author: Rémi Moreau
 platforms: [linux]
 metadata:
@@ -23,6 +23,7 @@ dashu est le dashboard perso de Rémi : des tâches, des notes Markdown, des fic
 - Il demande ses cours ou son emploi du temps de l'école : `dashu agenda`. Pour ajouter un rendez-vous à dashu (copié dans son Google Agenda) : `dashu event-add`. Ses rendez-vous perso sont plutôt dans Google Agenda (skill google-workspace) : pour « mon agenda » au sens large, regarde les deux.
 - Il veut créer, renommer, archiver ou partager un espace : `dashu spaces` / `space-add` / `space-edit` / `members` / `invite`.
 - Il parle de son profil, du thème ou de son tableau de bord : `dashu settings` / `settings-set` / `dashboard`.
+- Il veut afficher ou masquer un outil (Notes, Fichiers, Agenda, Outils) dans un espace : `dashu tools` / `tools-set`. Masquer ne supprime rien et ne t'empêche pas d'y travailler.
 - Il demande si dashu marche, ou de le mettre à jour : `dashu admin …`.
 
 Choisis l'espace selon le sujet : cours, BTS, révisions → `ecole` ; 1Life, Open-Prod, alternance → `taff` ; le reste → `perso`. Si le sujet correspond mieux à un autre espace de `dashu spaces`, prends-le. En cas de doute, demande.
@@ -109,6 +110,10 @@ dashu invitation-decline 3
 # Tableau de bord d'un espace (widget:largeurxhauteur, de 1 à 4)
 dashu dashboard ecole
 dashu dashboard-set ecole --layout "calendar:2x3,tasks:2x2" | --default
+
+# Outils de la barre latérale d'un espace (notes, files, calendar, tools ; le dashboard reste toujours)
+dashu tools ecole
+dashu tools-set ecole --hide files [--show calendar]   # affichage seulement, rien n'est supprimé
 
 # Réglages (le mot de passe, Google et les jetons ne se changent que sur le site)
 dashu settings

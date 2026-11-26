@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tool, shown AS \"shown!: bool\" FROM space_tools\n           WHERE user_id = ? AND space_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "tool",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "shown!: bool",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "10bdcea7af6a3c74ec68e95dd705a2ad159714dc2a6f522c095814558ca39df2"
+}

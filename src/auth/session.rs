@@ -15,6 +15,7 @@ use tower_sessions::cookie::time::Duration;
 use tower_sessions::{Expiry, Session};
 
 use crate::AppState;
+use crate::registry::{self, Tool};
 use crate::spaces::{self, Space, SpaceTag, url};
 use crate::tabbar::{self, Tab};
 use crate::web::{self, AppError, AppResult, csrf};
@@ -93,6 +94,9 @@ pub struct Flash {
     /// `ok` ou `error`.
     pub kind: String,
     pub text: String,
+    /// Lien affiché après le texte : adresse et libellé.
+    #[serde(default)]
+    pub link: Option<(String, String)>,
 }
 
 pub struct Ctx {
@@ -114,6 +118,8 @@ pub struct Ctx {
     /// Conversions en cours (pages seulement, pas les fragments), et si l'une
     /// part d'un fichier de l'onglet Outils.
     pub jobs: (i64, bool),
+    /// Outils de l'espace actif : réglables et affichés (voir `registry`).
+    pub tools: registry::Shown,
 }
 
 /// Ce que le gabarit `layout.html` affiche autour de chaque page.
@@ -140,8 +146,10 @@ pub struct Shell {
     pub csrf: String,
     pub path: String,
     pub flash: Option<Flash>,
-    /// Barre de raccourcis du téléphone.
+    /// Barre de raccourcis du téléphone, sans les outils masqués.
     pub tabs: Vec<&'static Tab>,
+    /// Outils affichés dans l'espace actif (barre latérale).
+    pub tools: Vec<&'static Tool>,
     /// Écran de lancement (logo sur fond noir) : seulement au chargement
     /// complet, jamais pendant une navigation htmx.
     pub launch: bool,
@@ -188,7 +196,13 @@ impl Ctx {
             csrf: self.csrf.clone(),
             path: self.path.clone(),
             flash,
-            tabs: tabbar::selected(self.user.mobile_tabs.as_deref()),
+            tabs: tabbar::selected(self.user.mobile_tabs.as_deref())
+                .into_iter()
+                .filter(|tab| {
+                    registry::tool_of_tab(tab.key).is_none_or(|id| self.tools.is_shown(id))
+                })
+                .collect(),
+            tools: self.tools.visible().collect(),
             launch: self.launch,
             jobs_active: self.jobs.0,
             jobs_tools: self.jobs.1,
@@ -201,6 +215,27 @@ impl Ctx {
 
     pub async fn flash_error(&self, text: impl Into<String>) -> AppResult<()> {
         set_flash(&self.session, "error", text).await
+    }
+
+    /// Message suivi d'un lien (`kind` : `ok` ou `error`).
+    pub async fn flash_link(
+        &self,
+        kind: &str,
+        text: &str,
+        href: &str,
+        label: &str,
+    ) -> AppResult<()> {
+        self.session
+            .insert(
+                FLASH,
+                Flash {
+                    kind: kind.into(),
+                    text: text.into(),
+                    link: Some((href.into(), label.into())),
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     /// Espace de l'utilisateur portant cet identifiant, archivé ou non.
@@ -241,6 +276,7 @@ pub async fn set_flash(session: &Session, kind: &str, text: impl Into<String>) -
             Flash {
                 kind: kind.into(),
                 text: text.into(),
+                link: None,
             },
         )
         .await?;
@@ -395,6 +431,10 @@ impl FromRequestParts<AppState> for Ctx {
             (0, false)
         };
 
+        let tools = registry::load(&state.db, user.id, active.id)
+            .await
+            .map_err(internal)?;
+
         Ok(Self {
             user,
             spaces,
@@ -406,6 +446,7 @@ impl FromRequestParts<AppState> for Ctx {
             path,
             launch,
             jobs,
+            tools,
         })
     }
 }

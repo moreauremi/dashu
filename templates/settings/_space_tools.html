@@ -1,0 +1,22 @@
+{#- Outils affichés dans un espace (Réglages › Espaces), un interrupteur par
+    outil du registre (src/registry.rs). Chaque interrupteur s'enregistre
+    tout de suite : htmx envoie son formulaire au changement, et remplace ce
+    bloc par la réponse (avec la barre latérale, hx-swap-oob).
+    Variables : space_id, tools (registry::Shown). -#}
+<fieldset class="space-tools" id="space-tools-{{ space_id }}">
+  <legend>Outils affichés dans la barre latérale</legend>
+  <div class="tool-switches">
+    {% for (tool, shown) in tools.tools %}
+    {% if tool.maskable %}
+    <form method="post" action="/settings/spaces/{{ space_id }}/tools/{{ tool.id }}" hx-post="/settings/spaces/{{ space_id }}/tools/{{ tool.id }}" hx-trigger="change" hx-target="#space-tools-{{ space_id }}" hx-swap="outerHTML">
+      <label class="switch-row">
+        <input class="switch" type="checkbox" role="switch" name="shown" value="1"{% if shown %} checked{% endif %}>
+        {{ crate::assets::icon(tool.icon)|safe }}
+        <span>{{ tool.name }}</span>
+      </label>
+    </form>
+    {% endif %}
+    {% endfor %}
+  </div>
+  <p class="hint">Le Dashboard et les Réglages restent toujours. Masquer un outil ne supprime rien : son contenu revient quand on le réaffiche.</p>
+</fieldset>

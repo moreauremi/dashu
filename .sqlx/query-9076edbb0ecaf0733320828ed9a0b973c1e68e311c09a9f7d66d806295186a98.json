@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO space_tools (user_id, space_id, tool, shown) VALUES (?, ?, ?, ?)\n         ON CONFLICT (user_id, space_id, tool) DO UPDATE SET shown = excluded.shown",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "9076edbb0ecaf0733320828ed9a0b973c1e68e311c09a9f7d66d806295186a98"
+}

@@ -99,6 +99,13 @@ def fmt_settings(s):
     print(f"Raccourcis : {', '.join(s['mobile_tabs'])} ; espace du moment : {s['moment_space'] or 'aucun'}")
 
 
+def fmt_tools(d):
+    shown = [t["tool"] for t in d["tools"] if t["shown"]]
+    hidden = [t["tool"] for t in d["tools"] if not t["shown"]]
+    print(f"Outils de {d['space']} : {', '.join(shown)}")
+    print(f"Masqués : {', '.join(hidden) or 'aucun'}")
+
+
 def call_raw(method, path, params=None, data=None):
     """Appelle l'API sans JSON : un contenu à envoyer ou à recevoir (fichiers)."""
     url = read_config("url").rstrip("/") + "/api/v1" + path
@@ -517,6 +524,14 @@ def main():
     what.add_argument("--layout", help="calendar:2x3,tasks:2x2 (vide : aucun widget)")
     what.add_argument("--default", action="store_true", help="la disposition par défaut")
 
+    s = reader("tools", "outils affichés dans la barre latérale d'un espace")
+    s.add_argument("space", help=SPACES)
+
+    s = sub.add_parser("tools-set", help="affiche ou masque des outils dans un espace (rien n'est supprimé)")
+    s.add_argument("space", help=SPACES)
+    s.add_argument("--show", action="append", default=[], metavar="OUTIL", help="outil à afficher (répétable)")
+    s.add_argument("--hide", action="append", default=[], metavar="OUTIL", help="outil à masquer (répétable)")
+
     reader("settings", "profil et affichage du compte")
 
     s = sub.add_parser("settings-set", help="change le profil ou l'affichage")
@@ -811,6 +826,14 @@ def main():
         layout = None if args.default else args.layout
         d = call("PUT", f"/spaces/{quote(args.space)}/dashboard", body={"layout": layout})
         print(f"Tableau de bord de {d['space']} : {d['layout'] or 'aucun widget'}.")
+    elif args.cmd == "tools":
+        show(call("GET", f"/spaces/{quote(args.space)}/tools"), args, fmt_tools)
+    elif args.cmd == "tools-set":
+        changes = {t: True for t in args.show}
+        changes.update({t: False for t in args.hide})
+        if not changes:
+            sys.exit("Rien à changer : --show OUTIL ou --hide OUTIL.")
+        fmt_tools(call("PUT", f"/spaces/{quote(args.space)}/tools", body={"tools": changes}))
     elif args.cmd == "settings":
         show(call("GET", "/settings"), args, fmt_settings)
     elif args.cmd == "settings-set":

@@ -105,6 +105,10 @@ pub async fn list(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Response> {
+    // Outil masqué dans cet espace : retour à l'accueil (SPEC, « Outils par espace »).
+    if let Some(back) = crate::registry::guard(&ctx, "notes").await? {
+        return Ok(back);
+    }
     let q = query.q.unwrap_or_default().trim().to_string();
     let tag = query
         .tag

@@ -1644,3 +1644,92 @@ Reste à trancher :
 - **Signature des archives** (avec minisign, par exemple) en plus de l'empreinte : elle protégerait d'une version publiée par quelqu'un d'autre que Rémi.
 - **Inviter quelqu'un par lien**, plutôt qu'en ajoutant son adresse.
 - **Une adresse courte** pour la commande (`https://dashu.dev/install.sh`, servie par la page d'accueil).
+
+---
+
+# dashu — Outils par espace
+
+Nov 25, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 25 novembre 2026, en deux PR :
+
+1. **Choisir les outils affichés dans chaque espace.** Notes et Agenda dans École, mais pas Fichiers, par exemple. Aujourd'hui, la barre latérale est la même partout, écrite à la main dans `layout.html`, et la barre de commandes répète la liste de son côté.
+2. **Un outil « 1Life » réservé au compte de Rémi**, pour son travail. Pour l'instant un squelette : trois modules vides.
+
+Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers, Agenda, Outils, puis 1Life.
+
+## Fonctionnement : outils par espace (PR 1)
+
+- **Un registre unique** (`src/registry.rs`) déclare chaque outil : identifiant, nom, icône, adresse, raccourci clavier, mot de la barre de commandes, affiché par défaut ou non, masquable ou non, réservé ou non. La barre latérale, la barre de commandes (`/go`), les réglages et l'API en sont tirés ; la barre de raccourcis du téléphone le suit. Ajouter un outil = ajouter une entrée, plus ses pages.
+- **Réglages › Espaces** : dans chaque espace, la liste des outils, avec un interrupteur affiché / masqué pour chacun. Le changement s'enregistre tout de suite (htmx), sans bouton « Enregistrer », et la barre latérale suit.
+- **Le Dashboard (l'accueil de l'espace) et les Réglages ne se masquent pas.**
+- **Un outil masqué** disparaît, dans cet espace seulement, de la barre latérale, de `/go` dans la barre de commandes et de la barre de raccourcis du téléphone (« Nouvelle note » suit Notes).
+- **Ouvrir l'adresse d'un outil masqué** (`/e/ecole/files`) ramène à l'accueil de l'espace, avec le message « Cet outil est masqué dans cet espace » et un lien vers les réglages.
+- **Masquer ne supprime rien.** Notes, fichiers et événements restent en base, et réapparaissent quand on réaffiche l'outil.
+- **C'est un réglage d'affichage, pas une permission.** Une note ou un fichier s'ouvre toujours par son adresse, par `/open` ou depuis Perso ; l'API, le connecteur Claude et Hermès travaillent sur tous les outils, même masqués. Les widgets du dashboard ne changent pas : ils se retirent dans la disposition du dashboard.
+- **Le réglage est propre à chaque compte.** Dans un espace partagé, chaque membre choisit ses outils, sans changer ceux des autres.
+- **API** : `GET /api/v1/spaces/{slug}/tools` lit le réglage, `PUT` le change (`{"tools": {"files": false}}`), avec l'outil MCP et la commande d'Hermès qui vont avec, comme pour la disposition du dashboard.
+
+## Fonctionnement : 1Life, outil réservé (PR 2)
+
+- **Un outil réservé** n'existe que pour les comptes autorisés : ailleurs, il n'apparaît ni dans la barre latérale, ni dans la barre de commandes, ni dans les réglages, ni dans l'API.
+- **L'autorisation se donne seulement sur le serveur**, par le binaire :
+  - `dashu tools list` : les outils réservés, et les comptes autorisés pour chacun ;
+  - `dashu tools grant <email> 1life` ;
+  - `dashu tools revoke <email> 1life`.
+  Aucune route HTTP, aucun écran, aucune action de l'API ni du connecteur ne donne ou ne retire cet accès.
+- **Contrôle côté serveur sur toutes les routes `/1life/*`** : un compte non autorisé reçoit une 404, la même que pour une adresse qui n'existe pas (pas une 403, qui dirait que l'outil existe). Sans session aussi : 404, et non la page de connexion.
+- **Une fois autorisé**, 1Life se règle par espace comme les autres outils, **masqué par défaut**. Masqué dans l'espace actif, ses pages ramènent à l'accueil de l'espace, comme les autres outils. Retirer l'autorisation le fait disparaître partout ; ses réglages par espace restent, pour une autorisation future.
+- **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée.
+- **Aucune logique métier pour l'instant** : pas de table pour les modules, pas d'appel à une IA, pas d'action dans l'API ni pour Hermès.
+
+## Modèle de données
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `space_tools` | `user_id`, `space_id`, `tool`, `shown` | Clé (`user_id`, `space_id`, `tool`). Pas de ligne : la valeur par défaut du registre. Rien n'est écrit par la migration : tous les outils actuels restent affichés |
+| `tool_grants` | `user_id`, `tool`, `granted_at` | Clé (`user_id`, `tool`). Écrite seulement par `dashu tools grant` et `revoke` (PR 2) |
+
+Un identifiant d'outil inconnu en base (outil retiré du registre) est ignoré.
+
+## Sécurité
+
+- **Masquer n'est pas une permission** : aucune vérification d'accès ne dépend de `space_tools`. Les droits restent ceux de `space_access`.
+- **Un outil réservé se vérifie sur le serveur**, à chaque requête de ses pages, à partir de `tool_grants`. Masquer le lien ne suffit jamais.
+- **Personne ne s'autorise lui-même** : aucune route n'écrit dans `tool_grants` ; l'API et le connecteur répondent sur un outil réservé non autorisé exactement comme sur un outil inconnu.
+- **Dépôt public** : aucun nom de client, aucun document ni aucune information interne de 1Life dans le code, les tests ou les fixtures.
+
+## Critères d'acceptation
+
+PR 1 :
+
+- [ ] Masquer Fichiers dans École le retire de la barre latérale, de `/go` et de la barre du téléphone dans École seulement ; le réafficher le ramène, et les fichiers d'École sont tous là
+- [ ] `/e/ecole/files`, Fichiers masqué dans École, ramène à `/e/ecole/` avec « Cet outil est masqué dans cet espace » et un lien vers les réglages
+- [ ] Les réglages d'un espace ne changent pas ceux d'un autre, ni ceux d'un autre membre d'un espace partagé
+- [ ] Le Dashboard et les Réglages ne se masquent pas ; un identifiant d'outil inconnu est refusé
+- [ ] Chaque entrée du registre apparaît dans la barre latérale, la barre de commandes et les réglages sans autre modification (test qui parcourt le registre)
+- [ ] Sur une base existante, la migration ne masque rien
+- [ ] L'API travaille sur un outil masqué (créer et lister des notes, Notes masqué) ; `GET` et `PUT /api/v1/spaces/{slug}/tools` lisent et changent le réglage
+- [ ] STATUS et README à jour
+
+PR 2 :
+
+- [ ] Un compte non autorisé, ou sans session, reçoit 404 sur `/1life`, `/1life/cr`, `/1life/audit` et `/1life/clients` (et avec l'espace dans l'adresse) ; 1Life n'est ni dans ses réglages, ni dans sa barre de commandes, ni dans l'API
+- [ ] `dashu tools grant <email> 1life` puis `dashu tools revoke` donnent puis retirent l'accès ; `dashu tools list` les montre ; un compte ou un outil inconnu est refusé
+- [ ] Un compte autorisé voit 1Life dans ses réglages, masqué par défaut ; affiché dans un espace, il apparaît dans la barre latérale de cet espace seulement, et ses quatre pages s'ouvrent
+- [ ] Aucune route ne donne l'accès ; l'API refuse de régler 1Life pour un compte non autorisé comme un outil inconnu
+- [ ] STATUS et README à jour
+
+## Décisions
+
+Prises le 25 novembre 2026, par défaut, pour avancer :
+
+- **La palette `Ctrl+K` n'existe plus** depuis le 13 novembre 2026 : « absent de Ctrl+K » veut dire absent de la barre de commandes `/` (`/go`).
+- **Réglage par compte et par espace**, plutôt que par espace seulement : c'est un réglage d'affichage, et dans un espace partagé chacun garde le sien.
+- **Seule l'adresse de l'outil est gardée** (`/notes`, `/files`, `/calendar`, `/tools`) : une note ou un fichier ouvert par lien, par `/open` ou depuis Perso s'ouvre toujours. Pour 1Life, toutes ses adresses.
+- **Les widgets du dashboard ne suivent pas** le réglage : ils ont déjà leur propre disposition par espace.
+- **L'onglet Outils garde son adresse sans espace** (`/tools`) : il est masqué selon l'espace actif (celui de l'onglet ou le dernier utilisé).
+- **Le réglage passe par l'API** (route, outil MCP, commande d'Hermès), comme la disposition du dashboard : « L'API couvre tout le site ». L'autorisation des outils réservés, elle, reste hors de l'API, comme l'administration du serveur.
+- **La PR 2 part de la branche de la PR 1** : elle a besoin du registre. Elle sera rebasée sur `v1` une fois la PR 1 fusionnée.

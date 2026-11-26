@@ -123,13 +123,24 @@
       <ul class="space-list" role="list">
         {% for space in shell.spaces %}
         {% if !space.mine %}
-        {#- Espace rejoint : ni Modifier, ni Archiver, ni Supprimer. -#}
-        <li class="space-archived-row" data-accent="{{ space.color }}">
-          <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
-          <span class="space-name">{{ space.name }}</span>
-          {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
-          {% if let Some(label) = shared.get(&space.id) %}<span class="space-tag">{{ label }}</span>{% endif %}
-          <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
+        {#- Espace rejoint : ni Modifier, ni Archiver, ni Supprimer ; ses
+            outils affichés se règlent, pour soi seulement. -#}
+        <li>
+          <details class="space-row" data-accent="{{ space.color }}">
+            <summary>
+              <span class="space-badge">{{ crate::assets::icon(space.icon())|safe }}</span>
+              <span class="space-name">{{ space.name }}</span>
+              {% if space.id == shell.active.id %}<span class="space-tag">actif</span>{% endif %}
+              {% if let Some(label) = shared.get(&space.id) %}<span class="space-tag">{{ label }}</span>{% endif %}
+              <span class="space-more">Outils{{ crate::assets::icon("chevron-right")|safe }}</span>
+            </summary>
+            <div class="space-form">
+              {% if let Some(tools) = space_tools.get(&space.id) %}{% let space_id = space.id %}{% include "settings/_space_tools.html" %}{% endif %}
+              <div class="space-actions">
+                <a class="btn" href="/settings/spaces/{{ space.id }}/members">Membres</a>
+              </div>
+            </div>
+          </details>
         </li>
         {% else %}
         <li>
@@ -164,6 +175,10 @@
                 {% endif %}
               </div>
             </form>
+            {#- Hors du formulaire de l'espace : chaque interrupteur s'enregistre seul. -#}
+            <div class="space-form">
+              {% if let Some(tools) = space_tools.get(&space.id) %}{% let space_id = space.id %}{% include "settings/_space_tools.html" %}{% endif %}
+            </div>
           </details>
         </li>
         {% endif %}

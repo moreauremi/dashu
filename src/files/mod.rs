@@ -211,6 +211,10 @@ pub async fn list(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Response> {
+    // Outil masqué dans cet espace : retour à l'accueil (SPEC, « Outils par espace »).
+    if let Some(back) = crate::registry::guard(&ctx, "files").await? {
+        return Ok(back);
+    }
     use crate::folders::{self, view_url};
 
     let user = ctx.user.id;
