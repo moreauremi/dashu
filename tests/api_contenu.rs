@@ -429,8 +429,8 @@ async fn dossiers_creer_renommer_deplacer_supprimer() {
     let exos_id = exos["id"].as_i64().unwrap();
 
     // Refus : nom pris, ni espace ni parent, nom vide. (Le niveau de trop,
-    // au-delà de cinq niveaux, est éprouvé dans
-    // tests/dossiers_cinq_niveaux.rs.)
+    // au-delà de cinq niveaux de dossiers, est éprouvé dans
+    // tests/dossiers.rs, `l_api_et_le_connecteur_suivent_les_cinq_niveaux`.)
     for body in [
         json!({ "name": "math", "space": "ecole" }),
         json!({ "name": "Perdu" }),

@@ -127,6 +127,22 @@ pub struct Crumb {
     pub href: Option<String>,
     /// Un pas du fil d'Ariane reçoit aussi ce qu'on glisse (pas « Fichiers »).
     pub drop: Option<DropAt>,
+    /// Pas du milieu d'un long chemin : sur un écran étroit, il laisse la
+    /// place à « … » (classe `crumb-mid`, voir [`shorten`]).
+    pub mid: bool,
+}
+
+/// Au-delà de quatre pas cliquables, ceux du milieu (après l'espace, avant
+/// le dossier parent) sont marqués : sur téléphone, le CSS les remplace par
+/// « … ». Un dossier du 5e niveau compte six pas, qui ne tiendraient pas.
+fn shorten(crumbs: &mut [Crumb]) {
+    let linked = crumbs.iter().filter(|c| c.href.is_some()).count();
+    if linked <= 4 {
+        return;
+    }
+    for (i, crumb) in crumbs.iter_mut().enumerate() {
+        crumb.mid = crumb.href.is_some() && i >= 2 && i + 1 < linked;
+    }
 }
 
 #[derive(Template)]
@@ -158,8 +174,8 @@ struct ListPage {
     upload_space: i64,
     upload_folder: Option<i64>,
     /// Création d'un dossier ici : (espace, dossier parent). Rien à la racine,
-    /// dans Temporaire et au niveau le plus profond (cinq niveaux au plus,
-    /// l'espace compris).
+    /// dans Temporaire et au niveau le plus profond (cinq niveaux de dossiers
+    /// sous l'espace).
     new_folder: Option<(i64, Option<i64>)>,
     /// « Nouvelle note » : l'adresse qui la crée ici (dossier d'un espace et
     /// dossiers seulement).
@@ -248,6 +264,7 @@ pub async fn list(
         label: "Fichiers".into(),
         href: Some("/files?dossier=racine".into()),
         drop: None,
+        mid: false,
     };
     // Dossier montré (`None` : la racine de l'espace), pour les vues d'un espace.
     let (name, here, crumbs, inside) = match &view {
@@ -269,6 +286,7 @@ pub async fn list(
                     label: "Temporaire".into(),
                     href: None,
                     drop: None,
+                    mid: false,
                 },
             ],
             None,
@@ -287,6 +305,7 @@ pub async fn list(
                         space: space.id,
                         folder: None,
                     }),
+                    mid: false,
                 },
             ];
             crumbs.extend(folders::chain(&all, folder).into_iter().map(|f| Crumb {
@@ -296,10 +315,12 @@ pub async fn list(
                     space: space.id,
                     folder: Some(f.id),
                 }),
+                mid: false,
             }));
             if let Some(last) = crumbs.last_mut() {
                 last.href = None;
             }
+            shorten(&mut crumbs);
             let name = if folder.is_some() {
                 "dossier"
             } else {

@@ -769,6 +769,8 @@ Lot 2 :
 
 Nov 13, 2026 · @Rémi Moreau
 
+> **Règle remplacée le 26 novembre 2026.** La limite des trois niveaux (Espace / Dossier / Sous-dossier) et ce qui en découle ci-dessous (pas de dossier dans un sous-dossier ; un dossier qui a des sous-dossiers ne va que directement dans un espace ; le troisième niveau refusé) sont remplacés par **cinq niveaux de dossiers sous l'espace** : voir « Dossiers : cinq niveaux ». Le reste de cette section vaut toujours.
+
 ## Contexte
 
 Demandé par Rémi le 13 novembre 2026. Il revient sur la décision du 11 novembre (« des fichiers sans dossiers ») : les tags ne suffisent pas pour ranger les cours par matière. Les dossiers rangent les fichiers **et les notes**.
@@ -780,7 +782,7 @@ Demandé par Rémi le 13 novembre 2026. Il revient sur la décision du 11 novemb
 - À la racine : un dossier par espace (sauf les espaces archivés), plus un dossier **Temporaire**.
 - Le dossier d'un espace, c'est l'espace lui-même : il apparaît à la création de l'espace, prend son nom quand on le renomme et ne se supprime pas depuis Fichiers (il part avec l'espace, depuis Réglages).
 - Temporaire montre les fichiers déposés dans l'onglet Outils et pas encore gardés. Ils sont toujours effacés au bout de 24 heures.
-- Dans le dossier d'un espace, des dossiers ; dans un dossier, des sous-dossiers. **Trois niveaux au plus** : Espace / Dossier / Sous-dossier. *Remplacé le 26 novembre 2026 par cinq niveaux : voir « Dossiers : cinq niveaux ».*
+- Dans le dossier d'un espace, des dossiers ; dans un dossier, des sous-dossiers. **Trois niveaux au plus** : Espace / Dossier / Sous-dossier. *Remplacé le 26 novembre 2026 par cinq niveaux de dossiers sous l'espace : voir « Dossiers : cinq niveaux ».*
 - Un dossier se crée, se renomme et se supprime. Son nom fait 60 caractères au plus et ne se répète pas parmi ses voisins (majuscules comprises : « Math » et « math » sont le même nom).
 - Supprimer un dossier vide demande une simple confirmation. Si le dossier contient quelque chose, une fenêtre d'avertissement dit ce qu'il contient et propose deux choix :
   - **Transférer dans le dossier parent** : ses notes et ses fichiers vont dans le dossier du dessus ; ses sous-dossiers montent d'un niveau (renommés « Exercices (2) » si le nom est déjà pris) ;
@@ -1310,6 +1312,7 @@ Ces actions restent sur le site ou sur le serveur, exprès :
 - **Les comptes et le serveur** : les adresses autorisées (`dashu-compte`) et l'administration (`dashu-admin`) se font sur le serveur, pas dans dashu. Hermès garde son accès `dashu-admin` à six actions.
 - **L'interface elle-même** : l'espace actif, la barre de commandes, la navigation. Un programme n'en a pas besoin : il désigne l'espace dans chaque requête.
 - **Le téléchargeur de liens** (YouTube, Instagram, TikTok), quand il existera : réservé au site et au compte de Rémi, comme le prévoit la v2.
+- **1Life**, outil réservé (« Outils par espace ») : son accès, et le module Clients (dossier des clients, infos, journées, vue globale ; « 1Life — Clients »). Les journées d'un client restent visibles et modifiables par l'API de l'Agenda, puisque ce sont des événements.
 
 ## Hermès et Claude suivent
 
@@ -1825,51 +1828,61 @@ Nov 26, 2026 · @Rémi Moreau
 
 ## Contexte
 
-Demandé par Rémi le 26 novembre 2026. La règle des trois niveaux (Espace / Dossier / Sous-dossier, décidée le 13 novembre dans « Dossiers ») ne suffit plus pour ranger un cours par matière, puis par partie, par chapitre et par type de document. La limite passe à **cinq niveaux, l'espace compris**. Cette section remplace la règle des trois niveaux ; le reste de « Dossiers » ne change pas.
+Demandé par Rémi le 26 novembre 2026. La règle des trois niveaux de « Dossiers » (Espace / Dossier / Sous-dossier, décidée le 13 novembre) ne suffit plus : Taff / Clients / Atelier Test / Audit est refusé, et le module Clients de 1Life (section suivante) range chaque client dans un dossier qui a ses propres sous-dossiers.
+
+Une première version, fusionnée le 26 novembre (PR #94), comptait l'espace dans les cinq niveaux, soit quatre niveaux de dossiers. Cette section la remplace : **cinq niveaux de dossiers sous l'espace**. Elle remplace aussi la règle des trois niveaux ; le reste de « Dossiers » ne change pas.
 
 ## Fonctionnement
 
-- **Cinq niveaux au plus** : l'espace, puis quatre niveaux de dossiers. Par exemple École / Math / Analyse / Chapitre 1 / Exercices. Le dossier d'un espace reste l'espace lui-même.
-- **Créer** : « Nouveau dossier » est proposé dans le dossier d'un espace et dans un dossier des trois premiers niveaux. Au quatrième, le bouton disparaît, et le serveur refuse : « Cinq niveaux au plus : pas de dossier de plus dans « Exercices ». »
-- **Déplacer un dossier** : il emmène tous ses sous-dossiers, à tous les niveaux. Il va dans n'importe quel dossier où lui et son sous-dossier le plus profond tiennent dans les cinq niveaux. Sinon, refus dit (« Cinq niveaux au plus : pas de place pour « Analyse » dans « Taff / Projet / Lot A ». ») et rien ne bouge. Il ne va ni dans lui-même, ni dans un de ses sous-dossiers, ni à côté d'un homonyme. Changer d'espace emmène tout son contenu, à tous les niveaux, conversions en cours comprises.
-- **La fenêtre « Ranger »** montre tous les niveaux, chacun avec son retrait. Pour un dossier, elle ne propose que les destinations où il tient, sans lui ni ce qu'il contient.
-- **Supprimer un dossier non vide** : « Transférer dans le dossier parent » monte ses sous-dossiers d'un niveau, dans ce parent (et non plus toujours à la racine de l'espace) ; un nom déjà pris y devient « Chapitre 1 (2) ». « Tout supprimer » met le dossier et tout ce qu'il contient dans la corbeille, à tous les niveaux.
-- **Restaurer un dossier** depuis la corbeille le remet dans son ancien dossier s'il y tient encore avec ses sous-dossiers ; sinon à la racine de son espace, avec tous ses niveaux.
-- **Compter et chercher** : le résumé d'un dossier (« 3 dossiers, 2 notes et 1 fichier ») et la recherche dans un dossier comprennent tout ce qui est en dessous, à tous les niveaux.
-- **Onglet Notes** : toujours une section par dossier du premier niveau. Une note plus bas y porte le chemin sous ce dossier (« Analyse / Chapitre 1 / Exercices »).
-- **Ce qui ne change pas** : le sélecteur « Dossier » de l'éditeur (premier niveau ; « Voir plus… » montre tout), le fil d'Ariane (il montre déjà tout le chemin), le glisser-déposer (le serveur refuse un niveau de trop, comme pour la fenêtre). L'API, le connecteur Claude et Hermès suivent la même règle, avec les mêmes messages.
+- **Cinq niveaux de dossiers sous l'espace** : Espace / D1 / D2 / D3 / D4 / D5, par exemple Taff / Clients / Atelier Test / Audit / 2026 / Annexes. Le dossier d'un espace reste l'espace lui-même.
+- **Une seule constante** : `folders::MAX_DEPTH = 5`, dans `src/folders/mod.rs`. Elle sert partout : création, déplacement, transfert, restauration, fenêtre « Ranger », bouton « Nouveau dossier ». Aucune autre valeur en dur. Les retraits de la fenêtre « Ranger » viennent d'une classe par niveau (`dest-d0` à `dest-d5`).
+- **Créer** : « Nouveau dossier » est proposé dans l'espace et dans un dossier des niveaux 1 à 4. Au 5e niveau, le bouton disparaît et le serveur refuse un dossier de plus, avec un message clair : « Cinq niveaux de dossiers au plus : pas de dossier dans « Annexes ». » (400 sur le site et l'API, erreur lisible pour le connecteur).
+- **Déplacer un dossier** : accepté si le niveau de la destination plus la hauteur du dossier reste ≤ 5. La hauteur vaut 1 pour un dossier sans sous-dossier, 2 si ses sous-dossiers n'en ont pas, et ainsi de suite. Sinon, refus, rien ne bouge, et le message dit pourquoi : « Cinq niveaux de dossiers au plus : « Audit » et ses sous-dossiers ne tiennent pas dans « Taff / Clients / Atelier Test / Projets ». » Un dossier ne va ni dans lui-même ni dans un de ses sous-dossiers. Cette règle remplace « un dossier qui a des sous-dossiers ne va que directement dans un espace ».
+- **Transférer dans le dossier parent** (suppression d'un dossier non vide) : ses sous-dossiers montent d'un niveau, dans ce parent ; ils restent donc dans la limite.
+- **Restaurer depuis la corbeille** : le dossier revient dans son ancien dossier s'il y tient encore avec ses sous-dossiers ; sinon à la racine de son espace, avec tous ses niveaux.
+- **Supprimer un espace en gardant son contenu** : ses dossiers passent dans l'espace qui le reçoit, chacun à son niveau ; la limite tient d'elle-même.
+- **La fenêtre « Ranger »** (`_destinations.html`) montre toute la profondeur, un retrait par niveau, et ne propose que des destinations valides : pour un dossier, ni lui, ni ce qu'il contient, ni un dossier où il ne tiendrait pas ; pour une note ou un fichier, tous les niveaux.
+- **Le fil d'Ariane** d'un dossier du 5e niveau compte six pas (Fichiers, l'espace, D1 à D4 ; D5 est le titre). Il tient sur iPhone : sous 640 px de large, les pas du milieu sont remplacés par « … », et restent Fichiers, l'espace, « … » et le dossier parent. Une classe sur les pas du milieu suffit, sans JavaScript ni style en ligne.
+- **Inchangés** : le sélecteur « Dossier » de l'éditeur (premier niveau, puis « Voir plus… »), l'onglet Notes groupé par dossier du premier niveau (une note plus bas y porte son chemin, « Audit / 2026 »), le glisser-déposer (le serveur refuse un niveau de trop).
+- **Partout où la règle est écrite**, tout est mis à jour : code et commentaires, gabarits, API (`/api/v1/folders`), descriptions des outils du connecteur Claude, commandes et skill d'Hermès (`deploy/hermes/dashu`, et `deploy/hermes/SKILL.md`, qui dit encore « un espace, un dossier, un sous-dossier au plus »), README. On cherche « trois niveaux », « Trois niveaux », « sous-dossier » et « cinq niveaux, l'espace compris ».
 
 ## Modèle de données
 
-Aucune migration. `folders.parent_id` permet déjà n'importe quelle profondeur ; la limite est dans le code (`folders::MAX_DEPTH`, quatre niveaux de dossiers). Le commentaire de la migration 0013 (« Trois niveaux au plus ») reste tel quel : une migration fusionnée ne se modifie pas.
+Aucune migration : `folders.parent_id` permet déjà toute profondeur. La limite passe de 4 à 5 dans le code. Le commentaire de la migration 0013 (« Trois niveaux au plus ») reste tel quel : une migration fusionnée ne se modifie pas.
 
 ## Sécurité
 
-- Un niveau de trop est refusé par le serveur, sur toutes les routes (site, API, connecteur, Hermès), pas seulement caché.
-- Un dossier ne va pas dans un de ses sous-dossiers : refusé par le serveur, sinon l'arborescence ferait une boucle.
-- Les parcours de l'arborescence, dans le code et dans les requêtes SQL récursives, ont un garde-fou : une boucle dans la base, qui ne devrait pas exister, ne les fait pas tourner sans fin.
-- Le reste vaut à tous les niveaux : un dossier d'un autre compte répond 404, un élément et son dossier sont toujours dans le même espace.
+- Un niveau de trop est refusé par le serveur sur toutes les routes (site, API, connecteur, Hermès), pas seulement caché.
+- Un dossier ne va pas dans un de ses sous-dossiers : sinon l'arborescence ferait une boucle.
+- Les parcours de l'arborescence, dans le code et dans les requêtes SQL récursives, gardent leur garde-fou : une boucle dans la base, qui ne devrait pas exister, ne les fait pas tourner sans fin.
+- Le reste de « Dossiers » vaut à tous les niveaux : un dossier d'un autre compte répond 404, un élément et son dossier sont toujours dans le même espace.
 
 ## Critères d'acceptation
 
-- [ ] Un dossier se crée jusqu'au quatrième niveau sous l'espace ; au-delà, le serveur refuse et « Nouveau dossier » n'est pas proposé ; le fil d'Ariane montre tout le chemin ; la fenêtre « Ranger » d'une note propose les quatre niveaux
-- [ ] L'API et le connecteur créent jusqu'au même niveau et refusent le suivant avec le même message ; l'API refuse un déplacement qui dépasserait cinq niveaux
-- [ ] Un dossier se déplace dans un dossier tant que lui et ses sous-dossiers tiennent dans cinq niveaux ; au-delà, refus dit, rien ne bouge ; ni dans lui-même ni dans un de ses sous-dossiers ; la fenêtre « Ranger » ne propose que les destinations permises
-- [ ] Déplacer un dossier dans un autre espace emmène ses notes, ses fichiers et ses sous-dossiers, à tous les niveaux
-- [ ] Le résumé d'un dossier et la recherche dans un dossier comprennent tous les niveaux en dessous ; l'onglet Notes range une note du quatrième niveau dans la section de son dossier du premier niveau, avec le chemin
-- [ ] Supprimer un dossier non vide : « Transférer » monte ses sous-dossiers d'un niveau dans son parent ; « Tout supprimer » met tout dans la corbeille, à tous les niveaux, et l'effacer vide le disque
-- [ ] Restaurer un dossier le remet dans son ancien dossier s'il y tient, sinon à la racine de l'espace, avec tous ses niveaux
-- [ ] Un second compte ne crée rien, n'ouvre rien et ne range rien dans les dossiers profonds du premier
-- [ ] STATUS et README à jour ; plus aucune mention des trois niveaux dans le code, les gabarits, `deploy`, les tests et le README
+- [ ] Un dossier se crée jusqu'au 5e niveau sous l'espace ; le 6e est refusé par le serveur avec un message clair, et « Nouveau dossier » n'est pas proposé au 5e
+- [ ] L'API, le connecteur et Hermès suivent la même limite, avec le même message
+- [ ] Un dossier se déplace là où lui et ses sous-dossiers tiennent ; un déplacement trop profond est refusé, le message dit pourquoi et rien ne bouge ; un dossier ne va ni dans lui-même ni dans un de ses sous-dossiers
+- [ ] La fenêtre « Ranger » montre les cinq niveaux, indentés, et ne propose que des destinations valides
+- [ ] « Transférer dans le dossier parent » monte les sous-dossiers d'un niveau dans le parent ; la restauration depuis la corbeille et la suppression d'un espace avec transfert respectent la limite
+- [ ] Le fil d'Ariane d'un dossier du 5e niveau tient sur un écran de 375 px, sans défilement horizontal
+- [ ] Le sélecteur de l'éditeur et l'onglet Notes ne changent pas
+- [ ] `MAX_DEPTH` est la seule valeur de la limite ; « trois niveaux » et les anciennes formules n'apparaissent plus dans le code, les gabarits, `deploy`, les tests ni le README
+- [ ] Tests dans `tests/dossiers.rs` : 5e niveau accepté, 6e refusé, déplacement trop profond refusé, transfert au parent qui marche ; STATUS et README à jour
 
 ## Décisions
 
-Prises le 26 novembre 2026, par défaut, pour avancer (Rémi a demandé les cinq niveaux et m'a laissé rédiger la section) :
+Prises par Rémi le 26 novembre 2026 :
 
-- **Cinq niveaux en comptant l'espace**, comme « trois niveaux » le comptait (Espace / Dossier / Sous-dossier).
-- **La limite est dans le code**, sans migration : changer de limite plus tard ne demande qu'une constante.
-- **Le sélecteur de l'éditeur reste au premier niveau** : il serait trop long avec quatre niveaux ; « Voir plus… » montre tout.
-- **Les tests de l'ancienne règle changent** : ceux qui vérifiaient le refus d'un troisième niveau (`tests/dossiers.rs`, `tests/api_contenu.rs`) vérifient maintenant ce que la nouvelle règle permet ; la limite elle-même est éprouvée dans `tests/dossiers_cinq_niveaux.rs`.
+- **Cinq niveaux de dossiers sous l'espace**, `MAX_DEPTH = 5`, sans migration.
+- **Déplacement** : profondeur de la destination plus hauteur du dossier ≤ 5, à la place de l'ancienne règle.
+- **Le sélecteur de l'éditeur et l'onglet Notes ne changent pas.**
+
+Par défaut, validées par Rémi le 26 novembre 2026 :
+
+- **On repart de la PR #94**, déjà fusionnée (quatre niveaux de dossiers) : on garde son code (`depth`, `height`, `descendants`, requêtes récursives de la corbeille) et on passe la limite de 4 à 5. Ses tests (`tests/dossiers_cinq_niveaux.rs`) rejoignent `tests/dossiers.rs`, adaptés à la nouvelle limite.
+- **Fil d'Ariane sur téléphone** : sous 640 px, un « … » non cliquable remplace les pas du milieu ; on remonte par le dernier pas visible.
+- **Message de refus** : il nomme le dossier et la destination, et rappelle la limite. Rien n'est renommé ni rangé à moitié.
+- **Supprimer un espace avec transfert** : pas de règle nouvelle, les dossiers gardent leur niveau ; un test le vérifie.
 
 ---
 
@@ -1879,54 +1892,110 @@ Nov 26, 2026 · @Rémi Moreau
 
 ## Contexte
 
-Demandé par Rémi le 26 novembre 2026. Premier module de 1Life à sortir du squelette (« Outils par espace », PR 2) : la carte « Clients » n'est plus « Bientôt ». C'est un carnet de clients de travail, volontairement simple : retrouver un client, ses coordonnées et ce qu'on sait de lui. Compte rendu et Audit restent « Bientôt ».
+Demandé par Rémi le 26 novembre 2026. Le module Clients de 1Life sort du squelette. Un client n'est pas une fiche à part : c'est un dossier de Fichiers, avec ses notes et ses fichiers, plus deux choses que Fichiers n'a pas : des infos en Markdown et les journées prévues chez lui, en emploi du temps et en vue globale (un diagramme de Gantt, une ligne par client et une barre par journée).
+
+Une première version, fusionnée le 26 novembre (PR #95), était un carnet d'adresses à part (table `onelife_clients`) : cette section la remplace. Compte rendu et Audit restent « Bientôt ».
 
 ## Fonctionnement
 
-- **Liste** (`/1life/clients`) : les clients actifs du compte, par nom (majuscules et accents mis à part). Chaque ligne montre le nom, le contact, l'e-mail et le téléphone. Deux filtres, « Actifs » et « Archivés » (`?archives=1`), avec leur nombre.
-- **Recherche** (`?q=`, au fil de la frappe) dans le nom, le contact, l'e-mail et le téléphone, accents et majuscules ignorés (« elan » trouve « Atelier Élan »).
-- **Fiche** : un formulaire, pour créer et pour modifier.
-  - **Nom** : obligatoire, 80 caractères au plus, unique dans le compte, majuscules et accents compris (« Atelier Élan » et « atelier elan » sont le même).
-  - **Contact** : la personne à joindre, facultatif, 80 caractères au plus.
-  - **E-mail** : facultatif, une adresse plausible (une `@`, un domaine avec un point), 254 caractères au plus. Un lien « Écrire à… » quand elle est valide.
-  - **Téléphone** : facultatif, chiffres, espaces et `+ . - ( )`, six chiffres au moins, 30 caractères au plus. Un lien « Appeler le… ».
-  - **Notes** : texte brut, retours à la ligne gardés, 4000 caractères au plus. Pas de Markdown : rien n'est interprété.
-- **Une saisie refusée** réaffiche le formulaire avec ce qui a été tapé et le message (422), sans rien écrire.
-- **Archiver** retire le client de la liste sans l'effacer ; « Remettre dans la liste » le ramène. **Supprimer** demande une confirmation et efface la fiche pour de bon : la corbeille ne garde que les notes, les fichiers, les dossiers et les espaces.
-- **Les clients sont au compte**, pas à un espace : 1Life est un outil réservé, ses clients le suivent dans tous les espaces où il est affiché. Ils n'apparaissent ni dans Perso, ni dans la recherche des notes, ni dans la barre de commandes, ni sur le dashboard.
-- **Hors de l'API**, comme le reste de 1Life : pas de route `/api/v1`, pas d'outil du connecteur Claude, pas de commande d'Hermès.
+**Le dossier des clients**
+
+- Rémi choisit une fois un dossier de ses Fichiers comme **dossier des clients**, dans n'importe quel espace, aux niveaux 1 à 3 (voir Décisions : un client doit pouvoir y recevoir ses sous-dossiers). Il le choisit et le change depuis le module, avec la fenêtre « Ranger » existante, réutilisée et ouverte sur une action du module. Les espaces y sont grisés : un espace n'est pas un dossier.
+- **Chaque sous-dossier direct de ce dossier est un client**, en direct : un dossier créé, renommé, déplacé ou mis à la corbeille dans Fichiers apparaît, change ou disparaît du module. Rien n'est copié : le client, c'est le dossier, et son identifiant est celui du dossier.
+- **« Nouveau client »** (un nom) crée le dossier et ses trois sous-dossiers, Audit, CR et Fichiers, puis ouvre sa fiche. Un nom déjà pris parmi les clients est refusé, comme dans Fichiers.
+- **Sans dossier choisi**, ou si le dossier choisi n'est plus accessible (corbeille, espace quitté) : un état vide explique ce qu'est le dossier des clients et propose de le choisir.
+
+**La page du module** (`/1life/clients`) a deux onglets.
+
+- **Clients** : la liste par nom, avec pour chacun la prochaine journée prévue et le nombre de fichiers (sous-dossiers compris). Recherche par nom au fil de la frappe, accents et majuscules ignorés. Un clic ouvre la fiche. En tête : le chemin du dossier des clients (« Taff / Clients »), « Changer » et « Nouveau client ».
+- **Vue globale** (`/1life/clients?vue=globale`) : le Gantt, décrit plus bas.
+
+**La fiche d'un client** (`/1life/clients/{id}`, l'id du dossier) montre son nom, un lien « Ouvrir dans Fichiers » et trois encarts, empilés sur téléphone.
+
+1. **Infos** : texte libre en Markdown, propre au dossier, affiché rendu (pulldown-cmark puis ammonia, comme les notes). « Modifier » remplace le rendu par une zone de texte dans l'encart. La saisie s'enregistre toute seule par htmx, une seconde après la dernière frappe et à la sortie du champ, avec un indicateur « Enregistrement… » puis « Enregistré ». « Terminé » revient au rendu. 20 000 caractères au plus.
+2. **Prochaines journées**, en emploi du temps : la semaine en cours dans la grille de l'Agenda (`src/calendar/view.rs` et `templates/calendar/_grid.html`, réutilisés : pas de seconde grille). Semaine précédente et suivante par `?semaine=AAAA-MM-JJ`. Seules les journées de ce client y figurent. En tête : « Prochaine journée : jeudi 3 décembre, 9 h – 17 h (dans 7 jours) », ou « aujourd'hui », « demain », ou « Aucune journée prévue ».
+   - **Ajouter une journée** :
+     - date de début, et nombre de jours ouvrés consécutifs (1 par défaut ; du lundi au vendredi, week-ends sautés) ;
+     - horaires : journée (9 h – 17 h), matin (9 h – 12 h 30), après-midi (13 h 30 – 17 h) ou horaires libres (début et fin) ;
+     - intitulé (« Paramétrage », « Formation »…) ;
+     - lieu : sur site ou à distance, plus un texte libre ;
+     - case « Envoyer à Google Agenda », comme dans le formulaire d'événement, proposée seulement si Google Agenda est relié.
+   - **Une journée est un événement de l'Agenda** (table `events`, dans l'espace du dossier client), relié au client par la table `onelife_client_days`. Plusieurs jours ajoutés d'un coup font un événement par jour. Titre de l'événement : « Atelier Test — Paramétrage » ; lieu : « Sur site · Lyon » ou « À distance ». La journée apparaît dans l'Agenda et part dans Google si la case est cochée.
+   - **Dans la fiche**, une journée s'ouvre dans le formulaire du module, un jour à la fois : elle s'y modifie et s'y supprime. Dans l'Agenda, elle s'ouvre dans le formulaire d'événement habituel. La grille réutilisée apprend donc à recevoir l'adresse de chaque événement.
+3. **Fichiers** : le contenu du dossier client (sous-dossiers Audit, CR, Fichiers…, fichiers et notes), navigable dans l'encart avec un petit fil d'Ariane qui part du nom du client. `?dossier=` y est limité au dossier client et à ses sous-dossiers. Chaque élément s'ouvre avec les pages existantes ; un fichier reçoit `depuis` pour revenir à la fiche. « Ouvrir dans Fichiers » mène au même dossier dans l'onglet Fichiers. L'envoi de fichiers dans le dossier ouvert réutilise la zone de dépôt de la page Fichiers (`data-dropzone`, `static/js/files.js`) si elle marche telle quelle ; sinon, l'encart propose seulement « Ouvrir dans Fichiers » pour envoyer.
+
+**La vue globale : un Gantt des journées**
+
+- Une ligne par client, par nom ; une colonne par jour ; une barre par journée. Une journée du matin occupe la moitié gauche de sa colonne, une de l'après-midi la moitié droite, les autres la colonne entière. Week-ends grisés, un trait sur aujourd'hui, jours passés atténués.
+- Période : 4 semaines à partir du lundi de la semaine en cours, ou 3 mois (13 semaines) au choix ; précédent, suivant, « Aujourd'hui ». Option « Seulement les clients qui ont des journées », sur la période affichée.
+- Survol : client, date, horaires et intitulé, par l'élément `<title>` du SVG (info-bulle native, sans JavaScript). Clic : la fiche du client.
+- Rendu par le serveur en SVG : positions et tailles dans les attributs `x`, `y`, `width` et `height`, couleurs par classes. Ni `style=` ni script en ligne (CSP), aucune bibliothèque de Gantt (règle des dépendances front). Sur téléphone, le SVG défile horizontalement dans son cadre, sans faire défiler la page.
+
+**Hors de l'API**, comme le reste de 1Life : ni route `/api/v1`, ni outil du connecteur Claude, ni commande d'Hermès pour le dossier des clients, les infos ou les journées (ajouté à « Hors de l'API »). Les journées restent visibles et modifiables par l'API de l'Agenda, puisque ce sont des événements.
 
 ## Modèle de données
 
+Migration 0027.
+
 | Table | Colonnes | Remarques |
 | --- | --- | --- |
-| `onelife_clients` | id, user\_id, name, contact, email, phone, notes, archived, created\_at, updated\_at | Index unique (`user_id`, `name` NOCASE) ; le code compare aussi les accents. Migration 0026 |
+| `onelife_settings` | user\_id (clé), clients\_folder\_id, updated\_at | Le dossier des clients de chaque compte. `ON DELETE SET NULL` sur le dossier : effacé pour de bon, le choix se vide |
+| `onelife_client_infos` | folder\_id (clé), body\_md, updated\_at, updated\_by | Les infos d'un client. `ON DELETE CASCADE` sur le dossier : elles restent pendant son séjour en corbeille et partent s'il est effacé pour de bon |
+| `onelife_client_days` | event\_id (clé), folder\_id, label, place\_kind (`site` ou `distance`), place, created\_at | Le lien entre un événement et un client. `ON DELETE CASCADE` sur l'événement et sur le dossier |
+
+La date, les horaires et l'envoi à Google sont ceux de l'événement (`events`) : rien n'est dupliqué. La table `onelife_clients` du carnet (migration 0026) n'est plus lue et reste en base (voir Décisions).
 
 ## Sécurité
 
-- **Toutes les adresses de Clients passent par le contrôle de 1Life**, à chaque requête : un compte non autorisé, ou sans session, reçoit la même 404 qu'une adresse qui n'existe pas, pour les pages comme pour les formulaires. Le contrôle passe avant la lecture du numéro et du formulaire : une erreur 400 ou 422 dirait que l'outil existe. Masqué dans l'espace actif, Clients ramène à l'accueil de l'espace.
-- **Une fiche n'est lue, modifiée, archivée ou supprimée que par son compte** : celle d'un autre compte répond 404, même s'il est autorisé à 1Life.
-- **Texte brut** : tout est échappé à l'affichage (askama), rien n'est interprété (ni Markdown ni HTML). Les liens `mailto:` et `tel:` ne sont construits que d'une adresse ou d'un numéro valides.
-- Tout `POST` porte le jeton CSRF.
-- **Dépôt public** : aucun vrai nom de client dans le code, les tests ou les docs ; les tests utilisent des noms inventés.
+- **Tout passe par `enter()` de 1Life**, avant de lire le numéro ou le formulaire : 404 pour un compte non autorisé ou sans session. La même 404 répond pour le dossier d'un autre compte et pour un dossier qui n'est pas un client (pas un sous-dossier direct du dossier des clients du compte).
+- **Accès** : dossiers et notes passent par `space_access` ; les journées, par `events.user_id`, comme dans l'Agenda : chacun ne voit que ses journées.
+- **Corbeille** : un dossier client mis à la corbeille disparaît du module (liste, Gantt, fiche en 404). Restauré, il revient avec ses infos et ses journées.
+- **Contenu** : les infos sont du Markdown nettoyé par ammonia avant l'affichage, comme les notes ; un script injecté est neutralisé. Les noms de dossiers et les intitulés sont échappés par askama, dans le HTML comme dans le SVG.
+- Tout `POST` porte le jeton CSRF. Ni `style=` ni script en ligne.
+- **Dépôt public** : aucun vrai nom de client dans le code, les tests ou les fixtures (« Client Exemple », « Atelier Test »).
+- **Téléphone** : encarts empilés, champs de 16 px au moins, utilisable dans l'app iPhone.
 
 ## Critères d'acceptation
 
-- [ ] Un compte autorisé crée un client, le retrouve dans la liste (par nom) et par la recherche (accents et majuscules ignorés, aussi dans le contact, l'e-mail et le téléphone), puis le modifie
-- [ ] Un nom vide ou déjà pris (majuscules et accents compris), un e-mail ou un téléphone invalide, un nom ou des notes trop longs sont refusés : le formulaire revient avec ce qui a été tapé et le message, rien n'est écrit
-- [ ] Archiver retire le client de la liste, « Archivés » le montre, on le remet ; la suppression demande une confirmation et efface la fiche
-- [ ] Un compte non autorisé, ou sans session, reçoit 404 sur toutes les adresses de Clients (pages et formulaires, avec ou sans l'espace dans l'adresse, numéro illisible compris) ; masqué dans l'espace actif, Clients ramène à l'accueil de l'espace sans rien écrire
-- [ ] Un second compte autorisé ne voit, ne modifie, n'archive ni ne supprime les clients du premier ; il peut avoir un client du même nom
-- [ ] Le nom et les notes d'un client sont affichés comme du texte, sans HTML interprété
-- [ ] L'accueil de 1Life ne marque plus Clients « Bientôt » ; Clients n'est ni dans l'API, ni dans le connecteur, ni dans la barre de commandes, ni dans Hermès
-- [ ] STATUS et README à jour ; aucun vrai nom de client
+- [ ] Sans dossier choisi, le module explique et propose de le choisir ; la fenêtre « Ranger » enregistre le dossier des clients, et « Changer » le remplace
+- [ ] Les clients sont les sous-dossiers directs, en direct : un dossier créé, renommé, déplacé hors du dossier ou mis à la corbeille dans Fichiers apparaît, change ou disparaît du module
+- [ ] « Nouveau client » crée le dossier et ses sous-dossiers Audit, CR et Fichiers, puis ouvre la fiche ; un nom déjà pris est refusé
+- [ ] La liste montre la prochaine journée et le nombre de fichiers de chaque client ; la recherche par nom marche
+- [ ] Les infos s'enregistrent toutes seules et s'affichent rendues ; un script injecté est neutralisé
+- [ ] Une journée ajoutée apparaît dans la fiche (grille de la semaine), dans l'Agenda et dans le Gantt ; case cochée, elle part vers Google
+- [ ] Une demi-journée prend les bons horaires et la moitié de sa colonne dans le Gantt ; plusieurs jours ouvrés d'un coup font un événement par jour, week-ends sautés
+- [ ] Une journée se modifie et se supprime depuis la fiche
+- [ ] « Prochaine journée » donne la bonne date, les bons horaires et le bon délai (aujourd'hui, demain, dans N jours)
+- [ ] Le Gantt : 4 semaines ou 3 mois, précédent, suivant, « Aujourd'hui », option « Seulement les clients qui ont des journées », clic vers la fiche ; aucun style en ligne
+- [ ] L'encart Fichiers navigue dans le dossier client sans en sortir et ouvre les éléments ; un fichier ramène à la fiche
+- [ ] Un second compte autorisé ne voit ni les clients, ni les infos, ni les journées du premier ; ses fiches répondent 404
+- [ ] Un compte non autorisé, ou sans session, reçoit 404 sur toutes les adresses du module (pages et formulaires, avec ou sans l'espace dans l'adresse)
+- [ ] Un client mis à la corbeille disparaît du module, puis revient à la restauration avec ses infos et ses journées
+- [ ] CR et Audit restent « Bientôt » ; rien de Clients dans l'API, le connecteur ni Hermès
+- [ ] Chaque point a son test dans `tests/outil_1life_clients.rs` ; STATUS et README à jour ; aucun vrai nom de client
 
 ## Décisions
 
-Prises le 26 novembre 2026, par défaut, pour avancer (Rémi a demandé le module et m'a laissé rédiger la section) :
+Prises par Rémi le 26 novembre 2026 :
 
-- **Une fiche simple** : nom, contact, e-mail, téléphone, notes, archivé. Pas d'adresse postale, de SIRET, de pièces jointes ni de lien vers les notes et les fichiers : à ajouter plus tard si le besoin se montre.
-- **Clients au compte**, pas à l'espace : 1Life n'a qu'un utilisateur, et un client ne change pas d'espace.
-- **Supprimer efface pour de bon**, après confirmation ; archiver est le geste réversible.
-- **Hors de l'API**, comme le reste de 1Life. À revoir si Rémi veut que Claude ou Hermès lisent ses clients.
-- **Le test du squelette change** : `un_compte_autorise_active_1life_par_espace` attendait Clients « Bientôt » ; il vérifie maintenant que Clients ouvre la liste, et que les deux autres modules restent « Bientôt ».
+- **Le client, c'est le dossier** ; le dossier des clients se choisit avec la fenêtre « Ranger ».
+- **Nouveau client** = le dossier, plus Audit, CR et Fichiers.
+- **Infos** en Markdown, enregistrées toutes seules, rendues comme les notes.
+- **Journées** = événements de l'Agenda reliés au client ; grille de l'Agenda réutilisée ; Gantt en SVG rendu par le serveur.
+- **Hors de l'API**, comme le reste de 1Life.
+
+Par défaut, validées par Rémi le 26 novembre 2026 :
+
+1. **Le carnet de la PR #95 est remplacé.** Son code et ses pages partent. La table `onelife_clients` reste en base sans être lue, pour ne rien perdre de ce qui y a été saisi ; une migration la supprimera quand Rémi aura recopié ce qui compte. Ses 7 tests (`tests/outil_1life_clients.rs`) sont remplacés par ceux de ce module.
+2. **Dossier des clients aux niveaux 1 à 3.** Un client y est alors au plus au niveau 4, et ses sous-dossiers au niveau 5. Plus bas, « Nouveau client » ne pourrait pas créer Audit, CR et Fichiers. Les espaces ne se choisissent pas (grisés dans la fenêtre).
+3. **Un dossier des clients par compte.** Deux comptes autorisés peuvent choisir le même dossier d'un espace partagé : ils voient alors les mêmes clients et les mêmes infos (le dernier enregistrement l'emporte), mais chacun ses journées.
+4. **Un événement par jour** : « 3 jours ouvrés » crée trois événements indépendants, chacun modifiable et supprimable seul. Les jours fériés ne sont pas sautés.
+5. **Demi-journée déduite des horaires**, pas stockée : fin à 13 h au plus tard, c'est le matin ; début à 13 h au plus tôt, l'après-midi ; sinon, la colonne entière. Une journée modifiée dans l'Agenda reste ainsi juste dans le Gantt.
+6. **Titre figé** : renommer un client ne renomme pas ses événements déjà créés ; la fiche et le Gantt montrent toujours le nom du dossier, et une journée enregistrée depuis la fiche reprend le nom actuel.
+7. **Espace d'une journée** : celui du dossier client au moment de l'ajout. Si le dossier change d'espace, ses journées restent dans l'ancien pour l'Agenda ; le module les montre quand même.
+8. **Corbeille** : les journées d'un client en corbeille restent dans l'Agenda. Effacé pour de bon, le dossier emporte ses infos ; ses journées redeviennent des événements ordinaires.
+9. **Notes de l'encart Fichiers** : elles s'ouvrent dans l'éditeur. Le retour à la fiche viendra avec le paramètre `depuis` des notes (« Parcours et espaces », lot 2) ; les fichiers l'ont déjà.
+10. **Prochaine journée** : la première dont la fin est après maintenant ; une journée en cours compte (« aujourd'hui »).
+11. **Gantt sur téléphone** : un seul SVG qui défile, noms compris (pas de colonne de noms figée).
+12. **Adresses** : vue globale par paramètre (`?vue=globale`) ; fiche par l'id du dossier ; une journée par l'id de son événement (`/1life/clients/{id}/journees/{event}`).
+13. **Infos : 20 000 caractères au plus.**
