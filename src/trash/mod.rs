@@ -200,11 +200,19 @@ pub async fn folder(db: &SqlitePool, who: Who<'_>, folder: &Folder) -> AppResult
     )
     .execute(&mut *tx)
     .await?;
-    // Ses sous-dossiers (un niveau au plus) le suivent.
+    // Ses sous-dossiers, à tous les niveaux (cinq au plus, l'espace compris),
+    // le suivent. `UNION` plutôt que `UNION ALL` : une boucle dans la base,
+    // qui ne devrait pas exister, ne ferait pas tourner la requête sans fin.
     sqlx::query!(
-        "UPDATE folders SET space_id = ?, deleted_at = ?, deleted_by = ?, deleted_via = ?,
-           trash_op = ?, trash_root = 0
-         WHERE parent_id = ?",
+        "UPDATE folders SET space_id = ?1, deleted_at = ?2, deleted_by = ?3, deleted_via = ?4,
+           trash_op = ?5, trash_root = 0
+         WHERE id IN (
+           WITH RECURSIVE below(id) AS (
+             SELECT id FROM folders WHERE parent_id = ?6
+             UNION SELECT f.id FROM folders f JOIN below b ON f.parent_id = b.id
+           )
+           SELECT id FROM below
+         )",
         bin,
         now,
         who.user,
@@ -447,28 +455,33 @@ async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<String
     .await?
     .ok_or(AppError::NotFound)?;
     let mut to = origin(db, user, row.space_id, row.trash_folder_id).await?;
-    // Trois niveaux au plus : un dossier qui a des sous-dossiers revient à
-    // la racine ; un dossier ne va que dans un dossier du premier niveau.
-    let has_subs = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "n!: i64" FROM folders WHERE parent_id = ?"#,
-        id
+    // Cinq niveaux au plus : s'il ne tient plus dans son ancien dossier avec
+    // ses sous-dossiers (ce dossier a pu descendre entre-temps), il revient à
+    // la racine de l'espace. Sa hauteur se lit dans la corbeille, où ses
+    // sous-dossiers ont gardé leur parent.
+    // Garde-fou contre une boucle dans la base : on ne descend pas plus bas
+    // que ce que la règle permet.
+    let limit = folders::MAX_DEPTH as i64;
+    let height = sqlx::query_scalar!(
+        r#"WITH RECURSIVE below(id, level) AS (
+             SELECT ?1, 1
+             UNION SELECT f.id, b.level + 1 FROM folders f JOIN below b ON f.parent_id = b.id
+               WHERE b.level <= ?2
+           )
+           SELECT max(level) AS "height!: i64" FROM below"#,
+        id,
+        limit
     )
     .fetch_one(db)
-    .await?
-        > 0;
-    if let Some(parent) = to.folder_id {
-        let top = sqlx::query_scalar!(
-            r#"SELECT parent_id IS NULL AS "top!: bool" FROM folders WHERE id = ?"#,
-            parent
-        )
-        .fetch_one(db)
-        .await?;
-        if has_subs || !top {
-            to.folder_id = None;
-        }
+    .await?;
+    let all = folders::all(db, user).await?;
+    let height = usize::try_from(height).unwrap_or(usize::MAX);
+    if to.folder_id.is_some()
+        && folders::depth(&all, to.folder_id).saturating_add(height) > folders::MAX_DEPTH
+    {
+        to.folder_id = None;
     }
     // Un voisin a pris son nom entre-temps : « Math (2) ».
-    let all = folders::all(db, user).await?;
     let taken = folders::neighbours(&all, to.space_id, to.folder_id, None);
     let name = folders::free_name(&taken, &row.name);
 
@@ -637,7 +650,7 @@ async fn erase_op(db: &SqlitePool, op: i64) -> AppResult<Vec<String>> {
     sqlx::query!("DELETE FROM notes WHERE trash_op = ?", op)
         .execute(&mut *tx)
         .await?;
-    // Les sous-dossiers d'abord, puis les dossiers du premier niveau.
+    // Les sous-dossiers d'abord, puis le dossier mis dans la corbeille.
     sqlx::query!(
         "DELETE FROM folders WHERE trash_op = ? AND parent_id IS NOT NULL",
         op

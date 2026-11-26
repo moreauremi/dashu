@@ -4017,6 +4017,16 @@ input.note-title::placeholder {
   padding-left: 52px;
 }
 
+/* Cinq niveaux au plus, l'espace compris (SPEC, « Dossiers : cinq niveaux ») :
+   deux retraits de plus, du même pas. */
+.dest-d3 {
+  padding-left: 76px;
+}
+
+.dest-d4 {
+  padding-left: 100px;
+}
+
 .dest .i {
   flex: none;
   width: 16px;

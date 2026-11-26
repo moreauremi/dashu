@@ -428,10 +428,11 @@ async fn dossiers_creer_renommer_deplacer_supprimer() {
     assert_eq!(exos["parent"], math_id);
     let exos_id = exos["id"].as_i64().unwrap();
 
-    // Refus : nom pris, troisième niveau, ni espace ni parent.
+    // Refus : nom pris, ni espace ni parent, nom vide. (Le niveau de trop,
+    // au-delà de cinq niveaux, est éprouvé dans
+    // tests/dossiers_cinq_niveaux.rs.)
     for body in [
         json!({ "name": "math", "space": "ecole" }),
-        json!({ "name": "Chapitre", "parent": exos_id }),
         json!({ "name": "Perdu" }),
         json!({ "name": "  ", "space": "ecole" }),
     ] {
@@ -485,7 +486,7 @@ async fn dossiers_creer_renommer_deplacer_supprimer() {
         .api(Method::GET, &format!("/api/v1/notes/{note_id}"), None, t)
         .await;
     assert_eq!(note["space"], "taff");
-    // Un dossier qui a des sous-dossiers ne va pas dans un dossier.
+    // Un dossier ne va pas dans un de ses sous-dossiers.
     let (_, other) = app
         .api(
             Method::POST,
@@ -494,15 +495,21 @@ async fn dossiers_creer_renommer_deplacer_supprimer() {
             t,
         )
         .await;
+    assert!(other["id"].is_i64(), "{other}");
     let (status, refused) = app
         .api(
             Method::PATCH,
             &format!("/api/v1/folders/{math_id}"),
-            Some(json!({ "parent": other["id"] })),
+            Some(json!({ "parent": exos_id })),
             t,
         )
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+    assert!(
+        refused
+            .to_string()
+            .contains("Un dossier ne va pas dans un de ses sous-dossiers.")
+    );
 
     let (_, list) = app
         .api(Method::GET, "/api/v1/folders?space=taff", None, t)

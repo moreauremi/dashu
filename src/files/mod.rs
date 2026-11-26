@@ -158,7 +158,8 @@ struct ListPage {
     upload_space: i64,
     upload_folder: Option<i64>,
     /// Création d'un dossier ici : (espace, dossier parent). Rien à la racine,
-    /// dans Temporaire et dans un sous-dossier (trois niveaux au plus).
+    /// dans Temporaire et au niveau le plus profond (cinq niveaux au plus,
+    /// l'espace compris).
     new_folder: Option<(i64, Option<i64>)>,
     /// « Nouvelle note » : l'adresse qui la crée ici (dossier d'un espace et
     /// dossiers seulement).
@@ -383,15 +384,17 @@ pub async fn list(
         View::Temp => "temporaire".to_string(),
         View::Folder(f) => f.id.to_string(),
     };
+    // Dans un dossier : lui et ses sous-dossiers, à tous les niveaux.
+    let below: Vec<i64> = match &view {
+        View::Folder(f) => std::iter::once(f.id)
+            .chain(folders::descendants(&all, f.id))
+            .collect(),
+        _ => Vec::new(),
+    };
     let in_scope = |space_id: i64, folder_id: Option<i64>| match &view {
         View::Root => ctx.spaces.iter().any(|s| s.id == space_id),
         View::Space => space_id == space.id,
-        View::Folder(f) => {
-            space_id == space.id
-                && folder_id.is_some_and(|id| {
-                    id == f.id || all.iter().any(|x| x.id == id && x.parent_id == Some(f.id))
-                })
-        }
+        View::Folder(_) => space_id == space.id && folder_id.is_some_and(|id| below.contains(&id)),
         View::Temp => false,
     };
     let scoped: Vec<_> = if temp {
@@ -535,7 +538,9 @@ pub async fn list(
     };
     let new_folder = match &view {
         View::Space => Some((space.id, None)),
-        View::Folder(f) if f.is_top() => Some((space.id, Some(f.id))),
+        View::Folder(f) if folders::depth(&all, Some(f.id)) < folders::MAX_DEPTH => {
+            Some((space.id, Some(f.id)))
+        }
         _ => None,
     };
     let new_note = match &view {
