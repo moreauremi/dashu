@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT body_md FROM onelife_client_infos WHERE folder_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "body_md",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2fa985067731f1d46c369e78b04b1e31f30e3fa6c3c17482e23311450ede0958"
+}

@@ -1,45 +1,100 @@
 {% extends "layout.html" %}
-{% block title %}Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
-{#- Liste des clients de 1Life (src/onelife/clients.rs). Réservé aux comptes
-    autorisés (404 pour les autres). Les clients sont au compte, pas à
-    l'espace. Dépôt public : aucun vrai nom de client ici. -#}
+{% block title %}{% if global %}Vue globale · {% endif %}Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- 1Life › Clients (src/onelife/clients/mod.rs) : les sous-dossiers directs du
+    dossier des clients, en liste ou en Gantt (?vue=globale). Réservé aux
+    comptes autorisés (404 pour les autres). Dépôt public : aucun vrai nom de
+    client ici. -#}
 {% block content %}
 <header class="page-head">
   <div>
     <a class="back-link" href="{{ shell.base }}/1life">{{ crate::assets::icon("arrow-left")|safe }}<span>1Life</span></a>
-    <h1>{% if archives %}Clients archivés{% else %}Clients{% endif %}</h1>
+    <h1>Clients</h1>
+    {% if state == "ready" %}<p class="muted client-folder">{{ crate::assets::icon("folder")|safe }}<span>{{ folder_label }}</span></p>{% endif %}
   </div>
-  {% if !archives %}
-  <a class="btn btn-primary" href="{{ shell.base }}/1life/clients/new">{{ crate::assets::icon("plus")|safe }}<span>Nouveau client</span></a>
+  {% if state == "ready" %}
+  <div class="toolbar">
+    {#- La fenêtre « Ranger » (layout.html), en mode dossier des clients. -#}
+    <button class="btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}<span>Changer</span></button>
+    <button class="btn btn-primary" type="button" popovertarget="pm-new-client">{{ crate::assets::icon("plus")|safe }}<span>Nouveau client</span></button>
+    <div id="pm-new-client" class="pop-menu" popover>
+      <p class="pop-title">Nouveau client dans {{ folder_label }}</p>
+      <form class="pop-pages" method="post" action="{{ list_url }}">
+        <input type="text" name="name" maxlength="60" required autocomplete="off" placeholder="Nom du client" aria-label="Nom du nouveau client">
+        <button class="btn btn-primary" type="submit">Créer</button>
+      </form>
+      <p class="pop-hint muted">Avec ses dossiers Audit, CR et Fichiers.</p>
+    </div>
+  </div>
   {% endif %}
 </header>
 
+{% if let Some(error) = error %}
+<p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+<form class="client-new" method="post" action="{{ list_url }}">
+  <input type="text" name="name" value="{{ typed }}" maxlength="60" required autocomplete="off" aria-label="Nom du nouveau client">
+  <button class="btn btn-primary" type="submit">Créer le client</button>
+</form>
+{% endif %}
+
+{% if state == "unset" %}
+<div class="empty-state">
+  {{ crate::assets::icon("users")|safe }}
+  <p>Choisir le dossier des clients</p>
+  <p class="muted">Un dossier de tes Fichiers, dans n'importe quel espace. Chacun de ses sous-dossiers est un client : ses notes et ses fichiers, plus ses infos et ses journées.</p>
+  <button class="btn btn-primary" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>Choisir le dossier des clients</button>
+</div>
+{% else if state == "gone" %}
+<div class="empty-state">
+  {{ crate::assets::icon("alert")|safe }}
+  <p>Le dossier des clients n'est plus accessible</p>
+  <p class="muted">Il est dans la corbeille, ou dans un espace que tu as quitté. Restaure-le, ou choisis-en un autre.</p>
+  <button class="btn btn-primary" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>Choisir le dossier des clients</button>
+</div>
+{% else %}
+<nav class="segmented client-tabs" aria-label="Vue">
+  <a href="{{ list_url }}"{% if !global %} aria-current="true"{% endif %}>Clients</a>
+  <a href="{{ list_url }}?vue=globale"{% if global %} aria-current="true"{% endif %}>Vue globale</a>
+</nav>
+
+{% if let Some(nav) = nav %}
+{#- La vue globale : un Gantt en SVG rendu par le serveur (onelife/_gantt.html). -#}
+<div class="toolbar gantt-tools">
+  <div class="btn-group" role="group" aria-label="Période affichée">
+    <a class="icon-btn" href="{{ nav.prev }}" aria-label="Période précédente">{{ crate::assets::icon("chevron-left")|safe }}</a>
+    <a class="btn" href="{{ nav.today }}">Aujourd'hui</a>
+    <a class="icon-btn" href="{{ nav.next }}" aria-label="Période suivante">{{ crate::assets::icon("chevron-right")|safe }}</a>
+  </div>
+  <div class="segmented" role="group" aria-label="Durée">
+    <a href="{{ nav.month }}"{% if !nav.quarter_on %} aria-current="true"{% endif %}>4 semaines</a>
+    <a href="{{ nav.quarter }}"{% if nav.quarter_on %} aria-current="true"{% endif %}>3 mois</a>
+  </div>
+  <a class="chip" href="{{ nav.busy }}" aria-pressed="{% if nav.busy_on %}true{% else %}false{% endif %}">Seulement les clients qui ont des journées</a>
+</div>
+<p class="muted gantt-title">{{ nav.title }}</p>
+{% if let Some(g) = gantt %}
+{% if g.lines.is_empty() %}
+<div class="empty-state"><p>{% if total == 0 %}Aucun client pour l'instant{% else %}Aucune journée sur cette période{% endif %}</p></div>
+{% else %}
+{% include "onelife/_gantt.html" %}
+{% endif %}
+{% endif %}
+{% else %}
 {#- Recherche au fil de la frappe : htmx redemande la page et n'en garde que
     #client-results (hx-select). Sans JavaScript, Entrée envoie le formulaire. -#}
-<form class="searchbar" action="{{ shell.base }}/1life/clients" method="get" role="search">
+<form class="searchbar" action="{{ list_url }}" method="get" role="search">
   {{ crate::assets::icon("search")|safe }}
   <input type="search" name="q" value="{{ q }}" autocomplete="off"
          placeholder="Rechercher un client" aria-label="Rechercher un client"
-         hx-get="{{ shell.base }}/1life/clients" hx-trigger="input changed delay:200ms" hx-include="closest form"
+         hx-get="{{ list_url }}" hx-trigger="input changed delay:200ms" hx-include="closest form"
          hx-target="#client-results" hx-select="#client-results" hx-swap="outerHTML" hx-push-url="true">
-  {% if archives %}<input type="hidden" name="archives" value="1">{% endif %}
 </form>
 
 <div id="client-results">
-  <nav class="chips" aria-label="Clients montrés">
-    <a class="chip" href="{{ shell.base }}/1life/clients"{% if !archives %} aria-current="true"{% endif %}>Actifs<span class="chip-count">{% if archives %}{{ other_count }}{% else %}{{ total }}{% endif %}</span></a>
-    <a class="chip" href="{{ shell.base }}/1life/clients?archives=1"{% if archives %} aria-current="true"{% endif %}>Archivés<span class="chip-count">{% if archives %}{{ total }}{% else %}{{ other_count }}{% endif %}</span></a>
-  </nav>
-
   {% if rows.is_empty() %}
-    {% if total == 0 && q.is_empty() %}
+    {% if total == 0 %}
     <div class="empty-state">
-      {% if archives %}
-      <p>Aucun client archivé</p>
-      {% else %}
       <p>Aucun client pour l'instant</p>
-      <a class="btn" href="{{ shell.base }}/1life/clients/new">Ajouter le premier</a>
-      {% endif %}
+      <p class="muted">« Nouveau client » crée son dossier dans {{ folder_label }}, ou crée un dossier dans Fichiers.</p>
     </div>
     {% else %}
     <div class="empty-state"><p>Aucun client ne correspond</p></div>
@@ -48,15 +103,16 @@
   <ul class="client-list" role="list">
     {% for row in rows %}
     <li>
-      <a class="client-row" href="{{ shell.base }}/1life/clients/{{ row.id }}">
+      <a class="client-row" href="{{ row.href }}">
         <span class="client-name">{{ row.name }}</span>
-        {% if !row.contact.is_empty() %}<span class="client-meta">{{ row.contact }}</span>{% endif %}
-        {% if !row.email.is_empty() %}<span class="client-meta">{{ row.email }}</span>{% endif %}
-        {% if !row.phone.is_empty() %}<span class="client-meta">{{ row.phone }}</span>{% endif %}
+        <span class="client-meta">{% if let Some(next) = row.next %}Prochaine journée : {{ next }}{% else %}Aucune journée prévue{% endif %}</span>
+        <span class="client-meta">{{ row.files }}</span>
       </a>
     </li>
     {% endfor %}
   </ul>
   {% endif %}
 </div>
+{% endif %}
+{% endif %}
 {% endblock %}

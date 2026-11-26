@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT clients_folder_id FROM onelife_settings WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "clients_folder_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c5ab740b3117ba3a9c6c037b6238515c6bcc2aa4b1fb1e41f8ab1224699856dc"
+}

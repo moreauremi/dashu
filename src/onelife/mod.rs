@@ -59,7 +59,7 @@ pub const MODULES: &[Module] = &[
         id: "clients",
         name: "Clients",
         icon: "users",
-        summary: "Retrouver ses clients.",
+        summary: "Ses clients : dossiers, infos et journées.",
         soon: false,
     },
 ];

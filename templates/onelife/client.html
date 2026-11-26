@@ -1,73 +1,108 @@
 {% extends "layout.html" %}
-{% block title %}{% if id.is_some() %}{{ fields.name }}{% else %}Nouveau client{% endif %} · Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
-{#- Fiche d'un client de 1Life (src/onelife/clients.rs) : un formulaire pour
-    la créer ou la modifier, puis archiver et supprimer. Tout est du texte
-    brut, échappé ici : rien n'est interprété. -#}
+{% block title %}{{ name }} · Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Fiche d'un client de 1Life (src/onelife/clients/mod.rs) : le dossier, ses
+    infos, ses journées dans la grille de l'Agenda et son contenu. Les trois
+    encarts s'empilent sur téléphone. -#}
 {% block content %}
 <header class="page-head">
   <div>
-    <a class="back-link" href="{{ shell.base }}/1life/clients{% if archived %}?archives=1{% endif %}">{{ crate::assets::icon("arrow-left")|safe }}<span>Clients</span></a>
-    <h1>{% if id.is_some() %}{{ fields.name }}{% else %}Nouveau client{% endif %}</h1>
+    <a class="back-link" href="{{ list_url }}">{{ crate::assets::icon("arrow-left")|safe }}<span>Clients</span></a>
+    <h1>{{ name }}</h1>
   </div>
-  {% if archived %}<span class="badge-soon">Archivé</span>{% endif %}
+  <a class="btn" href="{{ files_url }}">{{ crate::assets::icon("folder")|safe }}<span>Ouvrir dans Fichiers</span></a>
 </header>
 
-<section class="card form-card">
-  <div class="card-body">
-    {% if let Some(error) = error %}
-    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
-    {% endif %}
+<div class="client-cards">
+  {% include "onelife/_infos.html" %}
 
-    <form class="stack" method="post" action="{{ shell.base }}/1life/clients{% if let Some(id) = id %}/{{ id }}{% endif %}">
-      <label class="field">
-        <span class="field-label">Nom</span>
-        <input type="text" name="name" value="{{ fields.name }}" maxlength="80" required autocomplete="off"{% if id.is_none() %} autofocus{% endif %}>
-      </label>
-
-      <label class="field">
-        <span class="field-label">Contact</span>
-        <input type="text" name="contact" value="{{ fields.contact }}" maxlength="80" autocomplete="off" placeholder="La personne à joindre (facultatif)">
-      </label>
-
-      <label class="field">
-        <span class="field-label">E-mail</span>
-        <input type="email" name="email" value="{{ fields.email }}" maxlength="254" autocomplete="off" placeholder="Facultatif">
-        {% if let Some(href) = mailto %}<a class="hint client-link" href="{{ href }}">Écrire à {{ fields.email }}</a>{% endif %}
-      </label>
-
-      <label class="field">
-        <span class="field-label">Téléphone</span>
-        <input type="tel" name="phone" value="{{ fields.phone }}" maxlength="30" autocomplete="off" placeholder="Facultatif">
-        {% if let Some(href) = tel %}<a class="hint client-link" href="{{ href }}">Appeler le {{ fields.phone }}</a>{% endif %}
-      </label>
-
-      <label class="field">
-        <span class="field-label">Notes</span>
-        <textarea class="client-notes" name="notes" rows="6" maxlength="4000" placeholder="Ce qu'il faut savoir : texte brut, retours à la ligne gardés">{{ fields.notes }}</textarea>
-      </label>
-
-      <div class="space-actions">
-        <button class="btn btn-primary" type="submit">{% if id.is_some() %}Enregistrer{% else %}Créer le client{% endif %}</button>
-        <a class="btn" href="{{ shell.base }}/1life/clients">Annuler</a>
-      </div>
-    </form>
-
-    {% if let Some(id) = id %}
-    <div class="space-actions client-actions">
-      <form method="post" action="{{ shell.base }}/1life/clients/{{ id }}/archive">
-        {% if archived %}
-        <input type="hidden" name="archived" value="0">
-        <button class="btn" type="submit">Remettre dans la liste</button>
-        {% else %}
-        <input type="hidden" name="archived" value="1">
-        <button class="btn" type="submit">Archiver</button>
-        {% endif %}
-      </form>
-      <form method="post" action="{{ shell.base }}/1life/clients/{{ id }}/delete" hx-confirm="Supprimer « {{ fields.name }} » pour de bon ? La fiche ne va pas dans la corbeille.">
-        <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer le client</button>
-      </form>
+  <section class="card client-days" aria-labelledby="days-title">
+    <div class="card-head">
+      <h2 id="days-title">Prochaines journées</h2>
+      <a class="card-link" href="{{ new_day }}">{{ crate::assets::icon("plus")|safe }}Ajouter une journée</a>
     </div>
-    {% endif %}
-  </div>
-</section>
+    <div class="card-body">
+      <p class="client-next">{% if let Some(next) = next %}Prochaine journée : <strong>{{ next }}</strong>{% else %}Aucune journée prévue{% endif %}</p>
+      <div class="toolbar">
+        <div class="btn-group" role="group" aria-label="Semaine affichée">
+          <a class="icon-btn" href="{{ prev_week }}" aria-label="Semaine précédente">{{ crate::assets::icon("chevron-left")|safe }}</a>
+          <a class="btn" href="{{ this_week }}">Cette semaine</a>
+          <a class="icon-btn" href="{{ next_week }}" aria-label="Semaine suivante">{{ crate::assets::icon("chevron-right")|safe }}</a>
+        </div>
+        <span class="muted">{{ week_title }}</span>
+      </div>
+      {#- La grille de l'Agenda, réutilisée : chaque journée y ouvre le
+          formulaire du module (Grid::relink). -#}
+      {% include "calendar/_grid.html" %}
+    </div>
+  </section>
+
+  <section class="card client-files" aria-labelledby="files-title">
+    <div class="card-head">
+      <h2 id="files-title">Fichiers</h2>
+      <a class="card-link" href="{{ panel.open }}">Ouvrir dans Fichiers</a>
+    </div>
+    <div class="card-body">
+      {% if panel.crumbs.len() > 1 %}
+      <nav class="crumbs" aria-label="Emplacement">
+        {%- for crumb in panel.crumbs %}{% if !crumb.href.is_empty() %}
+        <a class="crumb" href="{{ crumb.href }}">{{ crumb.label }}</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+        {%- else %}<span class="crumb" aria-current="page">{{ crumb.label }}</span>{% endif %}{% endfor %}
+      </nav>
+      {% endif %}
+
+      {% if let Some(upload) = panel.upload %}
+      {#- La zone de dépôt de la page Fichiers (static/js/files.js), sur le
+          dossier montré ; après l'envoi, files.js recharge #file-results. -#}
+      <div class="dropzone client-drop" data-dropzone data-max="{{ upload.max_bytes }}" data-max-label="{{ upload.max_label }}" data-folder="{{ upload.folder }}">
+        {{ crate::assets::icon("upload")|safe }}
+        <p>Glisse des fichiers ici, ou
+          <label class="file-pick-link">choisis-les<input class="sr-only" type="file" multiple data-upload-input></label>
+        </p>
+        <p class="muted">{{ upload.max_label }} au plus par fichier</p>
+      </div>
+      <ul class="upload-queue" role="list" aria-live="polite" data-upload-queue></ul>
+      {% endif %}
+
+      <div id="file-results">
+        {% if panel.folders.is_empty() && panel.notes.is_empty() && panel.files.is_empty() %}
+        <p class="muted">Rien dans ce dossier pour l'instant.</p>
+        {% else %}
+        <ul class="file-list" role="list">
+          {% for folder in panel.folders %}
+          <li class="file-row folder-row">
+            <a class="folder-name" href="{{ folder.href }}">
+              <span class="file-thumb file-thumb-icon folder-icon">{{ crate::assets::icon("folder")|safe }}</span>
+              <span>{{ folder.name }}</span>
+            </a>
+            <span class="file-meta">{{ folder.summary }}</span>
+          </li>
+          {% endfor %}
+          {% for note in panel.notes %}
+          <li class="file-row note-file-row">
+            <a class="note-file-name" href="/notes/{{ note.id }}">
+              <span class="file-thumb file-thumb-icon">{{ crate::assets::icon("notes")|safe }}</span>
+              <span>{{ note.title }}</span>
+            </a>
+            <span class="file-meta">Note</span>
+          </li>
+          {% endfor %}
+          {% for file in panel.files %}
+          <li class="file-row">
+            <a class="file-name" href="{{ file.href }}">
+              {%- if let Some(thumb) = file.thumb %}
+              <img class="file-thumb" src="{{ thumb }}" alt="" width="40" height="40" loading="lazy" decoding="async">
+              {%- else %}
+              <span class="file-thumb file-thumb-icon">{{ crate::assets::icon(file.icon)|safe }}</span>
+              {%- endif %}
+              <span>{{ file.name }}</span>
+            </a>
+            <span class="file-meta">{{ file.meta }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
 {% endblock %}

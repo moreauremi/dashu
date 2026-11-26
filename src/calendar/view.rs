@@ -66,6 +66,30 @@ pub struct Grid {
     pub is_empty: bool,
 }
 
+impl Grid {
+    /// Réécrit l'adresse de chaque événement de dashu (`/calendar/events/{id}`)
+    /// avec `to(id)` : la fiche d'un client de 1Life ouvre ainsi une journée
+    /// dans le formulaire du module, et la même grille sert aux deux.
+    pub fn relink(&mut self, to: impl Fn(i64) -> String) {
+        let swap = |href: &mut String| {
+            if let Some(id) = href
+                .strip_prefix("/calendar/events/")
+                .and_then(|n| n.parse::<i64>().ok())
+            {
+                *href = to(id);
+            }
+        };
+        for day in &mut self.days {
+            for item in &mut day.all_day {
+                swap(&mut item.href);
+            }
+            for event in &mut day.events {
+                swap(&mut event.href);
+            }
+        }
+    }
+}
+
 pub struct HourMark {
     pub label: String,
     pub slot: u32,
@@ -468,6 +492,30 @@ mod tests {
         assert_eq!(grid.days[1].events[0].columns, 1);
         // La grille commence toujours à 8 h, pas à minuit.
         assert_eq!(grid.first_hour, 8);
+    }
+
+    #[test]
+    fn les_adresses_des_evenements_se_reecrivent() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
+        let start = time::day_start(date);
+        let mut own = event(
+            "Paramétrage",
+            utc(2026, 11, 18, 8, 0),
+            utc(2026, 11, 18, 16, 0),
+        );
+        own.event_id = Some(7);
+        let mut long = event("Formation", start, start + 86_400);
+        long.all_day = true;
+        long.event_id = Some(8);
+        let course = event("MATHS", utc(2026, 11, 18, 7, 0), utc(2026, 11, 18, 8, 0));
+        let mut grid = build(&[date], &[own, long, course], 0);
+        grid.relink(|id| format!("/1life/clients/3/journees/{id}"));
+        let day = &grid.days[0];
+        assert_eq!(day.all_day[0].href, "/1life/clients/3/journees/8");
+        let hrefs: Vec<&str> = day.events.iter().map(|e| e.href.as_str()).collect();
+        assert!(hrefs.contains(&"/1life/clients/3/journees/7"));
+        // Un cours iCal n'a toujours pas de lien.
+        assert!(hrefs.contains(&""));
     }
 
     #[test]

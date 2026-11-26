@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_settings (user_id, clients_folder_id, updated_at) VALUES (?, ?, ?)\n         ON CONFLICT (user_id) DO UPDATE SET clients_folder_id = excluded.clients_folder_id,\n                                             updated_at = excluded.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "441a6cc6d450ed472b1990b5b0a61534129a564ee16af896357658d2b825dc37"
+}

@@ -1,0 +1,32 @@
+{#- Encart Infos d'une fiche client (1Life › Clients) : le Markdown rendu
+    (pulldown-cmark puis ammonia, comme les notes), ou la zone de texte.
+    Pendant la frappe, htmx enregistre une seconde après la dernière touche et
+    à la sortie du champ (?auto=1) ; « Terminé » renvoie l'encart rendu. -#}
+<section class="card client-infos" id="client-infos" aria-labelledby="infos-title">
+  <div class="card-head">
+    <h2 id="infos-title">Infos</h2>
+    {% if !infos.editing %}
+    <a class="card-link" href="{{ infos.fiche }}?modifier=1" hx-get="{{ infos.action }}?modifier=1" hx-target="#client-infos" hx-swap="outerHTML" hx-push-url="false">{{ crate::assets::icon("pencil")|safe }}Modifier</a>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if infos.editing %}
+    {% if let Some(error) = infos.error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+    <form class="stack" method="post" action="{{ infos.action }}" hx-post="{{ infos.action }}" hx-target="#client-infos" hx-swap="outerHTML">
+      <textarea class="client-notes" name="body" rows="10" maxlength="{{ infos.max }}" aria-label="Infos du client, en Markdown" autofocus
+                hx-post="{{ infos.action }}?auto=1" hx-trigger="input changed delay:1s, blur changed" hx-target="#infos-status" hx-swap="innerHTML" hx-indicator="#infos-saving">{{ infos.body }}</textarea>
+      <div class="infos-foot">
+        <span class="hint">En Markdown : **gras**, listes, liens… Enregistré tout seul.</span>
+        <span class="infos-state" role="status"><span id="infos-saving" class="infos-saving">Enregistrement…</span><span id="infos-status"></span></span>
+        <button class="btn btn-primary" type="submit">Terminé</button>
+      </div>
+    </form>
+    {% else if infos.html.trim().is_empty() %}
+    <p class="muted">Rien pour l'instant : « Modifier » pour noter ce qu'il faut savoir sur ce client.</p>
+    {% else %}
+    <article class="prose client-infos-body">{{ infos.html|safe }}</article>
+    {% endif %}
+  </div>
+</section>

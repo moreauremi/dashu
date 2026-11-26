@@ -2590,11 +2590,196 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   outline-offset: 0;
 }
 
-/* Archiver et supprimer, sous le formulaire de la fiche. */
-.client-actions {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+/* Le dossier des clients, sous le titre : « Taff / Clients ». */
+.client-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.client-folder .i {
+  width: 16px;
+  height: 16px;
+}
+
+/* Un nouveau client refusé : le nom tapé, à corriger. */
+.client-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.client-new input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.client-tabs {
+  margin-bottom: 16px;
+}
+
+/* La fiche : trois encarts, côte à côte sur grand écran, empilés sur
+   téléphone. La grille de la semaine prend toute la largeur. */
+.client-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.client-days {
+  grid-column: 1 / -1;
+}
+
+.client-infos-body {
+  overflow-wrap: anywhere;
+}
+
+.client-next {
+  margin: 0;
+}
+
+.infos-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.infos-foot .hint {
+  flex: 1 1 200px;
+}
+
+.infos-state {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* « Enregistrement… » pendant l'envoi (htmx pose htmx-request sur
+   l'indicateur), « Enregistré à 14:32 » ensuite. */
+.infos-saving {
+  display: none;
+}
+
+.infos-saving.htmx-request {
+  display: inline;
+}
+
+.infos-saving.htmx-request + #infos-status {
+  display: none;
+}
+
+.client-drop {
+  padding: 16px;
+}
+
+.file-pick-link {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Formulaire d'une journée : les heures ne servent qu'aux horaires libres. */
+.day-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.day-form:not(:has(input[name="creneau"][value="libre"]:checked)) .day-free {
+  display: none;
+}
+
+/* Vue globale : un Gantt en SVG (src/onelife/clients/gantt.rs). Le cadre
+   défile horizontalement, sans faire défiler la page. */
+.gantt-tools {
+  margin-bottom: 8px;
+}
+
+.gantt-tools .chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gantt-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.gantt-frame {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+.gantt {
+  display: block;
+  font-family: inherit;
+}
+
+.gantt-weekend {
+  fill: color-mix(in oklab, var(--text) 7%, transparent);
+}
+
+.gantt-past {
+  fill: color-mix(in oklab, var(--text) 3%, transparent);
+}
+
+.gantt-month {
+  fill: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gantt-day {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+
+.gantt-day.is-today {
+  fill: var(--accent);
+  font-weight: 700;
+}
+
+.gantt-rule {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.gantt-name {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gantt-row:hover .gantt-name,
+.gantt-row:focus-visible .gantt-name {
+  fill: var(--accent);
+  text-decoration: underline;
+}
+
+.gantt-bar {
+  fill: var(--accent);
+}
+
+.gantt-bar.is-past {
+  fill-opacity: 0.4;
+}
+
+.gantt-row:hover .gantt-bar {
+  fill-opacity: 0.8;
+}
+
+.gantt-today {
+  stroke: var(--danger);
+  stroke-width: 2;
 }
 
 /* Outils affichés dans un espace : un interrupteur par outil (Réglages › Espaces). */
@@ -6002,6 +6187,7 @@ ol.setup-hint {
   input[type="search"],
   input[type="date"],
   input[type="time"],
+  input[type="number"],
   select,
   .client-notes {
     /* 16 px : en dessous, iOS zoome sur le champ quand on le touche. */

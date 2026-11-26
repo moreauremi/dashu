@@ -1,0 +1,33 @@
+{#- Vue globale de 1Life › Clients : un Gantt en SVG, rendu par le serveur
+    (src/onelife/clients/gantt.rs). Positions et tailles dans les attributs,
+    couleurs par classes : ni style= ni script (CSP). L'info-bulle de chaque
+    barre est son <title>, native. Le cadre défile horizontalement. -#}
+<div class="gantt-frame">
+  <svg class="gantt" xmlns="http://www.w3.org/2000/svg" width="{{ g.width }}" height="{{ g.height }}" viewBox="0 0 {{ g.width }} {{ g.height }}" role="img" aria-label="{{ g.label }}">
+    {%- for col in g.columns %}
+    {%- if col.weekend %}
+    <rect class="gantt-weekend" x="{{ col.x }}" y="0" width="{{ crate::onelife::clients::gantt::COL }}" height="{{ g.height }}"/>
+    {%- else if col.past %}
+    <rect class="gantt-past" x="{{ col.x }}" y="0" width="{{ crate::onelife::clients::gantt::COL }}" height="{{ g.height }}"/>
+    {%- endif %}
+    {%- if let Some(month) = col.month %}
+    <text class="gantt-month" x="{{ col.x + 4 }}" y="16">{{ month }}</text>
+    {%- endif %}
+    <text class="gantt-day{% if col.today %} is-today{% endif %}" x="{{ col.mid }}" y="36" text-anchor="middle">{{ col.day }}</text>
+    {%- endfor %}
+    <line class="gantt-rule" x1="0" y1="{{ crate::onelife::clients::gantt::HEAD }}" x2="{{ g.width }}" y2="{{ crate::onelife::clients::gantt::HEAD }}"/>
+    {%- for line in g.lines %}
+    <a class="gantt-row" href="{{ line.href }}">
+      <title>{{ line.full_name }}</title>
+      <text class="gantt-name" x="8" y="{{ line.text_y }}">{{ line.name }}</text>
+      {%- for bar in line.bars %}
+      <rect class="gantt-bar{% if bar.past %} is-past{% endif %}" x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" rx="4"><title>{{ bar.title }}</title></rect>
+      {%- endfor %}
+    </a>
+    <line class="gantt-rule" x1="0" y1="{{ line.y + crate::onelife::clients::gantt::ROW }}" x2="{{ g.width }}" y2="{{ line.y + crate::onelife::clients::gantt::ROW }}"/>
+    {%- endfor %}
+    {%- if let Some(x) = g.today_x %}
+    <line class="gantt-today" x1="{{ x }}" y1="22" x2="{{ x }}" y2="{{ g.height }}"/>
+    {%- endif %}
+  </svg>
+</div>

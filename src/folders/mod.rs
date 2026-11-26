@@ -801,6 +801,9 @@ pub struct Dest {
     pub color: String,
     /// Là où l'élément est déjà.
     pub current: bool,
+    /// Pas une destination possible (un espace, pour le dossier des clients
+    /// de 1Life) : montré, mais grisé.
+    pub disabled: bool,
 }
 
 /// Ce que la fenêtre « Ranger » propose pour un élément.
@@ -814,6 +817,9 @@ pub struct Reach {
     /// Le dossier qu'on déplace : ni lui ni ses sous-dossiers ne sont des
     /// destinations.
     pub moving: Option<i64>,
+    /// Les espaces eux-mêmes se choisissent (faux pour le dossier des clients
+    /// de 1Life : un espace n'est pas un dossier).
+    pub spaces: bool,
 }
 
 /// Toutes les destinations possibles, dans l'ordre de l'arborescence :
@@ -829,6 +835,7 @@ pub fn destinations(spaces: &[Space], folders: &[Folder], reach: &Reach) -> Vec<
             depth: 0,
             color: space.color.clone(),
             current: reach.here == Some((space.id, None)),
+            disabled: !reach.spaces,
         });
         branch(&mut out, space, folders, reach, None, 1);
     }
@@ -860,6 +867,7 @@ fn branch(
             depth,
             color: space.color.clone(),
             current: reach.here == Some((space.id, Some(folder.id))),
+            disabled: false,
         });
         branch(out, space, folders, reach, Some(folder.id), depth + 1);
     }
@@ -882,13 +890,16 @@ pub struct DestinationsQuery {
     note: Option<i64>,
     fichier: Option<i64>,
     dossier: Option<i64>,
+    /// `1` : choisir le dossier des clients de 1Life.
+    clients: Option<String>,
     /// Page où revenir après le rangement.
     next: Option<String>,
 }
 
 /// `GET /destinations?note=…`, `?fichier=…` ou `?dossier=…` : le contenu de
 /// la fenêtre « Ranger » (htmx), un bouton par espace et par dossier où
-/// l'élément peut aller.
+/// l'élément peut aller. `?clients=1` : le dossier des clients de 1Life
+/// (404 pour un compte qui n'y est pas autorisé).
 pub async fn picker(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -901,6 +912,32 @@ pub async fn picker(
         .map(|n| web::local_path(Some(n)).to_string())
         .unwrap_or_default();
     let folders = all(&state.db, user).await?;
+    if query.clients.as_deref() == Some("1") {
+        if ctx.tools.tool(crate::onelife::TOOL).is_none() {
+            return Err(AppError::NotFound);
+        }
+        // Les dossiers des niveaux 1 à 3 : un client y a la place de ses
+        // sous-dossiers. Le choix actuel est marqué « Ici ».
+        let chosen = crate::onelife::clients::chosen(&state.db, user).await?;
+        let here = chosen
+            .and_then(|id| folders.iter().find(|f| f.id == id))
+            .map(|f| (f.space_id, Some(f.id)));
+        return Ok(web::html(DestinationsFragment {
+            title: "Dossier des clients".into(),
+            action: format!("/e/{}/1life/clients/dossier", ctx.active.slug),
+            next: String::new(),
+            items: destinations(
+                &ctx.spaces,
+                &folders,
+                &Reach {
+                    here,
+                    depth: crate::onelife::clients::FOLDER_MAX_DEPTH,
+                    moving: None,
+                    spaces: false,
+                },
+            ),
+        }));
+    }
     let (title, action, reach, next) = match (query.note, query.fichier, query.dossier) {
         (Some(id), _, _) => {
             let note = sqlx::query!(
@@ -930,6 +967,7 @@ pub async fn picker(
                     here: Some((note.space_id, note.folder_id)),
                     depth: MAX_DEPTH,
                     moving: None,
+                    spaces: true,
                 },
                 next,
             )
@@ -954,6 +992,7 @@ pub async fn picker(
                         here: None,
                         depth: MAX_DEPTH,
                         moving: None,
+                        spaces: true,
                     },
                     next,
                 )
@@ -965,6 +1004,7 @@ pub async fn picker(
                         here: Some((file.space_id, file.folder_id)),
                         depth: MAX_DEPTH,
                         moving: None,
+                        spaces: true,
                     },
                     next,
                 )
@@ -985,6 +1025,7 @@ pub async fn picker(
                     here: Some((folder.space_id, folder.parent_id)),
                     depth: reach_depth,
                     moving: Some(id),
+                    spaces: true,
                 },
                 next,
             )
