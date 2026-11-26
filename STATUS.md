@@ -435,7 +435,7 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 - [x] Adresse d'un outil masqué : retour à l'accueil de l'espace, message « Cet outil est masqué dans cet espace. » et lien vers les réglages (le message reste 8 secondes au lieu de 4 quand il porte un lien). Test `adresse_d_un_outil_masque_ramene_a_l_accueil`.
 - [x] Réglages indépendants d'un espace à l'autre et d'un compte à l'autre, espace partagé compris : `reglages_independants_d_un_espace_et_d_un_compte_a_l_autre`.
 - [x] Le dashboard ne se masque pas, un outil inconnu est refusé : `l_accueil_ne_se_masque_pas_et_un_outil_inconnu_est_refuse`. Interrupteur htmx (bloc de l'espace et barre latérale par `hx-swap-oob`) : `interrupteur_htmx_renvoie_le_bloc_et_la_barre_laterale`.
-- [x] Migration 0023 (`space_tools`) : elle n'écrit rien, tout reste affiché. Test `la_migration_ne_masque_rien`.
+- [x] Migration 0024 (`space_tools`) : elle n'écrit rien, tout reste affiché. Test `la_migration_ne_masque_rien`.
 - [x] API : notes créées et listées dans un espace où Notes est masqué ; `GET` et `PUT /api/v1/spaces/{slug}/tools`, refus sans rien écrire. Test `l_api_travaille_sur_un_outil_masque_et_regle_les_outils`. Connecteur Claude : `lire_outils_espace`, `modifier_outils_espace` (62 outils en tout), test `le_connecteur_claude_lit_et_regle_les_outils`. Hermès : `tools`, `tools-set`, skill 1.5.0, vérifiés par une relecture seulement.
 - [x] Vu dans le navigateur, sur ordinateur, avec une copie locale du binaire : l'interrupteur s'enregistre, la barre latérale perd Fichiers sans rechargement, `/e/perso/files` ramène à l'accueil avec le message et son lien, aucune erreur dans la console.
 - [ ] Sur iPhone, et sur le serveur après `dashu-update`.
