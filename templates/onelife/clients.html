@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block title %}Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Liste des clients de 1Life (src/onelife/clients.rs). Réservé aux comptes
+    autorisés (404 pour les autres). Les clients sont au compte, pas à
+    l'espace. Dépôt public : aucun vrai nom de client ici. -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ shell.base }}/1life">{{ crate::assets::icon("arrow-left")|safe }}<span>1Life</span></a>
+    <h1>{% if archives %}Clients archivés{% else %}Clients{% endif %}</h1>
+  </div>
+  {% if !archives %}
+  <a class="btn btn-primary" href="{{ shell.base }}/1life/clients/new">{{ crate::assets::icon("plus")|safe }}<span>Nouveau client</span></a>
+  {% endif %}
+</header>
+
+{#- Recherche au fil de la frappe : htmx redemande la page et n'en garde que
+    #client-results (hx-select). Sans JavaScript, Entrée envoie le formulaire. -#}
+<form class="searchbar" action="{{ shell.base }}/1life/clients" method="get" role="search">
+  {{ crate::assets::icon("search")|safe }}
+  <input type="search" name="q" value="{{ q }}" autocomplete="off"
+         placeholder="Rechercher un client" aria-label="Rechercher un client"
+         hx-get="{{ shell.base }}/1life/clients" hx-trigger="input changed delay:200ms" hx-include="closest form"
+         hx-target="#client-results" hx-select="#client-results" hx-swap="outerHTML" hx-push-url="true">
+  {% if archives %}<input type="hidden" name="archives" value="1">{% endif %}
+</form>
+
+<div id="client-results">
+  <nav class="chips" aria-label="Clients montrés">
+    <a class="chip" href="{{ shell.base }}/1life/clients"{% if !archives %} aria-current="true"{% endif %}>Actifs<span class="chip-count">{% if archives %}{{ other_count }}{% else %}{{ total }}{% endif %}</span></a>
+    <a class="chip" href="{{ shell.base }}/1life/clients?archives=1"{% if archives %} aria-current="true"{% endif %}>Archivés<span class="chip-count">{% if archives %}{{ total }}{% else %}{{ other_count }}{% endif %}</span></a>
+  </nav>
+
+  {% if rows.is_empty() %}
+    {% if total == 0 && q.is_empty() %}
+    <div class="empty-state">
+      {% if archives %}
+      <p>Aucun client archivé</p>
+      {% else %}
+      <p>Aucun client pour l'instant</p>
+      <a class="btn" href="{{ shell.base }}/1life/clients/new">Ajouter le premier</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state"><p>Aucun client ne correspond</p></div>
+    {% endif %}
+  {% else %}
+  <ul class="client-list" role="list">
+    {% for row in rows %}
+    <li>
+      <a class="client-row" href="{{ shell.base }}/1life/clients/{{ row.id }}">
+        <span class="client-name">{{ row.name }}</span>
+        {% if !row.contact.is_empty() %}<span class="client-meta">{{ row.contact }}</span>{% endif %}
+        {% if !row.email.is_empty() %}<span class="client-meta">{{ row.email }}</span>{% endif %}
+        {% if !row.phone.is_empty() %}<span class="client-meta">{{ row.phone }}</span>{% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

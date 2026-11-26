@@ -1,0 +1,73 @@
+{% extends "layout.html" %}
+{% block title %}{% if id.is_some() %}{{ fields.name }}{% else %}Nouveau client{% endif %} · Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Fiche d'un client de 1Life (src/onelife/clients.rs) : un formulaire pour
+    la créer ou la modifier, puis archiver et supprimer. Tout est du texte
+    brut, échappé ici : rien n'est interprété. -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ shell.base }}/1life/clients{% if archived %}?archives=1{% endif %}">{{ crate::assets::icon("arrow-left")|safe }}<span>Clients</span></a>
+    <h1>{% if id.is_some() %}{{ fields.name }}{% else %}Nouveau client{% endif %}</h1>
+  </div>
+  {% if archived %}<span class="badge-soon">Archivé</span>{% endif %}
+</header>
+
+<section class="card form-card">
+  <div class="card-body">
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+
+    <form class="stack" method="post" action="{{ shell.base }}/1life/clients{% if let Some(id) = id %}/{{ id }}{% endif %}">
+      <label class="field">
+        <span class="field-label">Nom</span>
+        <input type="text" name="name" value="{{ fields.name }}" maxlength="80" required autocomplete="off"{% if id.is_none() %} autofocus{% endif %}>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Contact</span>
+        <input type="text" name="contact" value="{{ fields.contact }}" maxlength="80" autocomplete="off" placeholder="La personne à joindre (facultatif)">
+      </label>
+
+      <label class="field">
+        <span class="field-label">E-mail</span>
+        <input type="email" name="email" value="{{ fields.email }}" maxlength="254" autocomplete="off" placeholder="Facultatif">
+        {% if let Some(href) = mailto %}<a class="hint client-link" href="{{ href }}">Écrire à {{ fields.email }}</a>{% endif %}
+      </label>
+
+      <label class="field">
+        <span class="field-label">Téléphone</span>
+        <input type="tel" name="phone" value="{{ fields.phone }}" maxlength="30" autocomplete="off" placeholder="Facultatif">
+        {% if let Some(href) = tel %}<a class="hint client-link" href="{{ href }}">Appeler le {{ fields.phone }}</a>{% endif %}
+      </label>
+
+      <label class="field">
+        <span class="field-label">Notes</span>
+        <textarea class="client-notes" name="notes" rows="6" maxlength="4000" placeholder="Ce qu'il faut savoir : texte brut, retours à la ligne gardés">{{ fields.notes }}</textarea>
+      </label>
+
+      <div class="space-actions">
+        <button class="btn btn-primary" type="submit">{% if id.is_some() %}Enregistrer{% else %}Créer le client{% endif %}</button>
+        <a class="btn" href="{{ shell.base }}/1life/clients">Annuler</a>
+      </div>
+    </form>
+
+    {% if let Some(id) = id %}
+    <div class="space-actions client-actions">
+      <form method="post" action="{{ shell.base }}/1life/clients/{{ id }}/archive">
+        {% if archived %}
+        <input type="hidden" name="archived" value="0">
+        <button class="btn" type="submit">Remettre dans la liste</button>
+        {% else %}
+        <input type="hidden" name="archived" value="1">
+        <button class="btn" type="submit">Archiver</button>
+        {% endif %}
+      </form>
+      <form method="post" action="{{ shell.base }}/1life/clients/{{ id }}/delete" hx-confirm="Supprimer « {{ fields.name }} » pour de bon ? La fiche ne va pas dans la corbeille.">
+        <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer le client</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

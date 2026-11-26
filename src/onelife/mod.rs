@@ -6,9 +6,13 @@
 //! Une fois autorisé, il s'affiche ou se masque par espace comme les autres
 //! outils (masqué par défaut).
 //!
-//! Pour l'instant un squelette : une page d'accueil et une page vide par
-//! module. Aucune donnée, aucun appel extérieur. Le dépôt est public : rien
-//! de propre à 1Life (client, document, information interne) ne va ici.
+//! Une page d'accueil, une carte par module. Clients est fait (SPEC,
+//! « 1Life — Clients », sous-module [`clients`]) ; les autres modules ont
+//! une page « Module à venir ». Aucun appel extérieur. Le dépôt est public :
+//! rien de propre à 1Life (vrai client, document, information interne) ne
+//! va ici ni dans les tests.
+
+pub mod clients;
 
 use askama::Template;
 use axum::extract::Path;
@@ -56,7 +60,7 @@ pub const MODULES: &[Module] = &[
         name: "Clients",
         icon: "users",
         summary: "Retrouver ses clients.",
-        soon: true,
+        soon: false,
     },
 ];
 

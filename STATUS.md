@@ -444,7 +444,7 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 
 - [x] Compte non autorisé, ou sans session : 404 sur `/1life`, `/1life/cr`, `/1life/audit`, `/1life/clients`, avec ou sans l'espace dans l'adresse, la même page qu'une adresse inconnue ; 1Life absent des réglages, de `/go` et de la barre latérale ; le formulaire des réglages répond 404. Test `un_compte_non_autorise_recoit_404_partout`.
 - [x] `dashu tools grant`, `revoke` et `list`, joués avec le vrai binaire sur la base du test ; compte inconnu, outil non réservé ou inconnu refusés. Test `grant_puis_revoke_par_la_commande`.
-- [x] Compte autorisé : 1Life masqué par défaut, affiché dans Taff seulement ; l'accueil, ses trois cartes « Bientôt » et les trois pages « Module à venir » s'ouvrent. Test `un_compte_autorise_active_1life_par_espace`.
+- [x] Compte autorisé : 1Life masqué par défaut, affiché dans Taff seulement ; l'accueil, ses trois cartes et les trois pages des modules s'ouvrent. Test `un_compte_autorise_active_1life_par_espace`. Depuis le 26 novembre 2026, Clients n'est plus « Bientôt » (voir « 1Life — Clients ») : le test vérifie que Compte rendu et Audit restent « Module à venir » et que Clients ouvre la liste.
 - [x] Aucune route ne donne l'accès ; l'API traite 1Life comme un outil inconnu pour un compte non autorisé. Test `l_api_ne_donne_pas_l_acces_et_traite_1life_comme_un_outil_inconnu`.
 - Migration 0025 (`tool_grants`). Aucune logique métier, aucun nom de client.
 - Icône de 1Life (25 novembre 2026) : le logo fourni par Rémi, redessiné comme les icônes Lucide (grille de 24, deux traits ronds sans remplissage), symbole `1life` du sprite, ajouté par `scripts/build-assets.mjs`. Le `npm run build` local s'arrête avant le sprite (paquets ProseMirror absents de `node_modules`) : le symbole a été posé dans `static/icons.svg` à l'identique de ce que produit le script.
@@ -487,6 +487,23 @@ Cahier des charges dans `SPEC.md` (« Dossiers : cinq niveaux »), demandé par 
 - Aucune migration : la limite est dans le code (`folders::MAX_DEPTH`). Le commentaire de la migration 0013 parle encore de trois niveaux : une migration fusionnée ne se modifie pas.
 - Tests de l'ancienne règle adaptés, aucun supprimé : `des_dossiers_sur_trois_niveaux_au_plus` devient `des_dossiers_et_des_sous_dossiers` (un sous-dossier reçoit maintenant un dossier) ; dans `deplacer_un_dossier_entier` et `dossiers_creer_renommer_deplacer_supprimer` (API), les refus de l'ancienne règle deviennent des refus de la nouvelle (dans un de ses sous-dossiers).
 - [ ] Sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
+
+## 1Life — Clients : avancement
+
+Cahier des charges dans `SPEC.md` (« 1Life — Clients »), demandé par Rémi le 26 novembre 2026. Branche `1life-clients`, partie de la branche `dossiers-cinq-niveaux` (PR précédente), **pas encore fusionnée ni essayée sur le serveur**. Tests d'intégration dans `tests/outil_1life_clients.rs` (7 tests), tests unitaires `adresses_et_numeros`, `saisie_nettoyee_et_verifiee` et `liens_et_recherche` (`src/onelife/clients.rs`). Tous les noms des tests sont inventés.
+
+- [x] Un compte autorisé crée un client (la fiche s'ouvre, avec ses liens `mailto:` et `tel:`), le retrouve dans la liste par nom et par la recherche (« elan » trouve « Atelier Élan », « ATELIER » aussi, et la recherche lit le contact, l'e-mail et le téléphone), puis le modifie. Test `creer_retrouver_modifier_un_client`.
+- [x] Nom vide, nom déjà pris (« atelier élan » contre « Atelier Elan »), e-mail ou téléphone invalide, nom ou notes trop longs : 422, le formulaire revient avec ce qui a été tapé et le message, rien n'est écrit ; même chose pour une fiche renommée comme une autre. Test `une_saisie_refusee_revient_avec_ce_qui_a_ete_tape`.
+- [x] Archiver retire le client de la liste, « Archivés » le montre (avec le nombre de chaque liste), « Remettre dans la liste » le ramène ; le formulaire de suppression demande une confirmation (`hx-confirm`) et la fiche est effacée. Test `archiver_puis_supprimer_un_client`.
+- [x] Compte non autorisé : la même 404 qu'une adresse inconnue sur toutes les pages et tous les formulaires de Clients, avec ou sans l'espace, numéro illisible et corps qui n'est pas un formulaire compris ; sans session, 404 sur les pages et, pour un formulaire, la même réponse que sur une adresse inconnue ; 1Life masqué dans École : retour à l'accueil d'École, rien d'écrit. Test `sans_autorisation_clients_repond_404_partout`.
+- [x] Un second compte autorisé ne voit, ne modifie, n'archive ni ne supprime les clients du premier (404), et peut avoir un client du même nom. Test `un_autre_compte_autorise_ne_touche_pas_aux_clients`.
+- [x] Nom et notes affichés comme du texte : `<script>`, `<img onerror>` et `<b>` arrivent échappés, `**gras**` reste tel quel ; la base garde la saisie telle quelle. Test `les_notes_d_un_client_restent_du_texte`.
+- [x] L'accueil de 1Life ne marque plus Clients « Bientôt » (Compte rendu et Audit le restent) ; Clients n'est ni dans l'API (`/api/v1/…` 404), ni dans le connecteur (`tools/list`), ni dans la barre de commandes, ni dans les commandes d'Hermès. Test `clients_sort_du_squelette_mais_reste_hors_de_l_api`.
+- [x] STATUS et README à jour (« Outils réservés », arborescence du code) ; aucun vrai nom de client dans le code, les tests et les docs.
+- [x] Vu dans le navigateur (instance locale jetable, compte autorisé par `dashu tools grant`) : liste, recherche au fil de la frappe (« elan »), fiche avec ses liens, doublon refusé ; en largeur téléphone (375 px), pas de défilement horizontal et tous les champs à 16 px au doigt. Le champ téléphone (`type="tel"`) n'avait pas encore de style dans `app.css` : ajouté aux règles des champs, comme la zone des notes (`.client-notes`). Aucune erreur CSP dans la console.
+- Migration 0026 (`onelife_clients`). Les clients sont au compte, pas à un espace ; la suppression est définitive (pas de corbeille pour les fiches).
+- Test existant adapté : `un_compte_autorise_active_1life_par_espace` attendait Clients « Bientôt » et « Module à venir » ; il attend maintenant la liste des clients pour Clients, et « Bientôt » pour les deux autres modules seulement. C'est la conséquence directe de la livraison du module, pas une règle des trois niveaux.
+- [ ] Sur le serveur après `dashu-update` (et `dashu tools grant` pour le compte de Rémi), sur ordinateur et sur iPhone.
 
 ## Écarts par rapport au cahier des charges
 

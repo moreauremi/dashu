@@ -192,18 +192,21 @@ async fn un_compte_autorise_active_1life_par_espace() {
         );
     }
 
-    // Les quatre pages s'ouvrent : l'accueil et ses trois cartes « Bientôt »,
-    // puis chaque module, « Module à venir ».
+    // Les quatre pages s'ouvrent : l'accueil et ses trois cartes, puis chaque
+    // module. Compte rendu et Audit sont « Bientôt » (« Module à venir ») ;
+    // Clients est fait depuis le 26 novembre 2026 (SPEC, « 1Life — Clients ») :
+    // sa page est la liste des clients, éprouvée dans
+    // tests/outil_1life_clients.rs.
     let home = alice.get("/e/taff/1life").await;
     assert_eq!(home.status, StatusCode::OK);
     assert!(
         home.body
             .contains(r#"aria-current="page" data-tool="1life""#)
     );
-    for (id, name) in [
-        ("cr", "Compte rendu"),
-        ("audit", "Audit"),
-        ("clients", "Clients"),
+    for (id, name, soon) in [
+        ("cr", "Compte rendu", true),
+        ("audit", "Audit", true),
+        ("clients", "Clients", false),
     ] {
         assert!(
             home.body.contains(&format!(r#"href="/e/taff/1life/{id}""#)),
@@ -212,10 +215,13 @@ async fn un_compte_autorise_active_1life_par_espace() {
         assert!(home.body.contains(name), "{name}");
         let module = alice.get(&format!("/e/taff/1life/{id}")).await;
         assert_eq!(module.status, StatusCode::OK, "{id}");
-        assert!(module.body.contains("Module à venir"), "{id}");
+        assert_eq!(module.body.contains("Module à venir"), soon, "{id}");
         assert!(module.body.contains(name), "{id}");
+        if !soon {
+            assert!(module.body.contains("Nouveau client"), "{id}");
+        }
     }
-    assert_eq!(home.body.matches("Bientôt").count(), 3);
+    assert_eq!(home.body.matches("Bientôt").count(), 2);
 
     // Bob, non autorisé, ne le voit toujours pas.
     let mut bob = app.logged_in(BOB).await;
