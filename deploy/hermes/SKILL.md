@@ -1,7 +1,7 @@
 ---
 name: dashu
 description: "Tâches, notes, fichiers, dossiers, emploi du temps, espaces, membres et réglages de Rémi dans son dashboard dashu (corbeille comprise), plus l'admin du serveur dashu."
-version: 1.5.0
+version: 1.5.1
 author: Rémi Moreau
 platforms: [linux]
 metadata:
@@ -48,7 +48,7 @@ dashu note-edit 5 [--title "…"] [--body "remplace tout"] [--pin|--unpin] [--mo
 dashu note-rm 5           # dans la corbeille (30 jours)
 dashu note-md 5 [--out note.md]
 
-# Fichiers (rangés en dossiers : un espace, un dossier, un sous-dossier au plus)
+# Fichiers (rangés en dossiers : cinq niveaux de dossiers au plus sous l'espace)
 dashu files [--space ecole] [--folder 12] [--tag bts] [--q devis] [--temporary]
 dashu file 42             # informations
 dashu file-get 42 --out ~/devis.pdf

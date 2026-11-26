@@ -336,7 +336,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "lister_dossiers",
         title: "Lister les dossiers",
-        description: "L'arborescence : chaque dossier avec son espace et son dossier parent (cinq niveaux au plus : l'espace, puis quatre niveaux de dossiers).",
+        description: "L'arborescence : chaque dossier avec son espace et son dossier parent (cinq niveaux de dossiers au plus sous l'espace).",
         kind: Kind::Read,
         properties: || json!({ "space": space_prop("(tous si absent)") }),
         required: &[],
@@ -344,7 +344,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "creer_dossier",
         title: "Créer un dossier",
-        description: "Crée un dossier dans un espace, ou un sous-dossier dans un dossier (cinq niveaux au plus, l'espace compris).",
+        description: "Crée un dossier dans un espace, ou un sous-dossier dans un dossier (cinq niveaux de dossiers au plus sous l'espace).",
         kind: Kind::Write,
         properties: || {
             json!({

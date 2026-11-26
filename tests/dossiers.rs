@@ -1,6 +1,7 @@
-//! Dossiers (SPEC, « Dossiers ») : l'onglet Fichiers en arborescence, les
-//! notes rangées depuis l'éditeur, la fenêtre « Ranger », la suppression d'un
-//! dossier, et l'isolement entre deux comptes.
+//! Dossiers (SPEC, « Dossiers » et « Dossiers : cinq niveaux ») : l'onglet
+//! Fichiers en arborescence, les notes rangées depuis l'éditeur, la fenêtre
+//! « Ranger », la suppression d'un dossier, l'isolement entre deux comptes,
+//! et la limite de cinq niveaux de dossiers sous l'espace.
 
 mod common;
 
@@ -198,9 +199,9 @@ async fn des_dossiers_et_des_sous_dossiers() {
     let exercices = folder(&app, "Exercices").await;
     assert_eq!(folder_place(&app, exercices).await, (ecole, Some(math)));
 
-    // Un sous-dossier peut en recevoir à son tour : cinq niveaux au plus,
-    // l'espace compris (la limite elle-même est éprouvée dans
-    // tests/dossiers_cinq_niveaux.rs).
+    // Un sous-dossier peut en recevoir à son tour : cinq niveaux de dossiers
+    // au plus sous l'espace (la limite elle-même est éprouvée plus bas,
+    // `cinq_niveaux_de_dossiers_au_plus`).
     assert_eq!(count_folders(&app).await, 2);
     alice.post("/space", &[("slug", "ecole")]).await;
     let page = alice.get(&format!("/files?dossier={math}")).await;
@@ -1069,7 +1070,7 @@ async fn deplacer_un_dossier_entier() {
     alice.upload_in_folder("td.pdf", b"%PDF td", math).await;
 
     // La fenêtre d'un dossier qui a des sous-dossiers : les dossiers où lui
-    // et ses sous-dossiers tiennent (cinq niveaux au plus), sans lui ni ce
+    // et ses sous-dossiers tiennent (cinq niveaux de dossiers au plus), sans lui ni ce
     // qu'il contient.
     let picker = alice
         .get_fragment(&format!("/destinations?dossier={math}"))
@@ -1171,7 +1172,7 @@ async fn deplacer_un_dossier_entier() {
 
     // Refus dits, rien ne bouge : un dossier dans un de ses sous-dossiers,
     // dans lui-même, à côté d'un homonyme. (Le niveau de trop est éprouvé
-    // dans tests/dossiers_cinq_niveaux.rs.)
+    // plus bas, `deplacer_un_dossier_avec_tous_ses_niveaux`.)
     create_in_folder(&mut alice, projet, "Annexes").await;
     let refusals = [
         (
@@ -1413,4 +1414,733 @@ async fn glisser_deposer_dans_l_onglet_fichiers() {
         place_of(&app, "files", "photo.png").await,
         (ecole, Some(francais))
     );
+}
+
+// ---------------------------------------------------------------------
+// Cinq niveaux de dossiers sous l'espace (SPEC, « Dossiers : cinq
+// niveaux ») : la limite est vérifiée par le serveur partout (site, API,
+// connecteur), au déplacement comme à la création, et tout ce qui parcourt
+// l'arborescence (compte, recherche, corbeille, changement d'espace)
+// descend jusqu'en bas.
+// ---------------------------------------------------------------------
+
+/// Crée un dossier dans un espace et rend son identifiant.
+async fn in_space(app: &TestApp, client: &mut Client, space: i64, name: &str) -> i64 {
+    create_in_space(client, space, name).await;
+    folder(app, name).await
+}
+
+/// Crée un sous-dossier et rend son identifiant.
+async fn in_folder(app: &TestApp, client: &mut Client, parent: i64, name: &str) -> i64 {
+    create_in_folder(client, parent, name).await;
+    folder(app, name).await
+}
+
+/// École / Math / Analyse / Chapitre 1 / Exercices / Corrigés : cinq niveaux
+/// de dossiers sous l'espace. Rend les cinq dossiers, du haut vers le bas.
+async fn deep_chain(app: &TestApp, alice: &mut Client) -> [i64; 5] {
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let math = in_space(app, alice, ecole, "Math").await;
+    let analyse = in_folder(app, alice, math, "Analyse").await;
+    let chapitre = in_folder(app, alice, analyse, "Chapitre 1").await;
+    let exercices = in_folder(app, alice, chapitre, "Exercices").await;
+    let corriges = in_folder(app, alice, exercices, "Corrigés").await;
+    [math, analyse, chapitre, exercices, corriges]
+}
+
+/// Range une note par la fenêtre « Ranger », dans n'importe quel dossier.
+async fn range_note(client: &mut Client, id: i64, space: i64, folder: i64) {
+    let moved = client
+        .post(
+            &format!("/notes/{id}/move"),
+            &[
+                ("space_id", &space.to_string()),
+                ("folder_id", &folder.to_string()),
+            ],
+        )
+        .await;
+    assert_eq!(moved.status, StatusCode::SEE_OTHER, "{}", moved.body);
+}
+
+/// Déplace un dossier par la fenêtre « Ranger » ; rend la page d'arrivée
+/// (avec le message).
+async fn move_folder(client: &mut Client, id: i64, space: i64, parent: Option<i64>) -> String {
+    let parent = parent.map(|p| p.to_string()).unwrap_or_default();
+    let moved = client
+        .post(
+            &format!("/folders/{id}/move"),
+            &[("space_id", &space.to_string()), ("folder_id", &parent)],
+        )
+        .await;
+    assert_eq!(moved.status, StatusCode::SEE_OTHER, "{}", moved.body);
+    client.follow(moved).await.body
+}
+
+/// Le bouton de la fenêtre « Ranger » qui mène au dossier `id`, s'il y est.
+fn dest_button(picker: &str, id: i64) -> Option<&str> {
+    common::between(
+        picker,
+        &format!("name=\"folder_id\" value=\"{id}\""),
+        "</button>",
+    )
+}
+
+#[tokio::test]
+async fn cinq_niveaux_de_dossiers_au_plus() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let [math, analyse, chapitre, exercices, corriges] = deep_chain(&app, &mut alice).await;
+
+    // Chacun sous le précédent : cinq niveaux de dossiers sous École.
+    assert_eq!(folder_place(&app, math).await, (ecole, None));
+    assert_eq!(folder_place(&app, analyse).await, (ecole, Some(math)));
+    assert_eq!(folder_place(&app, chapitre).await, (ecole, Some(analyse)));
+    assert_eq!(folder_place(&app, exercices).await, (ecole, Some(chapitre)));
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+
+    // Au 4e niveau, « Nouveau dossier » est encore proposé ; au 5e, non.
+    let page = alice.get(&format!("/files?dossier={exercices}")).await;
+    assert!(page.body.contains("Nouveau dossier"));
+    assert!(
+        page.body
+            .contains(&format!("name=\"parent_id\" value=\"{exercices}\""))
+    );
+    let page = alice.get(&format!("/files?dossier={corriges}")).await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(!page.body.contains("Nouveau dossier"));
+
+    // Et le serveur refuse le 6e, pas seulement caché : rien n'est créé.
+    let refused = alice
+        .post(
+            "/folders",
+            &[("name", "Trop loin"), ("parent_id", &corriges.to_string())],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    assert!(
+        refused
+            .body
+            .contains("Cinq niveaux de dossiers au plus : pas de dossier dans « Corrigés »."),
+        "{}",
+        refused.body
+    );
+    assert_eq!(count_folders(&app).await, 5);
+
+    // Le fil d'Ariane montre tout le chemin : Fichiers › École › Math ›
+    // Analyse › Chapitre 1 › Exercices, puis le dossier ouvert en titre. Sur
+    // téléphone, les pas du milieu laissent la place à « … » (classe).
+    let crumbs = common::between(&page.body, "<nav class=\"crumbs\"", "</nav>").unwrap();
+    assert!(crumbs.contains("href=\"/files?dossier=racine\""));
+    assert!(crumbs.contains("href=\"/e/ecole/files?dossier=espace\""));
+    for id in [math, analyse, chapitre, exercices] {
+        assert!(
+            crumbs.contains(&format!("href=\"/e/ecole/files?dossier={id}\"")),
+            "{id}"
+        );
+    }
+    assert!(page.body.contains("<h1>Corrigés</h1>"));
+    assert!(crumbs.contains("class=\"crumb-more\""));
+    for id in [math, analyse, chapitre] {
+        assert!(
+            crumbs.contains(&format!(
+                "class=\"crumb crumb-mid\" href=\"/e/ecole/files?dossier={id}\""
+            )),
+            "{id}"
+        );
+    }
+    // Le parent reste visible, l'espace aussi.
+    assert!(crumbs.contains(&format!(
+        "class=\"crumb\" href=\"/e/ecole/files?dossier={exercices}\""
+    )));
+    assert!(crumbs.contains("class=\"crumb\" href=\"/e/ecole/files?dossier=espace\""));
+    // Un chemin court n'est pas raccourci.
+    let short = alice.get(&format!("/files?dossier={analyse}")).await;
+    assert!(!short.body.contains("crumb-mid") && !short.body.contains("crumb-more"));
+
+    // La fenêtre « Ranger » d'une note propose les cinq niveaux, chacun avec
+    // son retrait.
+    let cours = note(&mut alice, "Cours").await;
+    let picker = alice
+        .get_fragment(&format!("/destinations?note={cours}"))
+        .await;
+    for (id, depth) in [
+        (math, 1),
+        (analyse, 2),
+        (chapitre, 3),
+        (exercices, 4),
+        (corriges, 5),
+    ] {
+        let button = dest_button(&picker.body, id).unwrap_or_else(|| panic!("{id} absent"));
+        assert!(
+            button.contains(&format!("dest dest-d{depth}\"")),
+            "{button}"
+        );
+    }
+
+    // La note se range au niveau le plus profond, et l'éditeur dit où elle est.
+    range_note(&mut alice, cours, ecole, corriges).await;
+    assert_eq!(
+        place_of(&app, "notes", "Cours").await,
+        (ecole, Some(corriges))
+    );
+    let editor = alice.get(&format!("/notes/{cours}")).await;
+    assert!(
+        editor
+            .body
+            .contains("École / Math / Analyse / Chapitre 1 / Exercices / Corrigés")
+    );
+}
+
+/// Un message JSON-RPC envoyé à `/mcp` ; le résultat d'un outil.
+async fn mcp_call(
+    app: &TestApp,
+    token: &str,
+    tool: &str,
+    arguments: serde_json::Value,
+) -> serde_json::Value {
+    let (status, body) = app
+        .api(
+            Method::POST,
+            "/mcp",
+            Some(json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "name": tool, "arguments": arguments }
+            })),
+            Some(token),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["result"].clone()
+}
+
+/// Un jeton personnel, créé depuis Réglages › Connexions.
+async fn personal_token(app: &TestApp, email: &str) -> String {
+    let mut client = app.logged_in(email).await;
+    let response = client
+        .post("/settings/tokens", &[("name", "Script"), ("duree", "90")])
+        .await;
+    common::between(
+        &response.body,
+        "id=\"new-token\" type=\"text\" value=\"",
+        "\"",
+    )
+    .expect("jeton affiché")
+    .to_string()
+}
+
+#[tokio::test]
+async fn l_api_et_le_connecteur_suivent_les_cinq_niveaux() {
+    let app = TestApp::new().await;
+    let tk = personal_token(&app, ALICE).await;
+    let t = Some(tk.as_str());
+    let (ecole, taff) = (
+        app.space_id(ALICE, "ecole").await,
+        app.space_id(ALICE, "taff").await,
+    );
+
+    // L'API crée quatre niveaux de dossiers sous l'espace…
+    let (status, created) = app
+        .api(
+            Method::POST,
+            "/api/v1/folders",
+            Some(json!({ "name": "Math", "space": "ecole" })),
+            t,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let mut parent = created["id"].as_i64().unwrap();
+    let math = parent;
+    let mut chain = vec![math];
+    for name in ["Analyse", "Chapitre 1", "Exercices"] {
+        let (status, created) = app
+            .api(
+                Method::POST,
+                "/api/v1/folders",
+                Some(json!({ "name": name, "parent": parent })),
+                t,
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+        assert_eq!(created["parent"], parent);
+        assert_eq!(created["space"], "ecole");
+        parent = created["id"].as_i64().unwrap();
+        chain.push(parent);
+    }
+    let (chapitre, exercices) = (chain[2], chain[3]);
+
+    // … le connecteur, le cinquième…
+    let result = mcp_call(
+        &app,
+        &tk,
+        "creer_dossier",
+        json!({ "name": "Corrigés", "parent": exercices }),
+    )
+    .await;
+    assert_eq!(result["isError"], false, "{result}");
+    let corriges = folder(&app, "Corrigés").await;
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+
+    // … et tous deux refusent le sixième, avec le même message.
+    let result = mcp_call(
+        &app,
+        &tk,
+        "creer_dossier",
+        json!({ "name": "Trop loin", "parent": corriges }),
+    )
+    .await;
+    assert_eq!(result["isError"], true, "{result}");
+    let message = "Cinq niveaux de dossiers au plus : pas de dossier dans « Corrigés ».";
+    assert!(result.to_string().contains(message), "{result}");
+    let (status, refused) = app
+        .api(
+            Method::POST,
+            "/api/v1/folders",
+            Some(json!({ "name": "Trop loin", "parent": corriges })),
+            t,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(refused.to_string().contains(message), "{refused}");
+    assert_eq!(count_folders(&app).await, 5);
+
+    // Déplacer : Math et ses sous-dossiers (cinq étages) ne tiennent pas dans
+    // un dossier (refus, rien ne bouge) ; Chapitre 1 (trois étages), si.
+    let (_, other) = app
+        .api(
+            Method::POST,
+            "/api/v1/folders",
+            Some(json!({ "name": "Autre", "space": "taff" })),
+            t,
+        )
+        .await;
+    let other = other["id"].as_i64().unwrap();
+    let (status, refused) = app
+        .api(
+            Method::PATCH,
+            &format!("/api/v1/folders/{math}"),
+            Some(json!({ "space": "taff", "parent": other })),
+            t,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+    assert!(
+        refused
+            .to_string()
+            .contains("Cinq niveaux de dossiers au plus")
+    );
+    assert_eq!(folder_place(&app, math).await, (ecole, None));
+    let (status, moved) = app
+        .api(
+            Method::PATCH,
+            &format!("/api/v1/folders/{chapitre}"),
+            Some(json!({ "space": "taff", "parent": other })),
+            t,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["parent"], other);
+    assert_eq!(folder_place(&app, corriges).await, (taff, Some(exercices)));
+
+    // La liste du connecteur donne chaque parent.
+    let result = mcp_call(&app, &tk, "lister_dossiers", json!({ "space": "taff" })).await;
+    let text = result["content"][0]["text"].as_str().unwrap();
+    let list: serde_json::Value = serde_json::from_str(text).unwrap();
+    let parents: Vec<(i64, Option<i64>)> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| (f["id"].as_i64().unwrap(), f["parent"].as_i64()))
+        .collect();
+    assert!(parents.contains(&(corriges, Some(exercices))));
+    assert!(parents.contains(&(chapitre, Some(other))));
+}
+
+#[tokio::test]
+async fn deplacer_un_dossier_avec_tous_ses_niveaux() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let (ecole, taff) = (
+        app.space_id(ALICE, "ecole").await,
+        app.space_id(ALICE, "taff").await,
+    );
+    let [math, analyse, chapitre, exercices, corriges] = deep_chain(&app, &mut alice).await;
+    let projet = in_space(&app, &mut alice, taff, "Projet").await;
+    let lot = in_folder(&app, &mut alice, projet, "Lot A").await;
+
+    // La fenêtre d'Analyse (lui et trois étages en dessous : hauteur 4) : les
+    // espaces et les dossiers du premier niveau seulement, sans lui ni ce
+    // qu'il contient.
+    let picker = alice
+        .get_fragment(&format!("/destinations?dossier={analyse}"))
+        .await;
+    assert!(dest_button(&picker.body, projet).is_some());
+    assert!(dest_button(&picker.body, math).is_some());
+    for id in [lot, analyse, chapitre, exercices, corriges] {
+        assert!(dest_button(&picker.body, id).is_none(), "{id}");
+    }
+    // Celle de Chapitre 1 (hauteur 3) va jusqu'au deuxième niveau.
+    let picker = alice
+        .get_fragment(&format!("/destinations?dossier={chapitre}"))
+        .await;
+    assert!(dest_button(&picker.body, lot).unwrap().contains("dest-d2"));
+    for deeper in ["dest-d3", "dest-d4", "dest-d5"] {
+        assert!(!picker.body.contains(deeper), "{deeper}");
+    }
+    assert!(dest_button(&picker.body, exercices).is_none());
+
+    // Analyse ne tient pas dans Lot A (Corrigés descendrait au 6e niveau) :
+    // refus dit, rien ne bouge.
+    let page = move_folder(&mut alice, analyse, taff, Some(lot)).await;
+    assert!(
+        page.contains(
+            "Cinq niveaux de dossiers au plus : « Analyse » et ses sous-dossiers ne tiennent pas dans « Taff / Projet / Lot A »."
+        ),
+        "{page}"
+    );
+    assert_eq!(folder_place(&app, analyse).await, (ecole, Some(math)));
+    // Ni dans un de ses sous-dossiers, ni dans lui-même.
+    let page = move_folder(&mut alice, analyse, ecole, Some(exercices)).await;
+    assert!(page.contains("Un dossier ne va pas dans un de ses sous-dossiers."));
+    let page = move_folder(&mut alice, analyse, ecole, Some(analyse)).await;
+    assert!(page.contains("Un dossier ne va pas dans lui-même."));
+    assert_eq!(folder_place(&app, analyse).await, (ecole, Some(math)));
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+
+    // Dans Projet, il tient tout juste (1 + 4 = 5) : il y va avec ses niveaux.
+    let page = move_folder(&mut alice, analyse, taff, Some(projet)).await;
+    assert!(page.contains("Dossier « Analyse » déplacé dans « Taff / Projet »"));
+    assert_eq!(folder_place(&app, analyse).await, (taff, Some(projet)));
+    assert_eq!(folder_place(&app, chapitre).await, (taff, Some(analyse)));
+    assert_eq!(folder_place(&app, corriges).await, (taff, Some(exercices)));
+    // Et Chapitre 1 (hauteur 3) tient dans Lot A, au 2e niveau (2 + 3 = 5).
+    move_folder(&mut alice, chapitre, taff, Some(lot)).await;
+    assert_eq!(folder_place(&app, chapitre).await, (taff, Some(lot)));
+    assert_eq!(folder_place(&app, corriges).await, (taff, Some(exercices)));
+}
+
+#[tokio::test]
+async fn changer_d_espace_emmene_tous_les_niveaux() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let (ecole, taff) = (
+        app.space_id(ALICE, "ecole").await,
+        app.space_id(ALICE, "taff").await,
+    );
+    let chain = deep_chain(&app, &mut alice).await;
+    // Une note et un fichier à chaque niveau.
+    for (level, id) in chain.into_iter().enumerate() {
+        let title = format!("Note {}", level + 1);
+        let n = note(&mut alice, &title).await;
+        range_note(&mut alice, n, ecole, id).await;
+        let sent = alice
+            .upload_in_folder(&format!("niveau{}.pdf", level + 1), b"%PDF", id)
+            .await;
+        assert!(sent.status.is_success(), "{}", sent.body);
+    }
+
+    // Math part dans Taff : tout le suit, jusqu'en bas.
+    let page = move_folder(&mut alice, chain[0], taff, None).await;
+    assert!(page.contains("Dossier « Math » déplacé dans « Taff »"));
+    for (level, id) in chain.into_iter().enumerate() {
+        let n = level + 1;
+        assert_eq!(folder_place(&app, id).await.0, taff, "dossier {n}");
+        assert_eq!(
+            place_of(&app, "notes", &format!("Note {n}")).await,
+            (taff, Some(id))
+        );
+        assert_eq!(
+            place_of(&app, "files", &format!("niveau{n}.pdf")).await,
+            (taff, Some(id))
+        );
+    }
+    // École n'a plus rien.
+    let left: i64 = sqlx::query_scalar(
+        "SELECT (SELECT count(*) FROM folders WHERE space_id = ?1)
+              + (SELECT count(*) FROM files WHERE space_id = ?1)",
+    )
+    .bind(ecole)
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap();
+    assert_eq!(left, 0);
+}
+
+#[tokio::test]
+async fn le_contenu_compte_tous_les_niveaux() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let [math, analyse, chapitre, _, corriges] = deep_chain(&app, &mut alice).await;
+    let francais = in_space(&app, &mut alice, ecole, "Français").await;
+    let cours = note(&mut alice, "Cours de limites").await;
+    range_note(&mut alice, cours, ecole, analyse).await;
+    let exo = note(&mut alice, "Exo de limites").await;
+    range_note(&mut alice, exo, ecole, corriges).await;
+    alice
+        .upload_in_folder("corrige.pdf", b"%PDF corrige", chapitre)
+        .await;
+
+    // Le compte de Math et d'Analyse descend jusqu'en bas.
+    let root = alice.get("/files?dossier=espace").await;
+    let row = common::between(&root.body, &format!("dossier={math}\""), "</li>").unwrap();
+    assert!(row.contains("4 dossiers, 2 notes et 1 fichier"), "{row}");
+    let page = alice.get(&format!("/files?dossier={math}")).await;
+    let row = common::between(&page.body, &format!("dossier={analyse}\""), "</li>").unwrap();
+    assert!(row.contains("3 dossiers, 2 notes et 1 fichier"), "{row}");
+
+    // La recherche dans Math trouve le fichier du 3e niveau ; celle dans
+    // Français, non.
+    let found = alice.get(&format!("/files?dossier={math}&q=corrige")).await;
+    assert!(found.body.contains("corrige.pdf"), "{}", found.body);
+    let elsewhere = alice
+        .get(&format!("/files?dossier={francais}&q=corrige"))
+        .await;
+    assert!(!elsewhere.body.contains("corrige.pdf"));
+
+    // L'onglet Notes : la note du 5e niveau est dans la section de Math,
+    // avec le chemin qui y mène.
+    let list = alice.get("/notes").await.body;
+    let section = &list[list.find("aria-label=\"Dossier Math\"").unwrap()..];
+    let row = common::between(section, "Exo de limites", "</li>").unwrap();
+    assert!(row.contains("class=\"note-sub\""));
+    assert!(
+        row.contains("Analyse / Chapitre 1 / Exercices / Corrigés"),
+        "{row}"
+    );
+    let row = common::between(section, "Cours de limites", "</li>").unwrap();
+    assert!(row.contains("Analyse"));
+}
+
+#[tokio::test]
+async fn transferer_et_supprimer_au_milieu_de_l_arborescence() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let [math, analyse, chapitre, exercices, corriges] = deep_chain(&app, &mut alice).await;
+    // Un autre « Chapitre 1 » est déjà dans Math.
+    let homonyme = in_folder(&app, &mut alice, math, "chapitre 1").await;
+    let resume = note(&mut alice, "Résumé").await;
+    range_note(&mut alice, resume, ecole, analyse).await;
+    let exo = note(&mut alice, "Exo").await;
+    range_note(&mut alice, exo, ecole, exercices).await;
+    alice.upload_in_folder("td.pdf", b"%PDF td", corriges).await;
+
+    // Transférer Analyse dans son parent : son contenu va dans Math, et
+    // Chapitre 1 monte d'un niveau dans Math (pas à la racine d'École),
+    // renommé car le nom est pris.
+    let moved = alice
+        .post(
+            &format!("/folders/{analyse}/delete"),
+            &[("contenu", "remonter")],
+        )
+        .await;
+    let page = alice.follow(moved).await;
+    assert!(page.body.contains(
+        "Dossier « Analyse » mis dans la corbeille : son contenu est dans « École / Math »"
+    ));
+    assert_eq!(place_of(&app, "notes", "Résumé").await, (ecole, Some(math)));
+    assert_eq!(folder_place(&app, chapitre).await, (ecole, Some(math)));
+    assert_eq!(folder_place(&app, homonyme).await, (ecole, Some(math)));
+    let name: String = sqlx::query_scalar("SELECT name FROM folders WHERE id = ?")
+        .bind(chapitre)
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert_eq!(name, "Chapitre 1 (2)");
+    // Ce qu'il contenait garde sa place.
+    assert_eq!(folder_place(&app, exercices).await, (ecole, Some(chapitre)));
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+    assert_eq!(
+        place_of(&app, "notes", "Exo").await,
+        (ecole, Some(exercices))
+    );
+
+    // Tout supprimer Math : tout part dans la corbeille, à tous les niveaux ;
+    // le disque se vide quand on l'y efface.
+    let stored = app.stored_files().len();
+    let erased = alice
+        .post(
+            &format!("/folders/{math}/delete"),
+            &[("contenu", "supprimer")],
+        )
+        .await;
+    assert!(
+        alice
+            .follow(erased)
+            .await
+            .body
+            .contains("Dossier « Math » mis dans la corbeille, avec son contenu")
+    );
+    for (table, name) in [
+        ("notes", "Résumé"),
+        ("notes", "Exo"),
+        ("files", "td.pdf"),
+        ("folders", "Chapitre 1 (2)"),
+        ("folders", "Exercices"),
+        ("folders", "Corrigés"),
+        ("folders", "chapitre 1"),
+    ] {
+        assert!(!exists(&app, table, name).await, "{table} {name}");
+    }
+    let trash = alice.get("/settings/trash").await;
+    assert!(
+        trash.body.contains("2 notes, 1 fichier, 4 sous-dossiers"),
+        "{}",
+        trash.body
+    );
+    assert_eq!(app.stored_files().len(), stored);
+    alice
+        .post(&format!("/settings/trash/dossier/{math}/erase"), &[])
+        .await;
+    assert_eq!(app.stored_files().len(), stored - 1);
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM folders")
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    // Seul Analyse, mis seul dans la corbeille, y reste.
+    assert_eq!(left, 1);
+}
+
+#[tokio::test]
+async fn restaurer_un_dossier_profond() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let [_, analyse, chapitre, exercices, corriges] = deep_chain(&app, &mut alice).await;
+    let exo = note(&mut alice, "Exo").await;
+    range_note(&mut alice, exo, ecole, corriges).await;
+
+    // Chapitre 1 part dans la corbeille avec Exercices et Corrigés, puis
+    // revient dans Analyse : il y tient encore (2 + 3 = 5).
+    alice
+        .post(
+            &format!("/folders/{chapitre}/delete"),
+            &[("contenu", "supprimer")],
+        )
+        .await;
+    assert!(!exists(&app, "folders", "Corrigés").await);
+    let restored = alice
+        .post(&format!("/settings/trash/dossier/{chapitre}/restore"), &[])
+        .await;
+    assert_eq!(restored.status, StatusCode::SEE_OTHER);
+    assert_eq!(folder_place(&app, chapitre).await, (ecole, Some(analyse)));
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+    assert_eq!(
+        place_of(&app, "notes", "Exo").await,
+        (ecole, Some(corriges))
+    );
+
+    // De nouveau dans la corbeille ; entre-temps, Analyse descend d'un niveau
+    // (dans Français / Grammaire). Chapitre 1 et ses sous-dossiers n'y
+    // tiendraient plus (3 + 3 = 6) : ils reviennent à la racine d'École,
+    // ensemble.
+    alice
+        .post(
+            &format!("/folders/{chapitre}/delete"),
+            &[("contenu", "supprimer")],
+        )
+        .await;
+    let francais = in_space(&app, &mut alice, ecole, "Français").await;
+    let grammaire = in_folder(&app, &mut alice, francais, "Grammaire").await;
+    move_folder(&mut alice, analyse, ecole, Some(grammaire)).await;
+    assert_eq!(folder_place(&app, analyse).await, (ecole, Some(grammaire)));
+    alice
+        .post(&format!("/settings/trash/dossier/{chapitre}/restore"), &[])
+        .await;
+    assert_eq!(folder_place(&app, chapitre).await, (ecole, None));
+    assert_eq!(folder_place(&app, exercices).await, (ecole, Some(chapitre)));
+    assert_eq!(folder_place(&app, corriges).await, (ecole, Some(exercices)));
+    assert_eq!(
+        place_of(&app, "notes", "Exo").await,
+        (ecole, Some(corriges))
+    );
+}
+
+#[tokio::test]
+async fn supprimer_un_espace_garde_les_cinq_niveaux() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let (ecole, taff) = (
+        app.space_id(ALICE, "ecole").await,
+        app.space_id(ALICE, "taff").await,
+    );
+    let chain = deep_chain(&app, &mut alice).await;
+    let exo = note(&mut alice, "Exo").await;
+    range_note(&mut alice, exo, ecole, chain[4]).await;
+
+    // École supprimé, son contenu va dans Taff : chaque dossier garde son
+    // niveau, le plus profond reste au 5e.
+    alice.post("/space", &[("slug", "taff")]).await;
+    let deleted = alice
+        .post(
+            &format!("/settings/spaces/{ecole}/delete"),
+            &[("content", "move"), ("target", &taff.to_string())],
+        )
+        .await;
+    assert_eq!(deleted.status, StatusCode::SEE_OTHER, "{}", deleted.body);
+    assert_eq!(folder_place(&app, chain[0]).await, (taff, None));
+    for pair in chain.windows(2) {
+        assert_eq!(folder_place(&app, pair[1]).await, (taff, Some(pair[0])));
+    }
+    assert_eq!(place_of(&app, "notes", "Exo").await, (taff, Some(chain[4])));
+    // Et la limite vaut toujours dans Taff : pas de 6e niveau.
+    let refused = alice
+        .post(
+            "/folders",
+            &[("name", "Trop loin"), ("parent_id", &chain[4].to_string())],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn un_autre_compte_ne_touche_pas_aux_dossiers_profonds() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    alice.post("/space", &[("slug", "ecole")]).await;
+    let [_, _, chapitre, _, corriges] = deep_chain(&app, &mut alice).await;
+
+    let mut bob = app.logged_in(BOB).await;
+    let bob_perso = app.space_id(BOB, "perso").await;
+    // Il ne crée rien dans un dossier profond d'Alice…
+    let refused = bob
+        .post(
+            "/folders",
+            &[("name", "Intrus"), ("parent_id", &chapitre.to_string())],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
+    // … ne l'ouvre pas, ne voit pas sa fenêtre « Ranger »…
+    assert_eq!(
+        bob.get(&format!("/files?dossier={corriges}")).await.status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        bob.get_fragment(&format!("/destinations?dossier={corriges}"))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    // … et n'y range pas son propre dossier.
+    let mine = in_space(&app, &mut bob, bob_perso, "Perso de Bob").await;
+    let refused = bob
+        .post(
+            &format!("/folders/{mine}/move"),
+            &[
+                ("space_id", &bob_perso.to_string()),
+                ("folder_id", &chapitre.to_string()),
+            ],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND);
+    assert_eq!(folder_place(&app, mine).await, (bob_perso, None));
+    assert_eq!(count_folders(&app).await, 6);
 }

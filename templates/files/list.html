@@ -3,12 +3,15 @@
 {% block content %}
 <header class="page-head">
   {#- Fil d'Ariane : le chemin de l'endroit montré, chaque pas cliquable
-      sauf le dernier (SPEC, « Dossiers »). -#}
+      sauf le dernier (SPEC, « Dossiers »). Sur un écran étroit, les pas du
+      milieu d'un long chemin (classe crumb-mid) laissent la place à « … »
+      (SPEC, « Dossiers : cinq niveaux »). -#}
   <div class="files-head">
     {% if crumbs.len() > 1 %}
     <nav class="crumbs" aria-label="Emplacement">
       {%- for crumb in crumbs %}{% if let Some(href) = crumb.href %}
-      <a class="crumb" href="{{ href }}"{% if let Some(at) = crumb.drop %} data-drop-space="{{ at.space }}" data-drop-folder="{% if let Some(folder) = at.folder %}{{ folder }}{% endif %}"{% endif %}>{{ crumb.label }}</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+      {%- if crumb.mid && loop.index0 == 2 %}<span class="crumb-more" aria-hidden="true">…</span><span class="crumb-sep crumb-more" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>{% endif %}
+      <a class="crumb{% if crumb.mid %} crumb-mid{% endif %}" href="{{ href }}"{% if let Some(at) = crumb.drop %} data-drop-space="{{ at.space }}" data-drop-folder="{% if let Some(folder) = at.folder %}{{ folder }}{% endif %}"{% endif %}>{{ crumb.label }}</a><span class="crumb-sep{% if crumb.mid %} crumb-mid{% endif %}" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
       {%- endif %}{% endfor %}
     </nav>
     {% endif %}

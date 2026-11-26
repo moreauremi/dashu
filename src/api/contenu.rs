@@ -640,7 +640,7 @@ pub(crate) struct FolderListQuery {
 }
 
 /// `GET /api/v1/folders?space=ecole` : l'arborescence (chaque dossier avec
-/// son parent ; cinq niveaux au plus, l'espace compris).
+/// son parent ; cinq niveaux de dossiers au plus sous l'espace).
 async fn list_folders(
     user: ApiUser,
     State(state): State<AppState>,
@@ -687,7 +687,7 @@ pub(crate) struct NewFolder {
     /// Espace où le créer, sans `parent`.
     pub(crate) space: Option<String>,
     /// Dossier où le créer (il donne l'espace) ; refusé au niveau le plus
-    /// profond (cinq niveaux au plus, l'espace compris).
+    /// profond (cinq niveaux de dossiers au plus sous l'espace).
     pub(crate) parent: Option<i64>,
 }
 
@@ -730,7 +730,7 @@ pub(crate) struct FolderChanges {
     /// Espace où l'emmener, avec son contenu.
     pub(crate) space: Option<String>,
     /// Dossier où le mettre ; `null` : la racine de l'espace. Le dossier et
-    /// ses sous-dossiers doivent y tenir (cinq niveaux au plus).
+    /// ses sous-dossiers doivent y tenir (cinq niveaux de dossiers au plus).
     #[serde(default, deserialize_with = "some")]
     pub(crate) parent: Option<Option<i64>>,
 }

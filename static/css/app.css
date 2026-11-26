@@ -3919,6 +3919,23 @@ input.note-title::placeholder {
   height: 14px;
 }
 
+/* Long chemin (cinq niveaux de dossiers) : sur un écran étroit, « … »
+   remplace les pas du milieu ; restent Fichiers, l'espace et le parent. */
+.crumb-more {
+  display: none;
+  color: var(--text-3);
+}
+
+@media (max-width: 639px) {
+  .crumb-mid {
+    display: none;
+  }
+
+  .crumb-more {
+    display: inline-grid;
+  }
+}
+
 .files-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4095,14 +4112,18 @@ input.note-title::placeholder {
   padding-left: 52px;
 }
 
-/* Cinq niveaux au plus, l'espace compris (SPEC, « Dossiers : cinq niveaux ») :
-   deux retraits de plus, du même pas. */
+/* Cinq niveaux de dossiers sous l'espace (SPEC, « Dossiers : cinq niveaux ») :
+   un retrait de plus par niveau, du même pas. */
 .dest-d3 {
   padding-left: 76px;
 }
 
 .dest-d4 {
   padding-left: 100px;
+}
+
+.dest-d5 {
+  padding-left: 124px;
 }
 
 .dest .i {

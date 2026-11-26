@@ -200,7 +200,7 @@ pub async fn folder(db: &SqlitePool, who: Who<'_>, folder: &Folder) -> AppResult
     )
     .execute(&mut *tx)
     .await?;
-    // Ses sous-dossiers, à tous les niveaux (cinq au plus, l'espace compris),
+    // Ses sous-dossiers, à tous les niveaux (cinq niveaux de dossiers au plus),
     // le suivent. `UNION` plutôt que `UNION ALL` : une boucle dans la base,
     // qui ne devrait pas exister, ne ferait pas tourner la requête sans fin.
     sqlx::query!(
@@ -455,7 +455,7 @@ async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<String
     .await?
     .ok_or(AppError::NotFound)?;
     let mut to = origin(db, user, row.space_id, row.trash_folder_id).await?;
-    // Cinq niveaux au plus : s'il ne tient plus dans son ancien dossier avec
+    // Cinq niveaux de dossiers au plus : s'il ne tient plus dans son ancien dossier avec
     // ses sous-dossiers (ce dossier a pu descendre entre-temps), il revient à
     // la racine de l'espace. Sa hauteur se lit dans la corbeille, où ses
     // sous-dossiers ont gardé leur parent.

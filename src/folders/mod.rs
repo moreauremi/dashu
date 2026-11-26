@@ -1,7 +1,7 @@
 //! Dossiers (SPEC, « Dossiers ») : ils rangent les fichiers et les notes.
 //!
-//! * Cinq niveaux au plus, l'espace compris : Espace / Dossier / Sous-dossier,
-//!   puis deux niveaux de plus (SPEC, « Dossiers : cinq niveaux »). Le dossier
+//! * Cinq niveaux de dossiers au plus sous l'espace : Espace / D1 / D2 / D3 /
+//!   D4 / D5 (SPEC, « Dossiers : cinq niveaux »). Le dossier
 //!   d'un espace n'est pas une ligne de `folders` : c'est l'espace lui-même,
 //!   créé, renommé et supprimé avec lui. La limite est vérifiée par le
 //!   serveur ([`MAX_DEPTH`]) à chaque création, déplacement et restauration.
@@ -29,14 +29,14 @@ use crate::web::{self, AppError, AppResult, see_other};
 /// Longueur maximale d'un nom de dossier.
 pub const NAME_MAX_CHARS: usize = 60;
 
-/// Niveaux de dossiers sous l'espace : quatre, soit cinq niveaux en tout avec
-/// l'espace (Espace / Dossier / Sous-dossier / deux niveaux de plus).
-pub const MAX_DEPTH: usize = 4;
+/// Niveaux de dossiers sous l'espace : cinq (Espace / D1 / D2 / D3 / D4 /
+/// D5). La seule valeur de la limite : tout le reste la lit ici.
+pub const MAX_DEPTH: usize = 5;
 
 /// Refus d'un dossier créé un niveau trop bas, le même partout (site, API,
 /// connecteur, Hermès).
 pub fn too_deep(place: &str) -> String {
-    format!("Cinq niveaux au plus : pas de dossier de plus dans « {place} ».")
+    format!("Cinq niveaux de dossiers au plus : pas de dossier dans « {place} ».")
 }
 
 #[derive(Debug, Clone)]
@@ -180,7 +180,8 @@ pub fn parse_id(raw: Option<&str>) -> AppResult<Option<i64>> {
 pub fn chain(folders: &[Folder], id: Option<i64>) -> Vec<&Folder> {
     let mut out = Vec::new();
     let mut next = id;
-    // Cinq niveaux au plus : la boucle s'arrête d'elle-même, la limite n'est
+    // Cinq niveaux de dossiers au plus : la boucle s'arrête d'elle-même, la
+    // limite n'est
     // qu'un garde-fou.
     while let Some(id) = next
         && out.len() < MAX_DEPTH
@@ -365,7 +366,8 @@ pub struct CreateForm {
 }
 
 /// `POST /folders` : crée un dossier dans un espace, ou un sous-dossier dans
-/// un dossier (cinq niveaux au plus), puis revient là où il a été créé.
+/// un dossier (cinq niveaux de dossiers au plus), puis revient là où il a
+/// été créé.
 pub async fn create(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -376,7 +378,8 @@ pub async fn create(
         Some(id) => Some(find(&state.db, user, id).await?.ok_or(AppError::NotFound)?),
         None => None,
     };
-    // Cinq niveaux au plus : refusé par le serveur, pas seulement caché.
+    // Cinq niveaux de dossiers au plus : refusé par le serveur, pas seulement
+    // caché.
     if let Some(parent) = &parent
         && depth(&all(&state.db, user).await?, Some(parent.id)) >= MAX_DEPTH
     {
@@ -626,7 +629,7 @@ pub struct MoveForm {
 
 /// `POST /folders/{id}/move` : déplace un dossier, avec ses notes, ses
 /// fichiers et ses sous-dossiers, à la racine d'un espace ou dans un autre
-/// dossier. Cinq niveaux au plus : le dossier et ses sous-dossiers doivent
+/// dossier. Cinq niveaux de dossiers au plus : le dossier et ses sous-dossiers doivent
 /// tenir sous la destination. Un refus (niveau de trop, homonyme, le dossier
 /// dans lui-même ou dans un de ses sous-dossiers) est dit, et rien ne bouge.
 pub async fn move_folder(
@@ -703,7 +706,7 @@ pub(crate) async fn move_to(
         // Le dossier arrive un niveau sous la destination, son sous-dossier
         // le plus profond `hauteur` niveaux sous elle.
         Some(p) if depth(&folders, Some(p.id)) + height(&folders, id) > MAX_DEPTH => Some(format!(
-            "Cinq niveaux au plus : pas de place pour « {} » dans « {} ».",
+            "Cinq niveaux de dossiers au plus : « {} » et ses sous-dossiers ne tiennent pas dans « {} ».",
             folder.name,
             label(&target.name, &folders, parent_id)
         )),
@@ -806,7 +809,7 @@ pub struct Reach {
     pub here: Option<(i64, Option<i64>)>,
     /// Niveau le plus profond où il peut aller : [`MAX_DEPTH`] pour une note
     /// ou un fichier ; pour un dossier, `MAX_DEPTH` moins sa hauteur (0 : les
-    /// espaces seulement). Cinq niveaux au plus.
+    /// espaces seulement). Cinq niveaux de dossiers au plus.
     pub depth: usize,
     /// Le dossier qu'on déplace : ni lui ni ses sous-dossiers ne sont des
     /// destinations.
@@ -972,7 +975,7 @@ pub async fn picker(
                 .iter()
                 .find(|f| f.id == id)
                 .ok_or(AppError::NotFound)?;
-            // Cinq niveaux au plus : le dossier et ses sous-dossiers doivent
+            // Cinq niveaux de dossiers au plus : le dossier et ses sous-dossiers doivent
             // tenir sous la destination.
             let reach_depth = MAX_DEPTH.saturating_sub(height(&folders, id));
             (
@@ -1064,7 +1067,8 @@ mod tests {
         ];
         assert_eq!(depth(&folders, None), 0);
         assert_eq!(depth(&folders, Some(1)), 1);
-        assert_eq!(depth(&folders, Some(4)), MAX_DEPTH);
+        assert_eq!(depth(&folders, Some(4)), 4);
+        assert!(depth(&folders, Some(4)) < MAX_DEPTH);
         assert_eq!(height(&folders, 1), 4);
         assert_eq!(height(&folders, 2), 3);
         assert_eq!(height(&folders, 4), 1);

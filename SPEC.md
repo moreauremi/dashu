@@ -1877,7 +1877,7 @@ Prises par Rémi le 26 novembre 2026 :
 - **Déplacement** : profondeur de la destination plus hauteur du dossier ≤ 5, à la place de l'ancienne règle.
 - **Le sélecteur de l'éditeur et l'onglet Notes ne changent pas.**
 
-Par défaut, pour avancer :
+Par défaut, validées par Rémi le 26 novembre 2026 :
 
 - **On repart de la PR #94**, déjà fusionnée (quatre niveaux de dossiers) : on garde son code (`depth`, `height`, `descendants`, requêtes récursives de la corbeille) et on passe la limite de 4 à 5. Ses tests (`tests/dossiers_cinq_niveaux.rs`) rejoignent `tests/dossiers.rs`, adaptés à la nouvelle limite.
 - **Fil d'Ariane sur téléphone** : sous 640 px, un « … » non cliquable remplace les pas du milieu ; on remonte par le dernier pas visible.
@@ -1984,7 +1984,7 @@ Prises par Rémi le 26 novembre 2026 :
 - **Journées** = événements de l'Agenda reliés au client ; grille de l'Agenda réutilisée ; Gantt en SVG rendu par le serveur.
 - **Hors de l'API**, comme le reste de 1Life.
 
-Par défaut, pour avancer :
+Par défaut, validées par Rémi le 26 novembre 2026 :
 
 1. **Le carnet de la PR #95 est remplacé.** Son code et ses pages partent. La table `onelife_clients` reste en base sans être lue, pour ne rien perdre de ce qui y a été saisi ; une migration la supprimera quand Rémi aura recopié ce qui compte. Ses 7 tests (`tests/outil_1life_clients.rs`) sont remplacés par ceux de ce module.
 2. **Dossier des clients aux niveaux 1 à 3.** Un client y est alors au plus au niveau 4, et ses sous-dossiers au niveau 5. Plus bas, « Nouveau client » ne pourrait pas créer Audit, CR et Fichiers. Les espaces ne se choisissent pas (grisés dans la fenêtre).

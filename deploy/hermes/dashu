@@ -390,13 +390,13 @@ def main():
     s = sub.add_parser("folder-add", help="crée un dossier")
     s.add_argument("name")
     s.add_argument("--space", help=SPACES)
-    s.add_argument("--parent", type=int, help="dossier où le créer (cinq niveaux au plus)")
+    s.add_argument("--parent", type=int, help="dossier où le créer (cinq niveaux de dossiers au plus)")
 
     s = sub.add_parser("folder-edit", help="renomme ou déplace un dossier (avec son contenu)")
     s.add_argument("id", type=int)
     s.add_argument("--name")
     s.add_argument("--move", help="espace où l'emmener : " + SPACES)
-    s.add_argument("--parent", type=int, help="dossier où le mettre (cinq niveaux au plus)")
+    s.add_argument("--parent", type=int, help="dossier où le mettre (cinq niveaux de dossiers au plus)")
     s.add_argument("--root", action="store_true", help="à la racine de l'espace")
 
     s = sub.add_parser("folder-rm", help="met un dossier et son contenu dans la corbeille")
