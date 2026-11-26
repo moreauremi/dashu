@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO quota_changes (email, before_bytes, after_bytes, changed_at) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "0bbb1a40199bd2f6268a25ecfa3fc93b2768693bc48cf43c5d1ab61c6696830b"
+}

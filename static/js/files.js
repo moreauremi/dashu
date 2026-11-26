@@ -241,6 +241,11 @@
     const target = `#${results.id}`;
     // L'adresse entière : dans l'onglet Fichiers, ?dossier=… dit quel dossier.
     window.htmx.ajax("GET", location.pathname + location.search, { target, select: target, swap: "outerHTML" });
+    // La jauge du quota (onglet Fichiers) suit le nouvel usage.
+    if ($("#quota-gauge")) {
+      const gauge = "#quota-gauge";
+      window.htmx.ajax("GET", location.pathname + location.search, { target: gauge, select: gauge, swap: "outerHTML" });
+    }
   }
 
   // --- Bouton : sélecteur de fichiers

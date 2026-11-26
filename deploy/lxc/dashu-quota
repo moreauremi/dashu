@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Plafonds de stockage des comptes (SPEC v2, « Quota de stockage »), en root
+# dans le conteneur :
+#
+#   dashu-quota list                    usage et plafond de chaque compte
+#   dashu-quota show <email>            usage, plafond et derniers changements
+#   dashu-quota set <email> <taille>    plafond personnel : 50G, 500M, 1,5T…
+#   dashu-quota reset <email>           retour à la valeur par défaut
+#
+# C'est la commande `dashu quota` du binaire, lancée comme le service : sous
+# l'utilisateur dashu (une base ouverte en root laisserait des fichiers que
+# dashu ne pourrait plus écrire), avec sa configuration (DATABASE_URL,
+# FILES_DIR, FILES_QUOTA). Le plafond ne se change nulle part ailleurs : ni
+# dans le site, ni par l'API, ni par Hermès (dashu-admin garde ses six
+# actions).
+set -euo pipefail
+
+ENV_FILE="${DASHU_ENV_FILE:-/etc/dashu/dashu.env}"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "dashu-quota se lance en root (sudo dashu-quota …)." >&2
+  exit 2
+fi
+if [ "$#" -eq 0 ]; then
+  exec runuser -u dashu -- dashu quota
+fi
+
+exec runuser -u dashu -- sh -c 'set -a; . "$0"; exec dashu quota "$@"' "$ENV_FILE" "$@"

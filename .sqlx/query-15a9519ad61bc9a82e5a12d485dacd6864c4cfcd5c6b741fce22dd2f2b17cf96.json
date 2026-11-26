@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT size FROM files WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "size",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "15a9519ad61bc9a82e5a12d485dacd6864c4cfcd5c6b741fce22dd2f2b17cf96"
+}
