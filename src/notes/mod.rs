@@ -48,7 +48,8 @@ pub struct NoteItem {
     pub tags: Vec<String>,
     /// Vue d'ensemble de Perso : l'espace d'une note venue d'ailleurs.
     pub space: Option<crate::spaces::SpaceTag>,
-    /// Le sous-dossier de la note, dans la section de son dossier.
+    /// Le chemin de la note sous son dossier du premier niveau (« Exercices »,
+    /// « Exercices / Corrigés »), dans la section de ce dossier.
     pub sub: Option<String>,
     space_id: i64,
     folder_id: Option<i64>,
@@ -192,8 +193,8 @@ pub async fn list(
 
 /// Range les notes par dossier du premier niveau, dans l'ordre reçu : d'abord
 /// celles sans dossier, puis un dossier après l'autre (par espace, puis par
-/// nom). Une note d'un sous-dossier va dans la section de son dossier, avec
-/// le nom du sous-dossier.
+/// nom). Une note d'un sous-dossier, à n'importe quel niveau, va dans la
+/// section de son dossier du premier niveau, avec le chemin qui y mène.
 fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<NoteGroup> {
     let mut loose = Vec::new();
     let mut by_top: HashMap<i64, Vec<NoteItem>> = HashMap::new();
@@ -202,7 +203,13 @@ fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<No
         match chain.as_slice() {
             [] => loose.push(item),
             [top, rest @ ..] => {
-                item.sub = rest.last().map(|f| f.name.clone());
+                // Le chemin sous le dossier : « Exercices / Corrigés ».
+                item.sub = (!rest.is_empty()).then(|| {
+                    rest.iter()
+                        .map(|f| f.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                });
                 by_top.entry(top.id).or_default().push(item);
             }
         }

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE folders SET space_id = ?1, deleted_at = ?2, deleted_by = ?3, deleted_via = ?4,\n           trash_op = ?5, trash_root = 0\n         WHERE id IN (\n           WITH RECURSIVE below(id) AS (\n             SELECT id FROM folders WHERE parent_id = ?6\n             UNION SELECT f.id FROM folders f JOIN below b ON f.parent_id = b.id\n           )\n           SELECT id FROM below\n         )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "da2c6cb1a58d34e650a4af8517ad82dc630d2a4ad0905194886fa94813b87858"
+}

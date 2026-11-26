@@ -1,8 +1,10 @@
 //! Dossiers (SPEC, « Dossiers ») : ils rangent les fichiers et les notes.
 //!
-//! * Trois niveaux au plus : Espace / Dossier / Sous-dossier. Le dossier d'un
-//!   espace n'est pas une ligne de `folders` : c'est l'espace lui-même, créé,
-//!   renommé et supprimé avec lui.
+//! * Cinq niveaux au plus, l'espace compris : Espace / Dossier / Sous-dossier,
+//!   puis deux niveaux de plus (SPEC, « Dossiers : cinq niveaux »). Le dossier
+//!   d'un espace n'est pas une ligne de `folders` : c'est l'espace lui-même,
+//!   créé, renommé et supprimé avec lui. La limite est vérifiée par le
+//!   serveur ([`MAX_DEPTH`]) à chaque création, déplacement et restauration.
 //! * Les dossiers n'existent que dans la base : sur le disque, un fichier
 //!   garde son nom aléatoire, quel que soit son dossier (voir `files`).
 //! * Un élément et son dossier sont toujours dans le même espace : toute
@@ -27,6 +29,16 @@ use crate::web::{self, AppError, AppResult, see_other};
 /// Longueur maximale d'un nom de dossier.
 pub const NAME_MAX_CHARS: usize = 60;
 
+/// Niveaux de dossiers sous l'espace : quatre, soit cinq niveaux en tout avec
+/// l'espace (Espace / Dossier / Sous-dossier / deux niveaux de plus).
+pub const MAX_DEPTH: usize = 4;
+
+/// Refus d'un dossier créé un niveau trop bas, le même partout (site, API,
+/// connecteur, Hermès).
+pub fn too_deep(place: &str) -> String {
+    format!("Cinq niveaux au plus : pas de dossier de plus dans « {place} ».")
+}
+
 #[derive(Debug, Clone)]
 pub struct Folder {
     pub id: i64,
@@ -37,11 +49,61 @@ pub struct Folder {
 }
 
 impl Folder {
-    /// Vrai pour un dossier du premier niveau : lui seul peut contenir des
-    /// sous-dossiers.
+    /// Vrai pour un dossier du premier niveau (directement dans l'espace).
     pub fn is_top(&self) -> bool {
         self.parent_id.is_none()
     }
+}
+
+/// Niveau d'un dossier sous son espace : 1 pour un dossier du premier niveau,
+/// [`MAX_DEPTH`] au plus ; 0 pour la racine de l'espace (`None`).
+pub fn depth(folders: &[Folder], id: Option<i64>) -> usize {
+    chain(folders, id).len()
+}
+
+/// Sous-dossiers d'un dossier à tous les niveaux, du plus proche au plus
+/// profond, sans le dossier lui-même.
+pub fn descendants(folders: &[Folder], id: i64) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new();
+    let mut level = vec![id];
+    // Un niveau à la fois. La limite n'est qu'un garde-fou contre une boucle
+    // dans la base, qui ne devrait pas exister.
+    for _ in 0..=MAX_DEPTH {
+        level = folders
+            .iter()
+            .filter(|f| {
+                f.parent_id.is_some_and(|p| level.contains(&p))
+                    && f.id != id
+                    && !out.contains(&f.id)
+            })
+            .map(|f| f.id)
+            .collect();
+        if level.is_empty() {
+            break;
+        }
+        out.extend(&level);
+    }
+    out
+}
+
+/// Hauteur d'un dossier : 1 sans sous-dossier, 2 si ses sous-dossiers n'en
+/// ont pas, et ainsi de suite. Rangé dans un dossier de niveau `n`, son
+/// sous-dossier le plus profond arrive au niveau `n + hauteur`.
+pub fn height(folders: &[Folder], id: i64) -> usize {
+    let mut height = 1;
+    let mut level = vec![id];
+    for _ in 0..=MAX_DEPTH {
+        level = folders
+            .iter()
+            .filter(|f| f.parent_id.is_some_and(|p| level.contains(&p)) && f.id != id)
+            .map(|f| f.id)
+            .collect();
+        if level.is_empty() {
+            break;
+        }
+        height += 1;
+    }
+    height
 }
 
 /// Tous les dossiers des espaces d'un compte, triés par nom. Ils sont peu nombreux : on
@@ -118,10 +180,10 @@ pub fn parse_id(raw: Option<&str>) -> AppResult<Option<i64>> {
 pub fn chain(folders: &[Folder], id: Option<i64>) -> Vec<&Folder> {
     let mut out = Vec::new();
     let mut next = id;
-    // Trois niveaux au plus : la boucle s'arrête d'elle-même, la limite n'est
+    // Cinq niveaux au plus : la boucle s'arrête d'elle-même, la limite n'est
     // qu'un garde-fou.
     while let Some(id) = next
-        && out.len() < 3
+        && out.len() < MAX_DEPTH
     {
         let Some(folder) = folders.iter().find(|f| f.id == id) else {
             break;
@@ -273,12 +335,14 @@ pub async fn contents(
     {
         map.entry(row.folder_id).or_default().files += row.n;
     }
-    // Un sous-dossier compte dans son dossier parent, avec son contenu. (Un
-    // sous-dossier n'a pas d'enfant : l'ordre de la boucle est sans effet.)
+    // Un sous-dossier compte dans chacun des dossiers au-dessus de lui, avec
+    // ce qu'il contient directement : chaque dossier compte ainsi tout ce qui
+    // est en dessous, à tous les niveaux.
+    let direct = map.clone();
     for folder in folders {
-        if let Some(parent) = folder.parent_id {
-            let inside = map.get(&folder.id).copied().unwrap_or_default();
-            let entry = map.entry(parent).or_default();
+        let inside = direct.get(&folder.id).copied().unwrap_or_default();
+        for above in chain(folders, folder.parent_id) {
+            let entry = map.entry(above.id).or_default();
             entry.folders += 1;
             entry.notes += inside.notes;
             entry.files += inside.files;
@@ -301,7 +365,7 @@ pub struct CreateForm {
 }
 
 /// `POST /folders` : crée un dossier dans un espace, ou un sous-dossier dans
-/// un dossier du premier niveau, puis revient là où il a été créé.
+/// un dossier (cinq niveaux au plus), puis revient là où il a été créé.
 pub async fn create(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -312,11 +376,11 @@ pub async fn create(
         Some(id) => Some(find(&state.db, user, id).await?.ok_or(AppError::NotFound)?),
         None => None,
     };
-    // Trois niveaux au plus : pas de dossier dans un sous-dossier.
-    if parent.as_ref().is_some_and(|p| !p.is_top()) {
-        return Err(AppError::BadRequest(
-            "Pas de dossier dans un sous-dossier : trois niveaux au plus.".into(),
-        ));
+    // Cinq niveaux au plus : refusé par le serveur, pas seulement caché.
+    if let Some(parent) = &parent
+        && depth(&all(&state.db, user).await?, Some(parent.id)) >= MAX_DEPTH
+    {
+        return Err(AppError::BadRequest(too_deep(&parent.name)));
     }
     let space = match &parent {
         Some(parent) => ctx.space_by_id(parent.space_id),
@@ -335,9 +399,9 @@ pub async fn create(
     Ok(see_other(&back))
 }
 
-/// Crée un dossier dans un espace (déjà vérifié), ou dans un dossier du
-/// premier niveau de cet espace. Rend son identifiant et son nom, ou le
-/// refus à montrer (nom vide ou déjà pris). Aussi pour l'API.
+/// Crée un dossier dans un espace (déjà vérifié), ou dans un dossier de cet
+/// espace. Rend son identifiant et son nom, ou le refus à montrer (nom vide
+/// ou déjà pris, niveau de trop). Aussi pour l'API.
 pub(crate) async fn create_in(
     db: &SqlitePool,
     user: i64,
@@ -356,10 +420,8 @@ pub(crate) async fn create_in(
             .find(|f| f.id == parent && f.space_id == space)
         {
             None => return Err(AppError::NotFound),
-            Some(p) if !p.is_top() => {
-                return Ok(Err(
-                    "Pas de dossier dans un sous-dossier : trois niveaux au plus.".into(),
-                ));
+            Some(p) if depth(&folders, Some(p.id)) >= MAX_DEPTH => {
+                return Ok(Err(too_deep(&p.name)));
             }
             Some(_) => {}
         }
@@ -515,11 +577,12 @@ pub async fn delete(
             sqlx::query!("UPDATE folders SET name = ? WHERE id = ?", placeholder, id)
                 .execute(&mut *tx)
                 .await?;
-            let mut taken = neighbours(&folders, folder.space_id, None, Some(id));
+            let mut taken = neighbours(&folders, folder.space_id, parent, Some(id));
             for sub in &subs {
                 let name = free_name(&taken, &sub.name);
                 sqlx::query!(
-                    "UPDATE folders SET parent_id = NULL, name = ? WHERE id = ?",
+                    "UPDATE folders SET parent_id = ?, name = ? WHERE id = ?",
+                    parent,
                     name,
                     sub.id
                 )
@@ -555,17 +618,17 @@ pub async fn delete(
 #[derive(Deserialize)]
 pub struct MoveForm {
     space_id: i64,
-    /// Dossier du premier niveau où le mettre ; vide : la racine de l'espace.
+    /// Dossier où le mettre ; vide : la racine de l'espace.
     folder_id: Option<String>,
     /// Page où revenir ; le nouvel emplacement sans précision.
     next: Option<String>,
 }
 
 /// `POST /folders/{id}/move` : déplace un dossier, avec ses notes, ses
-/// fichiers et ses sous-dossiers, à la racine d'un espace ou dans un dossier
-/// du premier niveau. Trois niveaux au plus : un dossier qui a des
-/// sous-dossiers ne va que directement dans un espace. Un refus (niveau de
-/// trop, homonyme, le dossier dans lui-même) est dit, et rien ne bouge.
+/// fichiers et ses sous-dossiers, à la racine d'un espace ou dans un autre
+/// dossier. Cinq niveaux au plus : le dossier et ses sous-dossiers doivent
+/// tenir sous la destination. Un refus (niveau de trop, homonyme, le dossier
+/// dans lui-même ou dans un de ses sous-dossiers) est dit, et rien ne bouge.
 pub async fn move_folder(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -595,14 +658,15 @@ pub(crate) enum Moved {
     Same,
     /// Déplacé ; le message à montrer.
     Done(String),
-    /// Refusé (niveau de trop, homonyme, dans lui-même) : rien n'a bougé.
+    /// Refusé (niveau de trop, homonyme, dans lui-même ou dans un de ses
+    /// sous-dossiers) : rien n'a bougé.
     Refused(String),
 }
 
 /// Déplace un dossier accessible, avec ses notes, ses fichiers et ses
 /// sous-dossiers, à la racine d'un espace accessible (`target`) ou dans un
-/// dossier du premier niveau de cet espace. 404 si le dossier ou le dossier
-/// de destination n'est pas accessible. Aussi pour l'API.
+/// dossier de cet espace. 404 si le dossier ou le dossier de destination
+/// n'est pas accessible. Aussi pour l'API.
 pub(crate) async fn move_to(
     db: &SqlitePool,
     user: i64,
@@ -625,23 +689,23 @@ pub(crate) async fn move_to(
         ),
         None => None,
     };
-    let subs: Vec<i64> = folders
-        .iter()
-        .filter(|f| f.parent_id == Some(id))
-        .map(|f| f.id)
-        .collect();
+    // Ses sous-dossiers, à tous les niveaux : ils le suivent.
+    let subs = descendants(&folders, id);
 
     if folder.space_id == target.id && folder.parent_id == parent_id {
         return Ok(Moved::Same);
     }
     let refusal = match parent {
         Some(p) if p.id == id => Some("Un dossier ne va pas dans lui-même.".to_string()),
-        Some(p) if !p.is_top() => {
-            Some("Pas de dossier dans un sous-dossier : trois niveaux au plus.".to_string())
+        Some(p) if subs.contains(&p.id) => {
+            Some("Un dossier ne va pas dans un de ses sous-dossiers.".to_string())
         }
-        Some(_) if !subs.is_empty() => Some(format!(
-            "« {} » contient des sous-dossiers : il ne va que directement dans un espace (trois niveaux au plus).",
-            folder.name
+        // Le dossier arrive un niveau sous la destination, son sous-dossier
+        // le plus profond `hauteur` niveaux sous elle.
+        Some(p) if depth(&folders, Some(p.id)) + height(&folders, id) > MAX_DEPTH => Some(format!(
+            "Cinq niveaux au plus : pas de place pour « {} » dans « {} ».",
+            folder.name,
+            label(&target.name, &folders, parent_id)
         )),
         _ if neighbours(&folders, target.id, parent_id, Some(id))
             .iter()
@@ -728,8 +792,9 @@ pub struct Dest {
     pub space_id: i64,
     pub folder_id: Option<i64>,
     pub name: String,
-    /// 0 : un espace ; 1 : un dossier ; 2 : un sous-dossier.
-    pub depth: u8,
+    /// 0 : un espace ; 1 : un dossier du premier niveau ; jusqu'à
+    /// [`MAX_DEPTH`] pour le plus profond.
+    pub depth: usize,
     pub color: String,
     /// Là où l'élément est déjà.
     pub current: bool,
@@ -739,50 +804,62 @@ pub struct Dest {
 pub struct Reach {
     /// L'espace et le dossier où l'élément est déjà (grisés).
     pub here: Option<(i64, Option<i64>)>,
-    /// Niveau le plus profond où il peut aller : 2 pour une note ou un
-    /// fichier ; 1 pour un dossier sans sous-dossier ; 0 pour un dossier qui
-    /// en a (trois niveaux au plus).
-    pub depth: u8,
+    /// Niveau le plus profond où il peut aller : [`MAX_DEPTH`] pour une note
+    /// ou un fichier ; pour un dossier, `MAX_DEPTH` moins sa hauteur (0 : les
+    /// espaces seulement). Cinq niveaux au plus.
+    pub depth: usize,
     /// Le dossier qu'on déplace : ni lui ni ses sous-dossiers ne sont des
     /// destinations.
     pub moving: Option<i64>,
 }
 
 /// Toutes les destinations possibles, dans l'ordre de l'arborescence :
-/// chaque espace, puis ses dossiers, chacun suivi de ses sous-dossiers.
+/// chaque espace, puis ses dossiers, chacun suivi de ses sous-dossiers, à
+/// tous les niveaux permis.
 pub fn destinations(spaces: &[Space], folders: &[Folder], reach: &Reach) -> Vec<Dest> {
-    let here = reach.here;
     let mut out = Vec::new();
-    let mut push = |space: &Space, folder: Option<&Folder>, depth: u8| {
-        let folder_id = folder.map(|f| f.id);
+    for space in spaces {
         out.push(Dest {
             space_id: space.id,
-            folder_id,
-            name: folder.map_or_else(|| space.name.clone(), |f| f.name.clone()),
-            depth,
+            folder_id: None,
+            name: space.name.clone(),
+            depth: 0,
             color: space.color.clone(),
-            current: here == Some((space.id, folder_id)),
+            current: reach.here == Some((space.id, None)),
         });
-    };
-    for space in spaces {
-        push(space, None, 0);
-        if reach.depth == 0 {
-            continue;
-        }
-        for top in folders
-            .iter()
-            .filter(|f| f.space_id == space.id && f.is_top() && Some(f.id) != reach.moving)
-        {
-            push(space, Some(top), 1);
-            if reach.depth < 2 {
-                continue;
-            }
-            for sub in folders.iter().filter(|f| f.parent_id == Some(top.id)) {
-                push(space, Some(sub), 2);
-            }
-        }
+        branch(&mut out, space, folders, reach, None, 1);
     }
     out
+}
+
+/// Les dossiers de `parent` dans `space`, chacun suivi des siens, jusqu'au
+/// niveau `reach.depth`. Le dossier qu'on déplace n'y est pas, ni rien en
+/// dessous de lui.
+fn branch(
+    out: &mut Vec<Dest>,
+    space: &Space,
+    folders: &[Folder],
+    reach: &Reach,
+    parent: Option<i64>,
+    depth: usize,
+) {
+    if depth > reach.depth.min(MAX_DEPTH) {
+        return;
+    }
+    for folder in folders
+        .iter()
+        .filter(|f| f.space_id == space.id && f.parent_id == parent && Some(f.id) != reach.moving)
+    {
+        out.push(Dest {
+            space_id: space.id,
+            folder_id: Some(folder.id),
+            name: folder.name.clone(),
+            depth,
+            color: space.color.clone(),
+            current: reach.here == Some((space.id, Some(folder.id))),
+        });
+        branch(out, space, folders, reach, Some(folder.id), depth + 1);
+    }
 }
 
 #[derive(Template)]
@@ -848,7 +925,7 @@ pub async fn picker(
                 format!("/notes/{id}/move"),
                 Reach {
                     here: Some((note.space_id, note.folder_id)),
-                    depth: 2,
+                    depth: MAX_DEPTH,
                     moving: None,
                 },
                 next,
@@ -872,7 +949,7 @@ pub async fn picker(
                     format!("/files/{id}/keep"),
                     Reach {
                         here: None,
-                        depth: 2,
+                        depth: MAX_DEPTH,
                         moving: None,
                     },
                     next,
@@ -883,7 +960,7 @@ pub async fn picker(
                     format!("/files/{id}/move"),
                     Reach {
                         here: Some((file.space_id, file.folder_id)),
-                        depth: 2,
+                        depth: MAX_DEPTH,
                         moving: None,
                     },
                     next,
@@ -895,15 +972,15 @@ pub async fn picker(
                 .iter()
                 .find(|f| f.id == id)
                 .ok_or(AppError::NotFound)?;
-            // Trois niveaux au plus : un dossier qui a des sous-dossiers ne
-            // va que directement dans un espace.
-            let has_subs = folders.iter().any(|f| f.parent_id == Some(id));
+            // Cinq niveaux au plus : le dossier et ses sous-dossiers doivent
+            // tenir sous la destination.
+            let reach_depth = MAX_DEPTH.saturating_sub(height(&folders, id));
             (
                 format!("Déplacer le dossier « {} »", folder.name),
                 format!("/folders/{id}/move"),
                 Reach {
                     here: Some((folder.space_id, folder.parent_id)),
-                    depth: if has_subs { 0 } else { 1 },
+                    depth: reach_depth,
                     moving: Some(id),
                 },
                 next,
@@ -973,6 +1050,39 @@ mod tests {
         assert_eq!(chain(&folders, Some(99)).len(), 0);
         assert_eq!(view_url("ecole", Some(2)), "/e/ecole/files?dossier=2");
         assert_eq!(view_url("ecole", None), "/e/ecole/files?dossier=espace");
+    }
+
+    #[test]
+    fn niveaux_hauteurs_et_descendants() {
+        // Math / Analyse / Chapitre / Exercices, et Algèbre à côté d'Analyse.
+        let folders = vec![
+            folder(1, None, "Math"),
+            folder(2, Some(1), "Analyse"),
+            folder(3, Some(2), "Chapitre"),
+            folder(4, Some(3), "Exercices"),
+            folder(5, Some(1), "Algèbre"),
+        ];
+        assert_eq!(depth(&folders, None), 0);
+        assert_eq!(depth(&folders, Some(1)), 1);
+        assert_eq!(depth(&folders, Some(4)), MAX_DEPTH);
+        assert_eq!(height(&folders, 1), 4);
+        assert_eq!(height(&folders, 2), 3);
+        assert_eq!(height(&folders, 4), 1);
+        assert_eq!(descendants(&folders, 1), vec![2, 5, 3, 4]);
+        assert_eq!(descendants(&folders, 4), Vec::<i64>::new());
+        assert_eq!(
+            label("École", &folders, Some(4)),
+            "École / Math / Analyse / Chapitre / Exercices"
+        );
+    }
+
+    #[test]
+    fn une_boucle_dans_la_base_ne_bloque_rien() {
+        // Ne devrait pas exister ; les parcours s'arrêtent quand même.
+        let folders = vec![folder(1, Some(2), "A"), folder(2, Some(1), "B")];
+        assert!(depth(&folders, Some(1)) <= MAX_DEPTH);
+        assert!(height(&folders, 1) <= MAX_DEPTH + 2);
+        assert_eq!(descendants(&folders, 1), vec![2]);
     }
 
     #[test]

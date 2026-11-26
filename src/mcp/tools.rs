@@ -336,7 +336,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "lister_dossiers",
         title: "Lister les dossiers",
-        description: "L'arborescence : chaque dossier avec son espace et son dossier parent (trois niveaux au plus : l'espace, un dossier, un sous-dossier).",
+        description: "L'arborescence : chaque dossier avec son espace et son dossier parent (cinq niveaux au plus : l'espace, puis quatre niveaux de dossiers).",
         kind: Kind::Read,
         properties: || json!({ "space": space_prop("(tous si absent)") }),
         required: &[],
@@ -344,13 +344,13 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "creer_dossier",
         title: "Créer un dossier",
-        description: "Crée un dossier dans un espace, ou un sous-dossier dans un dossier du premier niveau.",
+        description: "Crée un dossier dans un espace, ou un sous-dossier dans un dossier (cinq niveaux au plus, l'espace compris).",
         kind: Kind::Write,
         properties: || {
             json!({
                 "name": { "type": "string", "description": "Nom du dossier" },
                 "space": space_prop("où le créer"),
-                "parent": { "type": "integer", "description": "Dossier du premier niveau où le créer" },
+                "parent": { "type": "integer", "description": "Dossier où le créer" },
             })
         },
         required: &["name"],
@@ -365,7 +365,7 @@ const TOOLS: &[Tool] = &[
                 "id": id_prop("le dossier"),
                 "name": { "type": "string", "description": "Nouveau nom" },
                 "space": space_prop("où l'emmener"),
-                "parent": folder_prop("du premier niveau"),
+                "parent": folder_prop("où le mettre"),
             })
         },
         required: &["id"],

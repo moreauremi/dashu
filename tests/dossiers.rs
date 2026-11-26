@@ -162,7 +162,7 @@ async fn la_racine_montre_les_espaces_et_temporaire() {
 }
 
 #[tokio::test]
-async fn des_dossiers_sur_trois_niveaux_au_plus() {
+async fn des_dossiers_et_des_sous_dossiers() {
     let app = TestApp::new().await;
     let mut alice = app.logged_in(ALICE).await;
     let (ecole, taff) = (
@@ -198,14 +198,9 @@ async fn des_dossiers_sur_trois_niveaux_au_plus() {
     let exercices = folder(&app, "Exercices").await;
     assert_eq!(folder_place(&app, exercices).await, (ecole, Some(math)));
 
-    // Pas de troisième niveau : refusé par le serveur, et pas proposé.
-    let refused = alice
-        .post(
-            "/folders",
-            &[("name", "Trop loin"), ("parent_id", &exercices.to_string())],
-        )
-        .await;
-    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    // Un sous-dossier peut en recevoir à son tour : cinq niveaux au plus,
+    // l'espace compris (la limite elle-même est éprouvée dans
+    // tests/dossiers_cinq_niveaux.rs).
     assert_eq!(count_folders(&app).await, 2);
     alice.post("/space", &[("slug", "ecole")]).await;
     let page = alice.get(&format!("/files?dossier={math}")).await;
@@ -215,7 +210,11 @@ async fn des_dossiers_sur_trois_niveaux_au_plus() {
     );
     assert!(page.body.contains("Exercices"));
     let page = alice.get(&format!("/files?dossier={exercices}")).await;
-    assert!(!page.body.contains("Nouveau dossier"));
+    assert!(page.body.contains("Nouveau dossier"));
+    assert!(
+        page.body
+            .contains(&format!("name=\"parent_id\" value=\"{exercices}\""))
+    );
     // Le chemin pour remonter : Fichiers › École › Math.
     let crumbs = common::between(&page.body, "<nav class=\"crumbs\"", "</nav>").unwrap();
     assert!(crumbs.contains("href=\"/files?dossier=racine\""));
@@ -1069,7 +1068,9 @@ async fn deplacer_un_dossier_entier() {
     file_note_any(&app, exo, exercices).await;
     alice.upload_in_folder("td.pdf", b"%PDF td", math).await;
 
-    // La fenêtre d'un dossier qui a des sous-dossiers : les espaces seulement.
+    // La fenêtre d'un dossier qui a des sous-dossiers : les dossiers où lui
+    // et ses sous-dossiers tiennent (cinq niveaux au plus), sans lui ni ce
+    // qu'il contient.
     let picker = alice
         .get_fragment(&format!("/destinations?dossier={math}"))
         .await;
@@ -1078,8 +1079,17 @@ async fn deplacer_un_dossier_entier() {
             .body
             .contains(&format!("action=\"/folders/{math}/move\""))
     );
-    assert!(!picker.body.contains("dest-d1") && !picker.body.contains("dest-d2"));
-    // Sans sous-dossier : aussi les dossiers du premier niveau, sauf lui-même.
+    assert!(
+        picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{projet}\""))
+    );
+    assert!(
+        !picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{exercices}\""))
+    );
+    // Sans sous-dossier : tous les dossiers, sauf lui-même.
     let picker = alice
         .get_fragment(&format!("/destinations?dossier={francais}"))
         .await;
@@ -1098,7 +1108,12 @@ async fn deplacer_un_dossier_entier() {
             .body
             .contains(&format!("name=\"folder_id\" value=\"{francais}\""))
     );
-    assert!(!picker.body.contains("dest-d2"));
+    // Le sous-dossier d'un autre aussi.
+    assert!(
+        picker
+            .body
+            .contains(&format!("name=\"folder_id\" value=\"{exercices}\""))
+    );
     // La liste propose de le déplacer.
     let page = alice.get("/files").await;
     assert!(
@@ -1154,17 +1169,16 @@ async fn deplacer_un_dossier_entier() {
         (ecole, Some(exercices))
     );
 
-    // Refus dits, rien ne bouge : un dossier qui a des sous-dossiers dans un
-    // dossier, un dossier dans un sous-dossier, dans lui-même, à côté d'un
-    // homonyme.
+    // Refus dits, rien ne bouge : un dossier dans un de ses sous-dossiers,
+    // dans lui-même, à côté d'un homonyme. (Le niveau de trop est éprouvé
+    // dans tests/dossiers_cinq_niveaux.rs.)
     create_in_folder(&mut alice, projet, "Annexes").await;
     let refusals = [
-        (projet, taff, Some(math), "contient des sous-dossiers"),
         (
-            math,
+            projet,
             taff,
             Some(francais),
-            "Pas de dossier dans un sous-dossier",
+            "Un dossier ne va pas dans un de ses sous-dossiers.",
         ),
         (
             math,

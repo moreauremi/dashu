@@ -780,7 +780,7 @@ Demandé par Rémi le 13 novembre 2026. Il revient sur la décision du 11 novemb
 - À la racine : un dossier par espace (sauf les espaces archivés), plus un dossier **Temporaire**.
 - Le dossier d'un espace, c'est l'espace lui-même : il apparaît à la création de l'espace, prend son nom quand on le renomme et ne se supprime pas depuis Fichiers (il part avec l'espace, depuis Réglages).
 - Temporaire montre les fichiers déposés dans l'onglet Outils et pas encore gardés. Ils sont toujours effacés au bout de 24 heures.
-- Dans le dossier d'un espace, des dossiers ; dans un dossier, des sous-dossiers. **Trois niveaux au plus** : Espace / Dossier / Sous-dossier.
+- Dans le dossier d'un espace, des dossiers ; dans un dossier, des sous-dossiers. **Trois niveaux au plus** : Espace / Dossier / Sous-dossier. *Remplacé le 26 novembre 2026 par cinq niveaux : voir « Dossiers : cinq niveaux ».*
 - Un dossier se crée, se renomme et se supprime. Son nom fait 60 caractères au plus et ne se répète pas parmi ses voisins (majuscules comprises : « Math » et « math » sont le même nom).
 - Supprimer un dossier vide demande une simple confirmation. Si le dossier contient quelque chose, une fenêtre d'avertissement dit ce qu'il contient et propose deux choix :
   - **Transférer dans le dossier parent** : ses notes et ses fichiers vont dans le dossier du dessus ; ses sous-dossiers montent d'un niveau (renommés « Exercices (2) » si le nom est déjà pris) ;
@@ -1816,3 +1816,57 @@ Lot 1 :
 Lots 2 à 5 : un critère par point ci-dessus, écrit avec son lot.
 
 - [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
+
+---
+
+# dashu — Dossiers : cinq niveaux
+
+Nov 26, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 26 novembre 2026. La règle des trois niveaux (Espace / Dossier / Sous-dossier, décidée le 13 novembre dans « Dossiers ») ne suffit plus pour ranger un cours par matière, puis par partie, par chapitre et par type de document. La limite passe à **cinq niveaux, l'espace compris**. Cette section remplace la règle des trois niveaux ; le reste de « Dossiers » ne change pas.
+
+## Fonctionnement
+
+- **Cinq niveaux au plus** : l'espace, puis quatre niveaux de dossiers. Par exemple École / Math / Analyse / Chapitre 1 / Exercices. Le dossier d'un espace reste l'espace lui-même.
+- **Créer** : « Nouveau dossier » est proposé dans le dossier d'un espace et dans un dossier des trois premiers niveaux. Au quatrième, le bouton disparaît, et le serveur refuse : « Cinq niveaux au plus : pas de dossier de plus dans « Exercices ». »
+- **Déplacer un dossier** : il emmène tous ses sous-dossiers, à tous les niveaux. Il va dans n'importe quel dossier où lui et son sous-dossier le plus profond tiennent dans les cinq niveaux. Sinon, refus dit (« Cinq niveaux au plus : pas de place pour « Analyse » dans « Taff / Projet / Lot A ». ») et rien ne bouge. Il ne va ni dans lui-même, ni dans un de ses sous-dossiers, ni à côté d'un homonyme. Changer d'espace emmène tout son contenu, à tous les niveaux, conversions en cours comprises.
+- **La fenêtre « Ranger »** montre tous les niveaux, chacun avec son retrait. Pour un dossier, elle ne propose que les destinations où il tient, sans lui ni ce qu'il contient.
+- **Supprimer un dossier non vide** : « Transférer dans le dossier parent » monte ses sous-dossiers d'un niveau, dans ce parent (et non plus toujours à la racine de l'espace) ; un nom déjà pris y devient « Chapitre 1 (2) ». « Tout supprimer » met le dossier et tout ce qu'il contient dans la corbeille, à tous les niveaux.
+- **Restaurer un dossier** depuis la corbeille le remet dans son ancien dossier s'il y tient encore avec ses sous-dossiers ; sinon à la racine de son espace, avec tous ses niveaux.
+- **Compter et chercher** : le résumé d'un dossier (« 3 dossiers, 2 notes et 1 fichier ») et la recherche dans un dossier comprennent tout ce qui est en dessous, à tous les niveaux.
+- **Onglet Notes** : toujours une section par dossier du premier niveau. Une note plus bas y porte le chemin sous ce dossier (« Analyse / Chapitre 1 / Exercices »).
+- **Ce qui ne change pas** : le sélecteur « Dossier » de l'éditeur (premier niveau ; « Voir plus… » montre tout), le fil d'Ariane (il montre déjà tout le chemin), le glisser-déposer (le serveur refuse un niveau de trop, comme pour la fenêtre). L'API, le connecteur Claude et Hermès suivent la même règle, avec les mêmes messages.
+
+## Modèle de données
+
+Aucune migration. `folders.parent_id` permet déjà n'importe quelle profondeur ; la limite est dans le code (`folders::MAX_DEPTH`, quatre niveaux de dossiers). Le commentaire de la migration 0013 (« Trois niveaux au plus ») reste tel quel : une migration fusionnée ne se modifie pas.
+
+## Sécurité
+
+- Un niveau de trop est refusé par le serveur, sur toutes les routes (site, API, connecteur, Hermès), pas seulement caché.
+- Un dossier ne va pas dans un de ses sous-dossiers : refusé par le serveur, sinon l'arborescence ferait une boucle.
+- Les parcours de l'arborescence, dans le code et dans les requêtes SQL récursives, ont un garde-fou : une boucle dans la base, qui ne devrait pas exister, ne les fait pas tourner sans fin.
+- Le reste vaut à tous les niveaux : un dossier d'un autre compte répond 404, un élément et son dossier sont toujours dans le même espace.
+
+## Critères d'acceptation
+
+- [ ] Un dossier se crée jusqu'au quatrième niveau sous l'espace ; au-delà, le serveur refuse et « Nouveau dossier » n'est pas proposé ; le fil d'Ariane montre tout le chemin ; la fenêtre « Ranger » d'une note propose les quatre niveaux
+- [ ] L'API et le connecteur créent jusqu'au même niveau et refusent le suivant avec le même message ; l'API refuse un déplacement qui dépasserait cinq niveaux
+- [ ] Un dossier se déplace dans un dossier tant que lui et ses sous-dossiers tiennent dans cinq niveaux ; au-delà, refus dit, rien ne bouge ; ni dans lui-même ni dans un de ses sous-dossiers ; la fenêtre « Ranger » ne propose que les destinations permises
+- [ ] Déplacer un dossier dans un autre espace emmène ses notes, ses fichiers et ses sous-dossiers, à tous les niveaux
+- [ ] Le résumé d'un dossier et la recherche dans un dossier comprennent tous les niveaux en dessous ; l'onglet Notes range une note du quatrième niveau dans la section de son dossier du premier niveau, avec le chemin
+- [ ] Supprimer un dossier non vide : « Transférer » monte ses sous-dossiers d'un niveau dans son parent ; « Tout supprimer » met tout dans la corbeille, à tous les niveaux, et l'effacer vide le disque
+- [ ] Restaurer un dossier le remet dans son ancien dossier s'il y tient, sinon à la racine de l'espace, avec tous ses niveaux
+- [ ] Un second compte ne crée rien, n'ouvre rien et ne range rien dans les dossiers profonds du premier
+- [ ] STATUS et README à jour ; plus aucune mention des trois niveaux dans le code, les gabarits, `deploy`, les tests et le README
+
+## Décisions
+
+Prises le 26 novembre 2026, par défaut, pour avancer (Rémi a demandé les cinq niveaux et m'a laissé rédiger la section) :
+
+- **Cinq niveaux en comptant l'espace**, comme « trois niveaux » le comptait (Espace / Dossier / Sous-dossier).
+- **La limite est dans le code**, sans migration : changer de limite plus tard ne demande qu'une constante.
+- **Le sélecteur de l'éditeur reste au premier niveau** : il serait trop long avec quatre niveaux ; « Voir plus… » montre tout.
+- **Les tests de l'ancienne règle changent** : ceux qui vérifiaient le refus d'un troisième niveau (`tests/dossiers.rs`, `tests/api_contenu.rs`) vérifient maintenant ce que la nouvelle règle permet ; la limite elle-même est éprouvée dans `tests/dossiers_cinq_niveaux.rs`.

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH RECURSIVE below(id, level) AS (\n             SELECT ?1, 1\n             UNION SELECT f.id, b.level + 1 FROM folders f JOIN below b ON f.parent_id = b.id\n               WHERE b.level <= ?2\n           )\n           SELECT max(level) AS \"height!: i64\" FROM below",
+  "describe": {
+    "columns": [
+      {
+        "name": "height!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "47838fa6da5d2b6ad5d4034ae449d7bf698e6cefbd396d1541022bff91e2d584"
+}
