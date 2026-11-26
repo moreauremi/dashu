@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO tool_grants (user_id, tool, granted_at) VALUES (?, ?, ?)\n         ON CONFLICT (user_id, tool) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "a8fe654b66c084312960470fe34039bad668b7128e735d25f10262c0b6992ff6"
+}

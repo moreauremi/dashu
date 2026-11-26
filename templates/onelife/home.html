@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}1Life · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Accueil de 1Life (src/onelife/mod.rs) : une carte par module du
+    registre MODULES. Réservé aux comptes autorisés (404 pour les autres). -#}
+{% block content %}
+<header class="page-head">
+  <h1 class="onelife-title"><span class="module-icon onelife-logo">{{ crate::assets::icon("1life")|safe }}</span>1Life</h1>
+</header>
+
+<ul class="module-grid" role="list">
+  {% for module in modules %}
+  <li>
+    <a class="module-card" href="{{ shell.base }}/1life/{{ module.id }}">
+      <span class="module-icon">{{ crate::assets::icon(module.icon)|safe }}</span>
+      <span class="module-name">{{ module.name }}</span>
+      {% if module.soon %}<span class="badge-soon">Bientôt</span>{% endif %}
+      <span class="module-summary muted">{{ module.summary }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

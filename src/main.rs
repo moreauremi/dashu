@@ -7,6 +7,7 @@
 //!   dashu worker                 service de conversion (voir src/tools/worker.rs)
 //!   dashu download [--check]     téléchargeur de liens (voir src/tools/telechargeur.rs)
 //!   dashu version                version et commit du binaire (lus par dashu-update)
+//!   dashu tools list|grant|revoke   accès aux outils réservés (voir src/registry.rs)
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -14,7 +15,8 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use dashu::config::{Config, Env};
 use dashu::{
-    AppState, auth, build_router, calendar, db, files, instance, restart, setup, tools, trash,
+    AppState, auth, build_router, calendar, db, files, instance, registry, restart, setup, tools,
+    trash,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower_sessions::ExpiredDeletion;
@@ -43,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
+        ["tools", "list"] => tools_list().await,
+        ["tools", "grant", email, tool] => tools_grant(email, tool, true).await,
+        ["tools", "revoke", email, tool] => tools_grant(email, tool, false).await,
         ["version"] | ["--version"] => {
             // Une seule ligne, « dashu <version> <commit> » : dashu-update la
             // compare à celle de la version à installer.
@@ -55,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
         }
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu download [--check]     téléchargeur de liens (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu download [--check]     téléchargeur de liens (lit WORK_DIR)\n  dashu tools list             outils réservés et comptes autorisés\n  dashu tools grant <email> <outil>    autorise un compte à un outil réservé\n  dashu tools revoke <email> <outil>   retire cette autorisation\n  dashu version               affiche la version et le commit"
             );
             std::process::exit(2);
         }
@@ -260,6 +265,51 @@ async fn download() -> anyhow::Result<()> {
         tools::telechargeur::run(std::path::Path::new(dir.trim()), cookies)
     })
     .await?
+}
+
+/// Base de dashu, pour les commandes qui n'ont besoin que d'elle :
+/// `DATABASE_URL` (variable ou `.env`), migrations appliquées.
+async fn database() -> anyhow::Result<sqlx::SqlitePool> {
+    let url = Env::load()
+        .get("DATABASE_URL")
+        .unwrap_or_else(|| "sqlite://dashu.db".into());
+    db::connect(&url)
+        .await
+        .with_context(|| format!("ouverture de la base {url}"))
+}
+
+/// `dashu tools list` : les outils réservés et, pour chacun, les comptes
+/// autorisés. Seule la ligne de commande, sur le serveur, gère ces accès.
+async fn tools_list() -> anyhow::Result<()> {
+    let pool = database().await?;
+    for (tool, emails) in registry::grants(&pool).await? {
+        if emails.is_empty() {
+            println!("{} ({}) : aucun compte autorisé", tool.id, tool.name);
+        } else {
+            println!("{} ({}) : {}", tool.id, tool.name, emails.join(", "));
+        }
+    }
+    pool.close().await;
+    Ok(())
+}
+
+/// `dashu tools grant|revoke <email> <outil>`.
+async fn tools_grant(email: &str, tool: &str, grant: bool) -> anyhow::Result<()> {
+    let pool = database().await?;
+    let changed = if grant {
+        registry::grant(&pool, email, tool).await
+    } else {
+        registry::revoke(&pool, email, tool).await
+    };
+    pool.close().await;
+    let message = match (grant, changed?) {
+        (true, true) => format!("{email} a maintenant accès à {tool}."),
+        (true, false) => format!("{email} avait déjà accès à {tool}."),
+        (false, true) => format!("{email} n'a plus accès à {tool}."),
+        (false, false) => format!("{email} n'avait pas accès à {tool}."),
+    };
+    println!("{message}");
+    Ok(())
 }
 
 /// `dashu healthcheck` : l'image Docker finale ne contient ni curl ni wget,

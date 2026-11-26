@@ -427,7 +427,7 @@ Demandée par Rémi le 23 novembre 2026, cahier des charges dans `SPEC.md` (« I
 
 ## Outils par espace : avancement
 
-Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi le 25 novembre 2026. PR 1 (outils par espace) : branche `outils-par-espace`, partie de `v1`, **pas encore fusionnée ni essayée sur le serveur**. PR 2 (1Life) : à venir.
+Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi le 25 novembre 2026. PR 1 (outils par espace) : branche `outils-par-espace`, partie de `v1`, **pas encore fusionnée ni essayée sur le serveur**. PR 2 (1Life) : branche `outil-1life`, partie de la branche de la PR 1, pas encore fusionnée.
 
 - [x] Registre unique `src/registry.rs` : la barre latérale, `/go`, les réglages et l'API en sont tirés ; la barre du téléphone le suit. Tests unitaires `registre_coherent`, `valeurs_par_defaut_et_reglages`, et test `chaque_outil_du_registre_apparait_partout`, qui parcourt le registre.
 - [x] Masquer Fichiers dans École le retire de la barre latérale et de `/go` d'École seulement ; réaffiché, il revient avec ses fichiers. Test `masquer_puis_reafficher_un_outil_sans_rien_perdre`. Notes masqué retire aussi « Nouvelle note » et les raccourcis du téléphone qui en dépendent : `notes_masquees_retirent_aussi_les_raccourcis_qui_en_dependent`.
@@ -438,6 +438,16 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 - [x] API : notes créées et listées dans un espace où Notes est masqué ; `GET` et `PUT /api/v1/spaces/{slug}/tools`, refus sans rien écrire. Test `l_api_travaille_sur_un_outil_masque_et_regle_les_outils`. Connecteur Claude : `lire_outils_espace`, `modifier_outils_espace` (62 outils en tout), test `le_connecteur_claude_lit_et_regle_les_outils`. Hermès : `tools`, `tools-set`, skill 1.5.0, vérifiés par une relecture seulement.
 - [x] Vu dans le navigateur, sur ordinateur, avec une copie locale du binaire : l'interrupteur s'enregistre, la barre latérale perd Fichiers sans rechargement, `/e/perso/files` ramène à l'accueil avec le message et son lien, aucune erreur dans la console.
 - [ ] Sur iPhone, et sur le serveur après `dashu-update`.
+
+**PR 2, 1Life réservé :**
+
+- [x] Compte non autorisé, ou sans session : 404 sur `/1life`, `/1life/cr`, `/1life/audit`, `/1life/clients`, avec ou sans l'espace dans l'adresse, la même page qu'une adresse inconnue ; 1Life absent des réglages, de `/go` et de la barre latérale ; le formulaire des réglages répond 404. Test `un_compte_non_autorise_recoit_404_partout`.
+- [x] `dashu tools grant`, `revoke` et `list`, joués avec le vrai binaire sur la base du test ; compte inconnu, outil non réservé ou inconnu refusés. Test `grant_puis_revoke_par_la_commande`.
+- [x] Compte autorisé : 1Life masqué par défaut, affiché dans Taff seulement ; l'accueil, ses trois cartes « Bientôt » et les trois pages « Module à venir » s'ouvrent. Test `un_compte_autorise_active_1life_par_espace`.
+- [x] Aucune route ne donne l'accès ; l'API traite 1Life comme un outil inconnu pour un compte non autorisé. Test `l_api_ne_donne_pas_l_acces_et_traite_1life_comme_un_outil_inconnu`.
+- Migration 0024 (`tool_grants`). Aucune logique métier, aucun nom de client.
+- Icône de 1Life (25 novembre 2026) : le logo fourni par Rémi, redessiné comme les icônes Lucide (grille de 24, deux traits ronds sans remplissage), symbole `1life` du sprite, ajouté par `scripts/build-assets.mjs`. Le `npm run build` local s'arrête avant le sprite (paquets ProseMirror absents de `node_modules`) : le symbole a été posé dans `static/icons.svg` à l'identique de ce que produit le script.
+- [ ] Sur le serveur : `dashu tools grant` pour le compte de Rémi, après `dashu-update`.
 
 ## Écarts par rapport au cahier des charges
 

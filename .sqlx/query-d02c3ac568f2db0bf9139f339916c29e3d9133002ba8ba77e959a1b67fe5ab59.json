@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.email FROM tool_grants g JOIN users u ON u.id = g.user_id\n             WHERE g.tool = ? ORDER BY u.email",
+  "describe": {
+    "columns": [
+      {
+        "name": "email",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d02c3ac568f2db0bf9139f339916c29e3d9133002ba8ba77e959a1b67fe5ab59"
+}

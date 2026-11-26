@@ -176,6 +176,26 @@ Pourquoi : un formulaire d'inscription sans vérification d'email laisserait qui
 
 Les deux méthodes mènent au même compte : Google est rattaché par l'email vérifié qu'il renvoie.
 
+### Outils réservés
+
+Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi (pour l'instant trois modules vides). Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
+
+L'accès se donne **seulement en ligne de commande, sur le serveur**. Aucune page, aucune route de l'API ni du connecteur ne le permet, et Hermès n'a pas cette action.
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools list'
+```
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools grant "$0" 1life' toi@example.com
+```
+
+```bash
+runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools revoke "$0" 1life' toi@example.com
+```
+
+`runuser` lance la commande sous le compte `dashu`, propriétaire de la base, avec sa configuration (`DATABASE_URL`). Le compte doit s'être connecté au moins une fois. Une fois autorisé, l'outil apparaît dans Réglages › Espaces, **masqué** : on l'affiche dans l'espace voulu (Taff, par exemple). Retirer l'accès le fait disparaître partout ; ses réglages par espace restent pour une autorisation future.
+
 ### Réglages › Instance
 
 L'administrateur (le compte créé au premier lancement ; sur une base plus ancienne, le plus ancien compte) a une carte de plus dans Réglages :
@@ -811,13 +831,14 @@ dashu/
 ├── migrations/             schéma SQL, appliqué au démarrage
 ├── .sqlx/                  métadonnées des requêtes (vérification à la compilation sans base)
 ├── src/
-│   ├── main.rs             serveur, set-password, backup, healthcheck, version
+│   ├── main.rs             serveur, set-password, backup, healthcheck, version, tools
 │   ├── lib.rs              état partagé et routeur
 │   ├── config.rs           variables d'environnement
 │   ├── db.rs               pool SQLite, mode WAL, migrations
 │   ├── assets.rs           fichiers statiques embarqués
 │   ├── time.rs             Europe/Paris, dates en français
-│   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace
+│   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace, outils réservés
+│   ├── onelife/            1Life, outil réservé : accueil et modules (squelette)
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets

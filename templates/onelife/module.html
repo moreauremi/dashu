@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}{{ module.name }} · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Page d'un module de 1Life : vide tant que le module n'est pas fait. -#}
+{% block content %}
+<header class="page-head">
+  <a class="back-link" href="{{ shell.base }}/1life">{{ crate::assets::icon("arrow-left")|safe }}<span>1Life</span></a>
+  <h1>{{ module.name }}</h1>
+</header>
+
+<div class="empty-state">
+  {{ crate::assets::icon(module.icon)|safe }}
+  <p>Module à venir</p>
+  <p class="muted">{{ module.summary }}</p>
+</div>
+{% endblock %}

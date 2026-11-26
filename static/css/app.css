@@ -2440,6 +2440,79 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   font-size: 14px;
 }
 
+/* 1Life : son icône devant le titre, puis une carte par module
+   (templates/onelife/home.html). */
+.onelife-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onelife-logo {
+  width: 40px;
+  height: 40px;
+}
+
+.onelife-logo .i {
+  width: 22px;
+  height: 22px;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px 12px;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.module-card:hover {
+  border-color: var(--border-strong);
+}
+
+.module-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.module-name {
+  font-weight: 500;
+}
+
+.module-summary {
+  grid-column: 1 / -1;
+  font-size: 14px;
+}
+
+.badge-soon {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
 /* Outils affichés dans un espace : un interrupteur par outil (Réglages › Espaces). */
 .space-tools {
   display: flex;

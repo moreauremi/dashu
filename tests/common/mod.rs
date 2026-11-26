@@ -221,6 +221,28 @@ impl TestApp {
         }
     }
 
+    /// `DATABASE_URL` de la base de ce test, pour lancer le binaire dessus
+    /// (`dashu tools …`).
+    pub fn database_url(&self) -> String {
+        format!("sqlite://{}", self.db_path.display())
+    }
+
+    /// Lance le binaire `dashu` sur la base de ce test, depuis le dossier
+    /// temporaire (sans `.env`) : réussite, sortie standard, sortie d'erreur.
+    pub fn run_binary(&self, args: &[&str]) -> (bool, String, String) {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_dashu"))
+            .args(args)
+            .env("DATABASE_URL", self.database_url())
+            .current_dir(std::env::temp_dir())
+            .output()
+            .expect("lancement du binaire");
+        (
+            output.status.success(),
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        )
+    }
+
     /// Fichiers présents sur le disque, hors envois en cours.
     pub fn stored_files(&self) -> Vec<PathBuf> {
         fn walk(dir: &Path, out: &mut Vec<PathBuf>) {

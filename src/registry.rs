@@ -110,6 +110,21 @@ pub const TOOLS: &[Tool] = &[
         maskable: true,
         reserved: false,
     },
+    // Réservé : seulement pour les comptes autorisés par `dashu tools grant`,
+    // et masqué tant qu'on ne l'affiche pas dans un espace (src/onelife).
+    Tool {
+        id: "1life",
+        name: "1Life",
+        icon: "1life",
+        route: "/1life",
+        scoped: true,
+        key: "",
+        command: "1life",
+        aliases: &["onelife"],
+        default_shown: false,
+        maskable: true,
+        reserved: true,
+    },
 ];
 
 /// Message montré quand on ouvre l'adresse d'un outil masqué.
@@ -181,8 +196,97 @@ pub async fn load(db: &SqlitePool, user_id: i64, space_id: i64) -> AppResult<Sho
     .fetch_all(db)
     .await?;
     let rows: Vec<(String, bool)> = rows.into_iter().map(|r| (r.tool, r.shown)).collect();
-    // Aucun outil n'est encore réservé : personne n'a d'autorisation.
-    Ok(Shown::from_rows(&rows, &[]))
+    let granted = granted(db, user_id).await?;
+    Ok(Shown::from_rows(&rows, &granted))
+}
+
+/// Outils réservés auxquels ce compte est autorisé (`tool_grants`).
+async fn granted(db: &SqlitePool, user_id: i64) -> AppResult<Vec<String>> {
+    Ok(
+        sqlx::query_scalar!("SELECT tool FROM tool_grants WHERE user_id = ?", user_id)
+            .fetch_all(db)
+            .await?,
+    )
+}
+
+// ---------------------------------------------------------------------
+// Autorisations des outils réservés : `dashu tools list|grant|revoke`.
+// Seule la ligne de commande, sur le serveur, les appelle : aucune route.
+// ---------------------------------------------------------------------
+
+/// L'outil réservé qui porte cet identifiant, ou un message d'erreur.
+fn reserved(id: &str) -> anyhow::Result<&'static Tool> {
+    match get(id) {
+        Some(tool) if tool.reserved => Ok(tool),
+        Some(_) => anyhow::bail!("{id} n'est pas un outil réservé : il est déjà à tout le monde"),
+        None => {
+            let known: Vec<&str> = TOOLS.iter().filter(|t| t.reserved).map(|t| t.id).collect();
+            anyhow::bail!(
+                "outil réservé inconnu : {id} (outils réservés : {})",
+                known.join(", ")
+            )
+        }
+    }
+}
+
+/// Numéro du compte qui porte cette adresse, ou un message d'erreur.
+async fn account(db: &SqlitePool, email: &str) -> anyhow::Result<i64> {
+    // La colonne compare sans tenir compte des majuscules (COLLATE NOCASE).
+    let email = email.trim();
+    sqlx::query_scalar!(r#"SELECT id AS "id!" FROM users WHERE email = ?"#, email)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            anyhow::anyhow!("aucun compte pour {email} : il doit s'être connecté une fois")
+        })
+}
+
+/// Autorise un compte à un outil réservé. Vrai s'il ne l'était pas déjà.
+pub async fn grant(db: &SqlitePool, email: &str, id: &str) -> anyhow::Result<bool> {
+    let tool = reserved(id)?;
+    let user = account(db, email).await?;
+    let now = crate::time::now();
+    let done = sqlx::query!(
+        "INSERT INTO tool_grants (user_id, tool, granted_at) VALUES (?, ?, ?)
+         ON CONFLICT (user_id, tool) DO NOTHING",
+        user,
+        tool.id,
+        now
+    )
+    .execute(db)
+    .await?;
+    Ok(done.rows_affected() > 0)
+}
+
+/// Retire l'autorisation. Vrai si le compte l'avait. Ses réglages par espace
+/// restent, pour une autorisation future.
+pub async fn revoke(db: &SqlitePool, email: &str, id: &str) -> anyhow::Result<bool> {
+    let tool = reserved(id)?;
+    let user = account(db, email).await?;
+    let done = sqlx::query!(
+        "DELETE FROM tool_grants WHERE user_id = ? AND tool = ?",
+        user,
+        tool.id
+    )
+    .execute(db)
+    .await?;
+    Ok(done.rows_affected() > 0)
+}
+
+/// Les outils réservés, chacun avec les adresses des comptes autorisés.
+pub async fn grants(db: &SqlitePool) -> anyhow::Result<Vec<(&'static Tool, Vec<String>)>> {
+    let mut list = Vec::new();
+    for tool in TOOLS.iter().filter(|t| t.reserved) {
+        let emails = sqlx::query_scalar!(
+            "SELECT u.email FROM tool_grants g JOIN users u ON u.id = g.user_id
+             WHERE g.tool = ? ORDER BY u.email",
+            tool.id
+        )
+        .fetch_all(db)
+        .await?;
+        list.push((tool, emails));
+    }
+    Ok(list)
 }
 
 /// Affiche ou masque un outil dans un espace, pour ce compte. L'espace doit

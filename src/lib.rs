@@ -17,6 +17,7 @@ pub mod instance;
 pub mod mcp;
 pub mod notes;
 pub mod oauth;
+pub mod onelife;
 pub mod registry;
 pub mod restart;
 pub mod settings;
@@ -244,6 +245,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/tools", get(tools::page))
         // Téléchargeur de liens : réservé à DOWNLOADER_EMAIL (404 sinon)
         .route("/tools/download", post(tools::telechargeur::start))
+        // 1Life : outil réservé, 404 pour tout compte non autorisé
+        .route("/1life", get(onelife::home).fallback(web::error::not_found))
+        .route(
+            "/1life/{module}",
+            get(onelife::module).fallback(web::error::not_found),
+        )
         // Agenda
         .route("/calendar", get(calendar::page))
         .route("/calendar/refresh", post(calendar::refresh))
