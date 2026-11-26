@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT d.event_id AS \"event_id!\", d.folder_id, d.label, d.place_kind, d.place,\n                  e.starts_at, e.ends_at, e.all_day AS \"all_day!: bool\"\n           FROM onelife_client_days d JOIN events e ON e.id = d.event_id\n           WHERE e.user_id = ?\n           ORDER BY e.starts_at, e.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "event_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "label",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "place_kind",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "place",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "starts_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "ends_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "all_day!: bool",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2fbb96a4230ceb871c0581c7fc99f01638a18b8fbbfb6c507989421a27f8efdb"
+}

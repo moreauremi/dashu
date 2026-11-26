@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+{% block title %}{% if delete.is_some() %}Modifier la journée{% else %}Nouvelle journée{% endif %} · {{ client }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Une journée chez un client (src/onelife/clients/journees.rs) : un
+    événement de l'Agenda, construit à partir de ce formulaire. « Horaires
+    libres » coché : les heures s'affichent (CSS, :has). -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ back }}">{{ crate::assets::icon("arrow-left")|safe }}<span>{{ client }}</span></a>
+    <h1>{% if delete.is_some() %}Modifier la journée{% else %}Nouvelle journée{% endif %}</h1>
+  </div>
+</header>
+
+<section class="card form-card">
+  <div class="card-body">
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+
+    <form class="stack day-form" method="post" action="{{ action }}">
+      <div class="event-times">
+        <label class="field">
+          <span class="field-label">{% if delete.is_some() %}Jour{% else %}Premier jour{% endif %}</span>
+          <input type="date" name="date" value="{{ date }}" required>
+        </label>
+        {% if delete.is_none() %}
+        <label class="field">
+          <span class="field-label">Jours ouvrés</span>
+          <input type="number" name="jours" value="{{ jours }}" min="1" max="20" inputmode="numeric" required>
+        </label>
+        {% endif %}
+      </div>
+      {% if delete.is_none() %}<p class="hint">Du lundi au vendredi, week-ends sautés : un événement par jour, chacun modifiable seul.</p>{% endif %}
+
+      <fieldset class="day-choices">
+        <legend class="field-label">Horaires</legend>
+        {% for slot in slots %}
+        <label class="check-row">
+          <input type="radio" name="creneau" value="{{ slot.key }}"{% if slot.checked %} checked{% endif %}>
+          <span>{{ slot.text }}</span>
+        </label>
+        {% endfor %}
+        <div class="event-times day-free">
+          <label class="field">
+            <span class="field-label">Début</span>
+            <input type="time" name="start" value="{{ start }}" step="300">
+          </label>
+          <label class="field">
+            <span class="field-label">Fin</span>
+            <input type="time" name="end" value="{{ end }}" step="300">
+          </label>
+        </div>
+      </fieldset>
+
+      <label class="field">
+        <span class="field-label">Intitulé</span>
+        <input type="text" name="label" value="{{ label }}" maxlength="100" autocomplete="off" placeholder="Paramétrage, Formation…">
+      </label>
+
+      <fieldset class="day-choices">
+        <legend class="field-label">Lieu</legend>
+        <label class="check-row">
+          <input type="radio" name="lieu" value="site"{% if lieu != "distance" %} checked{% endif %}>
+          <span>Sur site</span>
+        </label>
+        <label class="check-row">
+          <input type="radio" name="lieu" value="distance"{% if lieu == "distance" %} checked{% endif %}>
+          <span>À distance</span>
+        </label>
+        <input type="text" name="place" value="{{ place }}" maxlength="150" autocomplete="off" placeholder="Ville, salle, lien… (facultatif)" aria-label="Précision sur le lieu">
+      </fieldset>
+
+      {% if let Some(email) = google_email %}
+      <label class="check-row">
+        <input type="checkbox" name="google"{% if google %} checked{% endif %}>
+        <span>Envoyer à Google Agenda ({{ email }})</span>
+      </label>
+      {% endif %}
+
+      <div class="space-actions">
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+        <a class="btn" href="{{ back }}">Annuler</a>
+      </div>
+    </form>
+
+    {% if let Some(delete) = delete %}
+    <form method="post" action="{{ delete }}" hx-confirm="Supprimer cette journée ?{% if google %} Sa copie dans Google Agenda part aussi.{% endif %}">
+      <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer la journée</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -256,22 +256,36 @@ pub fn build_router(state: AppState) -> Router {
                 .fallback(web::error::not_found),
         )
         .route(
-            "/1life/clients/new",
-            get(onelife::clients::new_page).fallback(web::error::not_found),
+            "/1life/clients/dossier",
+            post(onelife::clients::choose).fallback(web::error::not_found),
         )
         .route(
             "/1life/clients/{id}",
-            get(onelife::clients::show)
-                .post(onelife::clients::update)
+            get(onelife::clients::show).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}/infos",
+            get(onelife::clients::infos)
+                .post(onelife::clients::save_infos)
                 .fallback(web::error::not_found),
         )
         .route(
-            "/1life/clients/{id}/archive",
-            post(onelife::clients::archive).fallback(web::error::not_found),
+            "/1life/clients/{id}/journees/new",
+            get(onelife::clients::journees::new_page).fallback(web::error::not_found),
         )
         .route(
-            "/1life/clients/{id}/delete",
-            post(onelife::clients::delete).fallback(web::error::not_found),
+            "/1life/clients/{id}/journees",
+            post(onelife::clients::journees::create).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}/journees/{event}",
+            get(onelife::clients::journees::edit_page)
+                .post(onelife::clients::journees::update)
+                .fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/clients/{id}/journees/{event}/delete",
+            post(onelife::clients::journees::delete).fallback(web::error::not_found),
         )
         .route(
             "/1life/{module}",

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_client_days (event_id, folder_id, label, place_kind, place, created_at)\n             VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "c8ded75de14387c0550c6b227f783b82cc4a63282e812ca0c0f28db4a597e5bc"
+}

@@ -218,7 +218,12 @@ async fn un_compte_autorise_active_1life_par_espace() {
         assert_eq!(module.body.contains("Module à venir"), soon, "{id}");
         assert!(module.body.contains(name), "{id}");
         if !soon {
-            assert!(module.body.contains("Nouveau client"), "{id}");
+            // Sans dossier des clients choisi : l'état vide de Clients
+            // (SPEC, « 1Life — Clients »).
+            assert!(
+                module.body.contains("Choisir le dossier des clients"),
+                "{id}"
+            );
         }
     }
     assert_eq!(home.body.matches("Bientôt").count(), 2);

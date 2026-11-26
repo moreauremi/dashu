@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT label, place_kind, place FROM onelife_client_days WHERE event_id = ? AND folder_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "label",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "place_kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "place",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5399709b7edb0d10a168343607ebb1273b25250e8f8e380f74304e34cbe0f4c2"
+}

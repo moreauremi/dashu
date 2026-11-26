@@ -179,7 +179,7 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 
 ### Outils réservés
 
-Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi. Son module **Clients** (`/1life/clients`) est un carnet de clients : nom, contact, e-mail, téléphone et notes en texte brut, recherche (accents et majuscules ignorés), archivage, et suppression pour de bon (la corbeille ne garde pas les fiches). Les clients sont au compte, pas à un espace, et restent hors de l'API, du connecteur et d'Hermès. Les modules Compte rendu et Audit sont encore vides. Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
+Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi. Son module **Clients** (`/1life/clients`) part d'un dossier de Fichiers, choisi une fois avec la fenêtre « Ranger » (le « dossier des clients », aux niveaux 1 à 3) : chacun de ses sous-dossiers est un client, avec ses notes et ses fichiers. « Nouveau client » crée le dossier et ses sous-dossiers Audit, CR et Fichiers. La fiche d'un client y ajoute des infos en Markdown, enregistrées pendant la frappe, et ses journées : des événements de l'Agenda (journée, matin, après-midi ou horaires libres, un par jour ouvré, envoyés à Google Agenda si on le demande). La vue globale (`?vue=globale`) les montre en Gantt, sur 4 semaines ou 3 mois. Le module reste hors de l'API, du connecteur et d'Hermès ; les journées restent des événements, visibles et modifiables par l'API de l'Agenda. Les modules Compte rendu et Audit sont encore vides. Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
 
 L'accès se donne **seulement en ligne de commande, sur le serveur**. Aucune page, aucune route de l'API ni du connecteur ne le permet, et Hermès n'a pas cette action.
 
@@ -858,7 +858,7 @@ dashu/
 │   ├── assets.rs           fichiers statiques embarqués
 │   ├── time.rs             Europe/Paris, dates en français
 │   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace, outils réservés
-│   ├── onelife/            1Life, outil réservé : accueil, module Clients, modules à venir
+│   ├── onelife/            1Life, outil réservé : accueil, modules à venir, Clients (liste, fiche, journées, Gantt)
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE onelife_client_days SET label = ?, place_kind = ?, place = ? WHERE event_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "2d7e5a38dbfd5b97491e8a43eb4f73024016ee4dc43adce152044ee510f0f139"
+}

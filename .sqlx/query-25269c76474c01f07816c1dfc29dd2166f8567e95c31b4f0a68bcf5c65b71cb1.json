@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_client_infos (folder_id, body_md, updated_at, updated_by) VALUES (?, ?, ?, ?)\n         ON CONFLICT (folder_id) DO UPDATE SET body_md = excluded.body_md,\n                                               updated_at = excluded.updated_at,\n                                               updated_by = excluded.updated_by",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "25269c76474c01f07816c1dfc29dd2166f8567e95c31b4f0a68bcf5c65b71cb1"
+}

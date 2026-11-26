@@ -11,7 +11,7 @@
       {%- if !next.is_empty() %}
       <input type="hidden" name="next" value="{{ next }}">
       {%- endif %}
-      <button class="dest dest-d{{ dest.depth }}" type="submit" data-accent="{{ dest.color }}"{% if dest.current %} aria-current="true" disabled{% endif %}>
+      <button class="dest dest-d{{ dest.depth }}" type="submit" data-accent="{{ dest.color }}"{% if dest.current %} aria-current="true"{% endif %}{% if dest.current || dest.disabled %} disabled{% endif %}>
         {%- if dest.depth == 0 %}<span class="dot" aria-hidden="true"></span>{% else %}{{ crate::assets::icon("folder")|safe }}{% endif -%}
         <span class="dest-name">{{ dest.name }}</span>
         {%- if dest.current %}<span class="dest-here">Ici</span>{% endif %}
