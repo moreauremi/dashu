@@ -354,6 +354,12 @@ html {
   text-decoration: none;
 }
 
+/* Logo en icône « H/ » (assets::logo_mark), dans la barre latérale. */
+.logo-mark {
+  --logo-h: 22px;
+  width: calc(var(--logo-h) * 244 / 186);
+}
+
 /* Barre latérale : surface neutre, navigation seulement. Le choix de l'espace
    est dans l'île (voir .island).
    Colonne commune : toutes les icônes à 24 px du bord, tous les libellés à 48 px. */

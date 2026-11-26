@@ -447,6 +447,7 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 - [x] Aucune route ne donne l'accès ; l'API traite 1Life comme un outil inconnu pour un compte non autorisé. Test `l_api_ne_donne_pas_l_acces_et_traite_1life_comme_un_outil_inconnu`.
 - Migration 0024 (`tool_grants`). Aucune logique métier, aucun nom de client.
 - Icône de 1Life (25 novembre 2026) : le logo fourni par Rémi, redessiné comme les icônes Lucide (grille de 24, deux traits ronds sans remplissage), symbole `1life` du sprite, ajouté par `scripts/build-assets.mjs`. Le `npm run build` local s'arrête avant le sprite (paquets ProseMirror absents de `node_modules`) : le symbole a été posé dans `static/icons.svg` à l'identique de ce que produit le script.
+- Barre latérale : le logo en icône, « H/ » (`assets::logo_mark`), au lieu du mot entier, demandé le même jour. Vu dans le navigateur.
 - [ ] Sur le serveur : `dashu tools grant` pour le compte de Rémi, après `dashu-update`.
 
 ## Écarts par rapport au cahier des charges

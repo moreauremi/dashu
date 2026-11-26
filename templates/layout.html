@@ -59,7 +59,7 @@
   <div class="sidebar-edge" aria-hidden="true"></div>
   <nav id="sidebar" class="sidebar" aria-label="Navigation principale">
     <div class="sidebar-head">
-      <a class="wordmark" href="{{ shell.base }}/">{{ crate::assets::logo()|safe }}</a>
+      <a class="wordmark" href="{{ shell.base }}/">{{ crate::assets::logo_mark()|safe }}</a>
       <form class="sidebar-pin" method="post" action="/settings/sidebar">
         <input type="hidden" name="next" value="{{ shell.path }}">
         {% if shell.sidebar_floating %}

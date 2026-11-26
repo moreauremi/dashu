@@ -68,6 +68,16 @@ pub fn logo() -> String {
     )
 }
 
+/// Logo Hermes en icône, « H/ » : le H et la barre rapprochée, comme à la
+/// fin de l'écran de lancement (la barre recule de 728 unités). Pour la
+/// barre latérale, où le mot entier prenait trop de place.
+pub fn logo_mark() -> String {
+    let file = url("logo.svg");
+    format!(
+        r#"<svg class="logo logo-mark" viewBox="127 54 244 186" role="img" aria-label="{APP_NAME}" focusable="false"><use href="{file}#h"/><use href="{file}#slash" transform="translate(-728 0)"/></svg>"#
+    )
+}
+
 /// `GET /static/{*path}`
 pub async fn serve(Path(path): Path<String>) -> Response {
     let requested = format!("/static/{path}");
