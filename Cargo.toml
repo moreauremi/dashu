@@ -64,6 +64,11 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "env-filter", "json"] }
 url = "2"
 
+# Démo statique de dashu.dev/demo (src/demo, commande `dashu demo-export`).
+# Jamais dans le binaire du serveur : la CI la construit à part.
+[features]
+demo = []
+
 # Tests seulement : un vrai client WebSocket pour les notes en direct
 # (tests/notes_direct.rs). Mêmes versions que celles qu'axum tire déjà.
 [dev-dependencies]

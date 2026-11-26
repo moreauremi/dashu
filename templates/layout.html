@@ -28,6 +28,15 @@
     barre latérale détachée, cachée à gauche (voir .sidebar-edge). -#}
 <div id="app" class="app" data-accent="{% if shell.is_settings() %}neutral{% else %}{{ shell.active.color }}{% endif %}" data-theme="{{ shell.theme }}"{% if !shell.ui_size.is_empty() %} data-size="{{ shell.ui_size }}"{% endif %}{% if shell.sidebar_floating %} data-sidebar="floating"{% endif %} hx-boost="true" hx-swap="innerHTML transition:true" hx-headers='{"X-CSRF-Token":"{{ shell.csrf }}","X-Espace":"{{ shell.active.slug }}"}'>
   <a class="skip-link" href="#main">Aller au contenu</a>
+  {#- Démo statique de dashu.dev/demo (feature `demo`, src/demo) : rappel
+      permanent que rien n'est réel, retour au site, remise à zéro (demo.js). -#}
+  {% if crate::DEMO %}
+  <div class="demo-banner" role="note">
+    <span class="demo-label"><strong>Mode démo</strong><span class="demo-long"> — données fictives</span></span>
+    <a href="https://dashu.dev">dashu.dev</a>
+    <button type="button" data-demo-reset>Réinitialiser<span class="demo-long"> la démo</span></button>
+  </div>
+  {% endif %}
 
   <header class="topbar">
     <button class="icon-btn" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">{{ crate::assets::icon("menu")|safe }}</button>

@@ -505,6 +505,18 @@ Cahier des charges dans `SPEC.md` (« 1Life — Clients »), demandé par Rémi 
 - Test existant adapté : `un_compte_autorise_active_1life_par_espace` attendait Clients « Bientôt » et « Module à venir » ; il attend maintenant la liste des clients pour Clients, et « Bientôt » pour les deux autres modules seulement. C'est la conséquence directe de la livraison du module, pas une règle des trois niveaux.
 - [ ] Sur le serveur après `dashu-update` (et `dashu tools grant` pour le compte de Rémi), sur ordinateur et sur iPhone.
 
+## Démo statique de dashu.dev/demo : avancement
+
+Demandée par Rémi le 26 novembre 2026 (bouton « Tester » de dashu.dev), option A : une démo figée, sans compte ni serveur. Branche `feat/demo`, partie de `v1`, **pas encore fusionnée** ; la publication est dans la branche `tester-demo` de `main` (workflow et boutons). Détail dans le README, « Démo statique ».
+
+- [x] `dashu demo-export <dossier>` (feature `demo`, absente du binaire du serveur) : l'application complète, base jetable, fixtures inventées chargées par l'API, pages lues comme un visiteur connecté. Environ 760 pages et 33 Mo, en 40 s environ. Test `export_de_la_demo` (`tests/demo.rs`), tests unitaires `correspondance_des_adresses`, `reecriture_des_balises`, `fichiers_fabriques`.
+- [x] Aucune donnée réelle : compte `camille@demo.invalid`, entreprises inventées, fichiers dessinés par le code, adresse iCal en `.invalid` jamais demandée, jeton CSRF remplacé par `demo`, mot de passe tiré au sort et jamais écrit. Le test cherche `app.dashu.dev`, Tailscale, les tunnels, une adresse Gmail, le réseau local.
+- [x] Bandeau permanent « Mode démo — données fictives », lien vers dashu.dev, « Réinitialiser la démo ». 1Life et l'administration absents ; envoi de fichiers, conversions et téléchargeur visibles, avec « Disponible dans la version complète ».
+- [x] Toute écriture est arrêtée dans le navigateur (`static/js/demo.js`) avec ce message ; l'éditeur affiche « Démo : non enregistré ». Thème et taille de l'interface gardés dans le navigateur.
+- [x] Vu dans le navigateur (export servi en local) : dashboard et widgets, changement d'espace par l'île, notes et filtre par tag, éditeur, dossiers de fichiers, lecteur PDF, agenda et emploi du temps, Outils, Réglages (thème clair gardé de page en page), remise à zéro ; en 375 px, sans défilement horizontal. Aucune requête hors de `/demo`, aucune erreur CSP.
+- Limites voulues : la recherche libre et la barre de commandes n'exécutent rien (message) ; les dates relatives (« à l'instant ») sont celles de la construction, refaite chaque nuit.
+- [ ] Après fusion de `feat/demo` dans `v1`, puis de `tester-demo` dans `main` (dans cet ordre) : premier « Publier dashu.dev » et essai sur dashu.dev/demo, ordinateur et iPhone.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

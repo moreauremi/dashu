@@ -24,6 +24,13 @@
 <meta name="apple-mobile-web-app-title" content="Dashboard">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#181817" media="(prefers-color-scheme: dark)">
+{#- Démo statique (feature `demo`) : la page est un fichier, servi sans
+    en-têtes ; la même CSP qu'en production arrive donc par une balise.
+    demo.js passe avant htmx et app.js (sans defer). -#}
+{% if crate::DEMO %}
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'">
+<script src="{{ crate::assets::url("js/demo.js") }}"></script>
+{% endif %}
 <script src="{{ crate::assets::url("js/htmx.js") }}" defer></script>
 <script src="{{ crate::assets::url("js/app.js") }}" defer></script>
 <script src="{{ crate::assets::url("js/files.js") }}" defer></script>

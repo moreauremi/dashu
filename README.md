@@ -20,6 +20,7 @@ dashu tient dans **un seul binaire Rust**. Les pages sont rendues par le serveur
 - [Sauvegardes et restauration](#sauvegardes-et-restauration)
 - [Sécurité](#sécurité)
 - [Développement](#développement)
+- [Démo statique (dashu.dev/demo)](#démo-statique-dashudevdemo)
 - [Choix techniques à connaître](#choix-techniques-à-connaître)
 - [Limites connues de la v1](#limites-connues-de-la-v1)
 
@@ -869,6 +870,7 @@ dashu/
 │   ├── calendar/           lecture iCal, synchro, grille jour/semaine
 │   ├── commands/           barre de commandes « / » : liste, lecture d'une ligne, exécution
 │   ├── settings/           thème, mot de passe, Google, sources iCal
+│   ├── demo/               démo statique de dashu.dev/demo (feature `demo`, jamais sur le serveur)
 │   └── web/                erreurs, CSRF, en-têtes de sécurité, /styleguide
 ├── templates/              gabarits askama : pages et fragments htmx (préfixe _)
 ├── static/                 CSS, JS, icônes, polices (embarqués dans le binaire)
@@ -906,6 +908,30 @@ npm install && npm run build
 ```
 
 **Guide de style.** La page `/styleguide` (connecté) montre toutes les briques de l'interface dans les deux thèmes. C'est la référence avant d'ajouter un écran.
+
+## Démo statique (dashu.dev/demo)
+
+Le bouton « Tester » de dashu.dev ouvre une démo sans compte ni serveur : l'application v1 figée en pages statiques, avec des données fictives (Camille Laurent, des entreprises inventées). Elle est servie par GitHub Pages sous `/demo`, à côté de la page d'accueil.
+
+**Comment elle est faite.** Rien n'est recopié à la main : la commande `dashu demo-export` démarre l'application complète dans le processus, sur une base jetable, la remplit avec `src/demo/fixtures.json` par l'API, puis parcourt les pages comme un visiteur connecté et les écrit dans un dossier (`src/demo/export.rs`). Les dates sont calculées depuis le jour de la construction : la démo est reconstruite chaque nuit, elle n'est jamais périmée. Le module n'existe qu'avec la feature Cargo `demo` ; le binaire du serveur ne le contient pas.
+
+**Dans le navigateur**, `static/js/demo.js` (chargé seulement dans ces pages) traduit chaque lien et chaque fragment htmx vers le fichier exporté, et arrête toute écriture avec le message « Disponible dans la version complète ». Le thème et la taille de l'interface se règlent quand même, gardés dans le navigateur ; « Réinitialiser la démo » les oublie. Un bandeau permanent rappelle que les données sont fictives.
+
+Ce que la démo ne fait pas, par choix : rien ne s'enregistre (créer, modifier, supprimer), pas d'envoi de fichiers, pas de conversion ni de téléchargeur, pas de barre de commandes qui exécute, pas de 1Life ni d'administration. Une recherche ne trouve que ce qui a été exporté (les tags, pas le texte libre).
+
+**La construire en local** (dossier `out/demo`, à servir depuis `out`) :
+
+```powershell
+cargo run --features demo -- demo-export out/demo
+```
+
+```powershell
+python -m http.server 8000 --directory out
+```
+
+Puis ouvrir http://localhost:8000/demo/. `--base /autre` change le préfixe.
+
+**Mise à jour de dashu.dev/demo.** Le workflow « Publier dashu.dev » (`.github/workflows/pages.yml`, branche `main`) reconstruit la démo depuis `v1` : chaque nuit à 4 h (UTC), à chaque fusion sur `v1` (la CI le relance), ou à la main (« Run workflow » dans l'onglet Actions). Modifier les données : `src/demo/fixtures.json`, puis une PR vers `v1`.
 
 ## Choix techniques à connaître
 
