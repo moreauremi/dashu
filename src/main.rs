@@ -3,6 +3,7 @@
 //!   dashu                        lance le serveur
 //!   dashu set-password <email>   crée un compte ou remplace son mot de passe
 //!   dashu backup <fichier>       copie à chaud de la base (VACUUM INTO)
+//!   dashu quota …                plafonds de stockage (voir src/files/quota.rs)
 //!   dashu healthcheck            interroge /health (pour le HEALTHCHECK Docker)
 //!   dashu worker                 service de conversion (voir src/tools/worker.rs)
 //!   dashu download [--check]     téléchargeur de liens (voir src/tools/telechargeur.rs)
@@ -28,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
         [] | ["serve"] => serve().await,
         ["set-password", email] => set_password(email).await,
         ["backup", destination] => backup(destination).await,
+        ["quota", rest @ ..] => quota(rest).await,
         ["healthcheck"] => healthcheck().await,
         ["worker"] => worker().await,
         ["download"] => download().await,
@@ -55,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
         }
         _ => {
             eprintln!(
-                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu download [--check]     téléchargeur de liens (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
+                "usage :\n  dashu                        lance le serveur\n  dashu set-password <email>   crée un compte ou remplace son mot de passe\n  dashu backup <fichier>       copie à chaud de la base SQLite\n  dashu quota list|show|set|reset  plafonds de stockage des comptes\n  dashu healthcheck            vérifie que le serveur répond\n  dashu worker                 service de conversion (lit WORK_DIR)\n  dashu download [--check]     téléchargeur de liens (lit WORK_DIR)\n  dashu version                affiche la version et le commit"
             );
             std::process::exit(2);
         }
@@ -228,6 +230,37 @@ async fn backup(destination: &str) -> anyhow::Result<()> {
     let pluriel = if notes > 1 { "s" } else { "" };
     eprintln!("Sauvegarde écrite et vérifiée : {destination} ({notes} note{pluriel}).");
     Ok(())
+}
+
+/// `dashu quota …` : usage et plafond de stockage des comptes. Le seul moyen
+/// de changer un plafond : aucune page ni route de l'API ne le permet. Lit
+/// `DATABASE_URL`, `FILES_DIR` (place du disque) et `FILES_QUOTA` (valeur
+/// par défaut), comme le serveur. Sur le serveur, à lancer sous
+/// l'utilisateur dashu : `dashu-quota` le fait (deploy/lxc).
+async fn quota(args: &[&str]) -> anyhow::Result<()> {
+    let env = Env::load();
+    let default = dashu::config::default_quota(&env)?;
+    let database_url = env
+        .get("DATABASE_URL")
+        .unwrap_or_else(|| "sqlite://dashu.db".into());
+    let files_dir = env
+        .get("FILES_DIR")
+        .map(|d| std::path::PathBuf::from(d.trim()));
+    let pool = db::connect(&database_url)
+        .await
+        .context("ouverture de la base")?;
+    let result = files::quota::command(&pool, default, files_dir.as_deref(), args).await;
+    pool.close().await;
+    match result {
+        Ok(text) => {
+            print!("{text}");
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("{}", error.message);
+            std::process::exit(error.code);
+        }
+    }
 }
 
 /// `dashu worker` : le service de conversion. Il ne lit que `WORK_DIR` :

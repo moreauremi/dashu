@@ -3772,6 +3772,33 @@ input.note-title::placeholder {
   margin-bottom: 16px;
 }
 
+/* Quota du compte : barre native et « 12,4 Go / 30 Go ». Couleur d'alerte
+   à partir de 90 % (classe posée par le serveur). */
+.quota {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-bar {
+  flex: 0 1 240px;
+  min-width: 96px;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.quota.is-alert {
+  color: var(--danger);
+}
+
+.quota.is-alert .quota-bar {
+  accent-color: var(--danger);
+}
+
 .folder-name,
 .note-file-name {
   display: flex;

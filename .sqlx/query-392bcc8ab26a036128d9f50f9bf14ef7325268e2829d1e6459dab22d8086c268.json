@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT before_bytes, after_bytes, changed_at FROM quota_changes\n         WHERE email = ? COLLATE NOCASE ORDER BY changed_at DESC, id DESC LIMIT 10",
+  "describe": {
+    "columns": [
+      {
+        "name": "before_bytes",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "after_bytes",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "changed_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "392bcc8ab26a036128d9f50f9bf14ef7325268e2829d1e6459dab22d8086c268"
+}

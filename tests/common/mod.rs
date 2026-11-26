@@ -202,6 +202,7 @@ impl TestApp {
             files: files.then(|| FilesConfig {
                 dir: files_dir.clone(),
                 max_upload_bytes: MAX_UPLOAD,
+                default_quota_bytes: dashu::config::DEFAULT_QUOTA_BYTES,
             }),
             work_dir: files.then(|| work_dir.clone()),
             downloader_email: None,

@@ -455,7 +455,7 @@ pub(crate) async fn file_update(
             return Err(ApiError::bad_request("ce fichier est déjà rangé"));
         }
         let space = target.ok_or_else(|| ApiError::bad_request("keep demande space"))?;
-        files::keep_in(db, user.id, id, space, changes.folder.flatten()).await?;
+        files::keep_in(state, user.id, id, space, changes.folder.flatten()).await?;
     } else if target.is_some() || changes.folder.is_some() {
         if current.temporary {
             return Err(ApiError::bad_request(
