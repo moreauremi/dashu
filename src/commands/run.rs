@@ -88,7 +88,16 @@ pub async fn run(
                 slug: slug.clone(),
                 next: Some(page),
             };
-            follow(spaces::switch(ctx, axum::Form(form)).await?, &slug)
+            // Sans en-tête htmx, `switch` répond par une redirection, que la
+            // barre ouvre ensuite dans le nouvel espace.
+            let response = spaces::switch(
+                ctx,
+                State(state.clone()),
+                axum::http::HeaderMap::new(),
+                axum::Form(form),
+            )
+            .await?;
+            follow(response, &slug)
         }
         Action::AddTask => {
             let (title, at, plus) = split_options(&arg, true);
@@ -333,7 +342,13 @@ async fn add_space(ctx: Ctx, state: AppState, name: String, here: &str) -> AppRe
         auto_mp4: None,
         auto_heic_jpeg: None,
     };
-    let response = spaces::create(ctx, State(state), axum::Form(form)).await?;
+    let response = spaces::create(
+        ctx,
+        State(state),
+        axum::http::HeaderMap::new(),
+        axum::Form(form),
+    )
+    .await?;
     match session.get::<String>(ACTIVE_SPACE).await? {
         Some(slug) if Some(&slug) != before.as_ref() => go("/", &slug),
         // Refusé (nom pris, trop d'espaces…) : Réglages, avec le message.
@@ -456,22 +471,7 @@ fn query(params: &[(&str, &str)]) -> String {
 /// requête porte l'espace de l'onglet (en-tête `X-Espace`), comme toute
 /// requête htmx. `HX-Boosted` : le serveur répond par une page entière.
 fn go(path: &str, slug: &str) -> AppResult<Response> {
-    let path = if url::is_scoped(path) {
-        url::prefixed(slug, path)
-    } else {
-        local_path(Some(path)).to_string()
-    };
-    let location = serde_json::json!({
-        "path": path,
-        "target": "body",
-        "swap": "innerHTML transition:true",
-        "headers": { "X-Espace": slug, "HX-Boosted": "true" },
-    });
-    let value = HeaderValue::from_str(&location.to_string())
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("adresse invalide : {e}")))?;
-    let mut response = StatusCode::NO_CONTENT.into_response();
-    response.headers_mut().insert("hx-location", value);
-    Ok(response)
+    url::hx_location(path, slug)
 }
 
 /// Une action existante répond par une redirection (303) : on ouvre sa

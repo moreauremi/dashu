@@ -9,10 +9,14 @@
 //! espaces ne se gênent plus. Les adresses sans préfixe restent valides (le
 //! dernier espace utilisé).
 
+use std::sync::{Arc, Mutex};
+
 use axum::extract::Request;
-use axum::http::{HeaderValue, Method, Uri, header};
+use axum::http::{HeaderValue, Method, StatusCode, Uri, header};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
+
+use crate::web::{AppError, AppResult, local_path};
 
 /// Début des adresses d'un espace.
 pub const PREFIX: &str = "/e/";
@@ -22,6 +26,64 @@ pub const HEADER: &str = "x-espace";
 /// Espace nommé par l'adresse, posé sur la requête par [`rewrite`].
 #[derive(Clone, Debug)]
 pub struct UrlSpace(pub String);
+
+/// Espace que l'extracteur `Ctx` a reconnu pour la requête, remonté à
+/// [`rewrite`] : une redirection prend le préfixe de cet espace-là, jamais
+/// celui d'un en-tête d'onglet périmé (espace supprimé, quitté).
+#[derive(Clone, Debug, Default)]
+pub struct ResolvedSpace(Arc<Mutex<Option<String>>>);
+
+impl ResolvedSpace {
+    pub fn set(&self, slug: &str) {
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = Some(slug.to_string());
+        }
+    }
+
+    fn get(&self) -> Option<String> {
+        self.0.lock().ok().and_then(|slot| slot.clone())
+    }
+}
+
+/// Ouvre une page dans un espace, depuis une requête htmx : en-tête
+/// `HX-Location`, même transition qu'un lien. La page d'un espace prend
+/// l'adresse de cet espace (`/e/ecole/notes`), et la requête porte l'espace
+/// voulu (en-tête `X-Espace`) : l'onglet change vraiment d'espace, même vers
+/// une page sans préfixe (`/tools`). Une redirection ordinaire garderait
+/// l'en-tête de l'ancien espace, que `Ctx` préfère à la session.
+/// `HX-Boosted` : le serveur répond par une page entière.
+pub fn hx_location(path: &str, slug: &str) -> AppResult<Response> {
+    let path = if is_scoped(path) {
+        prefixed(slug, path)
+    } else {
+        local_path(Some(path)).to_string()
+    };
+    let location = serde_json::json!({
+        "path": path,
+        "target": "body",
+        "swap": "innerHTML transition:true",
+        "headers": { "X-Espace": slug, "HX-Boosted": "true" },
+    });
+    let value = HeaderValue::from_str(&location.to_string())
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("adresse invalide : {e}")))?;
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    response.headers_mut().insert("hx-location", value);
+    Ok(response)
+}
+
+/// Vers `path` dans l'espace `slug` : `HX-Location` pour une requête htmx,
+/// redirection 303 (adresse préfixée) sinon.
+pub fn go_to(headers: &axum::http::HeaderMap, path: &str, slug: &str) -> AppResult<Response> {
+    if headers.contains_key("hx-request") {
+        return hx_location(path, slug);
+    }
+    let path = if is_scoped(path) {
+        prefixed(slug, path)
+    } else {
+        local_path(Some(path)).to_string()
+    };
+    Ok(crate::web::see_other(&path))
+}
 
 /// Un slug possible : minuscules, chiffres et tirets, 40 caractères au plus.
 pub fn valid_slug(slug: &str) -> bool {
@@ -89,9 +151,18 @@ pub async fn rewrite(mut request: Request, next: Next) -> Response {
         .map(|p| p.as_str().to_string())
         .unwrap_or_default();
     let had_prefix = from_url.is_some();
+    let resolved = ResolvedSpace::default();
+    request.extensions_mut().insert(resolved.clone());
 
     let mut response = next.run(request).await;
-    let Some(slug) = from_url.or(from_tab) else {
+    // Une requête qui nomme un espace (adresse ou onglet) garde l'espace
+    // reconnu par `Ctx` : l'en-tête d'un onglet peut nommer un espace qui
+    // n'existe plus. Sans espace nommé (formulaire classique), l'adresse ne
+    // change pas.
+    let Some(slug) = from_url
+        .or(from_tab)
+        .map(|named| resolved.get().unwrap_or(named))
+    else {
         return response;
     };
     if response.status().is_redirection() {
