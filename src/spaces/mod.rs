@@ -8,6 +8,7 @@
 
 use askama::Template;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -110,6 +111,31 @@ pub const NAME_MAX_CHARS: usize = 24;
 /// Retour aux réglages, sur la carte des espaces.
 const BACK: &str = "/settings#espaces";
 
+/// Retour aux réglages après une action qui fait quitter l'espace actif
+/// (archivé, supprimé, quitté) : l'onglet passe sur `next`, ou sur le premier
+/// autre espace en service. Sans cela, l'en-tête de l'onglet garderait
+/// l'espace parti.
+fn back_leaving(
+    ctx: &Ctx,
+    headers: &HeaderMap,
+    gone: i64,
+    next: Option<&str>,
+) -> AppResult<Response> {
+    if ctx.active.id != gone {
+        return Ok(see_other(BACK));
+    }
+    let slug = next.or_else(|| {
+        ctx.spaces
+            .iter()
+            .find(|s| s.id != gone)
+            .map(|s| s.slug.as_str())
+    });
+    match slug {
+        Some(slug) => url::go_to(headers, BACK, slug),
+        None => Ok(see_other(BACK)),
+    }
+}
+
 /// (slug, nom, couleur, icône) des espaces d'un nouveau compte, dans l'ordre.
 const DEFAULTS: [(&str, &str, &str, &str); 3] = [
     ("perso", "Perso", "orange", "home"),
@@ -181,28 +207,81 @@ pub struct SwitchForm {
     pub(crate) next: Option<String>,
 }
 
-/// `POST /space` : change l'espace actif puis revient sur la page courante.
-pub async fn switch(ctx: Ctx, axum::Form(form): axum::Form<SwitchForm>) -> AppResult<Response> {
-    if !ctx.spaces.iter().any(|s| s.slug == form.slug) {
-        return Err(AppError::NotFound);
-    }
+/// `POST /space` : change l'espace actif puis revient sur la page courante,
+/// dans le nouvel espace. Depuis htmx (l'île, le balayage), la réponse est un
+/// `HX-Location` qui porte le nouvel espace : une redirection garderait
+/// l'en-tête de l'onglet, resté sur l'ancien, et la page ne changerait pas.
+pub async fn switch(
+    ctx: Ctx,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<SwitchForm>,
+) -> AppResult<Response> {
+    let target = ctx
+        .spaces
+        .iter()
+        .find(|s| s.slug == form.slug)
+        .ok_or(AppError::NotFound)?;
     ctx.session.insert(ACTIVE_SPACE, &form.slug).await?;
+    let next = switch_target(&state.db, &ctx, target, local_path(form.next.as_deref())).await?;
+    url::go_to(&headers, &next, &form.slug)
+}
 
-    let next = local_path(form.next.as_deref());
+/// La page où arriver en changeant d'espace : la même, dans le nouvel espace,
+/// quand elle y a un sens.
+async fn switch_target(
+    db: &SqlitePool,
+    ctx: &Ctx,
+    target: &Space,
+    next: &str,
+) -> AppResult<String> {
+    let (path, query) = next.split_once('?').unwrap_or((next, ""));
     // Une note ou un fichier ouvert appartient à l'ancien espace : on revient
-    // à la liste.
-    let next = if next.starts_with("/notes/") {
-        "/notes"
-    } else if next.starts_with("/files/") {
-        "/files"
-    } else {
-        next
-    };
-    // La page d'un espace prend l'adresse du nouvel espace.
-    if url::is_scoped(next) {
-        return Ok(see_other(&url::prefixed(&form.slug, next)));
+    // à la liste ; un fichier de Temporaire, à l'onglet Outils où il attend.
+    if path.starts_with("/notes/") {
+        return Ok("/notes".into());
     }
-    Ok(see_other(next))
+    if let Some(id) = path.strip_prefix("/files/") {
+        let temporary = match id.parse::<i64>() {
+            // Même requête que `files::keep_in` (cache de sqlx).
+            Ok(id) => sqlx::query_scalar!(
+                "SELECT size FROM files WHERE id = ? AND user_id = ? AND expires_at IS NOT NULL",
+                id,
+                ctx.user.id
+            )
+            .fetch_optional(db)
+            .await?
+            .is_some(),
+            Err(_) => false,
+        };
+        return Ok(if temporary { "/tools" } else { "/files" }.into());
+    }
+    // Un outil masqué dans le nouvel espace : son accueil, sans message
+    // d'erreur (changer d'espace n'est pas une faute).
+    if let Some(tool) = crate::registry::at(path)
+        && !crate::registry::load(db, ctx.user.id, target.id)
+            .await?
+            .is_shown(tool.id)
+    {
+        return Ok("/".into());
+    }
+    // Un dossier appartient à l'ancien espace : on garde « racine » ou
+    // « temporaire », un numéro de dossier mène à la racine du nouvel espace
+    // (sinon `files::list` renverrait dans l'ancien).
+    let kept: Vec<(String, String)> = form_urlencoded::parse(query.as_bytes())
+        .filter(|(key, value)| !(key == "dossier" && value.parse::<i64>().is_ok()))
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    Ok(if kept.is_empty() {
+        path.to_string()
+    } else {
+        format!(
+            "{path}?{}",
+            form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(kept)
+                .finish()
+        )
+    })
 }
 
 // ---------------------------------------------------------------------
@@ -382,16 +461,21 @@ pub(crate) async fn create_space(
 pub async fn create(
     ctx: Ctx,
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::Form(form): axum::Form<SpaceForm>,
 ) -> AppResult<Response> {
     match create_space(&state.db, ctx.user.id, &ctx.all_spaces(), &form).await? {
         Ok((slug, name)) => {
             ctx.session.insert(ACTIVE_SPACE, &slug).await?;
             ctx.flash_ok(format!("Espace « {name} » créé")).await?;
+            // L'onglet passe sur le nouvel espace (pas seulement la session).
+            url::go_to(&headers, BACK, &slug)
         }
-        Err(message) => ctx.flash_error(message).await?,
+        Err(message) => {
+            ctx.flash_error(message).await?;
+            Ok(see_other(BACK))
+        }
     }
-    Ok(see_other(BACK))
 }
 
 /// Change le nom, la couleur, l'icône et, si le formulaire les porte, les
@@ -490,6 +574,7 @@ pub(crate) async fn archive_space(
 pub async fn archive(
     ctx: Ctx,
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let space = ctx
@@ -504,10 +589,13 @@ pub async fn archive(
                 ctx.session.remove::<String>(ACTIVE_SPACE).await?;
             }
             ctx.flash_ok(message).await?;
+            back_leaving(&ctx, &headers, id, None)
         }
-        Err(message) => ctx.flash_error(message).await?,
+        Err(message) => {
+            ctx.flash_error(message).await?;
+            Ok(see_other(BACK))
+        }
     }
-    Ok(see_other(BACK))
 }
 
 /// Remet un espace archivé en service (propriétaire seulement). Rend le
@@ -541,11 +629,19 @@ pub(crate) async fn unarchive_space(
     )))
 }
 
+#[derive(Deserialize)]
+pub struct RestoreForm {
+    /// Page d'où vient la demande (le bandeau d'un espace archivé), pour y
+    /// revenir ; Réglages sans précision.
+    next: Option<String>,
+}
+
 /// `POST /settings/spaces/{id}/restore` : remet un espace archivé en service.
 pub async fn restore(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<RestoreForm>,
 ) -> AppResult<Response> {
     let space = ctx
         .archived
@@ -556,7 +652,10 @@ pub async fn restore(
         Ok(message) => ctx.flash_ok(message).await?,
         Err(message) => ctx.flash_error(message).await?,
     }
-    Ok(see_other(BACK))
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => local_path(Some(next)),
+        None => BACK,
+    }))
 }
 
 /// Ce que contient un espace, pour prévenir avant de le supprimer.
@@ -804,7 +903,8 @@ pub(crate) async fn delete_space(
             space.name
         )));
     }
-    if in_service(spaces) <= 1 {
+    // Supprimer un espace archivé ne retire rien au sélecteur.
+    if !space.archived && in_service(spaces) <= 1 {
         return Ok(Err("Il faut garder au moins un espace.".into()));
     }
     let id = space.id;
@@ -870,6 +970,7 @@ pub(crate) async fn delete_space(
 pub async fn delete(
     ctx: Ctx,
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
     axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
@@ -888,15 +989,15 @@ pub async fn delete(
     // L'espace actif vient de disparaître : on passe à celui qui a reçu le
     // contenu, ou au premier.
     if ctx.active.id == id {
-        match removed.next_active {
+        match &removed.next_active {
             Some(slug) => ctx.session.insert(ACTIVE_SPACE, slug).await?,
             None => {
                 ctx.session.remove::<String>(ACTIVE_SPACE).await?;
             }
         }
     }
-    ctx.flash_ok(removed.message).await?;
-    Ok(see_other(BACK))
+    ctx.flash_ok(removed.message.clone()).await?;
+    back_leaving(&ctx, &headers, id, removed.next_active.as_deref())
 }
 
 // ---------------------------------------------------------------------
@@ -1280,6 +1381,7 @@ pub(crate) async fn leave_space(db: &SqlitePool, user_id: i64, space: &Space) ->
 pub async fn leave(
     ctx: Ctx,
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let space = ctx.space_by_id(id).ok_or(AppError::NotFound)?;
@@ -1289,7 +1391,7 @@ pub async fn leave(
     }
     ctx.flash_ok(format!("Tu as quitté « {} »", space.name))
         .await?;
-    Ok(see_other(BACK))
+    back_leaving(&ctx, &headers, id, None)
 }
 
 /// Identifiant d'adresse d'un espace rejoint : celui de l'espace, suffixé

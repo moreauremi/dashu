@@ -451,6 +451,25 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 - Barre latérale : le logo en icône, « H/ » (`assets::logo_mark`), au lieu du mot entier, demandé le même jour. Vu dans le navigateur.
 - [ ] Sur le serveur : `dashu tools grant` pour le compte de Rémi, après `dashu-update`.
 
+## Parcours et espaces : avancement
+
+Cahier des charges dans `SPEC.md` (« Parcours et espaces »), demandé par Rémi le 26 novembre 2026. Cinq lots, une PR chacun. Lot 1 : branche `parcours-espaces`, partie de `v1`, **pas encore fusionnée ni essayée sur le serveur**.
+
+**Lot 1, l'espace ne se perd plus :**
+
+- [x] Changer d'espace depuis l'île (htmx) répond par un `HX-Location` qui porte le nouvel espace : `/tools` reste `/tools` mais sur Taff, `/notes?q=…` devient `/e/taff/notes?q=…`. Test `changer_d_espace_emmene_l_onglet`. La fonction est partagée avec la barre de commandes (`spaces::url::hx_location`).
+- [x] Dans un dossier, changer d'espace mène à la racine du nouvel espace ; `racine`, `temporaire` et la recherche restent. Test `changer_d_espace_dans_un_dossier_mene_au_nouvel_espace`.
+- [x] Vers un outil masqué : l'accueil du nouvel espace, sans message d'erreur. Test `changer_d_espace_vers_un_outil_masque_mene_a_l_accueil_sans_erreur`. Un fichier de Temporaire ramène à l'onglet Outils : `un_fichier_de_temporaire_ramene_a_l_onglet_outils`.
+- [x] Créer un espace y fait passer l'onglet, un refus le laisse en place. Test `creer_un_espace_y_emmene_l_onglet`. Archiver, supprimer ou quitter l'espace actif fait aussi passer l'onglet sur un espace qui reste.
+- [x] Un espace archivé garde ses fragments et ses écritures (en-tête de l'onglet et session acceptent un archivé). Test `un_espace_archive_garde_ses_fragments_et_ses_ecritures`.
+- [x] Un onglet sur un espace disparu : écriture refusée (409, `HX-Redirect: /`, message sur l'accueil), page rabattue sur le dernier espace. Les redirections prennent le préfixe de l'espace reconnu par `Ctx` (`spaces::url::ResolvedSpace`), jamais celui d'un en-tête périmé. Test `un_onglet_sur_un_espace_disparu_n_ecrit_nulle_part`.
+- [x] Bandeau d'un espace archivé : « Restaurer » pour le propriétaire seulement, retour sur la page de l'espace. Test `un_membre_ne_voit_pas_le_bouton_restaurer`.
+- [x] Un espace archivé se supprime même avec Perso seul en service. Test `un_espace_archive_se_supprime_meme_avec_perso_seul_en_service`.
+- [x] Vu dans le navigateur (instance locale, ordinateur) : sur `/e/ecole/tools`, un clic sur Taff dans l'île laisse `/tools` et passe l'onglet sur Taff ; dans le dossier Math d'École, un clic sur Taff mène aux fichiers de Taff ; dans Taff archivé, le widget propose Taff et la tâche ajoutée y reste. Aucune erreur dans la console.
+- [ ] Sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
+
+**Lots 2 à 5** (retours, corbeille dans Fichiers, Perso et Notes, rangement) : pas commencés.
+
 ## Écarts par rapport au cahier des charges
 
 - **Déploiement sans Docker.** La spec prévoyait Docker Compose (dashu + `cloudflared`). dashu tourne en binaire natif sous systemd dans un LXC, avec `cloudflared` installé comme service à côté : une couche de moins sur un vieux serveur. Le `Dockerfile` et le `docker-compose.yml` restent maintenus (l'image est construite par la CI) et décrits dans le README comme variante.

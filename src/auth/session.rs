@@ -8,7 +8,7 @@
 
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::http::{HeaderName, StatusCode};
+use axum::http::{HeaderName, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use tower_sessions::cookie::time::Duration;
@@ -24,6 +24,9 @@ use crate::web::{self, AppError, AppResult, csrf};
 pub const USER_ID: &str = "uid";
 pub const ACTIVE_SPACE: &str = "space";
 const FLASH: &str = "flash";
+
+/// Écriture refusée depuis un onglet ouvert sur un espace disparu.
+const STALE_TAB: &str = "Cet espace n'est plus accessible : rien n'a été enregistré.";
 
 /// Durée d'une session connectée : 30 jours glissants (repoussés à chaque visite).
 pub const LOGGED_IN_DAYS: i64 = 30;
@@ -383,13 +386,37 @@ impl FromRequestParts<AppState> for Ctx {
             .get(url::HEADER)
             .and_then(|v| v.to_str().ok())
             .map(str::to_string);
-        let by_slug = |slug: &str| spaces.iter().find(|s| s.slug == slug);
+        // Un espace archivé s'ouvre par son adresse ; l'onglet ouvert dessus
+        // (en-tête) et la session qui le retient y restent, sinon ses
+        // fragments et ses écritures partiraient dans Perso.
+        let by_slug = |slug: &str| spaces.iter().chain(&archived).find(|s| s.slug == slug);
+        // L'onglet nomme un espace qui n'existe plus pour ce compte (supprimé,
+        // quitté, membre retiré). Une page se rabat sur le dernier espace
+        // utilisé, qu'elle montre ; une écriture est refusée, pour ne rien
+        // ranger dans un autre espace sans le dire.
+        let stale_tab = from_url.is_none()
+            && from_tab
+                .as_deref()
+                .is_some_and(|slug| by_slug(slug).is_none());
+        if stale_tab && !matches!(parts.method, Method::GET | Method::HEAD) {
+            let _ = set_flash(&session, "error", STALE_TAB).await;
+            // En HTML : la page d'erreur générique (`web::error`) ne réécrit
+            // que les refus en texte brut, et perdrait l'en-tête.
+            let body = format!(
+                r#"<p class="frag-error" role="alert">{}</p>"#,
+                web::escape(STALE_TAB)
+            );
+            let mut response = (StatusCode::CONFLICT, axum::response::Html(body)).into_response();
+            response
+                .headers_mut()
+                .insert("hx-redirect", HeaderValue::from_static("/"));
+            return Err(response);
+        }
         let in_url = from_url.is_some();
         let active = if let Some(slug) = from_url {
             // Un espace inconnu (ou d'un autre compte) dans l'adresse : 404.
             // Un espace archivé s'ouvre par son adresse.
             let space = by_slug(&slug)
-                .or_else(|| archived.iter().find(|s| s.slug == slug))
                 .cloned()
                 .ok_or_else(|| AppError::NotFound.into_response())?;
             if wanted.as_deref() != Some(slug.as_str()) {
@@ -412,6 +439,11 @@ impl FromRequestParts<AppState> for Ctx {
                     )))
                 })?
         };
+
+        // `spaces::url::rewrite` préfixe ses redirections avec cet espace.
+        if let Some(resolved) = parts.extensions.get::<url::ResolvedSpace>() {
+            resolved.set(&active.slug);
+        }
 
         let csrf = csrf::token(&session).await.map_err(internal)?;
         let path = parts

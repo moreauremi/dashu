@@ -1733,3 +1733,86 @@ Prises le 25 novembre 2026, par défaut, pour avancer :
 - **L'onglet Outils garde son adresse sans espace** (`/tools`) : il est masqué selon l'espace actif (celui de l'onglet ou le dernier utilisé).
 - **Le réglage passe par l'API** (route, outil MCP, commande d'Hermès), comme la disposition du dashboard : « L'API couvre tout le site ». L'autorisation des outils réservés, elle, reste hors de l'API, comme l'administration du serveur.
 - **La PR 2 part de la branche de la PR 1** : elle a besoin du registre. Elle sera rebasée sur `v1` une fois la PR 1 fusionnée.
+
+---
+
+# dashu — Parcours et espaces
+
+Nov 26, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 26 novembre 2026 : analyser le fonctionnement des espaces et la façon de voir les notes et les fichiers, puis corriger les erreurs de logique, les endroits où l'on se perd et les redirections qui n'ont pas de sens. Depuis l'audit du 13 novembre (« Espaces et outils »), beaucoup de choses se sont ajoutées : l'espace dans l'adresse, les dossiers, les espaces partagés, la corbeille et les outils par espace. Chacune a apporté ses redirections, et elles se contredisent.
+
+Le problème central : **l'en-tête `X-Espace` de l'onglet passe avant la session**. Il n'est cherché que parmi les espaces en service, et un échec retombe en silence sur Perso. À côté de ça, plusieurs actions redirigent sans dire vers quel espace aller. Résultat : on change d'espace et rien ne bouge, on écrit dans Perso sans le savoir, on revient au mauvais endroit.
+
+## Constats et corrections
+
+**Lot 1 : l'espace ne se perd plus.**
+
+- Changer d'espace sur une page sans préfixe (`/tools`, un événement, 1Life) ne fait rien : la redirection garde l'en-tête de l'ancien espace. `POST /space` répond désormais, pour htmx, par un `HX-Location` qui porte le nouvel espace, comme la commande `/space`.
+- Changer d'espace dans un dossier de Fichiers ramène à l'ancien espace, parce que le dossier lui appartient. Un numéro de dossier est retiré de la page de retour : on arrive à la racine du nouvel espace. `racine`, `temporaire` et la recherche restent.
+- Passer sur un espace où l'outil ouvert est masqué affichait « Cet outil est masqué » à chaque balayage. On arrive maintenant sur l'accueil de l'espace, sans message. Un fichier de Temporaire ramène à l'onglet Outils.
+- Créer un espace devait en faire l'espace actif, mais l'onglet restait sur l'ancien. Il passe sur le nouveau, comme après un archivage, une suppression ou un départ, où l'onglet passe sur un espace qui reste.
+- Dans un espace archivé ouvert par son adresse, les fragments et les écritures tombaient sur Perso : une tâche ajoutée, la disposition du dashboard, une nouvelle note. L'en-tête de l'onglet et la session acceptent maintenant un espace archivé.
+- Un onglet resté sur un espace disparu (supprimé, quitté, membre retiré) écrivait en silence dans Perso. Une écriture est refusée (409, retour à l'accueil, « Cet espace n'est plus accessible : rien n'a été enregistré. »). Une page se rabat sur le dernier espace utilisé. Ses redirections ne prennent plus le préfixe de l'espace disparu.
+- Le bandeau d'un espace archivé proposait « Restaurer » aux membres, puis répondait 403. Il n'est plus proposé qu'au propriétaire, et il ramène sur la page de l'espace au lieu des Réglages.
+- Un espace archivé ne se supprimait pas quand Perso était le seul espace en service (« Il faut garder au moins un espace. »). Supprimer un archivé ne retire rien au sélecteur : c'est permis.
+
+**Lot 2 : on revient d'où l'on vient.**
+
+- Le retour de l'éditeur mène à la page d'où l'on a ouvert la note : un dossier de Fichiers, le dashboard, une recherche ou Perso. C'est le paramètre `depuis`, qui existe déjà pour les fichiers. Une note supprimée ramène au même endroit.
+- **Depuis Perso, une note, un fichier ou un événement d'un autre espace s'ouvre sur place**, avec la pastille de son espace. Le retour ramène à Perso. Hors de Perso, un élément s'ouvre toujours dans son espace.
+- Une action faite pendant une recherche de Fichiers garde la recherche et le tag. Compresser revient à la page d'origine. La reconnexion revient à la page demandée. Refuser une invitation ramène à la carte des espaces.
+
+**Lot 3 : la corbeille et les messages.**
+
+- **La corbeille devient un dossier « Corbeille » à la racine de Fichiers**, à côté de Temporaire, filtré sur l'espace ouvert (tous les espaces depuis Perso ou la racine). `/settings/trash` y mène, et Réglages garde un lien. Elle montre l'origine de chaque élément (« École / Math ») et se filtre par type.
+- Les confirmations disent « Mettre à la corbeille » et non « Supprimer définitivement ». Les messages de suppression portent un lien vers la corbeille. Un élément restauré dit où il est revenu (« à la racine d'École, son dossier n'existe plus »), avec un lien, et prévient si ses liens de partage ont été révoqués.
+- **« Vider la corbeille » n'efface que ce que l'on a supprimé soi-même.** Dans un espace partagé, ce que les autres membres ont supprimé reste 30 jours. La confirmation le dit.
+- Un titre n'est plus échappé deux fois (« R&amp;amp;D »).
+
+**Lot 4 : Perso, Notes et Fichiers parlent la même langue.**
+
+- Dans Perso, les widgets et les listes ne disent plus « dans cet espace » quand ils montrent tous les espaces. Les notes épinglées du widget portent leur pastille d'espace et tiennent dans le widget.
+- Dans l'onglet Notes, le titre d'une section de dossier s'ouvre sur ce dossier (`/notes?dossier=N`, avec un fil d'Ariane et un lien vers Fichiers). Une ligne de note a un menu : Ranger, Épingler, Mettre à la corbeille.
+- La recherche de Fichiers trouve aussi les notes du dossier. Le filtre par tag des notes se normalise comme celui des fichiers.
+- Un widget ne mène plus à un outil masqué. Masquer un outil met aussi à jour la barre du téléphone. L'indicateur de conversions mène à l'onglet Outils, qui les montre toutes.
+
+**Lot 5 : ranger ne casse rien.**
+
+- **Les images d'une note la suivent** quand on la déplace vers un autre espace (site, API, commande, dossier déplacé), sauf celles qu'une autre note de l'ancien espace affiche aussi. Le message le dit.
+- Une conversion en cours suit son fichier déplacé. Un lien de partage devenu inutilisable après un déplacement n'est plus affiché comme valable, et le déplacement le dit.
+- La fenêtre « Ranger » signale les espaces partagés et prévient quand on sort un élément d'un espace partagé.
+
+## Décisions
+
+Prises avec Rémi le 26 novembre 2026 :
+
+- **Perso ouvre sur place** les éléments des autres espaces, au lieu de faire passer l'onglet dans leur espace.
+- **La corbeille va dans Fichiers**, comme dossier de la racine.
+- **Les images d'une note la suivent** quand on la déplace.
+- **Vider la corbeille n'efface que ses propres suppressions.**
+
+Par défaut, pour avancer :
+
+- **Une écriture depuis un onglet sur un espace disparu est refusée** (409 et retour à l'accueil). Une page, elle, se rabat sur le dernier espace utilisé.
+- **Un formulaire classique** (sans en-tête d'onglet) garde ses adresses sans préfixe, comme avant.
+- **Un lot par PR**, dans l'ordre. Chaque lot a ses tests dans `tests/parcours.rs` ou dans le fichier de son module.
+
+## Critères d'acceptation
+
+Lot 1 :
+
+- [ ] Depuis l'île, passer de École à Taff sur `/tools` ouvre `/tools` sur Taff ; sur `/notes?q=…`, ouvre `/e/taff/notes?q=…`
+- [ ] Dans un dossier d'École, passer sur Taff mène à la racine des fichiers de Taff ; `racine`, `temporaire` et la recherche restent
+- [ ] Vers un espace où l'outil est masqué : l'accueil de cet espace, sans message d'erreur ; un fichier de Temporaire ramène à l'onglet Outils
+- [ ] Créer un espace y fait passer l'onglet ; un refus laisse l'onglet où il est
+- [ ] Dans un espace archivé, une tâche ajoutée y reste et son widget la montre
+- [ ] Une écriture depuis un onglet sur un espace disparu est refusée, sans rien écrire ; le message attend sur l'accueil
+- [ ] Le bandeau d'un espace archivé ne propose « Restaurer » qu'au propriétaire, et ramène sur la page de l'espace
+- [ ] Un espace archivé se supprime même quand Perso est le seul espace en service
+
+Lots 2 à 5 : un critère par point ci-dessus, écrit avec son lot.
+
+- [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
