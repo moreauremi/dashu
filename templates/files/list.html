@@ -127,9 +127,9 @@
   </nav>
   {% endif %}
   {% if searching %}
-  <p class="muted files-found" role="status">{% if items.is_empty() %}Aucun fichier ne correspond{% else %}{{ items.len() }} fichier{% if items.len() > 1 %}s{% endif %} trouvé{% if items.len() > 1 %}s{% endif %} dans {{ place }}{% endif %}</p>
+  <p class="muted files-found" role="status">{% if items.is_empty() && notes.is_empty() %}Rien ne correspond{% else %}Trouvé dans {{ place }} : {% if !items.is_empty() %}{{ items.len() }} fichier{% if items.len() > 1 %}s{% endif %}{% endif %}{% if !items.is_empty() && !notes.is_empty() %} et {% endif %}{% if !notes.is_empty() %}{{ notes.len() }} note{% if notes.len() > 1 %}s{% endif %}{% endif %}{% endif %}</p>
   {% endif %}
-  {% if searching && items.is_empty() %}
+  {% if searching && items.is_empty() && notes.is_empty() %}
   {% else if folders.is_empty() && notes.is_empty() && items.is_empty() %}
   <div class="empty-state">
     {% if view == "temporaire" %}

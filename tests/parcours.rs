@@ -651,3 +651,143 @@ async fn un_titre_n_est_echappe_qu_une_fois_dans_la_corbeille() {
     let page = alice.follow(restored).await;
     assert!(page.body.contains("« R&#38;D » est revenu"));
 }
+
+// ---------------------------------------------------------------------
+// Lot 4 : Perso, Notes et Fichiers parlent la même langue
+// ---------------------------------------------------------------------
+
+#[tokio::test]
+async fn les_widgets_de_perso_parlent_de_tous_les_espaces() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let perso = alice.get("/e/perso/widgets/notes").await;
+    assert!(perso.body.contains("Aucune note, dans aucun espace."));
+    let ecole = alice.get("/e/ecole/widgets/notes").await;
+    assert!(ecole.body.contains("Aucune note dans cet espace."));
+
+    // Les épinglées portent leur espace et tiennent dans le widget.
+    let mut ids = Vec::new();
+    for title in ["Un", "Deux", "Trois"] {
+        let id = titled_note(&mut alice, "ecole", title, None).await;
+        alice.post(&format!("/notes/{id}/pin"), &[]).await;
+        ids.push(id);
+    }
+    let widget = alice.get("/e/perso/widgets/notes?w=2&h=1").await;
+    assert_eq!(widget.body.matches("<li>").count(), 2, "{}", widget.body);
+    assert!(widget.body.contains("class=\"space-of\""));
+}
+
+#[tokio::test]
+async fn un_widget_ne_mene_pas_a_un_outil_masque() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let taff = app.space_id(ALICE, "taff").await;
+    alice
+        .post(&format!("/settings/spaces/{taff}/tools/notes"), &[])
+        .await;
+    let dashboard = alice.get("/e/taff/").await;
+    assert!(!dashboard.body.contains("Toutes les notes"));
+    assert!(
+        alice
+            .get("/e/ecole/")
+            .await
+            .body
+            .contains("Toutes les notes")
+    );
+    let widget = alice.get("/e/taff/widgets/notes").await;
+    assert!(!widget.body.contains("Écrire la première"));
+
+    // L'interrupteur remplace aussi la barre du téléphone (hors bande).
+    let toggled = alice
+        .with_header("hx-request", "true")
+        .with_header("x-espace", "taff")
+        .post(
+            &format!("/settings/spaces/{taff}/tools/notes"),
+            &[("shown", "1")],
+        )
+        .await;
+    assert!(
+        toggled.body.contains(
+            "id=\"tabbar\" class=\"tabbar\" aria-label=\"Raccourcis\" hx-swap-oob=\"true\""
+        )
+    );
+}
+
+#[tokio::test]
+async fn les_sections_de_dossier_des_notes_s_ouvrent() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let math = folder(&app, &mut alice, "ecole", "Math").await;
+    let id = titled_note(&mut alice, "ecole", "Fiche VLAN", Some(math)).await;
+    titled_note(&mut alice, "ecole", "Hors dossier", None).await;
+    alice
+        .post(&format!("/notes/{id}/tags"), &[("name", "bts")])
+        .await;
+
+    let list = alice.get("/e/ecole/notes").await;
+    assert!(
+        list.body
+            .contains(&format!("href=\"/notes?dossier={math}\""))
+    );
+    let opened = alice.get(&format!("/e/ecole/notes?dossier={math}")).await;
+    assert!(opened.body.contains("École / Math"));
+    assert!(opened.body.contains("Voir dans Fichiers"));
+    assert!(opened.body.contains("Fiche VLAN") && !opened.body.contains("Hors dossier"));
+    // Hors de Perso, un dossier d'un autre espace s'ouvre dans le sien.
+    let moved = alice.get(&format!("/e/taff/notes?dossier={math}")).await;
+    assert_eq!(moved.location(), format!("/e/ecole/notes?dossier={math}"));
+
+    // « #BTS » trouve le tag « bts », comme dans Fichiers.
+    let tagged = alice.get("/e/ecole/notes?tag=%23BTS").await;
+    assert!(tagged.body.contains("Fiche VLAN"));
+
+    // Le menu d'une ligne épingle sans ouvrir la note, et revient à la liste.
+    assert!(list.body.contains(&format!("action=\"/notes/{id}/pin\"")));
+    let pinned = alice
+        .post(&format!("/notes/{id}/pin"), &[("next", "/notes")])
+        .await;
+    assert_eq!(pinned.location(), "/notes");
+    let page = alice.follow(pinned).await;
+    assert!(page.body.contains("Note épinglée"));
+}
+
+#[tokio::test]
+async fn la_recherche_de_fichiers_trouve_aussi_les_notes() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let math = folder(&app, &mut alice, "ecole", "Math").await;
+    titled_note(&mut alice, "ecole", "Fiche VLAN", Some(math)).await;
+    titled_note(&mut alice, "taff", "VLAN du client", None).await;
+    let found = alice
+        .get(&format!("/e/ecole/files?dossier={math}&q=vlan"))
+        .await;
+    assert!(found.body.contains("Fiche VLAN"));
+    assert!(!found.body.contains("VLAN du client"));
+    assert!(
+        found.body.contains("Trouvé dans École / Math : 1 note"),
+        "{}",
+        found.body
+    );
+}
+
+#[tokio::test]
+async fn l_indicateur_mene_a_l_espace_de_la_conversion() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let user = app.user_id(ALICE).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    sqlx::query(
+        "INSERT INTO jobs (user_id, space_id, kind, source_name, source_size, status, created_at, updated_at)
+         VALUES (?, ?, 'convert', 'film.mov', 10, 'running', 0, 0)",
+    )
+    .bind(user)
+    .bind(ecole)
+    .execute(&app.state.db)
+    .await
+    .expect("conversion");
+    // Depuis Taff, l'indicateur mène aux fichiers d'École, où est son suivi.
+    let page = alice.get("/e/taff/notes").await;
+    let indicator =
+        common::between(&page.body, "id=\"jobs-indicator\"", "</a>").unwrap_or_default();
+    assert!(indicator.contains("href=\"/e/ecole/files\""), "{indicator}");
+}

@@ -51,8 +51,11 @@ pub struct NoteItem {
     /// Le chemin de la note sous son dossier du premier niveau (« Exercices »,
     /// « Exercices / Corrigés »), dans la section de ce dossier.
     pub sub: Option<String>,
-    space_id: i64,
-    folder_id: Option<i64>,
+    /// Titre brut (« Sans titre » s'il est vide), pour un gabarit qui
+    /// échappe lui-même (la recherche de l'onglet Fichiers).
+    pub(crate) plain: String,
+    pub(crate) space_id: i64,
+    pub(crate) folder_id: Option<i64>,
 }
 
 /// Une section de la liste : les notes d'un dossier du premier niveau (sous-
@@ -60,6 +63,8 @@ pub struct NoteItem {
 pub struct NoteGroup {
     /// Nom du dossier ; `None` pour les notes sans dossier.
     pub title: Option<String>,
+    /// Le titre ouvre ce dossier (`/notes?dossier=N`).
+    pub href: Option<String>,
     /// Vue d'ensemble de Perso : l'espace d'un dossier venu d'ailleurs.
     pub space: Option<crate::spaces::SpaceTag>,
     pub items: Vec<NoteItem>,
@@ -89,6 +94,25 @@ struct ListPage {
     only: bool,
     all_href: String,
     only_href: String,
+    /// Dossier ouvert (`?dossier=N`) : son chemin, « École / Math », et son
+    /// adresse dans l'onglet Fichiers.
+    folder: Option<(String, String)>,
+    dossier: Option<i64>,
+    /// Cette page, filtres compris : on y revient après une action de ligne.
+    here: String,
+    /// Notes est affiché ici : le bouton « Écrire la première » y a un sens.
+    tool: bool,
+}
+
+/// Ajoute le dossier ouvert à une adresse de la liste.
+fn in_folder(url: String, folder: Option<i64>) -> String {
+    match folder {
+        Some(id) => {
+            let join = if url.contains('?') { '&' } else { '?' };
+            format!("{url}{join}dossier={id}")
+        }
+        None => url,
+    }
 }
 
 #[derive(Deserialize)]
@@ -98,6 +122,8 @@ pub struct ListQuery {
     /// `1` : dans Perso, seulement ses propres notes.
     #[serde(default)]
     seul: u8,
+    /// Seulement les notes de ce dossier (et de ses sous-dossiers).
+    dossier: Option<i64>,
 }
 
 /// `GET /notes?q=…&tag=…`
@@ -111,11 +137,33 @@ pub async fn list(
         return Ok(back);
     }
     let q = query.q.unwrap_or_default().trim().to_string();
+    // « #Math » et « math » désignent le même tag, comme dans Fichiers.
     let tag = query
         .tag
-        .map(|t| t.trim().to_string())
+        .map(|t| normalize_tag(&t))
         .filter(|t| !t.is_empty());
     let only = query.seul == 1;
+    let all_folders = folders::all(&state.db, ctx.user.id).await?;
+    // Un dossier ouvert : il appartient à un espace accessible ; hors de
+    // Perso, il s'ouvre dans le sien, comme dans l'onglet Fichiers.
+    let folder = match query.dossier {
+        Some(id) => {
+            let folder = all_folders
+                .iter()
+                .find(|f| f.id == id)
+                .ok_or(AppError::NotFound)?;
+            if folder.space_id != ctx.active.id && !ctx.active.is_overview() {
+                let space = ctx.space_by_id(folder.space_id).ok_or(AppError::NotFound)?;
+                return Ok(see_other(&crate::spaces::url::prefixed(
+                    &space.slug,
+                    &format!("/notes?dossier={id}"),
+                )));
+            }
+            Some(folder.clone())
+        }
+        None => None,
+    };
+    let dossier = folder.as_ref().map(|f| f.id);
     // Perso montre les notes de tous les espaces, sauf « Seulement Perso ».
     let (user, space) = (ctx.user.id, ctx.scope(only));
     let now = time::now();
@@ -146,7 +194,15 @@ pub async fn list(
         item.tags = tags_by_note.remove(&item.id).unwrap_or_default();
         item.space = ctx.tag_of(item.space_id);
     }
-    let groups = by_folder(&ctx, items, &folders::all(&state.db, user).await?);
+    // Dossier ouvert : ses notes et celles de ses sous-dossiers.
+    if let Some(id) = dossier {
+        items.retain(|item| {
+            folders::chain(&all_folders, item.folder_id)
+                .iter()
+                .any(|f| f.id == id)
+        });
+    }
+    let groups = by_folder(&ctx, items, &all_folders);
 
     let chips = sqlx::query!(
         r#"SELECT t.name AS "name!", COUNT(DISTINCT n.id) AS "count!: i64"
@@ -168,7 +224,10 @@ pub async fn list(
             .is_some_and(|t| t.eq_ignore_ascii_case(&row.name));
         TagChip {
             // Recliquer sur le tag actif retire le filtre.
-            href: list_url(&q, if active { None } else { Some(&row.name) }, only),
+            href: in_folder(
+                list_url(&q, if active { None } else { Some(&row.name) }, only),
+                dossier,
+            ),
             name: row.name,
             count: row.count,
             active,
@@ -176,13 +235,29 @@ pub async fn list(
     })
     .collect();
 
+    let folder_info = folder.as_ref().map(|f| {
+        let space = ctx
+            .space_by_id(f.space_id)
+            .map_or_else(String::new, |s| s.name.clone());
+        let slug = ctx
+            .space_by_id(f.space_id)
+            .map_or_else(|| ctx.active.slug.clone(), |s| s.slug.clone());
+        (
+            folders::label(&space, &all_folders, Some(f.id)),
+            folders::view_url(&slug, Some(f.id)),
+        )
+    });
     let page = ListPage {
         shell: ctx.shell("notes").await?,
-        clear_tag_href: list_url(&q, None, only),
+        clear_tag_href: in_folder(list_url(&q, None, only), dossier),
         overview: ctx.active.is_overview(),
         only,
-        all_href: list_url(&q, tag.as_deref(), false),
-        only_href: list_url(&q, tag.as_deref(), true),
+        all_href: in_folder(list_url(&q, tag.as_deref(), false), dossier),
+        only_href: in_folder(list_url(&q, tag.as_deref(), true), dossier),
+        here: in_folder(list_url(&q, tag.as_deref(), only), dossier),
+        folder: folder_info,
+        dossier,
+        tool: ctx.tools.is_shown("notes"),
         q,
         tag,
         groups,
@@ -218,6 +293,7 @@ fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<No
     if !loose.is_empty() {
         groups.push(NoteGroup {
             title: None,
+            href: None,
             space: None,
             items: loose,
         });
@@ -238,6 +314,7 @@ fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<No
         if let Some(items) = by_top.remove(&top.id) {
             groups.push(NoteGroup {
                 title: Some(top.name.clone()),
+                href: Some(format!("/notes?dossier={}", top.id)),
                 space: ctx.tag_of(top.space_id),
                 items,
             });
@@ -309,7 +386,7 @@ pub(crate) fn plain_title(title: &str) -> String {
     }
 }
 
-async fn recent_in_space(
+pub(crate) async fn recent_in_space(
     db: &SqlitePool,
     user: i64,
     space: Option<i64>,
@@ -338,6 +415,7 @@ async fn recent_in_space(
         .into_iter()
         .map(|row| NoteItem {
             id: row.id,
+            plain: plain_title(&row.title),
             title_html: display_title(&row.title),
             excerpt_html: escape(&markdown::excerpt(&row.head, 160)),
             pinned: row.pinned,
@@ -351,7 +429,7 @@ async fn recent_in_space(
         .collect())
 }
 
-async fn search_in_space(
+pub(crate) async fn search_in_space(
     db: &SqlitePool,
     user: i64,
     space: Option<i64>,
@@ -386,6 +464,7 @@ async fn search_in_space(
         .into_iter()
         .map(|row| NoteItem {
             id: row.id,
+            plain: plain_title(&row.title),
             title_html: if row.title.trim().is_empty() {
                 "Sans titre".into()
             } else {
@@ -714,12 +793,29 @@ struct PinButton {
 }
 
 /// `POST /notes/{id}/pin` : épingle ou désépingle. Répond par le bouton à jour.
+#[derive(Deserialize, Default)]
+pub struct PinForm {
+    /// Page où revenir (le menu d'une ligne de la liste) ; sans elle, le
+    /// bouton de l'éditeur, à jour.
+    next: Option<String>,
+}
+
 pub async fn toggle_pin(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<PinForm>,
 ) -> AppResult<Response> {
     let pinned = toggle_pinned(&state.db, ctx.user.id, id).await?;
+    if let Some(next) = form.next.as_deref() {
+        ctx.flash_ok(if pinned {
+            "Note épinglée"
+        } else {
+            "Note désépinglée"
+        })
+        .await?;
+        return Ok(see_other(web::local_path(Some(next))));
+    }
     Ok(web::html(PinButton { id, pinned }))
 }
 

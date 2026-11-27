@@ -7,7 +7,7 @@ use common::{ALICE, BOB, TestApp, between};
 
 /// Libellés des entrées de la barre, dans l'ordre de la page.
 fn tabbar(body: &str) -> Vec<String> {
-    let nav = between(body, r#"<nav class="tabbar""#, "</nav>").expect("barre de raccourcis");
+    let nav = between(body, r#"class="tabbar""#, "</nav>").expect("barre de raccourcis");
     nav.split(r#"class="tab""#)
         .skip(1)
         .filter_map(|item| between(item, "<span>", "</span>"))

@@ -1517,10 +1517,14 @@ fn current_path(headers: &HeaderMap) -> Option<String> {
 
 /// Conversions en cours d'un utilisateur, tous espaces : leur nombre, et si
 /// l'une d'elles part d'un fichier de l'onglet Outils (le lien y mène alors).
-pub async fn active_jobs(db: &sqlx::SqlitePool, user_id: i64) -> AppResult<(i64, bool)> {
+pub async fn active_jobs(
+    db: &sqlx::SqlitePool,
+    user_id: i64,
+) -> AppResult<(i64, bool, Option<i64>)> {
     let row = sqlx::query!(
         r#"SELECT count(*) AS "n!: i64",
-                  coalesce(max(f.expires_at IS NOT NULL OR j.kind = 'download'), 0) AS "tools!: bool"
+                  coalesce(max(f.expires_at IS NOT NULL OR j.kind = 'download'), 0) AS "tools!: bool",
+                  max(j.space_id) AS "space: i64"
            FROM jobs j
            LEFT JOIN files f ON f.id = j.file_id
            WHERE j.user_id = ? AND j.kind IN ('compress', 'convert', 'download')
@@ -1529,7 +1533,20 @@ pub async fn active_jobs(db: &sqlx::SqlitePool, user_id: i64) -> AppResult<(i64,
     )
     .fetch_one(db)
     .await?;
-    Ok((row.n, row.tools))
+    Ok((row.n, row.tools, row.space))
+}
+
+/// Où mène l'indicateur des conversions : l'onglet Outils pour une
+/// conversion qui en part, sinon l'onglet Fichiers de l'espace de la
+/// conversion (son suivi y est), quel que soit l'espace ouvert.
+pub fn jobs_link(tools: bool, space: Option<i64>, spaces: &[crate::spaces::Space]) -> String {
+    if tools {
+        return "/tools".into();
+    }
+    match space.and_then(|id| spaces.iter().find(|s| s.id == id)) {
+        Some(space) => crate::spaces::url::prefixed(&space.slug, "/files"),
+        None => "/files".into(),
+    }
 }
 
 /// Fin d'une conversion, annoncée dans la barre latérale.
@@ -1543,7 +1560,8 @@ pub struct Finished {
 #[template(path = "_jobs_indicator.html")]
 struct Indicator {
     active: i64,
-    tools: bool,
+    /// Lien de l'indicateur pendant les conversions (voir `jobs_link`).
+    href: String,
     done: Option<Finished>,
 }
 
@@ -1558,7 +1576,8 @@ pub async fn indicator(
     if state.config.work_dir.is_none() {
         return Err(AppError::NotFound);
     }
-    let (active, tools) = active_jobs(&state.db, ctx.user.id).await?;
+    let (active, tools, space) = active_jobs(&state.db, ctx.user.id).await?;
+    let href = jobs_link(tools, space, &ctx.all_spaces());
     let mut done = None;
     if active == 0 && query.active > 0 {
         let last = sqlx::query!(
@@ -1592,11 +1611,7 @@ pub async fn indicator(
             },
         });
     }
-    Ok(web::html(Indicator {
-        active,
-        tools,
-        done,
-    }))
+    Ok(web::html(Indicator { active, href, done }))
 }
 
 // ---------------------------------------------------------------------

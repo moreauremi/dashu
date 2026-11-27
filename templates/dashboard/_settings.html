@@ -17,7 +17,7 @@
       {% if calendar_errors > 0 %}<span class="with-icon status-warn">{{ crate::assets::icon("alert")|safe }}{{ calendar_errors }} en échec</span>{% endif %}
     </li>
     {% if !storage.is_empty() %}
-    <li>{{ crate::assets::icon("files")|safe }}<a href="/files">{{ storage }}</a></li>
+    <li>{{ crate::assets::icon("files")|safe }}{% if files_tool %}<a href="/files">{{ storage }}</a>{% else %}{{ storage }}{% endif %}</li>
     {% endif %}
     <li>{{ crate::assets::icon("home")|safe }}<a href="/settings#espaces">Gérer les espaces</a></li>
   </ul>

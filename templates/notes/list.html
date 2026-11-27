@@ -2,7 +2,19 @@
 {% block title %}Notes · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
 {% block content %}
 <header class="page-head">
+  {#- Dossier ouvert (?dossier=N) : son chemin, un retour à toutes les notes
+      et le même dossier dans l'onglet Fichiers. -#}
+  {% if let Some((label, files_href)) = folder %}
+  <div class="files-head">
+    <nav class="crumbs" aria-label="Emplacement">
+      <a class="crumb" href="/notes">Notes</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+    </nav>
+    <h1>{{ label }}</h1>
+    <a class="back-link" href="{{ files_href }}">{{ crate::assets::icon("folder")|safe }}<span>Voir dans Fichiers</span></a>
+  </div>
+  {% else %}
   <h1>Notes</h1>
+  {% endif %}
   <form method="post" action="/notes">
     <button class="btn btn-primary" type="submit">{{ crate::assets::icon("plus")|safe }}<span>Nouvelle note</span></button>
   </form>
@@ -18,6 +30,7 @@
          hx-target="#note-results" hx-select="#note-results" hx-swap="outerHTML" hx-push-url="true">
   {% if let Some(tag) = tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
   {% if only %}<input type="hidden" name="seul" value="1">{% endif %}
+  {% if let Some(id) = dossier %}<input type="hidden" name="dossier" value="{{ id }}">{% endif %}
 </form>
 
 <div id="note-results">
@@ -38,10 +51,10 @@
   {% endif %}
 
   {% if groups.is_empty() %}
-    {% if q.is_empty() && tag.is_none() %}
+    {% if q.is_empty() && tag.is_none() && folder.is_none() %}
     <div class="empty-state">
-      <p>Aucune note dans l'espace {{ shell.active.name }}</p>
-      <a class="btn" href="/notes/new">Écrire la première</a>
+      <p>{% if overview && !only %}Aucune note, dans aucun espace{% else %}Aucune note dans l'espace {{ shell.active.name }}{% endif %}</p>
+      {% if tool %}<a class="btn" href="/notes/new">Écrire la première</a>{% endif %}
     </div>
     {% else %}
     <div class="empty-state"><p>Aucune note ne correspond</p></div>
@@ -52,7 +65,7 @@
   {% for group in groups %}
   <section class="note-group"{% if let Some(title) = group.title %} aria-label="Dossier {{ title }}"{% else if groups.len() > 1 %} aria-label="Sans dossier"{% endif %}>
     {% if let Some(title) = group.title %}
-    <h2 class="note-group-title">{{ crate::assets::icon("folder")|safe }}<span>{{ title }}</span>
+    <h2 class="note-group-title">{{ crate::assets::icon("folder")|safe }}{% if let Some(href) = group.href %}<a href="{{ href }}">{{ title }}</a>{% else %}<span>{{ title }}</span>{% endif %}
       {%- if let Some(space) = group.space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif -%}
       <span class="chip-count">{{ group.items.len() }}</span></h2>
     {% else if groups.len() > 1 %}
@@ -60,7 +73,7 @@
     {% endif %}
     <ul class="note-list" role="list">
       {% for item in group.items %}
-      <li>
+      <li class="note-item">
         <a class="note-row" href="/notes/{{ item.id }}">
           <span class="note-row-title">
             {% if item.pinned %}{{ crate::assets::icon("pin")|safe }}<span class="sr-only">Épinglée : </span>{% endif %}
@@ -74,6 +87,23 @@
             <span class="muted">{{ item.updated }}</span>
           </span>
         </a>
+        {#- Ranger, épingler, mettre à la corbeille, sans ouvrir la note ;
+            chaque action revient sur cette liste, filtres compris. -#}
+        <div class="note-actions">
+          <button class="icon-btn" type="button" popovertarget="pm-actions-note-{{ item.id }}" title="Actions" aria-label="Actions sur la note">{{ crate::assets::icon("more")|safe }}</button>
+          <div id="pm-actions-note-{{ item.id }}" class="pop-menu" popover aria-label="Actions sur la note">
+            <button type="button" popovertarget="picker" hx-get="{{ crate::folders::picker_url("note", *item.id, Some(here)) }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}Ranger ailleurs</button>
+            <form method="post" action="/notes/{{ item.id }}/pin">
+              <input type="hidden" name="next" value="{{ here }}">
+              <button type="submit">{% if item.pinned %}{{ crate::assets::icon("pin-off")|safe }}Désépingler{% else %}{{ crate::assets::icon("pin")|safe }}Épingler{% endif %}</button>
+            </form>
+            <div class="pop-sep" role="separator"></div>
+            <form method="post" action="/notes/{{ item.id }}/delete" hx-confirm="Mettre cette note à la corbeille ? Elle y reste 30 jours.">
+              <input type="hidden" name="next" value="{{ here }}">
+              <button class="pop-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer</button>
+            </form>
+          </div>
+        </div>
       </li>
       {% endfor %}
     </ul>

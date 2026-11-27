@@ -122,7 +122,7 @@ pub struct Ctx {
     pub launch: bool,
     /// Conversions en cours (pages seulement, pas les fragments), et si l'une
     /// part d'un fichier de l'onglet Outils.
-    pub jobs: (i64, bool),
+    pub jobs: (i64, bool, Option<i64>),
     /// Outils de l'espace actif : réglables et affichés (voir `registry`).
     pub tools: registry::Shown,
 }
@@ -162,8 +162,9 @@ pub struct Shell {
     pub base: String,
     /// Conversions en cours : l'indicateur de la barre latérale.
     pub jobs_active: i64,
-    /// L'une d'elles part de l'onglet Outils : le lien y mène.
-    pub jobs_tools: bool,
+    /// Lien de l'indicateur : l'onglet Outils, ou les fichiers de l'espace
+    /// de la conversion (voir `tools::jobs_link`).
+    pub jobs_href: String,
 }
 
 impl Shell {
@@ -210,7 +211,7 @@ impl Ctx {
             tools: self.tools.visible().collect(),
             launch: self.launch,
             jobs_active: self.jobs.0,
-            jobs_tools: self.jobs.1,
+            jobs_href: crate::tools::jobs_link(self.jobs.1, self.jobs.2, &self.all_spaces()),
         })
     }
 
@@ -463,7 +464,7 @@ impl FromRequestParts<AppState> for Ctx {
                 .await
                 .map_err(internal)?
         } else {
-            (0, false)
+            (0, false, None)
         };
 
         let tools = registry::load(&state.db, user.id, active.id)

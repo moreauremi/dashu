@@ -2,7 +2,7 @@
   {% if !enabled %}
   <p class="empty">Les fichiers ne sont pas activés sur ce serveur.</p>
   {% else if items.is_empty() %}
-  <p class="empty">Aucun fichier dans cet espace. <a href="/files">En envoyer un</a></p>
+  <p class="empty">{% if overview %}Aucun fichier, dans aucun espace.{% else %}Aucun fichier dans cet espace.{% endif %}{% if tool %} <a href="/files">En envoyer un</a>{% endif %}</p>
   {% else %}
   <ul class="note-links file-links" role="list">
     {% for file in items %}
@@ -19,7 +19,7 @@
     {% endfor %}
   </ul>
   {% if total > items.len() as i64 %}
-  <p class="widget-count">{{ total }} fichiers dans cet espace</p>
+  <p class="widget-count">{{ total }} fichiers{% if overview %}, tous espaces confondus{% else %} dans cet espace{% endif %}</p>
   {% endif %}
   {% endif %}
 </div>

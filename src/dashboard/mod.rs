@@ -40,12 +40,31 @@ struct DashboardPage {
     widgets: Vec<Widget>,
     /// Widgets qu'on peut ajouter (tous, sauf Fichiers s'il n'est pas activé).
     catalog: Vec<&'static Kind>,
+    /// Liens d'en-tête vers un outil masqué dans cet espace.
+    masked: Vec<&'static str>,
 }
 
 #[derive(Template)]
 #[template(path = "dashboard/_grid.html")]
 struct GridFragment {
     widgets: Vec<Widget>,
+    masked: Vec<&'static str>,
+}
+
+/// Les liens d'en-tête des widgets qui mènent à un outil masqué dans
+/// l'espace (« Toutes les notes » avec Notes masqué) : on ne les montre pas,
+/// ils ramèneraient sur ce dashboard avec un message d'erreur.
+fn masked_links(ctx: &Ctx) -> Vec<&'static str> {
+    layout::KINDS
+        .iter()
+        .filter_map(|kind| kind.link.map(|(href, _)| href))
+        .filter(|href| crate::registry::at(href).is_some_and(|tool| !ctx.tools.is_shown(tool.id)))
+        .collect()
+}
+
+/// Le lien d'en-tête est montré (gabarit de la grille).
+pub fn shows(masked: &[&str], href: &str) -> bool {
+    !masked.contains(&href)
 }
 
 /// Types de widgets disponibles sur ce serveur.
@@ -103,6 +122,7 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
     };
     let widgets = layout::load(&state.db, ctx.active.id, state.config.files.is_some()).await?;
     let page = DashboardPage {
+        masked: masked_links(&ctx),
         widgets,
         catalog: catalog(&state),
         greeting,
@@ -116,7 +136,10 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
 /// `GET /dashboard/grid` : la grille seule, rechargée après l'ajout d'un widget.
 pub async fn grid(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response> {
     let widgets = layout::load(&state.db, ctx.active.id, state.config.files.is_some()).await?;
-    Ok(web::html(GridFragment { widgets }))
+    Ok(web::html(GridFragment {
+        masked: masked_links(&ctx),
+        widgets,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -560,6 +583,10 @@ struct NoteLink {
 struct NotesWidget {
     pinned: Vec<NoteLink>,
     recent: Vec<NoteLink>,
+    /// Perso : les notes de tous les espaces (le texte le dit).
+    overview: bool,
+    /// Notes est affiché dans cet espace : « Écrire la première » y mène.
+    tool: bool,
 }
 
 /// `GET /widgets/notes?w=2&h=1` : les notes épinglées, puis les dernières
@@ -597,13 +624,23 @@ pub async fn recent_notes(
             updated: time::ago(row.updated_at, now),
             space: ctx.tag_of(row.space_id),
         };
+        // Les épinglées d'abord, puis les récentes : toutes comptent dans ce
+        // que le widget peut montrer.
+        if pinned.len() + recent.len() >= limit {
+            break;
+        }
         if row.pinned {
             pinned.push(link);
-        } else if recent.len() < limit {
+        } else {
             recent.push(link);
         }
     }
-    Ok(web::html(NotesWidget { pinned, recent }))
+    Ok(web::html(NotesWidget {
+        pinned,
+        recent,
+        overview: ctx.active.is_overview(),
+        tool: ctx.tools.is_shown("notes"),
+    }))
 }
 
 // ---------------------------------------------------------------------
@@ -629,6 +666,10 @@ struct FilesWidget {
     items: Vec<FileLink>,
     /// Fichiers de l'espace au total, s'il y en a plus que de lignes.
     total: i64,
+    /// Perso : les fichiers de tous les espaces (le texte le dit).
+    overview: bool,
+    /// Fichiers est affiché dans cet espace : « En envoyer un » y mène.
+    tool: bool,
 }
 
 /// `GET /widgets/files?w=2&h=1` : les derniers fichiers de l'espace actif.
@@ -642,6 +683,8 @@ pub async fn recent_files(
             enabled: false,
             items: Vec::new(),
             total: 0,
+            overview: false,
+            tool: false,
         }));
     }
     let now = time::now();
@@ -685,6 +728,8 @@ pub async fn recent_files(
         enabled: true,
         items,
         total,
+        overview: ctx.active.is_overview(),
+        tool: ctx.tools.is_shown("files"),
     }))
 }
 
@@ -704,6 +749,8 @@ struct SettingsWidget {
     calendar_errors: i64,
     /// « 34 fichiers · 1,2 Go », vide si les fichiers ne sont pas activés.
     storage: String,
+    /// Fichiers est affiché dans cet espace : la ligne mène à l'onglet.
+    files_tool: bool,
 }
 
 /// `GET /widgets/settings?w=2&h=1` : thème, état des agendas, place prise
@@ -763,5 +810,6 @@ pub async fn quick_settings(
         calendars,
         calendar_errors: i64::try_from(calendar_errors).unwrap_or(0),
         storage,
+        files_tool: ctx.tools.is_shown("files"),
     }))
 }

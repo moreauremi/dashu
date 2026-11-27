@@ -566,9 +566,32 @@ pub async fn list(
         })
         .collect()
     };
-    // Pendant une recherche, la page ne montre que ses résultats.
+    // Pendant une recherche, la page ne montre que ses résultats : les
+    // fichiers trouvés, et les notes de l'endroit (et de ce qu'il contient)
+    // qui répondent à la recherche ou portent le tag, comme dans l'onglet
+    // Notes.
     let (folder_rows, notes) = if searching {
-        (Vec::new(), Vec::new())
+        let found = match &fts {
+            Some(fts) => {
+                crate::notes::search_in_space(&state.db, user, None, fts, tag.as_deref(), now)
+                    .await?
+            }
+            None => {
+                crate::notes::recent_in_space(&state.db, user, None, tag.as_deref(), now).await?
+            }
+        };
+        let notes = found
+            .into_iter()
+            .filter(|n| in_scope(n.space_id, n.folder_id))
+            .map(|n| NoteRow {
+                picker: folders::picker_url("note", n.id, Some(&here)),
+                id: n.id,
+                title: n.plain,
+                pinned: n.pinned,
+                updated: n.updated,
+            })
+            .collect();
+        (Vec::new(), notes)
     } else {
         (folder_rows, notes)
     };
