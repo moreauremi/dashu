@@ -14,7 +14,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use dashu::config::{ApiConfig, Config, Env, FilesConfig, FromEnv, GoogleConfig, GoogleEndpoints};
+use dashu::config::{
+    AiConfig, ApiConfig, Config, Env, FilesConfig, FromEnv, GoogleConfig, GoogleEndpoints,
+};
 use dashu::{AppState, auth, build_router, db};
 use tower::ServiceExt;
 
@@ -92,6 +94,44 @@ impl TestApp {
             true,
             None,
             |config| config.downloader_email = Some(ALICE.into()),
+        )
+        .await;
+        app.add_user(ALICE).await;
+        app.add_user(BOB).await;
+        app
+    }
+
+    /// Comme [`TestApp::new`], avec l'IA de 1Life configurée vers `base` : un
+    /// faux serveur Anthropic local (tests/outil_1life_audit.rs). Délai court
+    /// (2 secondes), pour tester le dépassement.
+    pub async fn with_ai(base: &str) -> Self {
+        Self::with_ai_key(base, Some("cle-de-test")).await
+    }
+
+    /// Comme [`TestApp::with_ai`], sans `ANTHROPIC_API_KEY` : « IA non
+    /// configurée ».
+    pub async fn with_ai_without_key(base: &str) -> Self {
+        Self::with_ai_key(base, None).await
+    }
+
+    async fn with_ai_key(base: &str, key: Option<&str>) -> Self {
+        let base = base.to_string();
+        let key = key.map(String::from);
+        let app = Self::build_with(
+            Some(ApiConfig {
+                token: API_TOKEN.into(),
+                user_email: ALICE.into(),
+            }),
+            true,
+            None,
+            move |config| {
+                config.ai = AiConfig {
+                    key,
+                    base_url: base,
+                    timeout: std::time::Duration::from_secs(2),
+                    ..AiConfig::default()
+                }
+            },
         )
         .await;
         app.add_user(ALICE).await;
@@ -206,6 +246,7 @@ impl TestApp {
             }),
             work_dir: files.then(|| work_dir.clone()),
             downloader_email: None,
+            ai: AiConfig::default(),
             from_env,
         };
         tweak(&mut config);

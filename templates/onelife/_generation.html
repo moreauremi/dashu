@@ -1,0 +1,10 @@
+{#- État de la dernière génération d'un audit (src/onelife/audit.rs) : en
+    cours, htmx redemande toutes les deux secondes ; finie, le serveur fait
+    recharger la page (HX-Refresh). -#}
+<div id="generation" class="generation"{% if run.running %} hx-get="{{ run.poll }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {%- if run.running %}
+  <p class="generation-running" role="status">{{ crate::assets::icon("loader")|safe }}<span>Génération… La page se met à jour toute seule.</span></p>
+  {%- else if let Some(message) = run.message %}
+  <p class="alert{% if run.failed %} alert-error{% else %} alert-warn{% endif %}" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ message }}</span></p>
+  {%- endif -%}
+</div>

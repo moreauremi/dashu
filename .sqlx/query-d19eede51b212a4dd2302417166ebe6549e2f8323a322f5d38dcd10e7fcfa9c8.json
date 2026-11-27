@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_audit_points (version_id, position, text) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "d19eede51b212a4dd2302417166ebe6549e2f8323a322f5d38dcd10e7fcfa9c8"
+}

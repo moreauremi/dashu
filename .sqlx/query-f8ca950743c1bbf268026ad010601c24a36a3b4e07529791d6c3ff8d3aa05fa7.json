@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(MAX(number), 0) + 1 AS \"n!: i64\" FROM onelife_audit_versions WHERE audit_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f8ca950743c1bbf268026ad010601c24a36a3b4e07529791d6c3ff8d3aa05fa7"
+}

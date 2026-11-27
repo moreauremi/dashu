@@ -1267,6 +1267,40 @@
     go();
   }
 
+  // « Générer l'audit » depuis l'éditeur d'une note d'audit (1Life,
+  // templates/onelife/_generate.html) : l'IA lit la version enregistrée des
+  // notes. Comme pour un téléchargement, les modifications en attente partent
+  // d'abord ; le formulaire repart ensuite, par htmx. L'écouteur est posé en
+  // capture, pour passer avant celui de htmx.
+  document.addEventListener(
+    "submit",
+    (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.matches("form[data-note-flush]")) return;
+      const status = $("#save-status");
+      const note = $("#note-form");
+      const pending = () => ["dirty", "saving"].includes(status?.dataset.state);
+      if (form.dataset.flushed || !pending()) {
+        delete form.dataset.flushed;
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (status.dataset.state === "dirty" && note && window.htmx) window.htmx.trigger(note, "flush");
+      const asked = Date.now();
+      const go = () => {
+        if (pending() && Date.now() - asked < 4000) {
+          setTimeout(go, 150);
+          return;
+        }
+        form.dataset.flushed = "1";
+        form.requestSubmit();
+      };
+      go();
+    },
+    true,
+  );
+
   /** Message passager, comme le message flash d'après une redirection. */
   function showToast(text) {
     const toast = document.createElement("p");

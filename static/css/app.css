@@ -2666,8 +2666,205 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   display: inline;
 }
 
-.infos-saving.htmx-request + #infos-status {
+.infos-saving.htmx-request + #infos-status,
+.infos-saving.htmx-request + .save-text {
   display: none;
+}
+
+/* Encart Identité d'une fiche client : toute la largeur, les champs en
+   grille (une colonne sur téléphone). Toujours en saisie. */
+.client-identity {
+  grid-column: 1 / -1;
+}
+
+.identity-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px 16px;
+}
+
+.identity-form .field-wide {
+  grid-column: 1 / -1;
+}
+
+.identity-form .hint {
+  margin: 0;
+}
+
+.client-notes.identity-long {
+  min-height: 64px;
+}
+
+/* 1Life › Audit : listes des audits et des versions. */
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-row:last-child {
+  border-bottom: 0;
+}
+
+.audit-main {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.audit-title {
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.audit-main:hover .audit-title {
+  text-decoration: underline;
+}
+
+.audit-meta {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.audit-status {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.audit-status.audit-done {
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+.audit-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+.audit-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.audit-links .i {
+  width: 14px;
+  height: 14px;
+}
+
+.audit-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.audit-filter .field {
+  flex: 0 1 280px;
+}
+
+/* La génération en cours : l'icône tourne, la page se recharge à la fin. */
+.generation:empty {
+  display: none;
+}
+
+.generation {
+  margin-bottom: 16px;
+}
+
+.generation-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-2);
+}
+
+.generation-running .i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  animation: spin 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-running .i {
+    animation: none;
+  }
+}
+
+.generation .alert {
+  margin: 0;
+}
+
+.missing-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* Points non repris : une case par point ; coché, il est barré. */
+.audit-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-point .check-row {
+  align-items: flex-start;
+}
+
+.audit-point.is-done span {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+/* « Générer l'audit » dans le menu de l'éditeur : un vrai formulaire (les
+   formulaires des menus sont en display: contents). */
+.pop-generate .generate-form {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  max-width: 100%;
+  padding: 4px 8px 8px;
+}
+
+.generate-form .hint {
+  margin: 0;
+}
+
+.help-page {
+  max-width: 760px;
+}
+
+.help-page pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
 }
 
 .client-drop {

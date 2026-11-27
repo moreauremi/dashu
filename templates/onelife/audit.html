@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block title %}{{ title }} · {{ client }} · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- La page d'un audit (src/onelife/audit.rs) : ses notes, « Générer l'audit »,
+    les versions générées, les points non repris de la dernière et les
+    variables à compléter. Dépôt public : aucun vrai nom de client ici. -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ list_url }}">{{ crate::assets::icon("arrow-left")|safe }}<span>Audit</span></a>
+    <h1>{{ title }}</h1>
+    <p class="muted">{% if let Some(fiche) = fiche %}<a href="{{ fiche }}">{{ client }}</a>{% else %}{{ client }}{% endif %} · {{ date }}{% if !approver.is_empty() %} · approbateur : {{ approver }}{% endif %}</p>
+  </div>
+  <div class="toolbar">
+    <a class="btn" href="{{ notes }}">{{ crate::assets::icon("notes")|safe }}<span>Notes d'audit</span></a>
+    {% if let Some(word) = word %}
+    <a class="btn" href="{{ word }}" hx-boost="false">{{ crate::assets::icon("download")|safe }}<span>Exporter en Word</span></a>
+    {% endif %}
+  </div>
+</header>
+
+{% include "onelife/_generation.html" %}
+
+<div class="client-cards">
+  <section class="card" aria-labelledby="generate-title">
+    <div class="card-head">
+      <h2 id="generate-title">Générer l'audit</h2>
+      <a class="card-link" href="{{ help_url }}">{{ crate::assets::icon("info")|safe }}Modèles</a>
+    </div>
+    <div class="card-body stack">
+      <p class="muted">Modèle : {{ template_label }}. Générations aujourd'hui : {{ today }} sur {{ limit }}.</p>
+      {% if replaced %}
+      <p class="hint status-warn">{{ crate::assets::icon("alert")|safe }}Le modèle choisi pour cet audit n'existe plus : le modèle intégré sert à sa place.</p>
+      {% endif %}
+      {% if !missing.is_empty() %}
+      <div class="alert alert-warn" role="note">
+        {{ crate::assets::icon("alert")|safe }}
+        <div>
+          <p>Variables à compléter : elles deviendront « [À compléter : …] » dans le document.</p>
+          <ul class="missing-list">
+            {%- for name in missing %}
+            <li>{{ name }}</li>
+            {%- endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+      {% include "onelife/_generate.html" %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="versions-title">
+    <div class="card-head"><h2 id="versions-title">Versions</h2></div>
+    <div class="card-body">
+      {% if versions.is_empty() %}
+      <p class="muted">Pas encore de version : « Générer l'audit » crée la première.</p>
+      {% else %}
+      <ul class="audit-list" role="list">
+        {%- for version in versions %}
+        <li class="audit-row">
+          <a class="audit-main" href="{{ version.href }}">
+            <span class="audit-title">{{ version.label }} · {{ version.title }}</span>
+            <span class="audit-meta muted">{{ version.model }} · {{ version.tokens }} · {{ version.cost }} · {{ version.when }}</span>
+          </a>
+        </li>
+        {%- endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="points-title">
+    <div class="card-head"><h2 id="points-title">Points non repris{% if !points_of.is_empty() %} ({{ points_of }}){% endif %}</h2></div>
+    <div class="card-body">
+      {% if points.is_empty() %}
+      <p class="muted">{% if points_of.is_empty() %}Après une génération, l'IA liste ici ce qui est dans les notes mais pas dans le document.{% else %}Rien : tout ce qui est dans les notes est dans le document.{% endif %}</p>
+      {% else %}
+      <ul class="audit-points" role="list">
+        {%- for point in points %}
+        {% include "onelife/_point.html" %}
+        {%- endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT consultant_name, consultant_role, consultant_email, approver,\n                templates_folder_id, default_template, ai_model\n         FROM onelife_settings WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "consultant_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "consultant_role",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "consultant_email",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "approver",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "templates_folder_id",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "default_template",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "ai_model",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f2224efdef8367a392123fba1750287a31840ba4cd63a46f196b1440019f480d"
+}

@@ -18,6 +18,23 @@
       {#- Fenêtre « Ranger » (layout.html) : un autre espace, un dossier. -#}
       <button class="icon-btn" type="button" popovertarget="picker" hx-get="/destinations?note={{ id }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker aria-label="Ranger la note dans un autre dossier ou espace" title="Ranger dans un autre dossier ou espace">{{ crate::assets::icon("move")|safe }}</button>
 
+      {#- Note d'audit de 1Life (src/onelife/audit.rs, EditorLink) : la page de
+          l'audit, « Générer l'audit » (les notes) et « Exporter en Word ». -#}
+      {% if let Some(audit) = audit %}
+      <a class="icon-btn" href="{{ audit.page }}" aria-label="Page de l'audit" title="Page de l'audit{% if !audit.info.is_empty() %} · {{ audit.info }}{% endif %}">{{ crate::assets::icon("check")|safe }}</a>
+      {% if let Some(generate) = audit.generate %}
+      <button class="icon-btn" type="button" popovertarget="pm-note-generate" aria-label="Générer l'audit" title="Générer l'audit">{{ crate::assets::icon("convert")|safe }}</button>
+      <div id="pm-note-generate" class="pop-menu pop-generate" popover aria-label="Générer l'audit">
+        <p class="pop-title">Générer l'audit</p>
+        {% let readme = audit.readme %}
+        {% include "onelife/_generate.html" %}
+      </div>
+      {% endif %}
+      {% if let Some(word) = audit.word %}
+      <a class="icon-btn" href="{{ word }}" hx-boost="false" data-note-export aria-label="Exporter en Word" title="Exporter en Word">{{ crate::assets::icon("file")|safe }}</a>
+      {% endif %}
+      {% endif %}
+
       {#- Télécharger la note (src/notes/export.rs). Des liens ordinaires, hors
           htmx : la réponse est un fichier, et une erreur (service de
           conversion arrêté) s'affiche comme une page. app.js envoie d'abord

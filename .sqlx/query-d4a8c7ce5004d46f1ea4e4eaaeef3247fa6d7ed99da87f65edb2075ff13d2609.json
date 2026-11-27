@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_audit_runs (user_id, audit_id, model, status, started_at)\n         VALUES (?, ?, ?, 'running', ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "d4a8c7ce5004d46f1ea4e4eaaeef3247fa6d7ed99da87f65edb2075ff13d2609"
+}

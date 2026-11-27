@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% block title %}Commencer un audit · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Commencer un audit (src/onelife/audit.rs) : le client, la date, le titre,
+    l'approbateur et le modèle. Crée la note de notes dans le sous-dossier
+    Audit du client, puis ouvre l'éditeur. -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ list_url }}">{{ crate::assets::icon("arrow-left")|safe }}<span>Audit</span></a>
+    <h1>Commencer un audit</h1>
+  </div>
+</header>
+
+{% if no_clients %}
+<div class="empty-state">
+  {{ crate::assets::icon("users")|safe }}
+  <p>Pas encore de client</p>
+  <p class="muted">Un audit se fait pour un client : choisis d'abord le dossier des clients, ou crée un client.</p>
+  <a class="btn btn-primary" href="{{ clients_url }}">Ouvrir Clients</a>
+</div>
+{% else %}
+<section class="card form-card">
+  <div class="card-body">
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+    <form class="stack" method="post" action="{{ action }}">
+      <label class="field">
+        <span class="field-label">Client</span>
+        <select name="client" required>
+          {%- for client in clients %}
+          <option value="{{ client.id }}"{% if client.selected %} selected{% endif %}>{{ client.name }}</option>
+          {%- endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Date</span>
+        <input type="date" name="date" value="{{ date }}" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Titre</span>
+        <input type="text" name="titre" value="{{ title }}" maxlength="{{ max }}" autocomplete="off" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Approbateur</span>
+        <input type="text" name="approbateur" value="{{ approver }}" maxlength="{{ max }}" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Modèle</span>
+        <select name="modele">
+          {%- for choice in templates %}
+          <option value="{{ choice.key }}"{% if choice.key == template %} selected{% endif %}>{{ choice.label }}</option>
+          {%- endfor %}
+        </select>
+      </label>
+      <p class="hint">Une note « Notes d'audit » s'ouvre dans le dossier Audit du client : prends-y tes notes librement, puis « Générer l'audit ».</p>
+      <div class="space-actions">
+        <button class="btn btn-primary" type="submit">Commencer</button>
+        <a class="btn" href="{{ list_url }}">Annuler</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

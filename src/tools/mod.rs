@@ -563,23 +563,44 @@ pub enum NoResult {
     TooLong,
 }
 
+/// Nom du document de référence Word dans le dossier d'une tâche : toujours
+/// celui-ci. Le service le passe à pandoc (`--reference-doc`) quand il le
+/// trouve à côté d'un document à mettre en Word (SPEC, « 1Life — Audit en
+/// Word ») ; seul dashu écrit dans ce dossier.
+pub const REFERENCE_DOCX: &str = "reference.docx";
+
 /// Fabrique le PDF d'un document Markdown avec le service de conversion
 /// (pandoc et Typst, comme « Convertir › En PDF ») et renvoie son contenu.
 /// Le dossier de la tâche est effacé dans tous les cas, même si la personne
 /// a quitté la page entre-temps : l'attente tourne dans sa propre tâche.
 pub async fn export_pdf(state: &AppState, markdown: String) -> AppResult<Vec<u8>> {
+    export_document(state, markdown, Conversion::Pdf, None).await
+}
+
+/// Fabrique un document (PDF ou Word) à partir de Markdown, comme
+/// [`export_pdf`]. `reference` : le document de référence Word, copié dans
+/// le dossier de la tâche (le service ne voit que ce dossier).
+pub async fn export_document(
+    state: &AppState,
+    markdown: String,
+    to: Conversion,
+    reference: Option<Vec<u8>>,
+) -> AppResult<Vec<u8>> {
     let work_dir = state.config.work_dir.clone().ok_or(AppError::NotFound)?;
     let dir = new_export_dir(&work_dir).await?;
     let spec = JobSpec {
         task: Task::Convert,
         media: Media::Document,
         input: "input.md".into(),
-        output: "output.pdf".into(),
+        output: format!("output.{}", to.key()),
         preview: None,
-        to: Some(Conversion::Pdf),
+        to: Some(to),
         pages: None,
     };
     let prepared = async {
+        if let Some(reference) = reference.filter(|_| to == Conversion::Docx) {
+            tokio::fs::write(dir.join(REFERENCE_DOCX), reference).await?;
+        }
         let input = dir.join(&spec.input);
         tokio::fs::write(&input, markdown).await?;
         publish_job(&dir, &input, &spec).await
@@ -596,16 +617,21 @@ pub async fn export_pdf(state: &AppState, markdown: String) -> AppResult<Vec<u8>
         result
     })
     .await
-    .context("attente du PDF")?;
+    .context("attente du document")?;
+    let what = if to == Conversion::Pdf {
+        "Le PDF"
+    } else {
+        "Le fichier Word"
+    };
     waited.map_err(|reason| {
         AppError::Unavailable(match reason {
-            NoResult::Failed(message) => format!("Le PDF n'a pas pu être préparé. {message}"),
+            NoResult::Failed(message) => format!("{what} n'a pas pu être préparé. {message}"),
             NoResult::NotStarted => "Le service de conversion ne répond pas : il est occupé ou \
                                      arrêté. Réessaie dans un moment ; le Markdown, lui, se \
                                      télécharge toujours."
                 .into(),
             NoResult::TooLong => {
-                "Le PDF prend trop de temps à préparer. Réessaie dans un moment.".into()
+                format!("{what} prend trop de temps à préparer. Réessaie dans un moment.")
             }
         })
     })

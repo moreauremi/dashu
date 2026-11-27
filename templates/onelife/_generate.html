@@ -1,0 +1,25 @@
+{#- Formulaire « Générer l'audit » (src/onelife/audit.rs, Generate) : page de
+    l'audit et en-tête de l'éditeur des notes. Chaque modèle d'IA porte son
+    coût estimé. Sans clé ou trop long : bouton grisé, et pourquoi. Depuis
+    l'éditeur, app.js envoie d'abord les modifications en attente
+    (data-note-flush). -#}
+<form class="stack generate-form" method="post" action="{{ generate.action }}" data-note-flush>
+  <label class="field">
+    <span class="field-label">Modèle d'IA</span>
+    <select name="modele_ia"{% if !generate.ready || generate.too_long.is_some() %} disabled{% endif %}>
+      {%- for model in generate.models %}
+      <option value="{{ model.id }}"{% if model.selected %} selected{% endif %}>{{ model.label }}</option>
+      {%- endfor %}
+    </select>
+  </label>
+  {% if !generate.ready %}
+  <p class="hint status-warn">{{ crate::assets::icon("alert")|safe }}IA non configurée : la clé d'Anthropic manque sur le serveur (<a href="{{ readme }}" target="_blank" rel="noopener">README</a>).</p>
+  {% else if let Some(message) = generate.too_long %}
+  <p class="hint status-warn">{{ crate::assets::icon("alert")|safe }}{{ message }}</p>
+  {% else %}
+  <p class="hint">{{ generate.estimate }} : le modèle rempli et le texte des notes, sans fichiers ni images.</p>
+  {% endif %}
+  <div>
+    <button class="btn btn-primary" type="submit"{% if !generate.ready || generate.too_long.is_some() %} disabled{% endif %}>{{ crate::assets::icon("convert")|safe }}<span>Générer l'audit</span></button>
+  </div>
+</form>

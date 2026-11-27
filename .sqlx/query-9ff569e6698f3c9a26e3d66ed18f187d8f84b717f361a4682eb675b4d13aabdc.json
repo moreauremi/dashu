@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.id AS \"id!\", v.number AS \"number?: i64\", v.model AS \"model?: String\",\n                  v.cost_micro AS \"cost?: i64\"\n           FROM onelife_audits a\n           LEFT JOIN onelife_audit_versions v ON v.audit_id = a.id AND v.note_id = ?2\n           WHERE a.user_id = ?1 AND (a.notes_id = ?2 OR v.note_id = ?2)\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "number?: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "model?: String",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "cost?: i64",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9ff569e6698f3c9a26e3d66ed18f187d8f84b717f361a4682eb675b4d13aabdc"
+}

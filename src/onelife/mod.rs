@@ -7,12 +7,19 @@
 //! outils (masqué par défaut).
 //!
 //! Une page d'accueil, une carte par module. Clients est fait (SPEC,
-//! « 1Life — Clients », sous-module [`clients`]) ; les autres modules ont
-//! une page « Module à venir ». Aucun appel extérieur. Le dépôt est public :
-//! rien de propre à 1Life (vrai client, document, information interne) ne
-//! va ici ni dans les tests.
+//! « 1Life — Clients », sous-module [`clients`], avec l'encart Identité de
+//! [`fields`]), Audit aussi (« 1Life — Audit », [`audit`], qui appelle l'IA
+//! d'Anthropic par [`generation`]) ; les autres modules ont une page « Module
+//! à venir ». Les réglages de 1Life sont dans [`settings`]. Le dépôt est
+//! public : rien de propre à 1Life (vrai client, document, information
+//! interne) ne va ici ni dans les tests.
 
+pub mod audit;
 pub mod clients;
+pub mod fields;
+pub mod generation;
+pub mod settings;
+pub mod templates;
 
 use askama::Template;
 use axum::extract::Path;
@@ -52,8 +59,8 @@ pub const MODULES: &[Module] = &[
         id: "audit",
         name: "Audit",
         icon: "check",
-        summary: "Préparer et suivre un audit.",
-        soon: true,
+        summary: "Des notes d'audit au rapport, par l'IA.",
+        soon: false,
     },
     Module {
         id: "clients",
@@ -76,6 +83,8 @@ pub const MODULES: &[Module] = &[
 struct HomePage {
     shell: Shell,
     modules: &'static [Module],
+    /// `/e/<espace>/1life/reglages`
+    settings_url: String,
 }
 
 #[derive(Template)]
@@ -106,6 +115,7 @@ pub async fn home(ctx: Result<Ctx, Response>) -> AppResult<Response> {
         Err(back) => return Ok(back),
     };
     Ok(web::html(HomePage {
+        settings_url: format!("/e/{}/1life/reglages", ctx.active.slug),
         shell: ctx.shell(TOOL).await?,
         modules: MODULES,
     }))

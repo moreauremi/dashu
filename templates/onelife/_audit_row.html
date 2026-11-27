@@ -1,0 +1,15 @@
+{#- Une ligne de la liste des audits (page Audit et fiche client) :
+    src/onelife/audit.rs, Row. -#}
+<li class="audit-row">
+  <a class="audit-main" href="{{ audit.href }}">
+    <span class="audit-title">{{ audit.title }}</span>
+    <span class="audit-meta muted">{{ audit.client }} · {{ audit.date }}</span>
+  </a>
+  <span class="audit-status{% if audit.generated %} audit-done{% endif %}">{% if audit.generated %}Généré{% else %}Notes en cours{% endif %}</span>
+  <span class="audit-links">
+    <a href="{{ audit.notes }}">{{ crate::assets::icon("notes")|safe }}Notes</a>
+    {%- if let Some(latest) = audit.latest %}
+    <a href="{{ latest.href }}">{{ crate::assets::icon("file")|safe }}Audit {{ latest.label }}</a>
+    {%- endif %}
+  </span>
+</li>

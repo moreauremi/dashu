@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", title FROM notes\n           WHERE folder_id = ?2 AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ORDER BY title COLLATE NOCASE, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "06f42ec3a0b96f90482b07ad3afdad7afd7992c789fc0f7082475961824b9dca"
+}

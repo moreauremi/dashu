@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE onelife_audit_runs\n         SET status = 'failed', finished_at = ?,\n             message = 'Génération interrompue par un redémarrage du serveur : rien n''est créé.'\n         WHERE status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "bdbddbe94a97ab5e259536d97fd090f5c462ccf5899c03dae06727b41372dfcb"
+}

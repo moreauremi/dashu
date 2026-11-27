@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block title %}Modèles d'audit · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Aide des modèles d'audit (src/onelife/audit.rs) : syntaxe, variables,
+    consignes, marqueurs des notes, et le modèle intégré en exemple. La même
+    chose est dans le README (« Modèles d'audit »). -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ list_url }}">{{ crate::assets::icon("arrow-left")|safe }}<span>Audit</span></a>
+    <h1>Modèles d'audit</h1>
+  </div>
+  <a class="btn" href="{{ settings_url }}">{{ crate::assets::icon("settings")|safe }}<span>Réglages</span></a>
+</header>
+
+<div class="prose help-page">
+  <h2>Le modèle</h2>
+  <p>Un modèle est une note, ou un fichier <code>.md</code>, du dossier des modèles choisi dans les réglages de 1Life (un fichier se dépose par glisser-déposer dans ce dossier). Sans dossier, le modèle intégré ci-dessous sert. L'IA suit ses titres et leur ordre.</p>
+  <p>Il s'écrit en Markdown : titres de niveau 1 à 3 (<code>#</code>, <code>##</code>, <code>###</code>), listes, cases à cocher (<code>- [ ]</code>), tableaux et citations (<code>&gt;</code>).</p>
+
+  <h2>Les variables</h2>
+  <p>Le serveur les remplace avant l'envoi, à partir de la fiche du client, de l'audit et des réglages. Une variable vide ou inconnue devient « [À compléter : nom] », et la page de l'audit la signale.</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Valeur</th></tr></thead>
+    <tbody>
+      {%- for var in vars %}
+      <tr><td><code>{{ "{{" }}{{ var.name }}{{ "}}" }}</code></td><td>{{ var.label }}</td></tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+
+  <h2>Les consignes</h2>
+  <p>Une citation qui commence par « Consigne : » guide l'IA pour la partie où elle se trouve, puis disparaît du document, même si l'IA l'a recopiée :</p>
+  <pre><code>## Recommandations
+
+&gt; Consigne : une recommandation par constat important, avec sa priorité.</code></pre>
+  <p>Pas de commentaires HTML : l'éditeur de notes ne les garde pas.</p>
+
+  <h2>Les marqueurs des notes</h2>
+  <p>Facultatifs, en début de ligne dans les notes d'audit. L'IA s'en sert sans jamais en parler dans le document.</p>
+  <ul>
+    <li><code>OP:</code> une réponse d'Open-Prod (ce que le logiciel sait faire) ;</li>
+    <li><code>manque:</code> une information manquante ;</li>
+    <li><code>statut:</code> un état d'avancement ;</li>
+    <li><code>!!</code> un point bloquant.</li>
+  </ul>
+  <p>Les notes peuvent aussi être rangées par service, en tableaux « Besoin | Piste » : l'IA redistribue chaque élément dans le bon domaine du modèle, une seule fois.</p>
+
+  <h2>Ce qui part chez Anthropic</h2>
+  <p>Le modèle aux variables remplies et le texte des notes. Ni fichiers ni images : leurs liens restent tels quels. Le document généré est une note ordinaire, à relire et à modifier ; ce que l'IA n'a pas repris des notes s'affiche sur la page de l'audit.</p>
+
+  <h2>Le modèle intégré</h2>
+  <pre><code>{{ builtin }}</code></pre>
+</div>
+{% endblock %}

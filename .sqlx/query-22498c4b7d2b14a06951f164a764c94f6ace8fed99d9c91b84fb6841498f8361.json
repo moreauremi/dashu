@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO onelife_settings (user_id, updated_at, consultant_name, consultant_role,\n                                       consultant_email, approver, default_template, ai_model)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n         ON CONFLICT (user_id) DO UPDATE SET updated_at = excluded.updated_at,\n             consultant_name = excluded.consultant_name,\n             consultant_role = excluded.consultant_role,\n             consultant_email = excluded.consultant_email,\n             approver = excluded.approver,\n             default_template = excluded.default_template,\n             ai_model = excluded.ai_model",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "22498c4b7d2b14a06951f164a764c94f6ace8fed99d9c91b84fb6841498f8361"
+}

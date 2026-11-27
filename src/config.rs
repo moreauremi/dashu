@@ -51,6 +51,9 @@ pub struct Config {
     /// (SPEC v2, « Outils : téléchargeur de liens »). `None` : l'outil
     /// n'existe pas sur ce serveur.
     pub downloader_email: Option<String>,
+    /// L'IA de 1Life (module Audit) : la clé d'Anthropic et les modèles
+    /// proposés. Sans clé, la génération n'est pas proposée.
+    pub ai: AiConfig,
     /// Réglages de l'instance donnés par l'environnement : ils ne se changent
     /// pas depuis le site (Réglages › Instance les montre verrouillés).
     pub from_env: FromEnv,
@@ -95,6 +98,112 @@ pub fn default_quota(env: &Env) -> anyhow::Result<u64> {
         Some(value) => crate::files::quota::parse_size(&value)
             .map_err(|error| anyhow::anyhow!("FILES_QUOTA : {error}")),
     }
+}
+
+/// L'IA de 1Life (SPEC, « 1Life — Audit ») : l'API d'Anthropic, appelée par
+/// dashu lui-même (le service de conversion n'a pas de réseau).
+#[derive(Clone)]
+pub struct AiConfig {
+    /// `ANTHROPIC_API_KEY`, tapée par Rémi sur le serveur. Jamais affichée ni
+    /// journalisée. `None` : « IA non configurée ».
+    pub key: Option<String>,
+    /// `ANTHROPIC_BASE_URL`, sans barre finale : l'API d'Anthropic, ou le faux
+    /// serveur des tests.
+    pub base_url: String,
+    /// `ONELIFE_AI_MODELS` : les modèles proposés, le premier par défaut.
+    pub models: Vec<String>,
+    /// Délai d'une génération : 5 minutes (moins dans les tests).
+    pub timeout: std::time::Duration,
+}
+
+/// Adresse de l'API d'Anthropic.
+pub const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+
+/// Modèles proposés sans `ONELIFE_AI_MODELS` : Haiku 5.5 par défaut, ou
+/// Sonnet 5.5.
+pub const DEFAULT_AI_MODELS: [&str; 2] = ["claude-haiku-5-5", "claude-sonnet-5-5"];
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            key: None,
+            base_url: ANTHROPIC_BASE_URL.into(),
+            models: DEFAULT_AI_MODELS.map(String::from).to_vec(),
+            timeout: std::time::Duration::from_secs(300),
+        }
+    }
+}
+
+impl AiConfig {
+    fn from_env(env: &Env) -> Self {
+        let mut ai = Self {
+            key: env.get("ANTHROPIC_API_KEY").map(|k| k.trim().to_string()),
+            ..Self::default()
+        };
+        if let Some(base) = env.get("ANTHROPIC_BASE_URL") {
+            ai.base_url = base.trim().trim_end_matches('/').to_string();
+        }
+        if let Some(models) = env.get("ONELIFE_AI_MODELS") {
+            let models: Vec<String> = models
+                .split(',')
+                .map(|m| m.trim().to_string())
+                .filter(|m| !m.is_empty())
+                .collect();
+            if !models.is_empty() {
+                ai.models = models;
+            }
+        }
+        ai
+    }
+}
+
+/// La clé n'apparaît jamais dans un `{:?}` (logs, messages d'erreur).
+impl std::fmt::Debug for AiConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AiConfig")
+            .field("key", &self.key.as_ref().map(|_| "<masquée>"))
+            .field("base_url", &self.base_url)
+            .field("models", &self.models)
+            .field("timeout", &self.timeout)
+            .finish()
+    }
+}
+
+/// Tarif d'un modèle d'IA, en dollars par million de tokens.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AiPrice {
+    pub input: f64,
+    pub output: f64,
+    /// Au-delà de ce nombre de tokens d'entrée, toute la demande passe à un
+    /// autre tarif (entrée, sortie) : Haiku 5.5 coûte cinq fois plus au-delà
+    /// de 100 000 tokens.
+    pub long: Option<(u64, f64, f64)>,
+}
+
+/// Les tarifs connus (SPEC, « 1Life — Audit »). Un modèle absent : coût
+/// inconnu, affiché comme tel. Changer un tarif = changer une ligne.
+pub const AI_PRICES: &[(&str, AiPrice)] = &[
+    (
+        "claude-haiku-5-5",
+        AiPrice {
+            input: 0.10,
+            output: 0.50,
+            long: Some((100_000, 0.50, 2.50)),
+        },
+    ),
+    (
+        "claude-sonnet-5-5",
+        AiPrice {
+            input: 2.0,
+            output: 10.0,
+            long: None,
+        },
+    ),
+];
+
+/// Le tarif d'un modèle, s'il est connu.
+pub fn ai_price(model: &str) -> Option<AiPrice> {
+    AI_PRICES.iter().find(|(m, _)| *m == model).map(|(_, p)| *p)
 }
 
 /// Accès à l'API JSON (`/api/v1`) par un programme, par exemple un assistant.
@@ -301,6 +410,7 @@ impl Config {
                 .get("DOWNLOADER_EMAIL")
                 .map(|email| email.trim().to_lowercase())
                 .filter(|email| !email.is_empty()),
+            ai: AiConfig::from_env(env),
             files,
             from_env,
         })

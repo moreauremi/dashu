@@ -627,6 +627,10 @@ struct EditPage {
     space: Option<crate::spaces::SpaceTag>,
     /// Espace de la note : une image collée y est envoyée.
     space_id: i64,
+    /// Une note d'audit de 1Life (notes ou version) : « Générer l'audit »,
+    /// « Exporter en Word » et le lien vers l'audit. Seulement pour un compte
+    /// autorisé à 1Life.
+    audit: Option<crate::onelife::audit::EditorLink>,
 }
 
 /// `GET /notes/{id}`
@@ -692,6 +696,7 @@ pub async fn edit_page(
         back_label,
         space: ctx.tag_of(note.space_id),
         space_id: note.space_id,
+        audit: crate::onelife::audit::editor_link(&state, &ctx, id).await?,
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))
