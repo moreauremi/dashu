@@ -16,10 +16,12 @@ const PAGES: &[&str] = &[
     "/1life/cr",
     "/1life/audit",
     "/1life/clients",
+    "/1life/taches",
     "/e/taff/1life",
     "/e/taff/1life/cr",
     "/e/taff/1life/audit",
     "/e/taff/1life/clients",
+    "/e/taff/1life/taches",
 ];
 
 /// Identifiants des outils de la barre latérale.
@@ -192,8 +194,9 @@ async fn un_compte_autorise_active_1life_par_espace() {
         );
     }
 
-    // Les quatre pages s'ouvrent : l'accueil et ses trois cartes, puis chaque
-    // module. Compte rendu et Audit sont « Bientôt » (« Module à venir ») ;
+    // Les cinq pages s'ouvrent : l'accueil et ses quatre cartes, puis chaque
+    // module. Compte rendu, Audit et Tâches sont « Bientôt » (« Module à
+    // venir ») ;
     // Clients est fait depuis le 26 novembre 2026 (SPEC, « 1Life — Clients ») :
     // sa page est la liste des clients, éprouvée dans
     // tests/outil_1life_clients.rs.
@@ -207,6 +210,7 @@ async fn un_compte_autorise_active_1life_par_espace() {
         ("cr", "Compte rendu", true),
         ("audit", "Audit", true),
         ("clients", "Clients", false),
+        ("taches", "Tâches", true),
     ] {
         assert!(
             home.body.contains(&format!(r#"href="/e/taff/1life/{id}""#)),
@@ -226,7 +230,7 @@ async fn un_compte_autorise_active_1life_par_espace() {
             );
         }
     }
-    assert_eq!(home.body.matches("Bientôt").count(), 2);
+    assert_eq!(home.body.matches("Bientôt").count(), 3);
 
     // Bob, non autorisé, ne le voit toujours pas.
     let mut bob = app.logged_in(BOB).await;
