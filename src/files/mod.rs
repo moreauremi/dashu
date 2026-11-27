@@ -974,6 +974,15 @@ pub(crate) async fn move_into(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
+    // Une conversion en cours suit son fichier : son résultat arrivera dans
+    // le nouvel espace, à côté de lui (comme pour un dossier déplacé).
+    sqlx::query!(
+        "UPDATE jobs SET space_id = ? WHERE file_id = ? AND status IN ('queued', 'running')",
+        space,
+        id
+    )
+    .execute(db)
+    .await?;
     Ok(folder)
 }
 
@@ -1000,13 +1009,20 @@ pub async fn move_to_space(
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
     let folder = move_into(&state.db, ctx.user.id, id, target.id, folder).await?;
-    let message = match folder {
+    let mut message = match folder {
         Some(_) => format!(
             "Fichier rangé dans {}",
             place_label(&ctx, &state.db, target, folder).await?
         ),
         None => format!("Fichier déplacé vers {}", target.name),
     };
+    // Un lien de partage dont l'auteur n'a pas accès au nouvel espace ne
+    // marche plus : on le dit tout de suite.
+    match share::broken_links(&state.db, id).await? {
+        0 => {}
+        1 => message.push_str(" · 1 lien de partage ne marche plus"),
+        n => message.push_str(&format!(" · {n} liens de partage ne marchent plus")),
+    }
     ctx.flash_ok(message).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE jobs SET space_id = ? WHERE file_id = ? AND status IN ('queued', 'running')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "c54a8b2cb121544f5ac47c0e2883ced80832dfb34dedf324ab848f5ed21073bd"
+}

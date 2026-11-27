@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT body_md FROM notes WHERE space_id = ? AND id != ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "body_md",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bfb7d871fbe4b0eecdeaab4ef75dbc01388e272b902ecb2eb04cc7068ce77a7c"
+}

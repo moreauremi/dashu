@@ -791,3 +791,183 @@ async fn l_indicateur_mene_a_l_espace_de_la_conversion() {
         common::between(&page.body, "id=\"jobs-indicator\"", "</a>").unwrap_or_default();
     assert!(indicator.contains("href=\"/e/ecole/files\""), "{indicator}");
 }
+
+// ---------------------------------------------------------------------
+// Lot 5 : ranger ne casse rien
+// ---------------------------------------------------------------------
+
+/// Envoie un fichier dans l'espace `slug` ; rend son identifiant.
+async fn sent(app: &TestApp, client: &mut common::Client, slug: &str, name: &str) -> i64 {
+    client.post("/space", &[("slug", slug)]).await;
+    client.upload(name, b"contenu").await;
+    sqlx::query_scalar("SELECT id FROM files WHERE name = ? ORDER BY id DESC")
+        .bind(name)
+        .fetch_one(&app.state.db)
+        .await
+        .expect("fichier envoyé")
+}
+
+/// Espace et dossier d'un fichier.
+async fn place_of(app: &TestApp, file: i64) -> (i64, Option<i64>) {
+    sqlx::query_as("SELECT space_id, folder_id FROM files WHERE id = ?")
+        .bind(file)
+        .fetch_one(&app.state.db)
+        .await
+        .expect("fichier")
+}
+
+/// Note de l'espace `slug` dont le texte affiche ces fichiers.
+async fn note_showing(client: &mut common::Client, slug: &str, title: &str, files: &[i64]) -> i64 {
+    let id = titled_note(client, slug, title, None).await;
+    let body: String = files
+        .iter()
+        .map(|f| format!("![image](/files/{f}/raw)\n"))
+        .collect();
+    client
+        .post(
+            &format!("/notes/{id}"),
+            &[("title", title), ("body_md", &body)],
+        )
+        .await;
+    id
+}
+
+#[tokio::test]
+async fn les_images_suivent_leur_note() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let taff = app.space_id(ALICE, "taff").await;
+    let alone = sent(&app, &mut alice, "ecole", "schema.png").await;
+    let common_img = sent(&app, &mut alice, "ecole", "logo.png").await;
+    let elsewhere = sent(&app, &mut alice, "perso", "photo.png").await;
+    let perso = app.space_id(ALICE, "perso").await;
+    let id = note_showing(
+        &mut alice,
+        "ecole",
+        "Cours",
+        &[alone, common_img, elsewhere],
+    )
+    .await;
+    // Une autre note d'École affiche aussi le logo : il reste.
+    note_showing(&mut alice, "ecole", "Autre cours", &[common_img]).await;
+
+    let moved = alice
+        .post(
+            &format!("/notes/{id}/move"),
+            &[("space_id", &taff.to_string())],
+        )
+        .await;
+    let page = alice.follow(moved).await;
+    assert!(page.body.contains("1 image la suit"), "{}", page.body);
+    assert_eq!(place_of(&app, alone).await, (taff, None));
+    assert_eq!(place_of(&app, common_img).await.0, ecole);
+    assert_eq!(place_of(&app, elsewhere).await.0, perso);
+}
+
+#[tokio::test]
+async fn un_dossier_deplace_emmene_les_images_de_ses_notes() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let taff = app.space_id(ALICE, "taff").await;
+    let math = folder(&app, &mut alice, "ecole", "Math").await;
+    let image = sent(&app, &mut alice, "ecole", "figure.png").await;
+    let id = titled_note(&mut alice, "ecole", "Exercice", Some(math)).await;
+    alice
+        .post(
+            &format!("/notes/{id}"),
+            &[
+                ("title", "Exercice"),
+                ("body_md", &format!("![f](/files/{image}/raw)")),
+            ],
+        )
+        .await;
+    let moved = alice
+        .post(
+            &format!("/folders/{math}/move"),
+            &[("space_id", &taff.to_string())],
+        )
+        .await;
+    let page = alice.follow(moved).await;
+    assert!(
+        page.body.contains("1 image de ses notes le suit"),
+        "{}",
+        page.body
+    );
+    assert_eq!(place_of(&app, image).await, (taff, Some(math)));
+}
+
+#[tokio::test]
+async fn une_conversion_en_cours_suit_son_fichier() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let user = app.user_id(ALICE).await;
+    let ecole = app.space_id(ALICE, "ecole").await;
+    let taff = app.space_id(ALICE, "taff").await;
+    let film = sent(&app, &mut alice, "ecole", "film.mov").await;
+    sqlx::query(
+        "INSERT INTO jobs (user_id, space_id, file_id, kind, source_name, source_size, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'convert', 'film.mov', 7, 'running', 0, 0)",
+    )
+    .bind(user)
+    .bind(ecole)
+    .bind(film)
+    .execute(&app.state.db)
+    .await
+    .expect("conversion");
+    alice
+        .post(
+            &format!("/files/{film}/move"),
+            &[("space_id", &taff.to_string())],
+        )
+        .await;
+    let space: i64 = sqlx::query_scalar("SELECT space_id FROM jobs WHERE file_id = ?")
+        .bind(film)
+        .fetch_one(&app.state.db)
+        .await
+        .expect("conversion");
+    assert_eq!(space, taff);
+}
+
+#[tokio::test]
+async fn un_lien_devenu_inutilisable_le_dit() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let mut bob = app.logged_in(BOB).await;
+    let slug = app.share_space(ALICE, "ecole", BOB).await;
+    let taff = app.space_id(ALICE, "taff").await;
+    let file = sent(&app, &mut alice, "ecole", "rapport.pdf").await;
+    // Bob partage le fichier de l'espace commun.
+    bob.with_header("x-espace", &slug)
+        .post(&format!("/files/{file}/share"), &[("duree", "1j")])
+        .await;
+
+    // La fenêtre « Ranger » prévient : l'espace est partagé.
+    let picker = alice
+        .get_fragment(&format!("/destinations?fichier={file}"))
+        .await;
+    assert!(picker.body.contains("est partagé"), "{}", picker.body);
+    assert!(picker.body.contains(">partagé<"));
+
+    // Alice le range dans son Taff : le lien de Bob ne marche plus, et c'est dit.
+    let moved = alice
+        .post(
+            &format!("/files/{file}/move"),
+            &[("space_id", &taff.to_string())],
+        )
+        .await;
+    let page = alice.follow(moved).await;
+    assert!(
+        page.body.contains("1 lien de partage ne marche plus"),
+        "{}",
+        page.body
+    );
+    let view = alice.get(&format!("/e/taff/files/{file}")).await;
+    assert!(
+        view.body
+            .contains("Inutilisable : son auteur n'a plus accès à cet espace")
+    );
+    // Et la liste ne le marque plus comme partagé.
+    let list = alice.get("/e/taff/files").await;
+    assert!(!list.body.contains("file-shared"));
+}

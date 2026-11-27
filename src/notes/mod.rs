@@ -853,6 +853,15 @@ pub async fn move_to_space(
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = folders::parse_id(form.folder_id.as_deref())?;
     let folder = folders::target(&state.db, ctx.user.id, target.id, folder).await?;
+    // L'espace d'où elle part : ses images la suivent (voir `carry_images`).
+    let from = sqlx::query_scalar!(
+        "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
     let moved = sqlx::query!(
         "UPDATE notes SET space_id = ?, folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         target.id,
@@ -866,18 +875,100 @@ pub async fn move_to_space(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
-    let message = match folder {
+    let carried = carry_images(&state.db, ctx.user.id, id, from, target.id, folder).await?;
+    let mut message = match folder {
         Some(_) => format!(
             "Note rangée dans {}",
             crate::files::place_label(&ctx, &state.db, target, folder).await?
         ),
         None => format!("Note déplacée vers {}", target.name),
     };
+    match carried {
+        0 => {}
+        1 => message.push_str(" · 1 image la suit"),
+        n => message.push_str(&format!(" · {n} images la suivent")),
+    }
     ctx.flash_ok(message).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/notes",
     }))
+}
+
+/// Les fichiers de dashu qu'une note affiche ou cite : les identifiants des
+/// adresses `/files/<id>` de son Markdown (`/files/12/raw` d'une image
+/// collée, `/files/12` d'un lien), sans doublon.
+pub fn attachments(body: &str) -> Vec<i64> {
+    let mut ids = Vec::new();
+    for (at, _) in body.match_indices("/files/") {
+        let rest = &body[at + "/files/".len()..];
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        // Le nombre doit s'arrêter là (pas « /files/12abc »).
+        let next = rest[digits.len()..].chars().next();
+        if digits.is_empty() || next.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            continue;
+        }
+        if let Ok(id) = digits.parse::<i64>()
+            && !ids.contains(&id)
+        {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
+/// Déplace avec une note les images (et fichiers liés) qu'elle affiche,
+/// quand elle change d'espace (SPEC, « Parcours et espaces ») : sinon, un
+/// membre du nouvel espace qui n'a pas accès à l'ancien verrait des images
+/// cassées. Un fichier suit s'il est encore dans l'espace de départ et
+/// qu'aucune autre note de cet espace ne l'affiche ; il va dans le dossier
+/// de la note. Rend le nombre de fichiers déplacés.
+pub(crate) async fn carry_images(
+    db: &SqlitePool,
+    user: i64,
+    note: i64,
+    from: i64,
+    to: i64,
+    folder: Option<i64>,
+) -> AppResult<usize> {
+    if from == to {
+        return Ok(0);
+    }
+    let body = sqlx::query_scalar!("SELECT body_md FROM notes WHERE id = ?", note)
+        .fetch_optional(db)
+        .await?
+        .unwrap_or_default();
+    let wanted = attachments(&body);
+    if wanted.is_empty() {
+        return Ok(0);
+    }
+    // Ce que les autres notes de l'espace de départ affichent reste.
+    let mut kept = Vec::new();
+    for other in sqlx::query_scalar!(
+        "SELECT body_md FROM notes WHERE space_id = ? AND id != ?",
+        from,
+        note
+    )
+    .fetch_all(db)
+    .await?
+    {
+        kept.extend(attachments(&other));
+    }
+    let mut carried = 0;
+    for id in wanted.into_iter().filter(|id| !kept.contains(id)) {
+        let here = sqlx::query_scalar!(
+            r#"SELECT id AS "id!" FROM files WHERE id = ? AND space_id = ? AND expires_at IS NULL"#,
+            id,
+            from
+        )
+        .fetch_optional(db)
+        .await?;
+        if here.is_some() {
+            crate::files::move_into(db, user, id, to, folder).await?;
+            carried += 1;
+        }
+    }
+    Ok(carried)
 }
 
 /// Le sélecteur « Dossier » de l'éditeur, à côté des tags.
@@ -1223,6 +1314,14 @@ mod tests {
     fn extrait_de_recherche_echappe() {
         let raw = format!("<b>{MARK_OPEN}mot{MARK_CLOSE}</b>");
         assert_eq!(mark_matches(&raw), "&lt;b&gt;<mark>mot</mark>&lt;/b&gt;");
+    }
+
+    #[test]
+    fn fichiers_cites_par_une_note() {
+        let body = "![photo](/files/12/raw) et [cours](/files/7), encore ![x](/files/12/raw)
+                    `/files/99abc` /files/ seul, /files/3?depuis=x";
+        assert_eq!(attachments(body), vec![12, 7, 3]);
+        assert!(attachments("aucun fichier").is_empty());
     }
 
     #[test]

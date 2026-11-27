@@ -2,6 +2,10 @@
     un bouton par espace et par dossier, à tous les niveaux. Chaque choix envoie
     le formulaire de déplacement de l'élément ; l'endroit actuel est grisé. -#}
 <p class="pop-title" id="picker-title">{{ title }}</p>
+{#- Sortir un élément d'un espace partagé le retire aux autres membres. -#}
+{% if let Some(space) = leaving_shared %}
+<p class="hint status-warn">{{ crate::assets::icon("alert")|safe }}« {{ space }} » est partagé : rangé dans un autre espace, cet élément n'y sera plus pour les autres membres.</p>
+{% endif %}
 <ul class="dest-list" role="list">
   {%- for dest in items %}
   <li>
@@ -14,6 +18,7 @@
       <button class="dest dest-d{{ dest.depth }}" type="submit" data-accent="{{ dest.color }}"{% if dest.current %} aria-current="true"{% endif %}{% if dest.current || dest.disabled %} disabled{% endif %}>
         {%- if dest.depth == 0 %}<span class="dot" aria-hidden="true"></span>{% else %}{{ crate::assets::icon("folder")|safe }}{% endif -%}
         <span class="dest-name">{{ dest.name }}</span>
+        {%- if dest.shared %}<span class="dest-here">partagé</span>{% endif %}
         {%- if dest.current %}<span class="dest-here">Ici</span>{% endif %}
       </button>
     </form>

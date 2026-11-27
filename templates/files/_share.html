@@ -22,11 +22,15 @@
     {%- endfor %}
   </div>
   {%- if !links.is_empty() %}
-  <p class="pop-title">Liens valables</p>
+  <p class="pop-title">Liens de partage</p>
   <ul class="share-links" role="list">
     {%- for link in links %}
     <li>
+      {% if link.broken %}
+      <span class="status-warn">{{ crate::assets::icon("alert")|safe }}Inutilisable : son auteur n'a plus accès à cet espace <span class="muted">· {{ link.created }}</span></span>
+      {% else %}
       <span>{{ crate::assets::icon("link")|safe }}{{ link.expires }} <span class="muted">· {{ link.created }}</span></span>
+      {% endif %}
       <form hx-post="/files/{{ id }}/share/{{ link.id }}/revoke" hx-target="#file-share" hx-swap="outerHTML">
         <button class="btn" type="submit">Révoquer</button>
       </form>

@@ -40,6 +40,10 @@ pub struct LinkRow {
     pub expires: String,
     /// « créé il y a 5 min »
     pub created: String,
+    /// Le lien ne marche plus : son auteur n'a plus accès à l'espace du
+    /// fichier (fichier rangé ailleurs, membre parti). La page publique le
+    /// refuse ; on le dit au lieu de le montrer comme valable.
+    pub broken: bool,
 }
 
 #[derive(Template)]
@@ -58,7 +62,9 @@ impl ShareFragment {
     pub(crate) async fn load(db: &SqlitePool, user: i64, id: i64) -> AppResult<Self> {
         let now = time::now();
         let links = sqlx::query!(
-            r#"SELECT l.id AS "id!", l.expires_at, l.created_at FROM share_links l
+            r#"SELECT l.id AS "id!", l.expires_at, l.created_at,
+                      f.space_id NOT IN (SELECT space_id FROM space_access WHERE user_id = l.user_id) AS "broken!: bool"
+               FROM share_links l
                JOIN files f ON f.id = l.file_id
                WHERE l.file_id = ?2 AND l.revoked_at IS NULL AND l.expires_at > ?3
                  AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
@@ -77,6 +83,7 @@ impl ShareFragment {
                 crate::tools::time_left(row.expires_at, now)
             ),
             created: format!("créé {}", time::ago(row.created_at, now)),
+            broken: row.broken,
         })
         .collect();
         Ok(Self {
@@ -221,6 +228,21 @@ pub async fn revoke(
     Ok(web::html(ShareFragment::load(&state.db, user, id).await?))
 }
 
+/// Liens encore valables d'un fichier que leur auteur ne peut plus servir
+/// (il n'a pas accès à l'espace du fichier) : un déplacement le dit.
+pub(crate) async fn broken_links(db: &SqlitePool, file: i64) -> AppResult<i64> {
+    let now = time::now();
+    Ok(sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!: i64" FROM share_links l JOIN files f ON f.id = l.file_id
+           WHERE l.file_id = ?1 AND l.revoked_at IS NULL AND l.expires_at > ?2
+             AND f.space_id NOT IN (SELECT space_id FROM space_access WHERE user_id = l.user_id)"#,
+        file,
+        now
+    )
+    .fetch_one(db)
+    .await?)
+}
+
 /// Les fichiers accessibles au compte (les siens et ceux de ses espaces) qui ont un lien valable (repère dans la liste).
 pub(crate) async fn shared_files(db: &SqlitePool, user: i64) -> AppResult<HashSet<i64>> {
     let now = time::now();
@@ -228,7 +250,8 @@ pub(crate) async fn shared_files(db: &SqlitePool, user: i64) -> AppResult<HashSe
         r#"SELECT DISTINCT l.file_id AS "file_id!" FROM share_links l
            JOIN files f ON f.id = l.file_id
            WHERE f.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)
-             AND l.revoked_at IS NULL AND l.expires_at > ?2"#,
+             AND l.revoked_at IS NULL AND l.expires_at > ?2
+             AND f.space_id IN (SELECT space_id FROM space_access WHERE user_id = l.user_id)"#,
         user,
         now
     )
