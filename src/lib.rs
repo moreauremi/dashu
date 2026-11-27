@@ -407,7 +407,7 @@ pub fn build_router(state: AppState) -> Router {
             get(spaces::delete_page).post(spaces::delete),
         )
         // Corbeille
-        .route("/settings/trash", get(trash::page::show))
+        .route("/settings/trash", get(trash::page::old_address))
         .route("/settings/trash/empty", post(trash::page::empty))
         .route(
             "/settings/trash/{kind}/{id}/restore",

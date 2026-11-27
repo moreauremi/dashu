@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT t.kind AS \"kind!: String\", t.id AS \"id!: i64\", t.name AS \"name!: String\",\n                  t.space_id AS \"space_id!: i64\", t.folder_id AS \"folder_id: i64\",\n                  t.origin AS \"origin!: String\", t.color AS \"color!: String\",\n                  t.deleted_by AS \"by: i64\", u.email AS \"email?: String\",\n                  u.first_name AS \"first_name?: String\", u.last_name AS \"last_name?: String\",\n                  t.deleted_via AS \"via: String\", t.deleted_at AS \"deleted_at!: i64\",\n                  t.op AS \"op: i64\"\n           FROM (\n               SELECT 'note' AS kind, n.id, n.title AS name, s.id AS space_id,\n                      n.trash_folder_id AS folder_id, s.name AS origin, s.color,\n                      n.deleted_by, n.deleted_via, n.deleted_at, n.trash_op AS op\n                 FROM notes n JOIN trash_access a ON a.trash_id = n.space_id\n                 JOIN spaces s ON s.id = a.space_id\n                WHERE a.user_id = ?1 AND n.trash_root = 1\n               UNION ALL\n               SELECT 'fichier', f.id, f.name, s.id, f.trash_folder_id, s.name, s.color,\n                      f.deleted_by, f.deleted_via, f.deleted_at, f.trash_op\n                 FROM files f JOIN trash_access a ON a.trash_id = f.space_id\n                 JOIN spaces s ON s.id = a.space_id\n                WHERE a.user_id = ?1 AND f.trash_root = 1\n               UNION ALL\n               SELECT 'dossier', d.id, coalesce(d.trash_name, d.name), s.id, d.trash_folder_id,\n                      s.name, s.color, d.deleted_by, d.deleted_via, d.deleted_at, d.trash_op\n                 FROM folders d JOIN trash_access a ON a.trash_id = d.space_id\n                 JOIN spaces s ON s.id = a.space_id\n                WHERE a.user_id = ?1 AND d.trash_root = 1\n               UNION ALL\n               SELECT 'espace', s.id, s.name, s.id, NULL, s.name, s.color,\n                      s.deleted_by, s.deleted_via, s.deleted_at, NULL\n                 FROM spaces s WHERE s.user_id = ?1 AND s.deleted_at IS NOT NULL\n           ) t\n           LEFT JOIN users u ON u.id = t.deleted_by\n           ORDER BY t.deleted_at DESC, t.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "kind!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "id!: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!: String",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "space_id!: i64",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "folder_id: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "origin!: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "color!: String",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "by: i64",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "email?: String",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "first_name?: String",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_name?: String",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "via: String",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "deleted_at!: i64",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "op: i64",
+        "ordinal": 13,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      null,
+      true,
+      false,
+      true,
+      null,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "0f13e81f01acdfd21aeb1378a859fa6a3b78f95def12fa7f92e06c99b24bbd9b"
+}

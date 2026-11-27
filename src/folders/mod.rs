@@ -614,7 +614,13 @@ pub async fn delete(
             label(&space.name, &folders, folder.parent_id)
         )
     };
-    ctx.flash_ok(message).await?;
+    ctx.flash_link(
+        "ok",
+        &message,
+        crate::trash::page::PLACE,
+        "Ouvrir la corbeille",
+    )
+    .await?;
     Ok(see_other(&back))
 }
 

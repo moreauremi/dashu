@@ -774,7 +774,7 @@ async fn supprimer_un_dossier_vide_ou_non() {
     let vide = folder(&app, "Vide").await;
     let page = alice.get("/files").await;
     let row = common::between(&page.body, &format!("dossier={vide}\""), "</li>").unwrap();
-    assert!(row.contains("hx-confirm=\"Supprimer le dossier « Vide » ?\""));
+    assert!(row.contains("hx-confirm=\"Mettre le dossier vide « Vide » à la corbeille ?\""));
     let deleted = alice.post(&format!("/folders/{vide}/delete"), &[]).await;
     assert_eq!(deleted.location(), "/e/ecole/files?dossier=espace");
     assert!(
@@ -1988,7 +1988,10 @@ async fn transferer_et_supprimer_au_milieu_de_l_arborescence() {
     ] {
         assert!(!exists(&app, table, name).await, "{table} {name}");
     }
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(
         trash.body.contains("2 notes, 1 fichier, 4 sous-dossiers"),
         "{}",

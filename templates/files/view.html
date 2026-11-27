@@ -64,7 +64,7 @@
       </div>
     </details>
     {% endif %}
-    <form method="post" action="/files/{{ id }}/delete" hx-confirm="Supprimer définitivement « {{ name }} » ?">
+    <form method="post" action="/files/{{ id }}/delete" hx-confirm="Mettre « {{ name }} » à la corbeille ? Il y reste 30 jours.">
       <input type="hidden" name="next" value="{{ after_delete }}">
       <button class="btn" type="submit">{{ crate::assets::icon("trash")|safe }}<span>Supprimer</span></button>
     </form>

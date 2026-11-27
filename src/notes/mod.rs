@@ -295,10 +295,17 @@ pub fn mark_matches(text: &str) -> String {
 }
 
 pub(crate) fn display_title(title: &str) -> String {
+    escape(&plain_title(title))
+}
+
+/// Titre d'une note, sans échappement : « Sans titre » pour un titre vide.
+/// Pour un gabarit askama ou un message, qui échappent eux-mêmes (sinon
+/// « R&D » s'afficherait « R&amp;D »).
+pub(crate) fn plain_title(title: &str) -> String {
     if title.trim().is_empty() {
         "Sans titre".into()
     } else {
-        escape(title)
+        title.to_string()
     }
 }
 
@@ -897,8 +904,13 @@ pub async fn delete(
 ) -> AppResult<Response> {
     // Dans la corbeille, pas effacée : 30 jours pour la restaurer.
     crate::trash::note(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
-    ctx.flash_ok("Note mise dans la corbeille (Réglages › Corbeille)")
-        .await?;
+    ctx.flash_link(
+        "ok",
+        "Note mise dans la corbeille, pour 30 jours",
+        crate::trash::page::PLACE,
+        "Ouvrir la corbeille",
+    )
+    .await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/notes",

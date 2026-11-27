@@ -211,6 +211,9 @@ pub struct ListQuery {
     q: Option<String>,
     /// Filtre par tag.
     tag: Option<String>,
+    /// Dans la corbeille : une sorte d'élément (`note`, `fichier`…).
+    #[serde(rename = "type")]
+    kind: Option<String>,
 }
 
 /// Endroit montré par l'onglet Fichiers.
@@ -233,6 +236,11 @@ pub async fn list(
         return Ok(back);
     }
     use crate::folders::{self, view_url};
+
+    // La corbeille, dossier de la racine (SPEC, « Parcours et espaces »).
+    if query.dossier.as_deref() == Some("corbeille") {
+        return crate::trash::page::show(ctx, &state, query.kind.as_deref()).await;
+    }
 
     let user = ctx.user.id;
     let all = folders::all(&state.db, user).await?;
@@ -706,6 +714,24 @@ async fn root_rows(
     )
     .fetch_one(db)
     .await?;
+    // La corbeille : ce qui a été supprimé, dans tous les espaces.
+    let trashed = crate::trash::page::count(db, user).await?;
+    let trash_row = FolderRow {
+        id: None,
+        name: "Corbeille".into(),
+        href: crate::trash::page::PLACE.into(),
+        summary: match trashed {
+            0 => "Vide · ce qui est supprimé y reste 30 jours".into(),
+            1 => "1 élément · effacé 30 jours après sa suppression".into(),
+            n => format!("{n} éléments · effacés 30 jours après leur suppression"),
+        },
+        empty: trashed == 0,
+        icon: "trash",
+        color: None,
+        parent_label: String::new(),
+        drop: None,
+        picker: None,
+    };
     rows.push(FolderRow {
         id: None,
         name: "Temporaire".into(),
@@ -729,6 +755,7 @@ async fn root_rows(
         drop: None,
         picker: None,
     });
+    rows.push(trash_row);
     Ok(rows)
 }
 
@@ -1656,8 +1683,13 @@ pub async fn delete(
         }
         None => {
             crate::trash::file(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
-            ctx.flash_ok("Fichier mis dans la corbeille (Réglages › Corbeille)")
-                .await?;
+            ctx.flash_link(
+                "ok",
+                "Fichier mis dans la corbeille, pour 30 jours",
+                crate::trash::page::PLACE,
+                "Ouvrir la corbeille",
+            )
+            .await?;
         }
     }
     Ok(see_other(match form.next.as_deref() {

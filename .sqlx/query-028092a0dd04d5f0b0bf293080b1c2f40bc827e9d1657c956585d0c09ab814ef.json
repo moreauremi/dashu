@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT count(*) AS \"n!: i64\" FROM share_links l JOIN files f ON f.id = l.file_id\n                   WHERE l.file_id = ? AND l.revoked_at IS NOT NULL AND l.revoked_at >= f.deleted_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "028092a0dd04d5f0b0bf293080b1c2f40bc827e9d1657c956585d0c09ab814ef"
+}

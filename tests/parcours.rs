@@ -490,3 +490,164 @@ async fn refuser_une_invitation_ramene_aux_espaces() {
         .await;
     assert_eq!(declined.location(), "/settings#espaces");
 }
+
+// ---------------------------------------------------------------------
+// Lot 3 : la corbeille dans Fichiers
+// ---------------------------------------------------------------------
+
+/// Crée une note titrée dans l'espace `slug` ; rend son identifiant.
+async fn titled_note(
+    client: &mut common::Client,
+    slug: &str,
+    title: &str,
+    folder: Option<i64>,
+) -> i64 {
+    let path = match folder {
+        Some(folder) => format!("/notes?dossier={folder}"),
+        None => "/notes".to_string(),
+    };
+    let created = client.with_header("x-espace", slug).post(&path, &[]).await;
+    let id = common::note_id(&created);
+    client
+        .post(
+            &format!("/notes/{id}"),
+            &[("title", title), ("body_md", "texte")],
+        )
+        .await;
+    id
+}
+
+#[tokio::test]
+async fn la_corbeille_est_un_dossier_de_fichiers() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let maths = titled_note(&mut alice, "ecole", "Fiche maths", None).await;
+    let devis = titled_note(&mut alice, "taff", "Devis client", None).await;
+    for id in [maths, devis] {
+        let deleted = alice.post(&format!("/notes/{id}/delete"), &[]).await;
+        let page = alice.follow(deleted).await;
+        // Le message mène à la corbeille.
+        assert!(page.body.contains("Note mise dans la corbeille"));
+        assert!(page.body.contains("href=\"/files?dossier=corbeille\""));
+    }
+
+    // À la racine de Fichiers, à côté de Temporaire.
+    let root = alice.get("/e/perso/files?dossier=racine").await;
+    assert!(root.body.contains("Corbeille"));
+    assert!(root.body.contains("2 éléments"));
+    // Dans un espace : ce qui en vient ; depuis Perso : tout.
+    let ecole = alice.get("/e/ecole/files?dossier=corbeille").await;
+    assert!(ecole.body.contains("Fiche maths") && !ecole.body.contains("Devis client"));
+    let perso = alice.get("/e/perso/files?dossier=corbeille").await;
+    assert!(perso.body.contains("Fiche maths") && perso.body.contains("Devis client"));
+    // Filtre par sorte.
+    let files_only = alice
+        .get("/e/perso/files?dossier=corbeille&type=fichier")
+        .await;
+    assert!(!files_only.body.contains("Fiche maths"));
+
+    // L'ancienne adresse y mène.
+    let old = alice.get("/settings/trash").await;
+    assert_eq!(old.location(), "/e/perso/files?dossier=corbeille");
+}
+
+#[tokio::test]
+async fn restaurer_dit_ou_l_element_revient() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let math = folder(&app, &mut alice, "ecole", "Math").await;
+    let id = titled_note(&mut alice, "ecole", "Exercice 3", Some(math)).await;
+    alice.post(&format!("/notes/{id}/delete"), &[]).await;
+
+    // Son dossier existe encore : il y revient, et le message le dit.
+    let restored = alice
+        .post(
+            &format!("/settings/trash/note/{id}/restore"),
+            &[("next", "/files?dossier=corbeille")],
+        )
+        .await;
+    assert_eq!(restored.location(), "/files?dossier=corbeille");
+    let page = alice.follow(restored).await;
+    assert!(
+        page.body.contains("est revenu dans École / Math"),
+        "{}",
+        page.body
+    );
+    assert!(page.body.contains(&format!("href=\"/notes/{id}\"")));
+
+    // Son dossier est parti entre-temps : la racine, dite comme telle.
+    alice.post(&format!("/notes/{id}/delete"), &[]).await;
+    alice.post(&format!("/folders/{math}/delete"), &[]).await;
+    let restored = alice
+        .post(&format!("/settings/trash/note/{id}/restore"), &[])
+        .await;
+    let page = alice.follow(restored).await;
+    assert!(
+        page.body
+            .contains("est revenu à la racine de École : son dossier n&#39;existe plus"),
+        "{}",
+        page.body
+    );
+}
+
+#[tokio::test]
+async fn vider_ne_touche_pas_aux_suppressions_des_autres() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let mut bob = app.logged_in(BOB).await;
+    let slug = app.share_space(ALICE, "ecole", BOB).await;
+    let mine = titled_note(&mut alice, "ecole", "Brouillon d'Alice", None).await;
+    let his = titled_note(&mut bob, &slug, "Notes de Bob", None).await;
+    alice.post(&format!("/notes/{mine}/delete"), &[]).await;
+    bob.post(&format!("/notes/{his}/delete"), &[]).await;
+
+    // La confirmation dit ce qui reste.
+    let page = alice.get("/e/perso/files?dossier=corbeille").await;
+    assert!(
+        page.body
+            .contains("1 élément supprimé par un autre membre reste")
+    );
+    let emptied = alice
+        .post(
+            "/settings/trash/empty",
+            &[("next", "/files?dossier=corbeille")],
+        )
+        .await;
+    let page = alice.follow(emptied).await;
+    assert!(
+        page.body
+            .contains("Corbeille vidée : 1 élément supprimé définitivement")
+    );
+    // Ce que Bob a supprimé reste, et il peut encore le restaurer.
+    assert!(page.body.contains("Notes de Bob"));
+    let restored = bob
+        .post(&format!("/settings/trash/note/{his}/restore"), &[])
+        .await;
+    assert_eq!(restored.status, StatusCode::SEE_OTHER);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes WHERE id = ?")
+        .bind(mine)
+        .fetch_one(&app.state.db)
+        .await
+        .expect("compte");
+    assert_eq!(count, 0, "la note d'Alice est effacée");
+}
+
+#[tokio::test]
+async fn un_titre_n_est_echappe_qu_une_fois_dans_la_corbeille() {
+    let app = TestApp::new().await;
+    let mut alice = app.logged_in(ALICE).await;
+    let id = titled_note(&mut alice, "ecole", "R&D", None).await;
+    alice.post(&format!("/notes/{id}/delete"), &[]).await;
+    let page = alice.get("/e/perso/files?dossier=corbeille").await;
+    assert!(
+        page.body.contains("<strong>R&#38;D</strong>"),
+        "{}",
+        page.body
+    );
+    assert!(!page.body.contains("&#38;amp;"));
+    let restored = alice
+        .post(&format!("/settings/trash/note/{id}/restore"), &[])
+        .await;
+    let page = alice.follow(restored).await;
+    assert!(page.body.contains("« R&#38;D » est revenu"));
+}

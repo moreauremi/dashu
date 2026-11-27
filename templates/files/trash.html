@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+{% block title %}Corbeille · Fichiers · {{ shell.active.name }} · {{ crate::assets::APP_NAME }}{% endblock %}
+{% block content %}
+{#- Corbeille (src/trash/page.rs), dossier de la racine de Fichiers : ce qui a
+    été supprimé, du plus récent au plus ancien. Dans un espace, ce qui en
+    vient ; depuis Perso, tout. Restaurer remet l'élément à sa place ;
+    supprimer définitivement et vider ne se font qu'ici, avec confirmation. -#}
+<header class="page-head">
+  <div class="files-head">
+    <nav class="crumbs" aria-label="Emplacement">
+      <a class="crumb" href="/files?dossier=racine">Fichiers</a><span class="crumb-sep" aria-hidden="true">{{ crate::assets::icon("chevron-right")|safe }}</span>
+    </nav>
+    <h1>Corbeille</h1>
+  </div>
+</header>
+
+<p class="muted files-hint">{% if shell.active.is_overview() %}Ce qui a été supprimé dans tous tes espaces.{% else %}Ce qui a été supprimé dans {{ shell.active.name }}.{% endif %} Chaque élément reste {{ keep_days }} jours, puis s'efface tout seul, fichiers du serveur compris. Dans un espace partagé, la corbeille est commune à ses membres.</p>
+
+<nav class="chips" aria-label="Filtrer par sorte">
+  {% for filter in filters %}
+  <a class="chip" href="{{ filter.href }}"{% if filter.active %} aria-current="true"{% endif %}>{{ filter.label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="card">
+  <div class="card-body">
+    {% if rows.is_empty() %}
+    <p class="hint">Rien ici.</p>
+    {% else %}
+    <ul class="sources trash-list" role="list">
+      {% for row in rows %}
+      <li class="source trash-row">
+        <div class="source-main">
+          <span class="with-icon">{{ crate::assets::icon(row.entry.icon())|safe }}<strong>{{ row.entry.name }}</strong></span>
+          <span class="pal-space" data-accent="{{ row.entry.origin_color }}"><span class="dot" aria-hidden="true"></span>{{ row.origin }}</span>
+          {% if !row.entry.contents.is_empty() %}<span class="space-tag">{{ row.entry.contents }}</span>{% endif %}
+        </div>
+        <span class="muted">{{ row.entry.label() }} supprimé{% if row.entry.kind_key() == "note" %}e{% endif %} {{ row.when }} par {{ row.entry.who }}, depuis {{ row.entry.via }} · {{ row.left }}</span>
+        <div class="trash-actions">
+          <form method="post" action="/settings/trash/{{ row.entry.kind_key() }}/{{ row.entry.id }}/restore">
+            <input type="hidden" name="next" value="{{ here }}">
+            <button class="btn" type="submit">Restaurer</button>
+          </form>
+          <form method="post" action="/settings/trash/{{ row.entry.kind_key() }}/{{ row.entry.id }}/erase" hx-confirm="Supprimer définitivement « {{ row.entry.name }} »{% if row.entry.who != "toi" %}, supprimé par {{ row.entry.who }}{% endif %} ? Ce sera sans retour possible.">
+            <input type="hidden" name="next" value="{{ here }}">
+            <button class="btn btn-danger-outline" type="submit" aria-label="Supprimer définitivement {{ row.entry.name }}">{{ crate::assets::icon("trash")|safe }}</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {#- « Vider » n'efface que ce qu'on a supprimé soi-même : dans un espace
+        partagé, ce que les autres membres ont supprimé reste restaurable. -#}
+    {% if mine > 0 %}
+    <form method="post" action="/settings/trash/empty" hx-confirm="Vider la corbeille ? {% if mine == 1 %}1 élément que tu as supprimé sera effacé{% else %}{{ mine }} éléments que tu as supprimés seront effacés{% endif %} définitivement, sans retour possible.{% if others == 1 %} 1 élément supprimé par un autre membre reste.{% else if others > 1 %} {{ others }} éléments supprimés par d'autres membres restent.{% endif %}">
+      <input type="hidden" name="next" value="{{ here }}">
+      <button class="btn btn-danger-outline" type="submit">{{ crate::assets::icon("trash")|safe }}Vider la corbeille</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

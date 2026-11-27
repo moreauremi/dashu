@@ -105,7 +105,7 @@ async fn un_menu_par_ligne_avec_icone_et_texte() {
         assert!(menu.contains(&choice(icon, label)), "{label} : {menu}");
     }
     assert!(menu.contains(&format!("action=\"/folders/{vide}/delete\"")));
-    assert!(menu.contains("hx-confirm=\"Supprimer le dossier « Vide » ?\""));
+    assert!(menu.contains("hx-confirm=\"Mettre le dossier vide « Vide » à la corbeille ?\""));
     // Un dossier plein : « Supprimer… » ouvre l'avertissement.
     let line = row(&page, "Cours");
     only_more_button(line, &format!("pm-actions-folder-{cours}"));

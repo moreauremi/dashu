@@ -50,7 +50,7 @@
       </div>
       {% endif %}
 
-      <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Supprimer définitivement cette note ?">
+      <form method="post" action="/notes/{{ id }}/delete" hx-confirm="Mettre cette note à la corbeille ? Elle y reste 30 jours.">
         <input type="hidden" name="next" value="{{ back }}">
         <button class="icon-btn icon-btn-danger" type="submit" aria-label="Supprimer la note" title="Supprimer la note">{{ crate::assets::icon("trash")|safe }}</button>
       </form>
