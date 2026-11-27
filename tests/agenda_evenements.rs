@@ -225,12 +225,10 @@ async fn creer_modifier_supprimer_un_evenement() {
     let mut alice = app.logged_in(ALICE).await;
     let ecole = app.space_id(ALICE, "ecole").await;
 
+    // Depuis Perso, qui réunit tous les agendas : on y reste.
     let created = add_event(&mut alice, ecole, "Réunion projet", false).await;
     assert_eq!(created.status, StatusCode::SEE_OTHER, "{}", created.body);
-    assert_eq!(
-        created.location(),
-        "/e/ecole/calendar?view=week&date=2026-11-18"
-    );
+    assert_eq!(created.location(), "/calendar?view=week&date=2026-11-18");
     let id = event_id(&app, "Réunion projet").await;
 
     // Dans l'agenda de la semaine, cliquable, avec son heure et son lieu.

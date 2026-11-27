@@ -329,6 +329,24 @@ pub async fn list(
             (name, view_url(&space.slug, folder), crumbs, Some(folder))
         }
     };
+    // La recherche et le tag en cours font partie de la page : une action
+    // (renommer, ranger, supprimer…) ou le rechargement après un envoi y
+    // ramène sans les perdre.
+    let here = {
+        let mut params = form_urlencoded::Serializer::new(String::new());
+        for (key, value) in [("q", query.q.as_deref()), ("tag", query.tag.as_deref())] {
+            if let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) {
+                params.append_pair(key, value);
+            }
+        }
+        let params = params.finish();
+        if params.is_empty() {
+            here
+        } else {
+            let join = if here.contains('?') { '&' } else { '?' };
+            format!("{here}{join}{params}")
+        }
+    };
 
     let contents = folders::contents(&state.db, user, &all).await?;
     let folder_rows = match (&view, inside) {
@@ -1673,6 +1691,8 @@ const TEXT_PREVIEW_BYTES: u64 = 200 * 1024;
 struct ViewPage {
     shell: Shell,
     id: i64,
+    /// Espace du fichier quand il s'ouvre depuis Perso sans en changer.
+    space: Option<crate::spaces::SpaceTag>,
     /// Le dossier du fichier (ou Temporaire) : adresse et nom, pour revenir.
     back: String,
     back_label: String,
@@ -1752,17 +1772,17 @@ fn is_text(mime: &str) -> bool {
 pub struct ViewQuery {
     /// Page d'où l'on a ouvert le fichier, posée par app.js (« Retour à la
     /// bonne place ») : le lien de retour y ramène.
-    depuis: Option<String>,
+    pub(crate) depuis: Option<String>,
 }
 
 /// Une adresse `depuis` acceptée : un chemin de l'app (jamais un autre site),
 /// de longueur raisonnable.
-fn valid_origin(depuis: Option<&str>) -> Option<&str> {
+pub(crate) fn valid_origin(depuis: Option<&str>) -> Option<&str> {
     depuis.filter(|d| d.len() <= 2000 && web::local_path(Some(d)) == *d)
 }
 
 /// `path` avec son paramètre `depuis`, s'il y en a un.
-fn with_origin(path: &str, depuis: Option<&str>) -> String {
+pub(crate) fn with_origin(path: &str, depuis: Option<&str>) -> String {
     match depuis {
         Some(depuis) => format!(
             "{path}?{}",
@@ -1779,7 +1799,7 @@ fn with_origin(path: &str, depuis: Option<&str>) -> String {
 /// dashboard, une note… `None` pour l'adresse d'un espace inconnu, d'un
 /// dossier ou d'une note disparus : le retour se fait alors au dossier du
 /// fichier.
-async fn origin_label(
+pub(crate) async fn origin_label(
     ctx: &Ctx,
     db: &SqlitePool,
     all: &[crate::folders::Folder],
@@ -1900,8 +1920,11 @@ pub async fn view(
     .await?
     .ok_or(AppError::NotFound)?;
     // Fichier d'un autre espace : il s'ouvre dans le sien (sauf ceux de
-    // l'onglet Outils, qui n'appartiennent encore à aucune liste).
-    if row.space_id != ctx.active.id && row.expires_at.is_none() {
+    // l'onglet Outils, qui n'appartiennent encore à aucune liste). Depuis
+    // Perso, la vue d'ensemble, il s'ouvre sur place, avec la pastille de son
+    // espace : le retour ramène à Perso.
+    let overview = ctx.active.is_overview();
+    if row.space_id != ctx.active.id && row.expires_at.is_none() && !overview {
         let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
         return Ok(see_other(&crate::spaces::url::prefixed(
             &space.slug,
@@ -1963,6 +1986,15 @@ pub async fn view(
             "/files?dossier=temporaire".to_string(),
             "Temporaire".to_string(),
         ),
+        // Ouvert sur place depuis Perso : le dossier du fichier dans son
+        // espace, vu depuis la racine de Perso.
+        None if row.space_id != ctx.active.id => {
+            let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
+            (
+                "/files?dossier=racine".to_string(),
+                crate::folders::label(&space.name, &all, row.folder_id),
+            )
+        }
         None => (
             crate::folders::view_url(&ctx.active.slug, row.folder_id),
             crate::folders::label(&ctx.active.name, &all, row.folder_id),
@@ -1980,6 +2012,11 @@ pub async fn view(
     };
     let page = ViewPage {
         shell: ctx.shell("files").await?,
+        space: if row.expires_at.is_none() {
+            ctx.tag_of(row.space_id)
+        } else {
+            None
+        },
         id,
         back,
         back_label,

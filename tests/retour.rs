@@ -137,16 +137,11 @@ async fn ouvert_depuis_perso_on_revient_dans_perso() {
         ..
     } = setup().await;
     // La racine de Perso, avec une recherche dans tous les espaces : le
-    // fichier s'ouvre dans École, son espace, mais le retour mène à Perso.
+    // fichier d'École s'ouvre sur place, dans Perso, et le retour y mène.
     let depuis = "/e/perso/files?dossier=racine&q=vlan";
-    let opened = alice
-        .get(&format!("/e/perso/files/{file}?depuis={}", encoded(depuis)))
-        .await;
-    assert_eq!(
-        opened.location(),
-        format!("/e/ecole/files/{file}?depuis={}", encoded(depuis))
-    );
-    let (link, label) = back_of(&mut alice, opened.location()).await;
+    let path = format!("/e/perso/files/{file}?depuis={}", encoded(depuis));
+    assert_eq!(alice.get(&path).await.status, StatusCode::OK);
+    let (link, label) = back_of(&mut alice, &path).await;
     assert_eq!(link, in_html(depuis));
     assert_eq!(label, "Fichiers · « vlan »");
 }

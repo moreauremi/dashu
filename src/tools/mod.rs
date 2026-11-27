@@ -319,11 +319,22 @@ pub async fn compress(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<CompressForm>,
 ) -> AppResult<Response> {
     start(&ctx, &state, id, Conversion::Compress, None).await?;
     ctx.flash_ok("Compression lancée : la copie apparaîtra dans la liste")
         .await?;
-    Ok(see_other("/files"))
+    // Retour à la page d'où l'on vient, comme après une conversion.
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/files",
+    }))
+}
+
+#[derive(Deserialize, Default)]
+pub struct CompressForm {
+    /// Page où revenir ; la liste des fichiers sans précision.
+    next: Option<String>,
 }
 
 #[derive(Deserialize)]

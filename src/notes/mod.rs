@@ -442,7 +442,14 @@ pub async fn create(
     )
     .execute(&state.db)
     .await?;
-    Ok(see_other(&format!("/notes/{id}")))
+    // Créée depuis un dossier de Fichiers : le retour de l'éditeur y ramène.
+    Ok(see_other(&match folder {
+        Some(folder) => crate::files::with_origin(
+            &format!("/notes/{id}"),
+            Some(&folders::view_url(&ctx.active.slug, Some(folder))),
+        ),
+        None => format!("/notes/{id}"),
+    }))
 }
 
 /// Crée une note (titre éventuel) dans un espace de l'utilisateur et rend
@@ -527,6 +534,13 @@ struct EditPage {
     pdf: bool,
     /// Tailles du texte proposées pour le PDF.
     zooms: &'static [u16],
+    /// Page où revenir (d'où l'on a ouvert la note) et son nom.
+    back: String,
+    back_label: String,
+    /// Espace de la note quand elle s'ouvre depuis Perso sans en changer.
+    space: Option<crate::spaces::SpaceTag>,
+    /// Espace de la note : une image collée y est envoyée.
+    space_id: i64,
 }
 
 /// `GET /notes/{id}`
@@ -534,7 +548,9 @@ pub async fn edit_page(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(query): Query<crate::files::ViewQuery>,
 ) -> AppResult<Response> {
+    let depuis = crate::files::valid_origin(query.depuis.as_deref());
     let note = sqlx::query!(
         r#"SELECT space_id, folder_id, title, body_md, pinned AS "pinned!: bool", updated_at,
                   revision AS "revision!: i64"
@@ -546,15 +562,29 @@ pub async fn edit_page(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    // Note ouverte depuis un autre espace (recherche globale, Perso) : elle
-    // s'ouvre dans le sien, par l'adresse de cet espace.
-    if note.space_id != ctx.active.id {
+    // Note d'un autre espace (recherche globale, lien) : elle s'ouvre dans
+    // le sien, par l'adresse de cet espace. Depuis Perso, la vue d'ensemble,
+    // elle s'ouvre sur place, avec la pastille de son espace : le retour
+    // ramène à Perso.
+    if note.space_id != ctx.active.id && !ctx.active.is_overview() {
         let space = ctx.space_by_id(note.space_id).ok_or(AppError::NotFound)?;
         return Ok(see_other(&crate::spaces::url::prefixed(
             &space.slug,
-            &format!("/notes/{id}"),
+            &crate::files::with_origin(&format!("/notes/{id}"), depuis),
         )));
     }
+
+    // Retour à la page d'où l'on vient ; à défaut, à la liste des notes.
+    let origin = match depuis {
+        Some(depuis) => {
+            let all = folders::all(&state.db, ctx.user.id).await?;
+            crate::files::origin_label(&ctx, &state.db, &all, depuis)
+                .await?
+                .map(|label| (depuis.to_string(), label))
+        }
+        None => None,
+    };
+    let (back, back_label) = origin.unwrap_or_else(|| ("/notes".into(), "Notes".into()));
 
     let page = EditPage {
         id,
@@ -572,6 +602,10 @@ pub async fn edit_page(
         folder: note_folder(&ctx, &state.db, note.space_id, note.folder_id).await?,
         pdf: state.config.work_dir.is_some(),
         zooms: &export::ZOOMS,
+        back,
+        back_label,
+        space: ctx.tag_of(note.space_id),
+        space_id: note.space_id,
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))
@@ -847,17 +881,28 @@ pub async fn set_folder(
     }))
 }
 
+#[derive(Deserialize, Default)]
+pub struct DeleteForm {
+    /// Page où revenir (celle d'où l'on a ouvert la note) ; la liste sans
+    /// précision.
+    pub(crate) next: Option<String>,
+}
+
 /// `POST /notes/{id}/delete`
 pub async fn delete(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
     // Dans la corbeille, pas effacée : 30 jours pour la restaurer.
     crate::trash::note(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
     ctx.flash_ok("Note mise dans la corbeille (Réglages › Corbeille)")
         .await?;
-    Ok(see_other("/notes"))
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/notes",
+    }))
 }
 
 // ---------------------------------------------------------------------

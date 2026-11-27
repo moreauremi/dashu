@@ -1500,7 +1500,7 @@ pub async fn decline_invitation(
 ) -> AppResult<Response> {
     decline_for(&state.db, ctx.user.id, inv).await?;
     ctx.flash_ok("Invitation refusée").await?;
-    Ok(see_other("/settings"))
+    Ok(see_other(BACK))
 }
 
 #[cfg(test)]

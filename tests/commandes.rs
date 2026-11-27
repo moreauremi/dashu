@@ -239,8 +239,8 @@ async fn ajouter_une_tache_ou_une_note() {
             .unwrap();
     assert_eq!(title, "Idée de projet");
     assert_eq!(space, app.space_id(ALICE, "taff").await);
-    // (La note s'ouvre à l'adresse de son espace.)
-    let opened = alice.get(path).await;
+    // (La note s'ouvre à l'adresse de son espace, hors de Perso.)
+    let opened = alice.get(&format!("/e/ecole{path}")).await;
     assert_eq!(opened.location(), format!("/e/taff{path}"));
     assert!(alice.follow(opened).await.body.contains("Idée de projet"));
     // Sans titre : une note vide, comme le bouton « Nouvelle note ».

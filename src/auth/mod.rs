@@ -45,16 +45,22 @@ struct LoginPage<'a> {
 /// application attend une autorisation (OAuth, voir `crate::oauth`), sinon
 /// le dashboard. L'autorisation en attente est gardée dans la session, que
 /// la connexion conserve.
-pub async fn after_sign_in(session: &Session) -> AppResult<&'static str> {
+pub async fn after_sign_in(session: &Session) -> AppResult<String> {
+    // La page demandée avant la connexion (session expirée), gardée par
+    // `Ctx` : on y revient, espace compris (`/e/ecole/notes`).
+    let wanted = session
+        .remove::<String>(session::AFTER_LOGIN)
+        .await?
+        .filter(|path| crate::web::local_path(Some(path)) == path.as_str());
     Ok(
         if session
             .get::<crate::oauth::Pending>(crate::oauth::PENDING)
             .await?
             .is_some()
         {
-            "/oauth/authorize"
+            "/oauth/authorize".to_string()
         } else {
-            "/"
+            wanted.unwrap_or_else(|| "/".to_string())
         },
     )
 }
@@ -140,7 +146,7 @@ pub async fn login(
         Some(user) if password_ok && allowed => {
             sign_in(&state, &session, user.id).await?;
             tracing::info!(user_id = user.id, "connexion par identifiants");
-            Ok(see_other(after_sign_in(&session).await?))
+            Ok(see_other(&after_sign_in(&session).await?))
         }
         _ => {
             tracing::warn!("tentative de connexion refusée");

@@ -24,6 +24,8 @@ use crate::web::{self, AppError, AppResult, csrf};
 pub const USER_ID: &str = "uid";
 pub const ACTIVE_SPACE: &str = "space";
 const FLASH: &str = "flash";
+/// Page demandée sans être connecté : la connexion y ramène.
+pub const AFTER_LOGIN: &str = "after_login";
 
 /// Écriture refusée depuis un onglet ouvert sur un espace disparu.
 const STALE_TAB: &str = "Cet espace n'est plus accessible : rien n'a été enregistré.";
@@ -332,6 +334,7 @@ impl FromRequestParts<AppState> for Ctx {
             .await
             .map_err(|e| internal(e.into()))?;
         let Some(user_id) = user_id else {
+            remember_target(&session, parts).await;
             return Err(login_redirect(parts));
         };
 
@@ -488,6 +491,28 @@ impl FromRequestParts<AppState> for Ctx {
 /// Pour un fragment htmx, une redirection classique insérerait la page de
 /// connexion au milieu d'un widget : on répond donc 401 avec l'en-tête
 /// `HX-Redirect`, que htmx traduit en vraie navigation.
+/// Garde la page qu'on voulait ouvrir (une page entière, pas un fragment ni
+/// une écriture), avec son espace, pour y revenir après la connexion.
+async fn remember_target(session: &Session, parts: &Parts) {
+    if parts.method != Method::GET || web::is_fragment_request(&parts.headers) {
+        return;
+    }
+    let path = parts
+        .uri
+        .path_and_query()
+        .map(|p| p.as_str())
+        .unwrap_or("/");
+    // L'adresse a perdu son préfixe d'espace avant le routage : on le remet.
+    let path = match parts.extensions.get::<url::UrlSpace>() {
+        Some(space) => url::prefixed(&space.0, path),
+        None => path.to_string(),
+    };
+    if path == "/" || path.len() > 2000 {
+        return;
+    }
+    let _ = session.insert(AFTER_LOGIN, path).await;
+}
+
 fn login_redirect(parts: &Parts) -> Response {
     if web::is_fragment_request(&parts.headers) {
         (

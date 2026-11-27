@@ -57,8 +57,11 @@ async fn le_membre_lit_modifie_epingle_et_deplace() {
     let found = bob.get(&format!("/e/{slug}/notes?q=vlan")).await;
     assert!(found.body.contains("Cours de réseau"));
 
-    // Il l'ouvre (depuis son Perso : redirection vers l'espace partagé).
-    let jump = bob.get(&format!("/e/perso/notes/{id}")).await;
+    // Il l'ouvre depuis son Perso, sur place ; depuis un autre de ses
+    // espaces, elle bascule sur l'espace partagé.
+    let here = bob.get(&format!("/e/perso/notes/{id}")).await;
+    assert_eq!(here.status, StatusCode::OK);
+    let jump = bob.get(&format!("/e/ecole/notes/{id}")).await;
     assert_eq!(jump.status, StatusCode::SEE_OTHER);
     assert_eq!(jump.location(), format!("/e/{slug}/notes/{id}"));
     let page = bob.get(&format!("/e/{slug}/notes/{id}")).await;

@@ -132,8 +132,15 @@ async fn cycle_de_vie_d_une_note() {
             .contains("<mark>")
     );
 
-    // Ouvrir la note bascule sur son espace ; elle y garde ses tags.
-    let opened = alice.get(&url).await;
+    // Depuis Perso, la note s'ouvre sur place, marquée École ; depuis un
+    // autre espace, elle bascule sur le sien. Elle y garde ses tags.
+    let here = alice.get(&url).await;
+    assert_eq!(here.status, StatusCode::OK);
+    assert!(
+        here.body
+            .contains("class=\"space-of\" data-accent=\"blue\"")
+    );
+    let opened = alice.get(&format!("/e/taff{url}")).await;
     let page = alice.follow(opened).await;
     assert!(page.body.contains("data-accent=\"blue\""));
     assert!(page.body.contains("#bts"));
