@@ -498,7 +498,8 @@ Cahier des charges dans `SPEC.md` (« Parcours et espaces »), demandé par Rém
 - [x] Les images qu'une note affiche la suivent dans un autre espace (site, API, commande `/move`, dossier déplacé), sauf celles qu'une autre note de l'ancien espace affiche ou qui sont ailleurs ; le message le dit. Tests `les_images_suivent_leur_note`, `un_dossier_deplace_emmene_les_images_de_ses_notes`, test unitaire `fichiers_cites_par_une_note`.
 - [x] Une conversion en cours suit son fichier déplacé. Test `une_conversion_en_cours_suit_son_fichier`.
 - [x] Un lien de partage dont l'auteur n'a plus accès est affiché « Inutilisable », n'est plus compté comme partagé, et le déplacement le dit ; la fenêtre « Ranger » marque les espaces partagés et prévient quand on sort un élément de l'un d'eux. Test `un_lien_devenu_inutilisable_le_dit`.
-- [ ] Vu dans le navigateur ; sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
+- [x] Vu dans le navigateur (instance locale, ordinateur) : une session expirée sur `/e/ecole/notes` y revient après la connexion ; « Nouvelle note » dans le dossier Math, puis retour « École / Math » ; depuis Perso, la note d'École s'ouvre sur place, pastille « École », retour à Perso ; le menu d'une ligne de Notes met la note à la corbeille, le message mène au dossier Corbeille d'École (origine « École / Math »), et la restaurer dit « est revenu dans École / Math », avec « Ouvrir » ; la racine de Fichiers montre Temporaire et Corbeille. Aucune erreur dans la console.
+- [ ] Sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
 
 ## Dossiers : cinq niveaux : avancement
 
