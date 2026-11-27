@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", size, storage_key FROM files\n           WHERE folder_id = ?2 AND expires_at IS NULL AND lower(name) LIKE '%.docx'\n             AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ORDER BY updated_at DESC, id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "size",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "storage_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2b613cc1b62805de593eac07b1c58ab23d4882d37a76a1d260f0d6b2e9876140"
+}

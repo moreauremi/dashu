@@ -149,6 +149,9 @@ Aucune n'est obligatoire : sans elles, l'[assistant du premier lancement](#premi
 | `FILES_QUOTA` | non | Plafond de stockage d'un compte sans plafond à lui : `30G` par défaut (30 × 1024³ octets), ou `500M`, `1T`… Un plafond personnel se change avec `dashu-quota` sur le serveur (voir « 7. Fichiers (v2) »). |
 | `WORK_DIR` | non | Active la compression : dossier de travail partagé avec le service de conversion (`/srv/dashu/tmp` en production). Demande `FILES_DIR`. |
 | `DOWNLOADER_EMAIL` | non | Le seul compte qui a le téléchargeur de liens (onglet Outils). Sans elle, l'outil n'existe pas. Posée par `dashu-telechargeur activer` (voir « Téléchargeur de liens »). Demande `FILES_DIR` et `WORK_DIR`. |
+| `ANTHROPIC_API_KEY` | non | Clé de l'API d'Anthropic, pour « Générer l'audit » dans 1Life (voir « IA de 1Life »). Tapée sur le serveur, jamais affichée ni journalisée. Sans elle, le bouton est grisé : « IA non configurée ». |
+| `ONELIFE_AI_MODELS` | non | Modèles d'IA proposés, séparés par des virgules ; le premier est le défaut. Par défaut `claude-haiku-5-5,claude-sonnet-5-5`. |
+| `ANTHROPIC_BASE_URL` | non | Adresse de l'API d'Anthropic, `https://api.anthropic.com` par défaut. Ne sert qu'aux tests. |
 | `TUNNEL_TOKEN` | Docker seulement | Jeton du tunnel Cloudflare, lu par le conteneur `cloudflared`. |
 | `BACKUP_DIR` | Docker seulement | Dossier de l'hôte où vont les sauvegardes. |
 | `BIND_ADDR` | non | Adresse d'écoute, `0.0.0.0:3000` par défaut ; `127.0.0.1:3000` en production. |
@@ -180,7 +183,7 @@ Les deux méthodes mènent au même compte : Google est rattaché par l'email v�
 
 ### Outils réservés
 
-Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi. Son module **Clients** (`/1life/clients`) part d'un dossier de Fichiers, choisi une fois avec la fenêtre « Ranger » (le « dossier des clients », aux niveaux 1 à 3) : chacun de ses sous-dossiers est un client, avec ses notes et ses fichiers. « Nouveau client » crée le dossier et ses sous-dossiers Audit, CR et Fichiers. La fiche d'un client y ajoute des infos en Markdown, enregistrées pendant la frappe, et ses journées : des événements de l'Agenda (journée, matin, après-midi ou horaires libres, un par jour ouvré, envoyés à Google Agenda si on le demande). La vue globale (`?vue=globale`) les montre en Gantt, sur 4 semaines ou 3 mois. Le module reste hors de l'API, du connecteur et d'Hermès ; les journées restent des événements, visibles et modifiables par l'API de l'Agenda. Les modules Compte rendu et Audit sont encore vides. Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
+Certains outils n'existent que pour des comptes choisis : aujourd'hui **1Life**, l'outil de travail de Rémi. Son module **Clients** (`/1life/clients`) part d'un dossier de Fichiers, choisi une fois avec la fenêtre « Ranger » (le « dossier des clients », aux niveaux 1 à 3) : chacun de ses sous-dossiers est un client, avec ses notes et ses fichiers. « Nouveau client » crée le dossier et ses sous-dossiers Audit, CR et Fichiers. La fiche d'un client y ajoute des infos en Markdown, enregistrées pendant la frappe, et ses journées : des événements de l'Agenda (journée, matin, après-midi ou horaires libres, un par jour ouvré, envoyés à Google Agenda si on le demande). La vue globale (`?vue=globale`) les montre en Gantt, sur 4 semaines ou 3 mois. En tête de la fiche, l'encart **Identité** (raison sociale, adresse, contact principal, secteur, effectif, version d'Open-Prod) s'enregistre tout seul ; il remplit les variables des modèles d'audit. Le module **Audit** (`/1life/audit`) tire un document d'audit de notes prises chez le client, par l'IA d'Anthropic (voir « IA de 1Life »). Les **réglages** de 1Life (`/1life/reglages`) gardent le consultant, l'approbateur par défaut, le dossier des modèles d'audit, le modèle et le modèle d'IA par défaut. Ces modules restent hors de l'API, du connecteur et d'Hermès ; les journées restent des événements, visibles et modifiables par l'API de l'Agenda, et les notes d'audit des notes ordinaires. Les modules Compte rendu et Tâches sont encore vides. Pour tout autre compte, ses adresses (`/1life/…`) répondent 404, comme une page qui n'existe pas, et il n'apparaît nulle part : barre latérale, barre de commandes, réglages, API.
 
 L'accès se donne **seulement en ligne de commande, sur le serveur**. Aucune page, aucune route de l'API ni du connecteur ne le permet, et Hermès n'a pas cette action.
 
@@ -197,6 +200,44 @@ runuser -u dashu -- sh -c 'set -a; . /etc/dashu/dashu.env; exec dashu tools revo
 ```
 
 `runuser` lance la commande sous le compte `dashu`, propriétaire de la base, avec sa configuration (`DATABASE_URL`). Le compte doit s'être connecté au moins une fois. Une fois autorisé, l'outil apparaît dans Réglages › Espaces, **masqué** : on l'affiche dans l'espace voulu (Taff, par exemple). Retirer l'accès le fait disparaître partout ; ses réglages par espace restent pour une autorisation future.
+
+### IA de 1Life
+
+Le module Audit de 1Life appelle l'API d'Anthropic (Messages API) pour rédiger un document d'audit. C'est dashu qui l'appelle, pas le service de conversion, qui n'a pas de réseau.
+
+**Le parcours.** « Commencer un audit » (page Audit ou fiche client) crée la note « Notes d'audit — client — date » dans le sous-dossier Audit du client et ouvre l'éditeur : une note ordinaire, sur ordinateur ou sur l'iPhone. « Générer l'audit » (page de l'audit, ou en-tête de l'éditeur des notes) envoie le modèle et les notes à l'IA, en tâche de fond ; le résultat devient la note « Audit — client — date », dans le même dossier, à relire et à modifier. Régénérer crée « (v2) », « (v3) »… sans toucher aux versions précédentes. Ce que l'IA n'a pas repris des notes s'affiche sur la page de l'audit, en cases à cocher, jamais dans la note. « Exporter en Word » sort la dernière version en `.docx`, avec le `.docx` du dossier des modèles comme document de référence (styles, en-tête et pied de page avec le logo) s'il y en a un.
+
+**La clé.** Créer une clé dans la console d'Anthropic (console.anthropic.com), puis la taper sur le serveur, sans l'afficher ni la copier ailleurs :
+
+```bash
+nano /etc/dashu/dashu.env
+```
+
+Ajouter la ligne `ANTHROPIC_API_KEY=` suivie de la clé, enregistrer, puis relancer dashu :
+
+```bash
+systemctl restart dashu
+```
+
+Sans clé, rien n'est envoyé : le bouton est grisé et la page dit « IA non configurée ».
+
+**Les modèles d'IA** se choisissent à chaque génération : `ONELIFE_AI_MODELS`, Haiku 5.5 par défaut, ou Sonnet 5.5. Réglages de 1Life › « Modèle d'IA par défaut » change celui qui est présélectionné.
+
+**Le coût indicatif.** Haiku 5.5 coûte 0,10 $ par million de tokens envoyés et 0,50 $ par million de tokens reçus ; Sonnet 5.5, 2 $ et 10 $. Un audit (un modèle d'une page et quelques pages de notes, environ 10 000 tokens envoyés, 3 000 reçus) coûte donc moins d'un centime avec Haiku 5.5, quelques centimes avec Sonnet 5.5. Chaque version affiche son modèle d'IA, ses tokens et son coût estimé ; avant l'envoi, la page donne le coût « au plus ». Les tarifs sont dans `src/config.rs` (`AI_PRICES`).
+
+**Les garde-fous.** Une génération à la fois par compte, 20 par jour. Une demande d'environ 80 000 tokens au plus : au-delà de 100 000, Haiku 5.5 coûte cinq fois plus, et rien n'est envoyé. 16 000 tokens de réponse au plus, 5 minutes au plus. Une réponse coupée, une clé refusée, un quota atteint ou une API en panne : un message clair sur la page de l'audit, et rien n'est créé.
+
+**Confidentialité.** Ce qui part chez Anthropic : une consigne générique (dans le code), le modèle d'audit aux variables remplies (le nom et les coordonnées du client que porte la fiche, le nom du consultant) et le texte des notes de l'audit. Rien d'autre : ni fichiers, ni images (leurs liens restent tels quels dans le texte), ni les autres notes. Selon les conditions commerciales d'Anthropic, ce qui passe par l'API ne sert pas, par défaut, à entraîner ses modèles ; la durée de conservation dépend du compte (à vérifier dans la console d'Anthropic). Le document produit est rangé dans dashu, comme les autres notes. L'IA n'a aucun outil : elle reçoit du texte et renvoie du texte.
+
+### Modèles d'audit
+
+Un modèle est une note, ou un fichier `.md` déposé par glisser-déposer, dans le **dossier des modèles** choisi dans les réglages de 1Life (son contenu direct, pas ses sous-dossiers ; 200 Ko au plus). Le contenu de 1Life reste ainsi dans la base, jamais dans le dépôt. Sans dossier, un modèle générique intégré sert : Contexte, Périmètre, Constats, Recommandations, Prochaines étapes. La même aide est dans l'application : Audit › « Modèles d'audit » (`/1life/audit/modeles`).
+
+- **Syntaxe** : du Markdown, titres de niveau 1 à 3, listes, cases à cocher, tableaux, citations. L'IA suit les titres et leur ordre.
+- **Variables**, remplacées par dashu avant l'envoi : `{{client.raison_sociale}}` (le nom du dossier si elle est vide), `{{client.adresse}}`, `{{client.secteur}}`, `{{client.effectif}}`, `{{client.version_openprod}}`, `{{client.contact.nom}}`, `{{client.contact.fonction}}`, `{{client.contact.email}}`, `{{client.contact.telephone}}`, `{{audit.date}}`, `{{audit.titre}}`, `{{audit.approbateur}}`, `{{consultant.nom}}` (le nom du profil s'il est vide), `{{consultant.fonction}}`, `{{consultant.email}}`. Une variable vide ou inconnue devient « [À compléter : nom] », et la page de l'audit la signale. Un champ ajouté au registre (`src/onelife/fields.rs`) devient une variable de plus.
+- **Consignes** : une citation qui commence par « Consigne : » (`> Consigne : une recommandation par constat, avec sa priorité.`). Elle guide l'IA, puis dashu la retire du document, même si l'IA l'a recopiée. Pas de commentaires HTML : l'éditeur de notes ne les garde pas.
+- **Marqueurs des notes**, facultatifs, en début de ligne : `OP:` (réponse d'Open-Prod), `manque:` (information manquante), `statut:` (état d'avancement), `!!` (point bloquant). Les notes peuvent aussi être rangées par service, en tableaux « Besoin | Piste » : l'IA redistribue chaque élément dans le bon domaine, une seule fois, et renvoie ailleurs par « voir § X ».
+- **Document de référence Word** : un `.docx` dans le même dossier (le plus récent, 10 Mo au plus). dashu le copie dans le dossier de travail du service de conversion, qui le passe à pandoc (`--reference-doc`), toujours en bac à sable.
 
 ### Réglages › Instance
 
@@ -840,6 +881,7 @@ Le même exercice avec un fichier : `systemctl start dashu-backup`, supprimer un
 - **Google Agenda** : seulement la permission `calendar.events`, demandée à part de la connexion, avec `state` et PKCE. Le jeton de rafraîchissement est chiffré en base (ChaCha20-Poly1305, clé dérivée de `SESSION_SECRET` par HKDF) : une copie de la base ou d'une sauvegarde ne suffit pas à écrire dans l'agenda.
 - **Flux iCal** : l'URL Pronote contient un jeton d'accès. Elle n'est jamais réaffichée en entier ni écrite dans les logs. Seules les URL `https` publiques sont acceptées.
 - **API** : désactivée tant que `API_TOKEN` est vide. Le jeton (32 caractères minimum) est comparé en temps constant et n'apparaît jamais dans les logs. L'API n'agit que sur le compte `API_USER_EMAIL` et ne peut ni supprimer une note, ni toucher aux réglages, au mot de passe ou aux sources iCal.
+- **IA de 1Life** : la clé d'Anthropic (`ANTHROPIC_API_KEY`) ne part que dans l'en-tête de la requête ; elle n'apparaît ni dans les pages, ni dans les logs, ni dans un affichage de la configuration. L'IA n'a aucun outil, et sa réponse devient une note ordinaire, nettoyée par ammonia comme les autres. Voir « Confidentialité » dans « IA de 1Life ».
 - **Service** : utilisateur système sans shell, écoute sur `127.0.0.1` seulement, système en lecture seule sauf `/var/lib/dashu`, aucune capacité Linux (`deploy/lxc/hardening.conf`). Configuration lisible par root et le groupe `dashu` seulement.
 - **Image Docker** (variante) : image `scratch` (le binaire seul), utilisateur sans privilège, système de fichiers en lecture seule, aucune capacité Linux, aucun port publié.
 
@@ -859,7 +901,7 @@ dashu/
 │   ├── assets.rs           fichiers statiques embarqués
 │   ├── time.rs             Europe/Paris, dates en français
 │   ├── registry.rs         registre des outils de la barre latérale, affichés ou masqués par espace, outils réservés
-│   ├── onelife/            1Life, outil réservé : accueil, modules à venir, Clients (liste, fiche, journées, Gantt)
+│   ├── onelife/            1Life, outil réservé : accueil, Clients (liste, fiche, identité, journées, Gantt), Audit, génération par l'IA, réglages
 │   ├── auth/               identifiants, Google, sessions, limiteur de tentatives
 │   ├── spaces/             espaces et espace actif
 │   ├── dashboard/          page d'accueil et widgets

@@ -1312,7 +1312,7 @@ Ces actions restent sur le site ou sur le serveur, exprès :
 - **Les comptes et le serveur** : les adresses autorisées (`dashu-compte`) et l'administration (`dashu-admin`) se font sur le serveur, pas dans dashu. Hermès garde son accès `dashu-admin` à six actions.
 - **L'interface elle-même** : l'espace actif, la barre de commandes, la navigation. Un programme n'en a pas besoin : il désigne l'espace dans chaque requête.
 - **Le téléchargeur de liens** (YouTube, Instagram, TikTok), quand il existera : réservé au site et au compte de Rémi, comme le prévoit la v2.
-- **1Life**, outil réservé (« Outils par espace ») : son accès, et le module Clients (dossier des clients, infos, journées, vue globale ; « 1Life — Clients »). Les journées d'un client restent visibles et modifiables par l'API de l'Agenda, puisque ce sont des événements.
+- **1Life**, outil réservé (« Outils par espace ») : son accès, le module Clients (dossier des clients, identité, infos, journées, vue globale ; « 1Life — Clients », « 1Life — Fiche client et réglages »), ses réglages et le module Audit (« 1Life — Audit »). Les journées d'un client restent visibles et modifiables par l'API de l'Agenda, puisque ce sont des événements ; les notes d'audit, par l'API des notes.
 
 ## Hermès et Claude suivent
 
@@ -1685,7 +1685,7 @@ Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers,
   Aucune route HTTP, aucun écran, aucune action de l'API ni du connecteur ne donne ou ne retire cet accès.
 - **Contrôle côté serveur sur toutes les routes `/1life/*`** : un compte non autorisé reçoit une 404, la même que pour une adresse qui n'existe pas (pas une 403, qui dirait que l'outil existe). Sans session aussi : 404, et non la page de connexion.
 - **Une fois autorisé**, 1Life se règle par espace comme les autres outils, **masqué par défaut**. Masqué dans l'espace actif, ses pages ramènent à l'accueil de l'espace, comme les autres outils. Retirer l'autorisation le fait disparaître partout ; ses réglages par espace restent, pour une autorisation future.
-- **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée. *Clients est fait depuis le 26 novembre 2026 : voir « 1Life — Clients ».*
+- **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée. *Clients est fait depuis le 26 novembre 2026 : voir « 1Life — Clients ». Audit depuis le 27 novembre 2026 : voir « 1Life — Audit ».*
 - **Aucune logique métier pour l'instant** : pas de table pour les modules, pas d'appel à une IA, pas d'action dans l'API ni pour Hermès.
 - **Module Tâches** (demandé le 27 novembre 2026) : une quatrième carte « Tâches », marquée « Bientôt » comme Compte rendu, à l'adresse `/1life/taches`, avec sa page « Module à venir ».
 
@@ -2023,3 +2023,208 @@ Par défaut, validées par Rémi le 26 novembre 2026 :
 11. **Gantt sur téléphone** : un seul SVG qui défile, noms compris (pas de colonne de noms figée).
 12. **Adresses** : vue globale par paramètre (`?vue=globale`) ; fiche par l'id du dossier ; une journée par l'id de son événement (`/1life/clients/{id}/journees/{event}`).
 13. **Infos : 20 000 caractères au plus.**
+
+---
+
+# dashu — 1Life — Fiche client et réglages
+
+Nov 27, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 27 novembre 2026, avec « 1Life — Audit » et « 1Life — Audit en Word », les trois dans une seule PR (choix de Rémi). Un audit reprend l'identité du client (raison sociale, contact, version d'Open-Prod…) et celle du consultant. Jusqu'ici, la fiche d'un client n'avait que des infos en texte libre, et 1Life n'avait pas de réglages.
+
+## Fonctionnement
+
+**L'encart « Identité »**, en tête de la fiche client, au-dessus de « Infos » :
+
+- raison sociale (par défaut le nom du dossier, affiché en indication), adresse, contact principal (nom, fonction, e-mail, téléphone), secteur d'activité, effectif, version d'Open-Prod ;
+- toujours en saisie : la saisie s'enregistre par htmx une seconde après la dernière touche et à la sortie du champ, avec « Enregistrement… » puis « Enregistré à HH:MM », comme les infos ;
+- 500 caractères par champ (1 000 pour l'adresse), champs de 16 px au moins.
+
+**Un registre des champs** (`src/onelife/fields.rs`) : clé, libellé, type (texte, texte long, e-mail, téléphone). L'encart, l'enregistrement et les variables des modèles d'audit (`{{client.<clé>}}`) en sont tirés : ajouter un champ = une entrée. Une clé inconnue en base (champ retiré) est ignorée.
+
+**La page « Réglages » de 1Life** (`/1life/reglages`, un lien sur l'accueil de 1Life) :
+
+- le consultant : nom (par défaut le prénom et le nom du profil), fonction, e-mail ;
+- l'approbateur par défaut d'un audit ;
+- le dossier des modèles d'audit, choisi avec la fenêtre « Ranger » (espaces grisés, tous les niveaux) ;
+- le modèle par défaut (le modèle intégré, ou une note ou un `.md` du dossier des modèles) ;
+- le modèle d'IA par défaut (un de `ONELIFE_AI_MODELS`).
+
+Un formulaire avec « Enregistrer » ; le dossier des modèles s'enregistre dès qu'il est choisi.
+
+## Modèle de données
+
+Migration 0028.
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `onelife_client_fields` | folder\_id, key, value, updated\_at, updated\_by | Clé (`folder_id`, `key`). `ON DELETE CASCADE` sur le dossier, comme `onelife_client_infos` : les champs restent pendant le séjour en corbeille, reviennent à la restauration et partent à l'effacement |
+| `onelife_settings` | + consultant\_name, consultant\_role, consultant\_email, approver, templates\_folder\_id, default\_template, ai\_model | Colonnes ajoutées. `templates_folder_id` en `ON DELETE SET NULL`. `default_template` : `integre`, `note:<id>` ou `fichier:<id>` |
+
+## Sécurité
+
+- Tout passe par `enter()` de 1Life : 404 pour un compte non autorisé ou sans session, et pour un dossier qui n'est pas un client du compte.
+- Les valeurs sont échappées par askama. Le dossier des modèles d'un autre compte répond 404, comme le dossier des clients.
+- Hors de l'API, comme le reste de 1Life.
+
+## Critères d'acceptation
+
+- [ ] L'encart Identité s'enregistre tout seul ; la raison sociale vide affiche le nom du dossier ; une valeur trop longue est refusée sans rien écrire
+- [ ] Les champs suivent le dossier : corbeille, restauration, effacement
+- [ ] Un champ ajouté au registre apparaît dans l'encart et dans les variables sans autre changement (test qui parcourt le registre)
+- [ ] La page Réglages enregistre le consultant, l'approbateur, le modèle et le modèle d'IA ; le consultant vide reprend le nom du profil ; le dossier des modèles se choisit par la fenêtre « Ranger »
+- [ ] Un compte non autorisé reçoit 404 sur l'encart et sur les réglages ; un second compte ne voit pas les champs du premier
+- [ ] Tests dans `tests/outil_1life_clients.rs` ; STATUS et README à jour
+
+## Décisions
+
+Par défaut, pour avancer :
+
+- **Toujours en saisie** : l'encart Identité n'a pas de bouton « Modifier », ses champs sont courts.
+- **Raison sociale vide = nom du dossier**, dans la fiche comme dans les modèles.
+- **Réglages par compte**, dans `onelife_settings`, comme le dossier des clients.
+
+---
+
+# dashu — 1Life — Audit
+
+Nov 27, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 27 novembre 2026. Le module Audit sort de « Bientôt ». Rémi prend ses notes pendant l'audit chez le client, dans une note dashu ordinaire ; l'IA d'Anthropic en tire le document d'audit, d'après un modèle. Compte rendu et Tâches restent « Bientôt » ; le moteur de génération (`src/onelife/generation`) est partagé, pour que Compte rendu s'en serve plus tard.
+
+## Fonctionnement
+
+**Commencer un audit** (`/1life/audit/nouveau`, depuis la page Audit ou la fiche client, client déjà choisi) : client, date (aujourd'hui), titre (« Rapport d'audit ERP »), approbateur (celui des réglages), modèle (celui des réglages). Cela crée la note « Notes d'audit — <client> — <date> » dans le sous-dossier Audit du client (créé s'il manque) et ouvre l'éditeur.
+
+**Les notes** sont une note dashu normale : tableaux, images collées, iPhone, temps réel. Des marqueurs facultatifs en début de ligne, documentés dans l'aide : `OP:` (réponse Open-Prod), `manque:`, `statut:`, `!!` (point bloquant). Les notes peuvent aussi être rangées par service, en tableaux « Besoin | Piste » : la consigne de l'IA couvre les deux cas.
+
+**La page d'un audit** (`/1life/audit/{id}`) : client, date, titre, approbateur, modèle, lien vers les notes, les versions générées (modèle d'IA, tokens, coût estimé), les points non repris de la dernière version, les variables à compléter, « Exporter en Word ».
+
+**Générer l'audit**, sur la page de l'audit et dans l'en-tête de l'éditeur des notes : le choix du modèle d'IA (le défaut des réglages, sinon le premier de `ONELIFE_AI_MODELS`), avec le coût estimé à côté de chacun. La génération tourne en tâche de fond ; la page de l'audit montre « Génération… », puis se recharge sur le résultat. Le résultat est une nouvelle note « Audit — <client> — <date> » dans le même dossier Audit, modifiable, exportable en PDF et en Word. Depuis l'éditeur, les modifications en attente partent d'abord.
+
+**Régénérer** crée une nouvelle note, « (v2) », « (v3) »… : les versions précédentes et les notes ne changent pas.
+
+**Points non repris** : la consigne demande à l'IA, après le document, une ligne séparatrice fixe (`=== POINTS NON REPRIS ===`) puis la liste des éléments des notes absents du document. Le serveur coupe la réponse à cette ligne : la liste s'affiche sur la page de l'audit, en cases à cocher dont l'état s'enregistre, et n'entre jamais dans la note.
+
+**La page Audit** (`/1life/audit`) : tous les audits du compte, du plus récent au plus ancien (client, date, titre, statut « Notes en cours » ou « Généré », liens vers les notes et vers la dernière version), avec un filtre par client. La fiche client montre aussi ses audits.
+
+**Modèles d'audit**
+
+- Un modèle est une note ou un fichier `.md` du dossier des modèles (réglages), par exemple un `modele-audit.md` déposé par glisser-déposer. Le contenu de 1Life reste dans la base de Rémi, jamais dans le dépôt. Un modèle générique intégré au code (Contexte, Périmètre, Constats, Recommandations, Prochaines étapes, rien de 1Life) sert tant qu'aucun dossier n'est choisi, et reste proposé ensuite.
+- Syntaxe : Markdown (titres 1 à 3, listes, cases à cocher, tableaux, citations).
+- **Variables**, remplacées par le serveur avant l'envoi, pas par l'IA : `{{client.raison_sociale}}`, `{{client.adresse}}`, `{{client.secteur}}`, `{{client.effectif}}`, `{{client.version_openprod}}`, `{{client.contact.nom}}`, `{{client.contact.fonction}}`, `{{client.contact.email}}`, `{{client.contact.telephone}}`, `{{audit.date}}`, `{{audit.titre}}`, `{{audit.approbateur}}`, `{{consultant.nom}}`, `{{consultant.fonction}}`, `{{consultant.email}}`. Une variable vide ou inconnue devient « [À compléter : <nom lisible>] », et la page de l'audit le signale.
+- **Consignes** : une citation qui commence par « Consigne : » (`> Consigne : …`). Elle guide l'IA, puis le serveur la retire du résultat, même si l'IA l'a recopiée. Pas de commentaires HTML : l'éditeur lit le Markdown avec `html: false`.
+- **L'aide** (`/1life/audit/modeles`) : syntaxe, variables, consignes, marqueurs, et le modèle intégré en exemple. La même chose dans le README (« Modèles d'audit »).
+
+**La génération**
+
+- API d'Anthropic (Messages API), appelée par dashu avec reqwest, pas par le service de conversion, qui tourne sans réseau. Sans flux (une seule réponse), `max_tokens` 16 000, `output_config.effort` à `low`, `anthropic-version: 2026-10-21`, délai de 5 minutes.
+- Variables d'environnement : `ANTHROPIC_API_KEY` (tapée par Rémi sur le serveur ; jamais demandée, affichée ni journalisée), `ONELIFE_AI_MODELS` (`claude-haiku-5-5,claude-sonnet-5-5` par défaut ; le premier est le défaut), `ANTHROPIC_BASE_URL` (pour les tests). Sans clé : bouton grisé, « IA non configurée » et un lien vers le README.
+- **Ce qui part chez Anthropic** : la consigne système, le modèle aux variables remplies et le texte des notes. Ni fichiers ni images : leurs liens Markdown restent tels quels.
+- **La consigne système**, générique et dans le code : français professionnel et vouvoiement ; suivre les titres et l'ordre du modèle, appliquer chaque « Consigne : » ; ne rien inventer (ce qui manque devient « [À compléter] »), garder chiffres, noms et termes Open-Prod tels quels ; ne jamais parler des notes ni de leurs marqueurs ; redistribuer dans les bons domaines les notes rangées par service, un constat une seule fois, dans le domaine le plus pertinent, et ailleurs « voir § X » ; « à confirmer » une fois par liste, jamais à chaque puce ; répondre en Markdown seulement, puis la ligne séparatrice et les points non repris.
+- **Échecs** : réponse coupée (`stop_reason` `max_tokens`), refus du modèle, clé refusée (401), facturation (402, crédit épuisé), quota (429), surcharge (500, 529), délai dépassé, API injoignable : un message clair sur la page de l'audit, et rien de créé, ni note ni version.
+
+**Garde-fous**
+
+- Une génération à la fois par compte ; 20 par jour (demandes envoyées depuis minuit, heure de Paris).
+- Une demande d'environ 80 000 tokens au plus, sous le seuil de 100 000 où Haiku 5.5 coûte cinq fois plus : au-delà, rien n'est envoyé et la page dit pourquoi.
+- Chaque version affiche son modèle d'IA, ses tokens et son coût estimé. Tarifs dans `src/config.rs` : Haiku 5.5, 0,10 $ / 0,50 $ par million de tokens (0,50 $ / 2,50 $ au-delà de 100 000 tokens d'entrée) ; Sonnet 5.5, 2 $ / 10 $.
+
+**Hors de l'API**, comme le reste de 1Life : ni route `/api/v1`, ni outil du connecteur, ni commande d'Hermès. Les notes produites restent des notes ordinaires, que l'API voit comme les autres.
+
+## Modèle de données
+
+Migration 0028, avec la fiche client.
+
+| Table | Colonnes | Remarques |
+| --- | --- | --- |
+| `onelife_audits` | id, user\_id, client\_id (dossier), notes\_id (note), template, title, audit\_date, approver, created\_at | `ON DELETE CASCADE` sur le dossier et la note |
+| `onelife_audit_versions` | id, audit\_id, number, note\_id, model, input\_tokens, output\_tokens, cost\_micro, created\_at | Une version générée. `ON DELETE CASCADE` sur l'audit et la note. Clé unique (`audit_id`, `number`) |
+| `onelife_audit_points` | id, version\_id, position, text, done | Les points non repris d'une version et leur case |
+| `onelife_audit_runs` | id, user\_id, audit\_id, model, status (`running`, `done`, `failed`), message, version\_id, started\_at, finished\_at | Chaque demande envoyée : l'indicateur, le message d'échec, la limite par jour. Un index unique sur `user_id` quand `status = 'running'` : une génération à la fois, même avec deux clics simultanés |
+
+Un audit se voit si sa note de notes se voit (`space_access`) : la note à la corbeille, l'audit disparaît ; restaurée, il revient ; effacée, il part. Une version se voit si sa note se voit.
+
+## Sécurité
+
+- **Tout passe par `enter()` de 1Life**, avant de lire le numéro ou le formulaire : 404 pour un compte non autorisé ou sans session. L'audit d'un autre compte répond la même 404, même dans un espace partagé : un audit est à celui qui l'a commencé.
+- **Le résultat de l'IA est du contenu utilisateur** : une note normale, rendue par pulldown-cmark puis nettoyée par ammonia. L'IA n'a aucun outil ; sa réponse n'est que du texte.
+- **La clé** n'apparaît ni dans les pages, ni dans les logs, ni dans un `{:?}` de la configuration. Les messages d'erreur de l'API ne sont pas recopiés tels quels dans la page.
+- Tout `POST` porte le jeton CSRF. Ni `style=` ni script en ligne, champs de 16 px au moins, utilisable dans l'app iPhone.
+- **Dépôt public** : aucun vrai nom de client ni contenu de 1Life dans le code, les tests ou les fixtures.
+
+## Critères d'acceptation
+
+- [ ] Commencer un audit crée la note de notes dans le sous-dossier Audit du client (créé s'il manque) et ouvre l'éditeur
+- [ ] Générer de bout en bout : la note « Audit — … » est créée dans le même dossier, avec son modèle d'IA, ses tokens et son coût
+- [ ] Régénérer crée v2 sans toucher v1 ni les notes
+- [ ] Les points non repris sont séparés du document, s'affichent en cases et leur état s'enregistre
+- [ ] Les consignes sont retirées du résultat, même recopiées par l'IA
+- [ ] Une variable vide ou inconnue devient « [À compléter : …] » et la page le signale
+- [ ] Le modèle d'IA choisi est bien celui envoyé
+- [ ] Sans clé, le bouton est grisé et rien n'est envoyé
+- [ ] Réponse coupée et erreur de l'API : un message clair, rien de créé
+- [ ] Une demande trop longue n'est pas envoyée ; la 21e du jour non plus ; une seule à la fois
+- [ ] Le modèle intégré sert sans dossier des modèles ; un `.md` et une note du dossier servent de modèle
+- [ ] Deux comptes autorisés ne voient pas les audits l'un de l'autre ; un compte non autorisé ou sans session reçoit 404 partout
+- [ ] Les notes à la corbeille, l'audit disparaît ; restaurées, il revient
+- [ ] Tests dans `tests/outil_1life_audit.rs`, avec un faux serveur Anthropic local (`ANTHROPIC_BASE_URL`) et sans aucun appel réel ; STATUS et README à jour
+
+## Décisions
+
+Prises par Rémi le 27 novembre 2026 : tout ce qui précède, et **une seule PR** pour les trois sections.
+
+Par défaut, pour avancer :
+
+- **Statut déduit, pas stocké** : « Généré » dès qu'une version se voit, sinon « Notes en cours ». Une version mise à la corbeille ne compte plus.
+- **Audits personnels**, comme les journées : ni un autre membre d'un espace partagé ni un autre compte autorisé ne les voient dans le module, même s'ils voient les notes.
+- **Modèles du dossier** : son contenu direct seulement, pas ses sous-dossiers ; un modèle fait 200 Ko au plus.
+- **Estimation des tokens** avant l'envoi : un token pour trois caractères du texte envoyé, consigne système comprise. C'est prudent pour le français ; la vraie valeur, celle que renvoie l'API, est enregistrée avec la version.
+- **Coût affiché avant l'envoi** : « au plus », avec l'entrée estimée et les 16 000 tokens de sortie possibles.
+- **`effort: low`** : Haiku 5.5 et Sonnet 5.5 réfléchissent par défaut, et cette réflexion compte dans les 16 000 tokens de sortie et dans le prix. Rédiger d'après un modèle n'en demande pas beaucoup.
+- **Variables à compléter** : calculées en direct sur la page de l'audit (fiche, réglages, modèle actuels), avant comme après la génération.
+- **Séparateur absent** de la réponse : tout le texte devient le document, la liste est vide et la page le signale.
+- **Points non repris** : ceux de la dernière version.
+- **Une génération coupée par un redémarrage** est marquée échouée au démarrage suivant.
+- **Dates affichées** en toutes lettres : « 27 novembre 2026 ».
+
+---
+
+# dashu — 1Life — Audit en Word
+
+Nov 27, 2026 · @Rémi Moreau
+
+## Contexte
+
+Demandé par Rémi le 27 novembre 2026. Le document d'audit part chez le client en Word, aux couleurs de 1Life : styles, polices, en-tête et pied de page avec le logo. pandoc sait reprendre tout cela d'un document de référence (`--reference-doc`).
+
+## Fonctionnement
+
+- **Export Word d'une note d'audit** (`/1life/audit/{id}/word`, la dernière version, ou les notes s'il n'y en a pas ; `?note=` pour une note précise de l'audit), par le service de conversion, comme le PDF d'une note : le texte de la note en `.docx`, sans son titre (le document d'audit porte déjà le sien).
+- **Document de référence** : le fichier `.docx` le plus récent du dossier des modèles, s'il y en a un. Sinon, le Word de pandoc par défaut.
+- **« Exporter en Word »** sur la page de l'audit et dans l'en-tête de l'éditeur d'une note d'audit (les notes ou une version), quand le service de conversion existe. Une note qui n'est pas de l'audit répond 404.
+
+## Isolement
+
+- Le service de conversion ne voit que son dossier de travail. dashu copie donc le `.docx` de référence dans le dossier de la tâche (`reference.docx`), à côté du Markdown, et le service le passe à pandoc par `--reference-doc`. pandoc garde `--sandbox` : il lit les fichiers nommés sur la ligne de commande, rien d'autre. La CI le vérifie dans le vrai bac à sable du service (étape « Documents dans le bac à sable du service de conversion »), avec le document de référence par défaut de pandoc.
+- Le nom du fichier de référence est fixe : `job.json` dit seulement s'il y en a un, jamais un chemin.
+- Le `.docx` est vérifié avant la copie : 10 Mo au plus, et un vrai fichier ZIP (signature `PK`). Sinon, l'export se fait sans lui.
+
+## Critères d'acceptation
+
+- [ ] Une note d'audit s'exporte en Word par le service de conversion ; sans service, l'option n'est pas proposée
+- [ ] Elle prend le `.docx` du dossier des modèles comme référence (test avec un `.docx` fabriqué par le test, rien de 1Life) ; une note qui n'est pas de l'audit répond 404 et n'a pas le bouton
+- [ ] « Exporter en Word » est sur la page de l'audit et dans l'en-tête de la note d'audit
+- [ ] `--sandbox` et `--reference-doc` ensemble passent dans le bac à sable de la CI
+- [ ] STATUS et README à jour
+
+## Décisions
+
+Par défaut, pour avancer :
+
+- **Word pour les notes d'audit seulement**, sous `/1life/audit` : l'export reste dans 1Life, hors de l'API, comme le reste du module. Un export Word de toutes les notes demanderait aussi sa route dans l'API (« L'API couvre tout le site ») : à décider plus tard.
+- **Le `.docx` le plus récent** du dossier des modèles, s'il y en a plusieurs.

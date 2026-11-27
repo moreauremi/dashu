@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.id AS \"id!\", a.client_id, a.notes_id, a.template, a.title, a.audit_date, a.approver,\n                  (SELECT v.number FROM onelife_audit_versions v JOIN notes vn ON vn.id = v.note_id\n                    WHERE v.audit_id = a.id\n                      AND vn.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n                    ORDER BY v.number DESC LIMIT 1) AS \"latest_number?: i64\",\n                  (SELECT v.note_id FROM onelife_audit_versions v JOIN notes vn ON vn.id = v.note_id\n                    WHERE v.audit_id = a.id\n                      AND vn.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n                    ORDER BY v.number DESC LIMIT 1) AS \"latest_note?: i64\"\n           FROM onelife_audits a JOIN notes n ON n.id = a.notes_id\n           WHERE a.user_id = ?1\n             AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ORDER BY a.audit_date DESC, a.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "client_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "notes_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "template",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "audit_date",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "approver",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "latest_number?: i64",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "latest_note?: i64",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1ad2db51eb22319ee75a3e47ecb952b1f001297d5db95dd4dc34e35f65183732"
+}

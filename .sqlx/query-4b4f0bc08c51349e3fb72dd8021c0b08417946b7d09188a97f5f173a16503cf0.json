@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", name FROM files\n           WHERE folder_id = ?2 AND expires_at IS NULL AND lower(name) LIKE '%.md'\n             AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ORDER BY name COLLATE NOCASE, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "4b4f0bc08c51349e3fb72dd8021c0b08417946b7d09188a97f5f173a16503cf0"
+}

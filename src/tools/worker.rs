@@ -312,7 +312,13 @@ impl Tools {
                             .map_err(|_| "La conversion a échoué.".to_string())?;
                     }
                 }
-                let cmd = pandoc_command(to, dir, &input, &output).ok_or_else(impossible)?;
+                // Le document de référence Word, posé par dashu à côté du
+                // Markdown (export Word d'une note d'audit de 1Life).
+                let reference = dir.join(super::REFERENCE_DOCX);
+                let reference =
+                    (to == Conversion::Docx && reference.is_file()).then_some(reference);
+                let cmd = pandoc_command(to, dir, &input, &output, reference.as_deref())
+                    .ok_or_else(impossible)?;
                 run_tool(cmd, Duration::from_secs(300), |_| {})
             }
             _ => Err(impossible()),
@@ -497,9 +503,25 @@ const PDF_FILTER_LUA: &str = include_str!("pdf/images.lua");
 /// Typst et le PDF intermédiaire dans le dossier courant, sans regarder
 /// `TMPDIR`, et sous systemd le dossier courant est `/`, en lecture seule.
 /// Ses autres fichiers de travail (et ceux de Typst) vont au même endroit.
-pub fn pandoc_command(to: Conversion, dir: &Path, input: &Path, output: &Path) -> Option<Command> {
+/// `reference` : un document de référence Word (styles, en-tête, pied de
+/// page), dans le dossier de la tâche ; nommé sur la ligne de commande, il
+/// passe le bac à sable de pandoc (`--sandbox`).
+pub fn pandoc_command(
+    to: Conversion,
+    dir: &Path,
+    input: &Path,
+    output: &Path,
+    reference: Option<&Path>,
+) -> Option<Command> {
+    let mut args = pandoc_args(to, dir, input, output)?;
+    if let Some(reference) = reference.filter(|_| to == Conversion::Docx) {
+        // Avant `--output <sortie> <entrée>`, toujours les trois derniers.
+        let at = args.len() - 3;
+        args.insert(at, "--reference-doc".into());
+        args.insert(at + 1, reference.to_string_lossy().into_owned());
+    }
     let mut cmd = Command::new("pandoc");
-    cmd.args(pandoc_args(to, dir, input, output)?)
+    cmd.args(args)
         .current_dir(dir)
         .env("TMPDIR", dir)
         .env("HOME", dir)
@@ -979,6 +1001,7 @@ mod tests {
             dir,
             &dir.join("input.md"),
             &dir.join("output.pdf"),
+            None,
         )
         .unwrap();
         assert_eq!(cmd.get_program(), "pandoc");
@@ -990,6 +1013,27 @@ mod tests {
                 "{var}"
             );
         }
+    }
+
+    #[test]
+    fn document_de_reference_word() {
+        let dir = Path::new("/srv/dashu/tmp/jobs/8");
+        let (input, output) = (dir.join("input.md"), dir.join("output.docx"));
+        let reference = dir.join("reference.docx");
+        let cmd = pandoc_command(Conversion::Docx, dir, &input, &output, Some(&reference)).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        // Toujours en bac à sable ; la référence avant la sortie et l'entrée.
+        assert_eq!(args[0], "--sandbox");
+        let at = args.iter().position(|a| a == "--reference-doc").unwrap();
+        assert_eq!(args[at + 1], reference.to_string_lossy());
+        assert_eq!(args[args.len() - 3], "--output");
+        assert_eq!(args.last().unwrap(), &input.to_string_lossy());
+        // Seulement pour Word.
+        let pdf = pandoc_command(Conversion::Pdf, dir, &input, &output, Some(&reference)).unwrap();
+        assert!(!pdf.get_args().any(|a| a == "--reference-doc"));
     }
 
     /// La vraie conversion, avec pandoc et Typst, dans le bac à sable du
@@ -1058,6 +1102,34 @@ mod tests {
             .convert(&spec, dir, &|_| {})
             .unwrap_or_else(|e| panic!("note : {e}"));
         assert!(fs::read(dir.join("note.pdf")).unwrap().starts_with(b"%PDF"));
+
+        // Word avec un document de référence (export Word d'un audit de
+        // 1Life) : celui de pandoc par défaut, posé dans le dossier de la
+        // tâche. `--sandbox` doit l'accepter (SPEC, « 1Life — Audit en Word »).
+        let default_reference = Command::new("pandoc")
+            .args(["--print-default-data-file", "reference.docx"])
+            .output()
+            .unwrap();
+        assert!(default_reference.status.success());
+        assert!(default_reference.stdout.starts_with(b"PK"));
+        fs::write(
+            dir.join(super::super::REFERENCE_DOCX),
+            &default_reference.stdout,
+        )
+        .unwrap();
+        let spec = JobSpec {
+            task: Task::Convert,
+            media: Media::Document,
+            input: "input.md".into(),
+            output: "audit.docx".into(),
+            preview: None,
+            to: Some(Conversion::Docx),
+            pages: None,
+        };
+        tools
+            .convert(&spec, dir, &|_| {})
+            .unwrap_or_else(|e| panic!("Word avec référence : {e}"));
+        assert!(fs::read(dir.join("audit.docx")).unwrap().starts_with(b"PK"));
 
         // La CI garde les PDF pour qu'on puisse regarder la mise en page.
         if let Ok(keep) = std::env::var("DOCUMENT_PDF") {

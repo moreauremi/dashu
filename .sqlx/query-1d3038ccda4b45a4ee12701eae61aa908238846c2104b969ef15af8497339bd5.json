@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE onelife_audit_runs SET version_id = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "1d3038ccda4b45a4ee12701eae61aa908238846c2104b969ef15af8497339bd5"
+}

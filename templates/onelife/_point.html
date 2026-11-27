@@ -1,0 +1,8 @@
+{#- Un point non repris (src/onelife/audit.rs) : une case dont l'état
+    s'enregistre (htmx), jamais dans la note. -#}
+<li class="audit-point{% if point.done %} is-done{% endif %}">
+  <label class="check-row">
+    <input type="checkbox" name="done" value="1"{% if point.done %} checked{% endif %} hx-post="{{ point.action }}" hx-trigger="change" hx-target="closest li" hx-swap="outerHTML">
+    <span>{{ point.text }}</span>
+  </label>
+</li>

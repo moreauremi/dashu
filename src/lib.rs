@@ -294,6 +294,55 @@ pub fn build_router(state: AppState) -> Router {
             post(onelife::clients::journees::delete).fallback(web::error::not_found),
         )
         .route(
+            "/1life/clients/{id}/identite",
+            post(onelife::fields::save).fallback(web::error::not_found),
+        )
+        // 1Life › Réglages et Audit : mêmes contrôles.
+        .route(
+            "/1life/reglages",
+            get(onelife::settings::page)
+                .post(onelife::settings::save)
+                .fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/reglages/modeles",
+            post(onelife::settings::choose_folder).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit",
+            get(onelife::audit::list)
+                .post(onelife::audit::create)
+                .fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/nouveau",
+            get(onelife::audit::new_page).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/modeles",
+            get(onelife::audit::help).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/{id}",
+            get(onelife::audit::show).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/{id}/generer",
+            post(onelife::audit::generate).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/{id}/generation",
+            get(onelife::audit::status).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/{id}/points/{point}",
+            post(onelife::audit::toggle_point).fallback(web::error::not_found),
+        )
+        .route(
+            "/1life/audit/{id}/word",
+            get(onelife::audit::word).fallback(web::error::not_found),
+        )
+        .route(
             "/1life/{module}",
             get(onelife::module).fallback(web::error::not_found),
         )

@@ -199,7 +199,8 @@ async fn un_compte_autorise_active_1life_par_espace() {
     // venir ») ;
     // Clients est fait depuis le 26 novembre 2026 (SPEC, « 1Life — Clients ») :
     // sa page est la liste des clients, éprouvée dans
-    // tests/outil_1life_clients.rs.
+    // tests/outil_1life_clients.rs. Audit, depuis le 27 novembre 2026
+    // (tests/outil_1life_audit.rs).
     let home = alice.get("/e/taff/1life").await;
     assert_eq!(home.status, StatusCode::OK);
     assert!(
@@ -208,7 +209,7 @@ async fn un_compte_autorise_active_1life_par_espace() {
     );
     for (id, name, soon) in [
         ("cr", "Compte rendu", true),
-        ("audit", "Audit", true),
+        ("audit", "Audit", false),
         ("clients", "Clients", false),
         ("taches", "Tâches", true),
     ] {
@@ -221,7 +222,7 @@ async fn un_compte_autorise_active_1life_par_espace() {
         assert_eq!(module.status, StatusCode::OK, "{id}");
         assert_eq!(module.body.contains("Module à venir"), soon, "{id}");
         assert!(module.body.contains(name), "{id}");
-        if !soon {
+        if id == "clients" {
             // Sans dossier des clients choisi : l'état vide de Clients
             // (SPEC, « 1Life — Clients »).
             assert!(
@@ -230,7 +231,8 @@ async fn un_compte_autorise_active_1life_par_espace() {
             );
         }
     }
-    assert_eq!(home.body.matches("Bientôt").count(), 3);
+    // Compte rendu et Tâches.
+    assert_eq!(home.body.matches("Bientôt").count(), 2);
 
     // Bob, non autorisé, ne le voit toujours pas.
     let mut bob = app.logged_in(BOB).await;

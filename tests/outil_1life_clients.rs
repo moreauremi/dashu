@@ -1318,7 +1318,7 @@ async fn token(client: &mut Client) -> String {
 }
 
 #[tokio::test]
-async fn cr_et_audit_restent_bientot_et_clients_reste_hors_de_l_api() {
+async fn cr_et_taches_restent_bientot_et_clients_reste_hors_de_l_api() {
     let app = TestApp::new().await;
     let (mut alice, _, _) = ready(&app, ALICE).await;
     new_client(&mut alice, "Atelier Test").await;
@@ -1327,9 +1327,9 @@ async fn cr_et_audit_restent_bientot_et_clients_reste_hors_de_l_api() {
     assert_eq!(home.status, StatusCode::OK);
     let card = between(&home.body, "href=\"/e/taff/1life/clients\"", "</a>").unwrap();
     assert!(card.contains("Clients") && !card.contains("Bientôt"));
-    // Compte rendu, Audit et Tâches.
-    assert_eq!(home.body.matches("Bientôt").count(), 3);
-    for module in ["cr", "audit", "taches"] {
+    // Compte rendu et Tâches ; Audit est fait (tests/outil_1life_audit.rs).
+    assert_eq!(home.body.matches("Bientôt").count(), 2);
+    for module in ["cr", "taches"] {
         let page = alice.get(&format!("/e/taff/1life/{module}")).await;
         assert!(page.body.contains("Module à venir"), "{module}");
     }
@@ -1380,4 +1380,283 @@ async fn cr_et_audit_restent_bientot_et_clients_reste_hors_de_l_api() {
     // … ni dans les commandes d'Hermès.
     let hermes = std::fs::read_to_string("deploy/hermes/dashu").unwrap();
     assert!(!hermes.contains("1life") && !hermes.contains("onelife"));
+}
+
+// ---------------------------------------------------------------------
+// Fiche client : Identité ; réglages de 1Life (SPEC, « 1Life — Fiche
+// client et réglages »)
+// ---------------------------------------------------------------------
+
+/// Les valeurs enregistrées de l'encart Identité d'un client.
+async fn identity(app: &TestApp, folder: i64) -> Vec<(String, String)> {
+    sqlx::query_as("SELECT key, value FROM onelife_client_fields WHERE folder_id = ? ORDER BY key")
+        .bind(folder)
+        .fetch_all(&app.state.db)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn l_encart_identite_s_enregistre_tout_seul_et_suit_le_dossier() {
+    let app = TestApp::new().await;
+    let (mut alice, _, _) = ready(&app, ALICE).await;
+    let id = new_client(&mut alice, "Atelier Test").await;
+
+    // En tête de la fiche, au-dessus des infos ; la raison sociale vide
+    // montre le nom du dossier.
+    let fiche = alice.get(&format!("{LIST}/{id}")).await;
+    let identity_at = fiche.body.find("id=\"identity-title\"").unwrap();
+    let infos_at = fiche.body.find("id=\"infos-title\"").unwrap();
+    assert!(identity_at < infos_at);
+    assert!(fiche.body.contains("name=\"raison_sociale\" value=\"\" maxlength=\"500\" autocomplete=\"off\" placeholder=\"Atelier Test\""), "{}", fiche.body);
+    // Chaque champ du registre a sa saisie, sans autre changement.
+    for field in dashu::onelife::fields::FIELDS {
+        assert!(
+            fiche.body.contains(&format!("name=\"{}\"", field.key)),
+            "{}",
+            field.key
+        );
+        assert!(
+            fiche.body.contains(field.label.split('\'').next().unwrap()),
+            "{}",
+            field.label
+        );
+    }
+    assert!(fiche.body.contains("type=\"email\" name=\"contact.email\""));
+    assert!(
+        fiche
+            .body
+            .contains("type=\"tel\" name=\"contact.telephone\"")
+    );
+
+    // htmx enregistre tout le formulaire.
+    alice.with_header("hx-request", "true");
+    let saved = alice
+        .post(
+            &format!("{LIST}/{id}/identite"),
+            &[
+                ("raison_sociale", " Atelier Test SAS "),
+                ("adresse", "1 rue de l'Exemple\r\n69000 Lyon"),
+                ("contact.nom", "Dominique Exemple"),
+                ("contact.email", "contact@example.test"),
+                ("version_openprod", "9.2"),
+                ("inconnu", "ignoré"),
+            ],
+        )
+        .await;
+    assert_eq!(saved.status, StatusCode::OK, "{}", saved.body);
+    assert!(saved.body.starts_with("Enregistré à "));
+    let stored = identity(&app, id).await;
+    assert!(stored.contains(&("raison_sociale".into(), "Atelier Test SAS".into())));
+    assert!(stored.contains(&("adresse".into(), "1 rue de l'Exemple\n69000 Lyon".into())));
+    assert!(!stored.iter().any(|(k, _)| k == "inconnu"));
+    let fiche = alice.get(&format!("{LIST}/{id}")).await;
+    assert!(fiche.body.contains("value=\"Dominique Exemple\""));
+    assert!(fiche.body.contains("69000 Lyon</textarea>"));
+
+    // Trop long : refusé, rien n'est écrit.
+    alice.with_header("hx-request", "true");
+    let long = "x".repeat(501);
+    let refused = alice
+        .post(
+            &format!("{LIST}/{id}/identite"),
+            &[("raison_sociale", "Autre nom"), ("secteur", long.as_str())],
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(refused.body.contains("500 caractères au plus"));
+    assert!(
+        identity(&app, id)
+            .await
+            .contains(&("raison_sociale".into(), "Atelier Test SAS".into()))
+    );
+
+    // Sans htmx : retour à la fiche.
+    let plain = alice
+        .post(
+            &format!("{LIST}/{id}/identite"),
+            &[("secteur", "Ameublement")],
+        )
+        .await;
+    assert_eq!(plain.status, StatusCode::SEE_OTHER);
+    assert!(plain.location().ends_with(&format!("/1life/clients/{id}")));
+
+    // Un autre compte autorisé n'y touche pas.
+    let (mut bob, _, _) = ready(&app, BOB).await;
+    assert_eq!(
+        bob.post(&format!("{LIST}/{id}/identite"), &[("secteur", "x")])
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+
+    // Corbeille, restauration : les champs suivent le dossier.
+    let deleted = alice
+        .post(
+            &format!("/folders/{id}/delete"),
+            &[("contenu", "supprimer")],
+        )
+        .await;
+    assert_eq!(deleted.status, StatusCode::SEE_OTHER);
+    assert_eq!(
+        alice
+            .post(&format!("{LIST}/{id}/identite"), &[("secteur", "x")])
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    alice
+        .post(&format!("/settings/trash/dossier/{id}/restore"), &[])
+        .await;
+    let fiche = alice.get(&format!("{LIST}/{id}")).await;
+    assert!(fiche.body.contains("value=\"Atelier Test SAS\""));
+    // Effacé pour de bon : les champs partent avec lui.
+    alice
+        .post(
+            &format!("/folders/{id}/delete"),
+            &[("contenu", "supprimer")],
+        )
+        .await;
+    let erased = alice
+        .post(&format!("/settings/trash/dossier/{id}/erase"), &[])
+        .await;
+    assert_eq!(erased.status, StatusCode::SEE_OTHER, "{}", erased.body);
+    assert!(identity(&app, id).await.is_empty());
+}
+
+#[tokio::test]
+async fn les_reglages_de_1life() {
+    let app = TestApp::new().await;
+    let (mut alice, taff, _) = ready(&app, ALICE).await;
+    sqlx::query("UPDATE users SET first_name = 'Camille', last_name = 'Exemple' WHERE email = ?")
+        .bind(ALICE)
+        .execute(&app.state.db)
+        .await
+        .unwrap();
+
+    // Un lien depuis l'accueil de 1Life.
+    let home = alice.get("/e/taff/1life").await;
+    assert!(home.body.contains("href=\"/e/taff/1life/reglages\""));
+    let page = alice.get("/e/taff/1life/reglages").await;
+    assert_eq!(page.status, StatusCode::OK);
+    // Le nom du consultant vide : celui du profil, en indication.
+    assert!(page.body.contains("name=\"consultant_name\" value=\"\" maxlength=\"200\" autocomplete=\"name\" placeholder=\"Camille Exemple\""), "{}", page.body);
+    assert!(
+        page.body
+            .contains("<option value=\"integre\" selected>Modèle intégré</option>")
+    );
+    assert!(
+        page.body
+            .contains("<option value=\"claude-haiku-5-5\" selected>Haiku 5.5</option>")
+    );
+    assert!(page.body.contains("Aucun dossier choisi"));
+
+    let saved = alice
+        .post(
+            "/e/taff/1life/reglages",
+            &[
+                ("consultant_name", ""),
+                ("consultant_role", "Consultant ERP"),
+                ("consultant_email", "consultant@example.test"),
+                ("approver", "Dominique Exemple"),
+                ("template", "note:999"),
+                ("ai_model", "claude-sonnet-5-5"),
+            ],
+        )
+        .await;
+    assert_eq!(saved.status, StatusCode::SEE_OTHER);
+    let row: (String, String, String, String, String, String) = sqlx::query_as(
+        "SELECT consultant_name, consultant_role, consultant_email, approver, default_template, ai_model FROM onelife_settings",
+    )
+    .fetch_one(&app.state.db)
+    .await
+    .unwrap();
+    // Un modèle qui n'est pas proposé n'est pas gardé.
+    assert_eq!(
+        row,
+        (
+            String::new(),
+            "Consultant ERP".into(),
+            "consultant@example.test".into(),
+            "Dominique Exemple".into(),
+            String::new(),
+            "claude-sonnet-5-5".into()
+        )
+    );
+    // Le dossier des clients ne bouge pas.
+    let clients: Option<i64> = sqlx::query_scalar("SELECT clients_folder_id FROM onelife_settings")
+        .fetch_one(&app.state.db)
+        .await
+        .unwrap();
+    assert!(clients.is_some());
+    // Trop long : refusé, rien n'est écrit.
+    let long = "x".repeat(201);
+    let refused = alice
+        .post("/e/taff/1life/reglages", &[("approver", long.as_str())])
+        .await;
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // L'approbateur par défaut prérempli « Commencer un audit ».
+    new_client(&mut alice, "Atelier Test").await;
+    let form = alice.get("/e/taff/1life/audit/nouveau").await;
+    assert!(
+        form.body
+            .contains("name=\"approbateur\" value=\"Dominique Exemple\"")
+    );
+
+    // Le dossier des modèles, par la fenêtre « Ranger » : espaces grisés,
+    // tous les niveaux.
+    let models = folder(&app, &mut alice, taff, None, "Modèles").await;
+    let deep = folder(&app, &mut alice, taff, Some(models), "Audit").await;
+    let picker = alice.get_fragment("/destinations?modeles=1").await;
+    assert_eq!(picker.status, StatusCode::OK);
+    assert!(
+        picker.body.contains("Dossier des modèles d&#39;audit")
+            || picker.body.contains("Dossier des modèles d'audit")
+    );
+    assert!(
+        picker
+            .body
+            .contains("action=\"/e/taff/1life/reglages/modeles\"")
+    );
+    assert!(picker.body.contains(&format!("value=\"{deep}\"")));
+    // Un espace seul est refusé.
+    let space_only = alice
+        .post(
+            "/e/taff/1life/reglages/modeles",
+            &[("space_id", &taff.to_string()), ("folder_id", "")],
+        )
+        .await;
+    assert_eq!(space_only.status, StatusCode::SEE_OTHER);
+    let chosen = alice
+        .post(
+            "/e/taff/1life/reglages/modeles",
+            &[
+                ("space_id", &taff.to_string()),
+                ("folder_id", &models.to_string()),
+            ],
+        )
+        .await;
+    assert_eq!(chosen.status, StatusCode::SEE_OTHER);
+    let page = alice.get("/e/taff/1life/reglages").await;
+    assert!(page.body.contains("Taff / Modèles"));
+
+    // Le dossier d'un autre compte : 404 ; ses réglages restent les siens.
+    let (mut bob, bob_taff, _) = ready(&app, BOB).await;
+    assert_eq!(
+        bob.post(
+            "/e/taff/1life/reglages/modeles",
+            &[
+                ("space_id", &taff.to_string()),
+                ("folder_id", &models.to_string())
+            ],
+        )
+        .await
+        .status,
+        StatusCode::NOT_FOUND
+    );
+    let _ = bob_taff;
+    let bob_page = bob.get("/e/taff/1life/reglages").await;
+    assert!(!bob_page.body.contains("Consultant ERP"));
+    assert!(bob_page.body.contains("Aucun dossier choisi"));
 }

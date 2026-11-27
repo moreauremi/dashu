@@ -1,8 +1,8 @@
 {% extends "layout.html" %}
 {% block title %}{{ name }} · Clients · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
-{#- Fiche d'un client de 1Life (src/onelife/clients/mod.rs) : le dossier, ses
-    infos, ses journées dans la grille de l'Agenda et son contenu. Les trois
-    encarts s'empilent sur téléphone. -#}
+{#- Fiche d'un client de 1Life (src/onelife/clients/mod.rs) : le dossier, son
+    identité, ses infos, ses audits, ses journées dans la grille de l'Agenda
+    et son contenu. Les encarts s'empilent sur téléphone. -#}
 {% block content %}
 <header class="page-head">
   <div>
@@ -13,7 +13,26 @@
 </header>
 
 <div class="client-cards">
+  {% include "onelife/_identity.html" %}
   {% include "onelife/_infos.html" %}
+
+  <section class="card client-audits" aria-labelledby="audits-title">
+    <div class="card-head">
+      <h2 id="audits-title">Audits</h2>
+      <a class="card-link" href="{{ new_audit }}">{{ crate::assets::icon("plus")|safe }}Commencer un audit</a>
+    </div>
+    <div class="card-body">
+      {% if audits.is_empty() %}
+      <p class="muted">Aucun audit pour l'instant.</p>
+      {% else %}
+      <ul class="audit-list" role="list">
+        {%- for audit in audits %}
+        {% include "onelife/_audit_row.html" %}
+        {%- endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </section>
 
   <section class="card client-days" aria-labelledby="days-title">
     <div class="card-head">

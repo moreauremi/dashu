@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE onelife_audit_runs SET status = ?, message = ?, finished_at = ?\n         WHERE id = ? AND status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "ff9b2f8a8465b34ad0d777a5ec53d2479b3da26250bc093dc0ee17010265dd1c"
+}

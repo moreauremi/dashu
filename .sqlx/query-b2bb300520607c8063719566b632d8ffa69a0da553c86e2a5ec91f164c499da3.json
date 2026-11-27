@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT body_md FROM notes WHERE id = ?2\n           AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)",
+  "describe": {
+    "columns": [
+      {
+        "name": "body_md",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b2bb300520607c8063719566b632d8ffa69a0da553c86e2a5ec91f164c499da3"
+}

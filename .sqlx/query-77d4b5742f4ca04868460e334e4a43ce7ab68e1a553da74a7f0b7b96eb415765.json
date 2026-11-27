@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT v.id AS \"id!\", v.number, v.note_id, v.model, v.input_tokens, v.output_tokens,\n                  v.cost_micro, v.created_at, n.title\n           FROM onelife_audit_versions v JOIN notes n ON n.id = v.note_id\n           WHERE v.audit_id = ?2\n             AND n.space_id IN (SELECT space_id FROM space_access WHERE user_id = ?1)\n           ORDER BY v.number DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "number",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "note_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "model",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "input_tokens",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "output_tokens",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cost_micro",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "77d4b5742f4ca04868460e334e4a43ce7ab68e1a553da74a7f0b7b96eb415765"
+}

@@ -111,6 +111,8 @@ async fn serve() -> anyhow::Result<()> {
     calendar::google::spawn_retry(state.clone());
     files::spawn_cleanup(state.clone());
     trash::spawn_purge(state.clone());
+    // 1Life : une génération coupée par l'arrêt du serveur est marquée échouée.
+    dashu::onelife::audit::recover(&pool).await?;
     tools::spawn_collector(state.clone());
     tokio::spawn(db::session_store(&pool).continuously_delete_expired(Duration::from_secs(3600)));
 

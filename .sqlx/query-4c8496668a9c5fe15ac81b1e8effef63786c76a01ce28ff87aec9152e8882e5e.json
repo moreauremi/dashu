@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE onelife_audit_points SET done = ?\n           WHERE id = ? AND version_id IN (SELECT id FROM onelife_audit_versions WHERE audit_id = ?)\n           RETURNING id AS \"id!\", text",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "text",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4c8496668a9c5fe15ac81b1e8effef63786c76a01ce28ff87aec9152e8882e5e"
+}

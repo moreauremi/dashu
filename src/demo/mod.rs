@@ -92,6 +92,8 @@ async fn run(
         // Le téléchargeur de liens est montré au compte démo, désactivé de
         // la même façon : il n'existe pas de service pour le faire tourner.
         downloader_email: Some(fixtures.user.email.clone()),
+        // 1Life n'est pas dans la démo : pas de clé.
+        ai: crate::config::AiConfig::default(),
         from_env: FromEnv {
             base_url: true,
             google: true,

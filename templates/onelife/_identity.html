@@ -1,0 +1,25 @@
+{#- Encart Identité d'une fiche client (src/onelife/fields.rs) : un champ par
+    entrée du registre FIELDS, toujours en saisie. htmx enregistre tout le
+    formulaire une seconde après la dernière frappe et à la sortie d'un champ ;
+    la réponse (« Enregistré à 14:32 », ou un refus) va dans l'état. -#}
+<section class="card client-identity" aria-labelledby="identity-title">
+  <div class="card-head">
+    <h2 id="identity-title">Identité</h2>
+    <span class="infos-state" role="status"><span id="identity-saving" class="infos-saving">Enregistrement…</span><span id="identity-status" class="save-text"></span></span>
+  </div>
+  <div class="card-body">
+    <form class="identity-form" method="post" action="{{ identity.action }}" hx-post="{{ identity.action }}" hx-trigger="input delay:1s, change" hx-target="#identity-status" hx-swap="innerHTML" hx-indicator="#identity-saving">
+      {%- for input in identity.inputs %}
+      <label class="field{% if input.input_type.is_empty() %} field-wide{% endif %}">
+        <span class="field-label">{{ input.label }}</span>
+        {%- if input.input_type.is_empty() %}
+        <textarea class="client-notes identity-long" name="{{ input.key }}" rows="2" maxlength="{{ input.max }}" autocomplete="off">{{ input.value }}</textarea>
+        {%- else %}
+        <input type="{{ input.input_type }}" name="{{ input.key }}" value="{{ input.value }}" maxlength="{{ input.max }}" autocomplete="{{ input.autocomplete }}"{% if !input.placeholder.is_empty() %} placeholder="{{ input.placeholder }}"{% endif %}>
+        {%- endif %}
+      </label>
+      {%- endfor %}
+      <p class="hint field-wide">Enregistré tout seul. Ces champs remplissent les variables des modèles d'audit (<code>{{ "{{" }}client.…{{ "}}" }}</code>).</p>
+    </form>
+  </div>
+</section>

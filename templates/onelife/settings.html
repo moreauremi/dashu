@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+{% block title %}Réglages · 1Life · {{ crate::assets::APP_NAME }}{% endblock %}
+{#- Réglages de 1Life (src/onelife/settings.rs) : le consultant, l'approbateur
+    par défaut, le dossier des modèles d'audit (fenêtre « Ranger »), le modèle
+    et le modèle d'IA par défaut. -#}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back-link" href="{{ home }}">{{ crate::assets::icon("arrow-left")|safe }}<span>1Life</span></a>
+    <h1>Réglages</h1>
+  </div>
+</header>
+
+<section class="card form-card" aria-labelledby="templates-title">
+  <div class="card-head"><h2 id="templates-title">Dossier des modèles d'audit</h2></div>
+  <div class="card-body stack">
+    {% if let Some(label) = folder_label %}
+    <p class="client-folder">{{ crate::assets::icon("folder")|safe }}<span>{{ label }}</span></p>
+    {% else if folder_gone %}
+    <p class="hint status-warn">{{ crate::assets::icon("alert")|safe }}Le dossier des modèles n'est plus accessible (corbeille, espace quitté) : le modèle intégré sert en attendant.</p>
+    {% else %}
+    <p class="muted">Aucun dossier choisi : le modèle intégré sert pour tous les audits.</p>
+    {% endif %}
+    <p class="hint">Ses notes et ses fichiers <code>.md</code> sont des modèles d'audit ; un fichier <code>.docx</code> y sert de document de référence à l'export Word.</p>
+    <div>
+      {#- La fenêtre « Ranger » (layout.html), en mode dossier des modèles. -#}
+      <button class="btn" type="button" popovertarget="picker" hx-get="{{ picker }}" hx-target="#picker-body" hx-swap="innerHTML" data-picker>{{ crate::assets::icon("move")|safe }}<span>{% if folder_label.is_some() %}Changer{% else %}Choisir le dossier{% endif %}</span></button>
+    </div>
+  </div>
+</section>
+
+<section class="card form-card" aria-labelledby="settings-title">
+  <div class="card-head"><h2 id="settings-title">Consultant et audits</h2></div>
+  <div class="card-body">
+    {% if let Some(error) = error %}
+    <p class="alert alert-error" role="alert">{{ crate::assets::icon("alert")|safe }}<span>{{ error }}</span></p>
+    {% endif %}
+    <form class="stack" method="post" action="{{ action }}">
+      <label class="field">
+        <span class="field-label">Nom du consultant</span>
+        <input type="text" name="consultant_name" value="{{ settings.consultant_name }}" maxlength="{{ max }}" autocomplete="name"{% if !profile_name.is_empty() %} placeholder="{{ profile_name }}"{% endif %}>
+      </label>
+      <p class="hint">Vide : le prénom et le nom du profil.</p>
+      <label class="field">
+        <span class="field-label">Fonction</span>
+        <input type="text" name="consultant_role" value="{{ settings.consultant_role }}" maxlength="{{ max }}" autocomplete="organization-title">
+      </label>
+      <label class="field">
+        <span class="field-label">E-mail</span>
+        <input type="email" name="consultant_email" value="{{ settings.consultant_email }}" maxlength="{{ max }}" autocomplete="email">
+      </label>
+      <label class="field">
+        <span class="field-label">Approbateur par défaut</span>
+        <input type="text" name="approver" value="{{ settings.approver }}" maxlength="{{ max }}" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Modèle par défaut</span>
+        <select name="template">
+          {%- for choice in templates %}
+          <option value="{{ choice.key }}"{% if choice.key == template %} selected{% endif %}>{{ choice.label }}</option>
+          {%- endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Modèle d'IA par défaut</span>
+        <select name="ai_model">
+          {%- for model in models %}
+          <option value="{{ model.id }}"{% if model.selected %} selected{% endif %}>{{ model.label }}</option>
+          {%- endfor %}
+        </select>
+      </label>
+      <div class="space-actions">
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

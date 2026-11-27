@@ -935,14 +935,17 @@ pub struct DestinationsQuery {
     dossier: Option<i64>,
     /// `1` : choisir le dossier des clients de 1Life.
     clients: Option<String>,
+    /// `1` : choisir le dossier des modèles d'audit de 1Life.
+    modeles: Option<String>,
     /// Page où revenir après le rangement.
     next: Option<String>,
 }
 
 /// `GET /destinations?note=…`, `?fichier=…` ou `?dossier=…` : le contenu de
 /// la fenêtre « Ranger » (htmx), un bouton par espace et par dossier où
-/// l'élément peut aller. `?clients=1` : le dossier des clients de 1Life
-/// (404 pour un compte qui n'y est pas autorisé).
+/// l'élément peut aller. `?clients=1` : le dossier des clients de 1Life ;
+/// `?modeles=1` : son dossier des modèles d'audit (404 pour un compte qui
+/// n'y est pas autorisé).
 pub async fn picker(
     ctx: Ctx,
     State(state): State<AppState>,
@@ -976,6 +979,32 @@ pub async fn picker(
                 &Reach {
                     here,
                     depth: crate::onelife::clients::FOLDER_MAX_DEPTH,
+                    moving: None,
+                    spaces: false,
+                },
+            ),
+        }));
+    }
+    if query.modeles.as_deref() == Some("1") {
+        if ctx.tools.tool(crate::onelife::TOOL).is_none() {
+            return Err(AppError::NotFound);
+        }
+        // Un dossier à tout niveau ; les espaces sont grisés.
+        let chosen = crate::onelife::settings::chosen_folder(&state.db, user).await?;
+        let here = chosen
+            .and_then(|id| folders.iter().find(|f| f.id == id))
+            .map(|f| (f.space_id, Some(f.id)));
+        return Ok(web::html(DestinationsFragment {
+            title: "Dossier des modèles d'audit".into(),
+            action: format!("/e/{}/1life/reglages/modeles", ctx.active.slug),
+            next: String::new(),
+            leaving_shared: None,
+            items: destinations(
+                &ctx.spaces,
+                &folders,
+                &Reach {
+                    here,
+                    depth: MAX_DEPTH,
                     moving: None,
                     spaces: false,
                 },

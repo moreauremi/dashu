@@ -657,7 +657,12 @@ struct ClientPage {
     list_url: String,
     /// Le dossier du client dans l'onglet Fichiers.
     files_url: String,
+    /// L'encart Identité (`onelife/_identity.html`).
+    identity: super::fields::Identity,
     infos: Infos,
+    /// Les audits du client, et « Commencer un audit ».
+    audits: Vec<super::audit::Row>,
+    new_audit: String,
     next: Option<String>,
     grid: Grid,
     week_title: String,
@@ -717,8 +722,10 @@ pub async fn show(
     let now = time::now();
     let today = time::paris_date(now);
 
-    // Infos.
+    // Identité et infos.
     let fiche = url(&ctx, &format!("/{}", client.id));
+    let values = super::fields::stored(&state.db, client.id).await?;
+    let identity = super::fields::Identity::new(&fiche, &values, &client.name);
     let body = stored_infos(&state.db, client.id).await?;
     let editing = query.modifier.as_deref() == Some("1");
     let infos = Infos::new(&fiche, body, editing, None);
@@ -792,7 +799,10 @@ pub async fn show(
         name: client.name.clone(),
         list_url: url(&ctx, ""),
         files_url: folders::view_url(&book.space.slug, Some(client.id)),
+        identity,
         infos,
+        audits: super::audit::rows_for_client(&state, &ctx, client.id).await?,
+        new_audit: super::audit::new_url(&ctx, Some(client.id)),
         next,
         week_title: format!("Semaine du {}", time::day_month(monday)),
         prev_week: fiche_url(&ctx, client.id, Some(monday - Duration::days(7)), None),

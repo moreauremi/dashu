@@ -158,6 +158,28 @@ pub(crate) async fn pdf_download(
     ))
 }
 
+/// Type d'un fichier Word.
+pub const DOCX_MIME: &str =
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/// La note en Word, par le service de conversion (1Life › Audit, « Exporter
+/// en Word ») : le texte seul, puisque le document d'audit porte déjà son
+/// titre, et le document de référence Word s'il y en a un.
+pub(crate) async fn docx_download(
+    state: &AppState,
+    user: i64,
+    id: i64,
+    reference: Option<Vec<u8>>,
+) -> AppResult<Response> {
+    let note = load(state, user, id).await?;
+    let mut source = note.body_md;
+    if !source.ends_with('\n') {
+        source.push('\n');
+    }
+    let bytes = tools::export_document(state, source, tools::Conversion::Docx, reference).await?;
+    Ok(download(bytes, DOCX_MIME, &file_name(&note.title, "docx")))
+}
+
 /// Réponse de téléchargement : jamais affichée comme une page (même en-têtes
 /// qu'un fichier téléchargé, voir `files::attachment_response`).
 fn download(bytes: Vec<u8>, mime: &'static str, name: &str) -> Response {
