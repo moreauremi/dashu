@@ -254,7 +254,7 @@ pub async fn callback(
 
     let user_id = find_or_create_user(&state, &identity).await?;
     sign_in(&state, &session, user_id).await?;
-    Ok(see_other(super::after_sign_in(&session).await?))
+    Ok(see_other(&super::after_sign_in(&session).await?))
 }
 
 /// Retrouve le compte dashu d'une identité Google, ou le crée.

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT body_md FROM notes WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "body_md",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "552dc6fda38379ec7b68a3c37c709b5d4b48478dda98a68580033812b0ff86f8"
+}

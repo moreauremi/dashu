@@ -372,7 +372,7 @@
     <header class="card-head"><h2 id="s-trash">Corbeille</h2></header>
     <div class="card-body">
       <p class="hint">Ce que tu supprimes (notes, fichiers, dossiers, espaces) reste 30 jours dans la corbeille, d'où tu peux le restaurer.</p>
-      <div><a class="btn" href="/settings/trash">{{ crate::assets::icon("trash")|safe }}{% if trash_count == 0 %}Ouvrir la corbeille (vide){% else if trash_count == 1 %}Ouvrir la corbeille (1 élément){% else %}Ouvrir la corbeille ({{ trash_count }} éléments){% endif %}</a></div>
+      <div><a class="btn" href="/e/{{ overview_slug }}/files?dossier=corbeille">{{ crate::assets::icon("trash")|safe }}{% if trash_count == 0 %}Ouvrir la corbeille (vide){% else if trash_count == 1 %}Ouvrir la corbeille (1 élément){% else %}Ouvrir la corbeille ({{ trash_count }} éléments){% endif %}</a></div>
     </div>
   </section>
 

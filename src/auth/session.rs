@@ -24,6 +24,8 @@ use crate::web::{self, AppError, AppResult, csrf};
 pub const USER_ID: &str = "uid";
 pub const ACTIVE_SPACE: &str = "space";
 const FLASH: &str = "flash";
+/// Page demandée sans être connecté : la connexion y ramène.
+pub const AFTER_LOGIN: &str = "after_login";
 
 /// Écriture refusée depuis un onglet ouvert sur un espace disparu.
 const STALE_TAB: &str = "Cet espace n'est plus accessible : rien n'a été enregistré.";
@@ -120,7 +122,7 @@ pub struct Ctx {
     pub launch: bool,
     /// Conversions en cours (pages seulement, pas les fragments), et si l'une
     /// part d'un fichier de l'onglet Outils.
-    pub jobs: (i64, bool),
+    pub jobs: (i64, bool, Option<i64>),
     /// Outils de l'espace actif : réglables et affichés (voir `registry`).
     pub tools: registry::Shown,
 }
@@ -160,8 +162,9 @@ pub struct Shell {
     pub base: String,
     /// Conversions en cours : l'indicateur de la barre latérale.
     pub jobs_active: i64,
-    /// L'une d'elles part de l'onglet Outils : le lien y mène.
-    pub jobs_tools: bool,
+    /// Lien de l'indicateur : l'onglet Outils, ou les fichiers de l'espace
+    /// de la conversion (voir `tools::jobs_link`).
+    pub jobs_href: String,
 }
 
 impl Shell {
@@ -208,7 +211,7 @@ impl Ctx {
             tools: self.tools.visible().collect(),
             launch: self.launch,
             jobs_active: self.jobs.0,
-            jobs_tools: self.jobs.1,
+            jobs_href: crate::tools::jobs_link(self.jobs.1, self.jobs.2, &self.all_spaces()),
         })
     }
 
@@ -332,6 +335,7 @@ impl FromRequestParts<AppState> for Ctx {
             .await
             .map_err(|e| internal(e.into()))?;
         let Some(user_id) = user_id else {
+            remember_target(&session, parts).await;
             return Err(login_redirect(parts));
         };
 
@@ -460,7 +464,7 @@ impl FromRequestParts<AppState> for Ctx {
                 .await
                 .map_err(internal)?
         } else {
-            (0, false)
+            (0, false, None)
         };
 
         let tools = registry::load(&state.db, user.id, active.id)
@@ -488,6 +492,28 @@ impl FromRequestParts<AppState> for Ctx {
 /// Pour un fragment htmx, une redirection classique insérerait la page de
 /// connexion au milieu d'un widget : on répond donc 401 avec l'en-tête
 /// `HX-Redirect`, que htmx traduit en vraie navigation.
+/// Garde la page qu'on voulait ouvrir (une page entière, pas un fragment ni
+/// une écriture), avec son espace, pour y revenir après la connexion.
+async fn remember_target(session: &Session, parts: &Parts) {
+    if parts.method != Method::GET || web::is_fragment_request(&parts.headers) {
+        return;
+    }
+    let path = parts
+        .uri
+        .path_and_query()
+        .map(|p| p.as_str())
+        .unwrap_or("/");
+    // L'adresse a perdu son préfixe d'espace avant le routage : on le remet.
+    let path = match parts.extensions.get::<url::UrlSpace>() {
+        Some(space) => url::prefixed(&space.0, path),
+        None => path.to_string(),
+    };
+    if path == "/" || path.len() > 2000 {
+        return;
+    }
+    let _ = session.insert(AFTER_LOGIN, path).await;
+}
+
 fn login_redirect(parts: &Parts) -> Response {
     if web::is_fragment_request(&parts.headers) {
         (

@@ -6,4 +6,9 @@
 {% let nav_current = "settings" %}
 {% let nav_oob = true %}
 {% include "_nav_tools.html" %}
+{% let tab_list = tabs.as_slice() %}
+{% let tab_base = base.as_str() %}
+{% let tab_current = "settings" %}
+{% let tab_oob = true %}
+{% include "_tabbar.html" %}
 {% endif %}

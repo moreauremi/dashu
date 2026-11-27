@@ -208,12 +208,12 @@ async fn un_fichier_se_deplace_avec_sa_vignette() {
         )
         .await;
     assert_eq!(moved.location(), format!("/files/{id}"));
-    // Le fichier est maintenant dans École : son aperçu s'ouvre à l'adresse
-    // d'École.
-    let opened = alice.follow(moved).await;
-    assert_eq!(opened.location(), format!("/e/ecole/files/{id}"));
-    let page = alice.follow(opened).await;
+    // Le fichier est maintenant dans École. Depuis Perso, la vue
+    // d'ensemble, son aperçu s'ouvre sur place, marqué École.
+    let page = alice.follow(moved).await;
+    assert_eq!(page.status, StatusCode::OK);
     assert!(page.body.contains("Fichier déplacé vers École"));
+    assert!(page.body.contains("class=\"space-of\""));
     assert_eq!(file_of(&app, "cours.pdf").await.1, ecole);
     let thumb = alice.get(&format!("/files/{id}/thumb")).await;
     assert_eq!(thumb.status, StatusCode::OK);

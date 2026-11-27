@@ -21,6 +21,9 @@ struct Fragment {
     /// Outils affichés dans l'espace actif, s'il vient de changer : la barre
     /// latérale à remplacer.
     nav: Option<Vec<&'static Tool>>,
+    /// La barre de raccourcis du téléphone, à remplacer avec la barre
+    /// latérale (« Nouvelle note » suit Notes).
+    tabs: Vec<&'static crate::tabbar::Tab>,
     base: String,
 }
 
@@ -74,8 +77,13 @@ pub async fn set(
     if web::is_fragment_request(&headers) {
         let tools = registry::load(&state.db, ctx.user.id, space.id).await?;
         let nav = (space.id == ctx.active.id).then(|| tools.visible().collect());
+        let tabs = crate::tabbar::selected(ctx.user.mobile_tabs.as_deref())
+            .into_iter()
+            .filter(|tab| registry::tool_of_tab(tab.key).is_none_or(|id| tools.is_shown(id)))
+            .collect();
         return Ok(web::html(Fragment {
             space_id: space.id,
+            tabs,
             tools,
             nav,
             base: format!("/e/{}", ctx.active.slug),

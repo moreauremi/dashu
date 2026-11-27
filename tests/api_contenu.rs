@@ -694,7 +694,10 @@ async fn notes_ranger_detaguer_telecharger_supprimer() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     let mut alice = app.logged_in(ALICE).await;
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(trash.body.contains("Réseaux"));
     assert!(trash.body.contains("depuis Claude Code du Mac"));
 }

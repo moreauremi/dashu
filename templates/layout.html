@@ -155,20 +155,16 @@
       balisage que _jobs_indicator.html). -#}
   {% if shell.jobs_active > 0 %}
   <div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ shell.jobs_active }}" hx-trigger="every 3s" hx-swap="outerHTML">
-    <a href="{% if shell.jobs_tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ shell.jobs_active }} conversion{% if shell.jobs_active > 1 %}s{% endif %} en cours</span></a>
+    <a href="{{ shell.jobs_href }}">{{ crate::assets::icon("loader")|safe }}<span>{{ shell.jobs_active }} conversion{% if shell.jobs_active > 1 %}s{% endif %} en cours</span></a>
   </div>
   {% endif %}
 
   {#- Téléphone : barre de raccourcis en bas de l'écran (choisis dans Réglages). -#}
-  <nav class="tabbar" aria-label="Raccourcis">
-    {% for tab in shell.tabs %}
-    {% if tab.href.is_empty() %}
-    <button class="tab" type="button" data-cmd-open>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></button>
-    {% else %}
-    <a class="tab" href="{% if crate::spaces::url::is_scoped(tab.href) %}{{ shell.base }}{% endif %}{{ tab.href }}"{% if tab.key == shell.nav %} aria-current="page"{% endif %}>{{ crate::assets::icon(tab.icon)|safe }}<span>{{ tab.label }}</span></a>
-    {% endif %}
-    {% endfor %}
-  </nav>
+  {% let tab_list = shell.tabs.as_slice() %}
+  {% let tab_base = shell.base.as_str() %}
+  {% let tab_current = shell.nav %}
+  {% let tab_oob = false %}
+  {% include "_tabbar.html" %}
 
   {#- Barre de commandes « / » (app.js, « Barre de commandes ») : la saisie
       est complétée dans le navigateur, puis envoyée à POST /cmd. Le serveur

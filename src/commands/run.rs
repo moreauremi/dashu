@@ -168,7 +168,10 @@ pub async fn run(
         }
         Action::Delete => {
             let response = match opened {
-                Opened::Note { id, .. } => notes::delete(ctx, State(state), Path(id)).await?,
+                Opened::Note { id, .. } => {
+                    notes::delete(ctx, State(state), Path(id), axum::Form(Default::default()))
+                        .await?
+                }
                 Opened::File { id, temporary, .. } => {
                     let form = files::DeleteForm {
                         next: temporary.then(|| "/tools".to_string()),

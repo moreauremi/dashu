@@ -7,6 +7,8 @@
         place », qui retrouve aussi le défilement). -#}
     <a class="back-link" href="{{ back }}" data-retour>{{ crate::assets::icon("arrow-left")|safe }}<span>{{ back_label }}</span></a>
     <h1>{{ name }}</h1>
+    {#- Ouvert depuis Perso, le fichier garde son espace : on le rappelle. -#}
+    {% if let Some(space) = space %}<span class="space-of" data-accent="{{ space.color }}"><span class="dot" aria-hidden="true"></span>{{ space.name }}</span>{% endif %}
     <p class="muted">{{ meta }}</p>
     {% include "files/_tags.html" %}
     {% if let Some(expires) = expires %}<p class="file-expires">{{ expires }} · <a href="/tools">Le garder</a></p>{% endif %}
@@ -62,7 +64,7 @@
       </div>
     </details>
     {% endif %}
-    <form method="post" action="/files/{{ id }}/delete" hx-confirm="Supprimer définitivement « {{ name }} » ?">
+    <form method="post" action="/files/{{ id }}/delete" hx-confirm="Mettre « {{ name }} » à la corbeille ? Il y reste 30 jours.">
       <input type="hidden" name="next" value="{{ after_delete }}">
       <button class="btn" type="submit">{{ crate::assets::icon("trash")|safe }}<span>Supprimer</span></button>
     </form>

@@ -51,8 +51,11 @@ pub struct NoteItem {
     /// Le chemin de la note sous son dossier du premier niveau (« Exercices »,
     /// « Exercices / Corrigés »), dans la section de ce dossier.
     pub sub: Option<String>,
-    space_id: i64,
-    folder_id: Option<i64>,
+    /// Titre brut (« Sans titre » s'il est vide), pour un gabarit qui
+    /// échappe lui-même (la recherche de l'onglet Fichiers).
+    pub(crate) plain: String,
+    pub(crate) space_id: i64,
+    pub(crate) folder_id: Option<i64>,
 }
 
 /// Une section de la liste : les notes d'un dossier du premier niveau (sous-
@@ -60,6 +63,8 @@ pub struct NoteItem {
 pub struct NoteGroup {
     /// Nom du dossier ; `None` pour les notes sans dossier.
     pub title: Option<String>,
+    /// Le titre ouvre ce dossier (`/notes?dossier=N`).
+    pub href: Option<String>,
     /// Vue d'ensemble de Perso : l'espace d'un dossier venu d'ailleurs.
     pub space: Option<crate::spaces::SpaceTag>,
     pub items: Vec<NoteItem>,
@@ -89,6 +94,25 @@ struct ListPage {
     only: bool,
     all_href: String,
     only_href: String,
+    /// Dossier ouvert (`?dossier=N`) : son chemin, « École / Math », et son
+    /// adresse dans l'onglet Fichiers.
+    folder: Option<(String, String)>,
+    dossier: Option<i64>,
+    /// Cette page, filtres compris : on y revient après une action de ligne.
+    here: String,
+    /// Notes est affiché ici : le bouton « Écrire la première » y a un sens.
+    tool: bool,
+}
+
+/// Ajoute le dossier ouvert à une adresse de la liste.
+fn in_folder(url: String, folder: Option<i64>) -> String {
+    match folder {
+        Some(id) => {
+            let join = if url.contains('?') { '&' } else { '?' };
+            format!("{url}{join}dossier={id}")
+        }
+        None => url,
+    }
 }
 
 #[derive(Deserialize)]
@@ -98,6 +122,8 @@ pub struct ListQuery {
     /// `1` : dans Perso, seulement ses propres notes.
     #[serde(default)]
     seul: u8,
+    /// Seulement les notes de ce dossier (et de ses sous-dossiers).
+    dossier: Option<i64>,
 }
 
 /// `GET /notes?q=…&tag=…`
@@ -111,11 +137,33 @@ pub async fn list(
         return Ok(back);
     }
     let q = query.q.unwrap_or_default().trim().to_string();
+    // « #Math » et « math » désignent le même tag, comme dans Fichiers.
     let tag = query
         .tag
-        .map(|t| t.trim().to_string())
+        .map(|t| normalize_tag(&t))
         .filter(|t| !t.is_empty());
     let only = query.seul == 1;
+    let all_folders = folders::all(&state.db, ctx.user.id).await?;
+    // Un dossier ouvert : il appartient à un espace accessible ; hors de
+    // Perso, il s'ouvre dans le sien, comme dans l'onglet Fichiers.
+    let folder = match query.dossier {
+        Some(id) => {
+            let folder = all_folders
+                .iter()
+                .find(|f| f.id == id)
+                .ok_or(AppError::NotFound)?;
+            if folder.space_id != ctx.active.id && !ctx.active.is_overview() {
+                let space = ctx.space_by_id(folder.space_id).ok_or(AppError::NotFound)?;
+                return Ok(see_other(&crate::spaces::url::prefixed(
+                    &space.slug,
+                    &format!("/notes?dossier={id}"),
+                )));
+            }
+            Some(folder.clone())
+        }
+        None => None,
+    };
+    let dossier = folder.as_ref().map(|f| f.id);
     // Perso montre les notes de tous les espaces, sauf « Seulement Perso ».
     let (user, space) = (ctx.user.id, ctx.scope(only));
     let now = time::now();
@@ -146,7 +194,15 @@ pub async fn list(
         item.tags = tags_by_note.remove(&item.id).unwrap_or_default();
         item.space = ctx.tag_of(item.space_id);
     }
-    let groups = by_folder(&ctx, items, &folders::all(&state.db, user).await?);
+    // Dossier ouvert : ses notes et celles de ses sous-dossiers.
+    if let Some(id) = dossier {
+        items.retain(|item| {
+            folders::chain(&all_folders, item.folder_id)
+                .iter()
+                .any(|f| f.id == id)
+        });
+    }
+    let groups = by_folder(&ctx, items, &all_folders);
 
     let chips = sqlx::query!(
         r#"SELECT t.name AS "name!", COUNT(DISTINCT n.id) AS "count!: i64"
@@ -168,7 +224,10 @@ pub async fn list(
             .is_some_and(|t| t.eq_ignore_ascii_case(&row.name));
         TagChip {
             // Recliquer sur le tag actif retire le filtre.
-            href: list_url(&q, if active { None } else { Some(&row.name) }, only),
+            href: in_folder(
+                list_url(&q, if active { None } else { Some(&row.name) }, only),
+                dossier,
+            ),
             name: row.name,
             count: row.count,
             active,
@@ -176,13 +235,29 @@ pub async fn list(
     })
     .collect();
 
+    let folder_info = folder.as_ref().map(|f| {
+        let space = ctx
+            .space_by_id(f.space_id)
+            .map_or_else(String::new, |s| s.name.clone());
+        let slug = ctx
+            .space_by_id(f.space_id)
+            .map_or_else(|| ctx.active.slug.clone(), |s| s.slug.clone());
+        (
+            folders::label(&space, &all_folders, Some(f.id)),
+            folders::view_url(&slug, Some(f.id)),
+        )
+    });
     let page = ListPage {
         shell: ctx.shell("notes").await?,
-        clear_tag_href: list_url(&q, None, only),
+        clear_tag_href: in_folder(list_url(&q, None, only), dossier),
         overview: ctx.active.is_overview(),
         only,
-        all_href: list_url(&q, tag.as_deref(), false),
-        only_href: list_url(&q, tag.as_deref(), true),
+        all_href: in_folder(list_url(&q, tag.as_deref(), false), dossier),
+        only_href: in_folder(list_url(&q, tag.as_deref(), true), dossier),
+        here: in_folder(list_url(&q, tag.as_deref(), only), dossier),
+        folder: folder_info,
+        dossier,
+        tool: ctx.tools.is_shown("notes"),
         q,
         tag,
         groups,
@@ -218,6 +293,7 @@ fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<No
     if !loose.is_empty() {
         groups.push(NoteGroup {
             title: None,
+            href: None,
             space: None,
             items: loose,
         });
@@ -238,6 +314,7 @@ fn by_folder(ctx: &Ctx, items: Vec<NoteItem>, all: &[folders::Folder]) -> Vec<No
         if let Some(items) = by_top.remove(&top.id) {
             groups.push(NoteGroup {
                 title: Some(top.name.clone()),
+                href: Some(format!("/notes?dossier={}", top.id)),
                 space: ctx.tag_of(top.space_id),
                 items,
             });
@@ -295,14 +372,21 @@ pub fn mark_matches(text: &str) -> String {
 }
 
 pub(crate) fn display_title(title: &str) -> String {
+    escape(&plain_title(title))
+}
+
+/// Titre d'une note, sans échappement : « Sans titre » pour un titre vide.
+/// Pour un gabarit askama ou un message, qui échappent eux-mêmes (sinon
+/// « R&D » s'afficherait « R&amp;D »).
+pub(crate) fn plain_title(title: &str) -> String {
     if title.trim().is_empty() {
         "Sans titre".into()
     } else {
-        escape(title)
+        title.to_string()
     }
 }
 
-async fn recent_in_space(
+pub(crate) async fn recent_in_space(
     db: &SqlitePool,
     user: i64,
     space: Option<i64>,
@@ -331,6 +415,7 @@ async fn recent_in_space(
         .into_iter()
         .map(|row| NoteItem {
             id: row.id,
+            plain: plain_title(&row.title),
             title_html: display_title(&row.title),
             excerpt_html: escape(&markdown::excerpt(&row.head, 160)),
             pinned: row.pinned,
@@ -344,7 +429,7 @@ async fn recent_in_space(
         .collect())
 }
 
-async fn search_in_space(
+pub(crate) async fn search_in_space(
     db: &SqlitePool,
     user: i64,
     space: Option<i64>,
@@ -379,6 +464,7 @@ async fn search_in_space(
         .into_iter()
         .map(|row| NoteItem {
             id: row.id,
+            plain: plain_title(&row.title),
             title_html: if row.title.trim().is_empty() {
                 "Sans titre".into()
             } else {
@@ -442,7 +528,14 @@ pub async fn create(
     )
     .execute(&state.db)
     .await?;
-    Ok(see_other(&format!("/notes/{id}")))
+    // Créée depuis un dossier de Fichiers : le retour de l'éditeur y ramène.
+    Ok(see_other(&match folder {
+        Some(folder) => crate::files::with_origin(
+            &format!("/notes/{id}"),
+            Some(&folders::view_url(&ctx.active.slug, Some(folder))),
+        ),
+        None => format!("/notes/{id}"),
+    }))
 }
 
 /// Crée une note (titre éventuel) dans un espace de l'utilisateur et rend
@@ -527,6 +620,13 @@ struct EditPage {
     pdf: bool,
     /// Tailles du texte proposées pour le PDF.
     zooms: &'static [u16],
+    /// Page où revenir (d'où l'on a ouvert la note) et son nom.
+    back: String,
+    back_label: String,
+    /// Espace de la note quand elle s'ouvre depuis Perso sans en changer.
+    space: Option<crate::spaces::SpaceTag>,
+    /// Espace de la note : une image collée y est envoyée.
+    space_id: i64,
 }
 
 /// `GET /notes/{id}`
@@ -534,7 +634,9 @@ pub async fn edit_page(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(query): Query<crate::files::ViewQuery>,
 ) -> AppResult<Response> {
+    let depuis = crate::files::valid_origin(query.depuis.as_deref());
     let note = sqlx::query!(
         r#"SELECT space_id, folder_id, title, body_md, pinned AS "pinned!: bool", updated_at,
                   revision AS "revision!: i64"
@@ -546,15 +648,29 @@ pub async fn edit_page(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    // Note ouverte depuis un autre espace (recherche globale, Perso) : elle
-    // s'ouvre dans le sien, par l'adresse de cet espace.
-    if note.space_id != ctx.active.id {
+    // Note d'un autre espace (recherche globale, lien) : elle s'ouvre dans
+    // le sien, par l'adresse de cet espace. Depuis Perso, la vue d'ensemble,
+    // elle s'ouvre sur place, avec la pastille de son espace : le retour
+    // ramène à Perso.
+    if note.space_id != ctx.active.id && !ctx.active.is_overview() {
         let space = ctx.space_by_id(note.space_id).ok_or(AppError::NotFound)?;
         return Ok(see_other(&crate::spaces::url::prefixed(
             &space.slug,
-            &format!("/notes/{id}"),
+            &crate::files::with_origin(&format!("/notes/{id}"), depuis),
         )));
     }
+
+    // Retour à la page d'où l'on vient ; à défaut, à la liste des notes.
+    let origin = match depuis {
+        Some(depuis) => {
+            let all = folders::all(&state.db, ctx.user.id).await?;
+            crate::files::origin_label(&ctx, &state.db, &all, depuis)
+                .await?
+                .map(|label| (depuis.to_string(), label))
+        }
+        None => None,
+    };
+    let (back, back_label) = origin.unwrap_or_else(|| ("/notes".into(), "Notes".into()));
 
     let page = EditPage {
         id,
@@ -572,6 +688,10 @@ pub async fn edit_page(
         folder: note_folder(&ctx, &state.db, note.space_id, note.folder_id).await?,
         pdf: state.config.work_dir.is_some(),
         zooms: &export::ZOOMS,
+        back,
+        back_label,
+        space: ctx.tag_of(note.space_id),
+        space_id: note.space_id,
         shell: ctx.shell("notes").await?,
     };
     Ok(web::html(page))
@@ -673,12 +793,29 @@ struct PinButton {
 }
 
 /// `POST /notes/{id}/pin` : épingle ou désépingle. Répond par le bouton à jour.
+#[derive(Deserialize, Default)]
+pub struct PinForm {
+    /// Page où revenir (le menu d'une ligne de la liste) ; sans elle, le
+    /// bouton de l'éditeur, à jour.
+    next: Option<String>,
+}
+
 pub async fn toggle_pin(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<PinForm>,
 ) -> AppResult<Response> {
     let pinned = toggle_pinned(&state.db, ctx.user.id, id).await?;
+    if let Some(next) = form.next.as_deref() {
+        ctx.flash_ok(if pinned {
+            "Note épinglée"
+        } else {
+            "Note désépinglée"
+        })
+        .await?;
+        return Ok(see_other(web::local_path(Some(next))));
+    }
     Ok(web::html(PinButton { id, pinned }))
 }
 
@@ -716,6 +853,15 @@ pub async fn move_to_space(
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = folders::parse_id(form.folder_id.as_deref())?;
     let folder = folders::target(&state.db, ctx.user.id, target.id, folder).await?;
+    // L'espace d'où elle part : ses images la suivent (voir `carry_images`).
+    let from = sqlx::query_scalar!(
+        "SELECT space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        id,
+        ctx.user.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
     let moved = sqlx::query!(
         "UPDATE notes SET space_id = ?, folder_id = ? WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         target.id,
@@ -729,18 +875,100 @@ pub async fn move_to_space(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
-    let message = match folder {
+    let carried = carry_images(&state.db, ctx.user.id, id, from, target.id, folder).await?;
+    let mut message = match folder {
         Some(_) => format!(
             "Note rangée dans {}",
             crate::files::place_label(&ctx, &state.db, target, folder).await?
         ),
         None => format!("Note déplacée vers {}", target.name),
     };
+    match carried {
+        0 => {}
+        1 => message.push_str(" · 1 image la suit"),
+        n => message.push_str(&format!(" · {n} images la suivent")),
+    }
     ctx.flash_ok(message).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
         None => "/notes",
     }))
+}
+
+/// Les fichiers de dashu qu'une note affiche ou cite : les identifiants des
+/// adresses `/files/<id>` de son Markdown (`/files/12/raw` d'une image
+/// collée, `/files/12` d'un lien), sans doublon.
+pub fn attachments(body: &str) -> Vec<i64> {
+    let mut ids = Vec::new();
+    for (at, _) in body.match_indices("/files/") {
+        let rest = &body[at + "/files/".len()..];
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        // Le nombre doit s'arrêter là (pas « /files/12abc »).
+        let next = rest[digits.len()..].chars().next();
+        if digits.is_empty() || next.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            continue;
+        }
+        if let Ok(id) = digits.parse::<i64>()
+            && !ids.contains(&id)
+        {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
+/// Déplace avec une note les images (et fichiers liés) qu'elle affiche,
+/// quand elle change d'espace (SPEC, « Parcours et espaces ») : sinon, un
+/// membre du nouvel espace qui n'a pas accès à l'ancien verrait des images
+/// cassées. Un fichier suit s'il est encore dans l'espace de départ et
+/// qu'aucune autre note de cet espace ne l'affiche ; il va dans le dossier
+/// de la note. Rend le nombre de fichiers déplacés.
+pub(crate) async fn carry_images(
+    db: &SqlitePool,
+    user: i64,
+    note: i64,
+    from: i64,
+    to: i64,
+    folder: Option<i64>,
+) -> AppResult<usize> {
+    if from == to {
+        return Ok(0);
+    }
+    let body = sqlx::query_scalar!("SELECT body_md FROM notes WHERE id = ?", note)
+        .fetch_optional(db)
+        .await?
+        .unwrap_or_default();
+    let wanted = attachments(&body);
+    if wanted.is_empty() {
+        return Ok(0);
+    }
+    // Ce que les autres notes de l'espace de départ affichent reste.
+    let mut kept = Vec::new();
+    for other in sqlx::query_scalar!(
+        "SELECT body_md FROM notes WHERE space_id = ? AND id != ?",
+        from,
+        note
+    )
+    .fetch_all(db)
+    .await?
+    {
+        kept.extend(attachments(&other));
+    }
+    let mut carried = 0;
+    for id in wanted.into_iter().filter(|id| !kept.contains(id)) {
+        let here = sqlx::query_scalar!(
+            r#"SELECT id AS "id!" FROM files WHERE id = ? AND space_id = ? AND expires_at IS NULL"#,
+            id,
+            from
+        )
+        .fetch_optional(db)
+        .await?;
+        if here.is_some() {
+            crate::files::move_into(db, user, id, to, folder).await?;
+            carried += 1;
+        }
+    }
+    Ok(carried)
 }
 
 /// Le sélecteur « Dossier » de l'éditeur, à côté des tags.
@@ -847,17 +1075,33 @@ pub async fn set_folder(
     }))
 }
 
+#[derive(Deserialize, Default)]
+pub struct DeleteForm {
+    /// Page où revenir (celle d'où l'on a ouvert la note) ; la liste sans
+    /// précision.
+    pub(crate) next: Option<String>,
+}
+
 /// `POST /notes/{id}/delete`
 pub async fn delete(
     ctx: Ctx,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::Form(form): axum::Form<DeleteForm>,
 ) -> AppResult<Response> {
     // Dans la corbeille, pas effacée : 30 jours pour la restaurer.
     crate::trash::note(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
-    ctx.flash_ok("Note mise dans la corbeille (Réglages › Corbeille)")
-        .await?;
-    Ok(see_other("/notes"))
+    ctx.flash_link(
+        "ok",
+        "Note mise dans la corbeille, pour 30 jours",
+        crate::trash::page::PLACE,
+        "Ouvrir la corbeille",
+    )
+    .await?;
+    Ok(see_other(match form.next.as_deref() {
+        Some(next) => web::local_path(Some(next)),
+        None => "/notes",
+    }))
 }
 
 // ---------------------------------------------------------------------
@@ -1070,6 +1314,14 @@ mod tests {
     fn extrait_de_recherche_echappe() {
         let raw = format!("<b>{MARK_OPEN}mot{MARK_CLOSE}</b>");
         assert_eq!(mark_matches(&raw), "&lt;b&gt;<mark>mot</mark>&lt;/b&gt;");
+    }
+
+    #[test]
+    fn fichiers_cites_par_une_note() {
+        let body = "![photo](/files/12/raw) et [cours](/files/7), encore ![x](/files/12/raw)
+                    `/files/99abc` /files/ seul, /files/3?depuis=x";
+        assert_eq!(attachments(body), vec![12, 7, 3]);
+        assert!(attachments("aucun fichier").is_empty());
     }
 
     #[test]

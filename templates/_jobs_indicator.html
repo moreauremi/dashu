@@ -3,7 +3,7 @@
     qui est prêt, avec un lien, et se tait. -#}
 {%- if active > 0 %}
 <div id="jobs-indicator" class="jobs-indicator" role="status" hx-get="/jobs/indicator?active={{ active }}" hx-trigger="every 3s" hx-swap="outerHTML">
-  <a href="{% if tools %}/tools{% else %}/files{% endif %}">{{ crate::assets::icon("loader")|safe }}<span>{{ active }} conversion{% if active > 1 %}s{% endif %} en cours</span></a>
+  <a href="{{ href }}">{{ crate::assets::icon("loader")|safe }}<span>{{ active }} conversion{% if active > 1 %}s{% endif %} en cours</span></a>
 </div>
 {%- else if let Some(done) = done %}
 <div id="jobs-indicator" class="jobs-indicator {% if done.ok %}is-done{% else %}is-failed{% endif %}" role="status">

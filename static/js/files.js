@@ -102,9 +102,13 @@
 
   /** Envoie un fichier dans l'espace de la page et rend son identifiant
    *  (éditeur de notes : image collée). `name` remplace le nom du fichier. */
+  // L'image va dans l'espace de la note (data-note-space), qui peut différer
+  // de l'espace actif : une note d'École ouverte depuis Perso.
   window.dashuUpload = (file, name) =>
     new Promise((resolve, reject) => {
-      waiting.push({ file, name, resolve, reject, ...addRow({ name: name || file.name }) });
+      const noteSpace = document.querySelector("[data-note-space]")?.dataset.noteSpace;
+      const where = noteSpace ? { space: noteSpace } : undefined;
+      waiting.push({ file, name, where, resolve, reject, ...addRow({ name: name || file.name }) });
       pump();
     });
 

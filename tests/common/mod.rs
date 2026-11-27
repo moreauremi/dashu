@@ -955,6 +955,10 @@ pub fn note_id(response: &TestResponse) -> i64 {
     response
         .location()
         .trim_start_matches("/notes/")
+        // Une note créée depuis un dossier porte sa page d'origine (`?depuis=`).
+        .split('?')
+        .next()
+        .unwrap_or_default()
         .parse()
         .expect("redirection vers /notes/{id}")
 }

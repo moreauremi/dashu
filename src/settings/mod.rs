@@ -74,6 +74,8 @@ struct SettingsPage {
     instance_html: String,
     /// Éléments dans la corbeille.
     trash_count: usize,
+    /// Adresse de Perso : la corbeille s'ouvre sur tout ce qui a été supprimé.
+    overview_slug: String,
     /// Outils de chaque espace en service : réglables, et affichés ou non.
     space_tools: HashMap<i64, Shown>,
 }
@@ -211,6 +213,13 @@ pub async fn page(ctx: Ctx, State(state): State<AppState>) -> AppResult<Response
         connexions_html: connexions::ConnexionsCard::render_html(&state, ctx.user.id).await?,
         instance_html: instance::InstanceCard::render_html(&state, &ctx).await?,
         trash_count: crate::trash::page::count(&state.db, ctx.user.id).await?,
+        overview_slug: ctx
+            .spaces
+            .iter()
+            .find(|s| s.is_overview())
+            .unwrap_or(&ctx.active)
+            .slug
+            .clone(),
         has_password: ctx.user.has_password,
         google_linked: ctx.user.google_linked,
         google_enabled: state.google.is_some(),

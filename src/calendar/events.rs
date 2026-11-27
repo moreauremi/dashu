@@ -141,9 +141,13 @@ pub(crate) fn validate_in(
     })
 }
 
-/// Agenda de l'espace de l'événement, sur sa semaine.
+/// Agenda de l'espace de l'événement, sur sa semaine. Depuis Perso, qui
+/// réunit les agendas de tous les espaces, on y reste.
 fn calendar_url(ctx: &Ctx, space_id: i64, date: NaiveDate) -> String {
     let path = format!("/calendar?view=week&date={}", date.format("%Y-%m-%d"));
+    if ctx.active.is_overview() {
+        return path;
+    }
     match ctx.space_by_id(space_id) {
         Some(space) => crate::spaces::url::prefixed(&space.slug, &path),
         None => path,
@@ -314,6 +318,17 @@ pub async fn edit_page(
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
     let event = owned(&state, ctx.user.id, id).await?;
+    // Événement d'un autre espace : il s'ouvre dans le sien, comme une note
+    // ou un fichier. Depuis Perso, qui réunit tous les agendas, sur place.
+    if event.space_id != ctx.active.id
+        && !ctx.active.is_overview()
+        && let Some(space) = ctx.space_by_id(event.space_id)
+    {
+        return Ok(web::see_other(&crate::spaces::url::prefixed(
+            &space.slug,
+            &format!("/calendar/events/{id}"),
+        )));
+    }
     let date = time::paris_date(event.starts_at);
     let linked = google::linked(&state, ctx.user.id).await?;
     let sync = match (event.google, linked.is_some()) {

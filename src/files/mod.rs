@@ -211,6 +211,9 @@ pub struct ListQuery {
     q: Option<String>,
     /// Filtre par tag.
     tag: Option<String>,
+    /// Dans la corbeille : une sorte d'élément (`note`, `fichier`…).
+    #[serde(rename = "type")]
+    kind: Option<String>,
 }
 
 /// Endroit montré par l'onglet Fichiers.
@@ -233,6 +236,11 @@ pub async fn list(
         return Ok(back);
     }
     use crate::folders::{self, view_url};
+
+    // La corbeille, dossier de la racine (SPEC, « Parcours et espaces »).
+    if query.dossier.as_deref() == Some("corbeille") {
+        return crate::trash::page::show(ctx, &state, query.kind.as_deref()).await;
+    }
 
     let user = ctx.user.id;
     let all = folders::all(&state.db, user).await?;
@@ -327,6 +335,24 @@ pub async fn list(
                 "espace"
             };
             (name, view_url(&space.slug, folder), crumbs, Some(folder))
+        }
+    };
+    // La recherche et le tag en cours font partie de la page : une action
+    // (renommer, ranger, supprimer…) ou le rechargement après un envoi y
+    // ramène sans les perdre.
+    let here = {
+        let mut params = form_urlencoded::Serializer::new(String::new());
+        for (key, value) in [("q", query.q.as_deref()), ("tag", query.tag.as_deref())] {
+            if let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) {
+                params.append_pair(key, value);
+            }
+        }
+        let params = params.finish();
+        if params.is_empty() {
+            here
+        } else {
+            let join = if here.contains('?') { '&' } else { '?' };
+            format!("{here}{join}{params}")
         }
     };
 
@@ -540,9 +566,32 @@ pub async fn list(
         })
         .collect()
     };
-    // Pendant une recherche, la page ne montre que ses résultats.
+    // Pendant une recherche, la page ne montre que ses résultats : les
+    // fichiers trouvés, et les notes de l'endroit (et de ce qu'il contient)
+    // qui répondent à la recherche ou portent le tag, comme dans l'onglet
+    // Notes.
     let (folder_rows, notes) = if searching {
-        (Vec::new(), Vec::new())
+        let found = match &fts {
+            Some(fts) => {
+                crate::notes::search_in_space(&state.db, user, None, fts, tag.as_deref(), now)
+                    .await?
+            }
+            None => {
+                crate::notes::recent_in_space(&state.db, user, None, tag.as_deref(), now).await?
+            }
+        };
+        let notes = found
+            .into_iter()
+            .filter(|n| in_scope(n.space_id, n.folder_id))
+            .map(|n| NoteRow {
+                picker: folders::picker_url("note", n.id, Some(&here)),
+                id: n.id,
+                title: n.plain,
+                pinned: n.pinned,
+                updated: n.updated,
+            })
+            .collect();
+        (Vec::new(), notes)
     } else {
         (folder_rows, notes)
     };
@@ -688,6 +737,24 @@ async fn root_rows(
     )
     .fetch_one(db)
     .await?;
+    // La corbeille : ce qui a été supprimé, dans tous les espaces.
+    let trashed = crate::trash::page::count(db, user).await?;
+    let trash_row = FolderRow {
+        id: None,
+        name: "Corbeille".into(),
+        href: crate::trash::page::PLACE.into(),
+        summary: match trashed {
+            0 => "Vide · ce qui est supprimé y reste 30 jours".into(),
+            1 => "1 élément · effacé 30 jours après sa suppression".into(),
+            n => format!("{n} éléments · effacés 30 jours après leur suppression"),
+        },
+        empty: trashed == 0,
+        icon: "trash",
+        color: None,
+        parent_label: String::new(),
+        drop: None,
+        picker: None,
+    };
     rows.push(FolderRow {
         id: None,
         name: "Temporaire".into(),
@@ -711,6 +778,7 @@ async fn root_rows(
         drop: None,
         picker: None,
     });
+    rows.push(trash_row);
     Ok(rows)
 }
 
@@ -906,6 +974,15 @@ pub(crate) async fn move_into(
     if moved == 0 {
         return Err(AppError::NotFound);
     }
+    // Une conversion en cours suit son fichier : son résultat arrivera dans
+    // le nouvel espace, à côté de lui (comme pour un dossier déplacé).
+    sqlx::query!(
+        "UPDATE jobs SET space_id = ? WHERE file_id = ? AND status IN ('queued', 'running')",
+        space,
+        id
+    )
+    .execute(db)
+    .await?;
     Ok(folder)
 }
 
@@ -932,13 +1009,20 @@ pub async fn move_to_space(
     let target = ctx.space_by_id(form.space_id).ok_or(AppError::NotFound)?;
     let folder = crate::folders::parse_id(form.folder_id.as_deref())?;
     let folder = move_into(&state.db, ctx.user.id, id, target.id, folder).await?;
-    let message = match folder {
+    let mut message = match folder {
         Some(_) => format!(
             "Fichier rangé dans {}",
             place_label(&ctx, &state.db, target, folder).await?
         ),
         None => format!("Fichier déplacé vers {}", target.name),
     };
+    // Un lien de partage dont l'auteur n'a pas accès au nouvel espace ne
+    // marche plus : on le dit tout de suite.
+    match share::broken_links(&state.db, id).await? {
+        0 => {}
+        1 => message.push_str(" · 1 lien de partage ne marche plus"),
+        n => message.push_str(&format!(" · {n} liens de partage ne marchent plus")),
+    }
     ctx.flash_ok(message).await?;
     Ok(see_other(match form.next.as_deref() {
         Some(next) => web::local_path(Some(next)),
@@ -1638,8 +1722,13 @@ pub async fn delete(
         }
         None => {
             crate::trash::file(&state.db, crate::trash::Who::site(ctx.user.id), id).await?;
-            ctx.flash_ok("Fichier mis dans la corbeille (Réglages › Corbeille)")
-                .await?;
+            ctx.flash_link(
+                "ok",
+                "Fichier mis dans la corbeille, pour 30 jours",
+                crate::trash::page::PLACE,
+                "Ouvrir la corbeille",
+            )
+            .await?;
         }
     }
     Ok(see_other(match form.next.as_deref() {
@@ -1673,6 +1762,8 @@ const TEXT_PREVIEW_BYTES: u64 = 200 * 1024;
 struct ViewPage {
     shell: Shell,
     id: i64,
+    /// Espace du fichier quand il s'ouvre depuis Perso sans en changer.
+    space: Option<crate::spaces::SpaceTag>,
     /// Le dossier du fichier (ou Temporaire) : adresse et nom, pour revenir.
     back: String,
     back_label: String,
@@ -1752,17 +1843,17 @@ fn is_text(mime: &str) -> bool {
 pub struct ViewQuery {
     /// Page d'où l'on a ouvert le fichier, posée par app.js (« Retour à la
     /// bonne place ») : le lien de retour y ramène.
-    depuis: Option<String>,
+    pub(crate) depuis: Option<String>,
 }
 
 /// Une adresse `depuis` acceptée : un chemin de l'app (jamais un autre site),
 /// de longueur raisonnable.
-fn valid_origin(depuis: Option<&str>) -> Option<&str> {
+pub(crate) fn valid_origin(depuis: Option<&str>) -> Option<&str> {
     depuis.filter(|d| d.len() <= 2000 && web::local_path(Some(d)) == *d)
 }
 
 /// `path` avec son paramètre `depuis`, s'il y en a un.
-fn with_origin(path: &str, depuis: Option<&str>) -> String {
+pub(crate) fn with_origin(path: &str, depuis: Option<&str>) -> String {
     match depuis {
         Some(depuis) => format!(
             "{path}?{}",
@@ -1779,7 +1870,7 @@ fn with_origin(path: &str, depuis: Option<&str>) -> String {
 /// dashboard, une note… `None` pour l'adresse d'un espace inconnu, d'un
 /// dossier ou d'une note disparus : le retour se fait alors au dossier du
 /// fichier.
-async fn origin_label(
+pub(crate) async fn origin_label(
     ctx: &Ctx,
     db: &SqlitePool,
     all: &[crate::folders::Folder],
@@ -1900,8 +1991,11 @@ pub async fn view(
     .await?
     .ok_or(AppError::NotFound)?;
     // Fichier d'un autre espace : il s'ouvre dans le sien (sauf ceux de
-    // l'onglet Outils, qui n'appartiennent encore à aucune liste).
-    if row.space_id != ctx.active.id && row.expires_at.is_none() {
+    // l'onglet Outils, qui n'appartiennent encore à aucune liste). Depuis
+    // Perso, la vue d'ensemble, il s'ouvre sur place, avec la pastille de son
+    // espace : le retour ramène à Perso.
+    let overview = ctx.active.is_overview();
+    if row.space_id != ctx.active.id && row.expires_at.is_none() && !overview {
         let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
         return Ok(see_other(&crate::spaces::url::prefixed(
             &space.slug,
@@ -1963,6 +2057,15 @@ pub async fn view(
             "/files?dossier=temporaire".to_string(),
             "Temporaire".to_string(),
         ),
+        // Ouvert sur place depuis Perso : le dossier du fichier dans son
+        // espace, vu depuis la racine de Perso.
+        None if row.space_id != ctx.active.id => {
+            let space = ctx.space_by_id(row.space_id).ok_or(AppError::NotFound)?;
+            (
+                "/files?dossier=racine".to_string(),
+                crate::folders::label(&space.name, &all, row.folder_id),
+            )
+        }
         None => (
             crate::folders::view_url(&ctx.active.slug, row.folder_id),
             crate::folders::label(&ctx.active.name, &all, row.folder_id),
@@ -1980,6 +2083,11 @@ pub async fn view(
     };
     let page = ViewPage {
         shell: ctx.shell("files").await?,
+        space: if row.expires_at.is_none() {
+            ctx.tag_of(row.space_id)
+        } else {
+            None
+        },
         id,
         back,
         back_label,

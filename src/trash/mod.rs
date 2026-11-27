@@ -393,9 +393,34 @@ async fn origin(db: &SqlitePool, user: i64, bin: i64, folder: Option<i64>) -> Ap
     })
 }
 
+/// Ce qu'une restauration a remis en place, pour le message : le nom, et
+/// l'endroit où l'élément est revenu.
+pub struct Restored {
+    pub name: String,
+    pub space_id: i64,
+    pub folder_id: Option<i64>,
+    /// Son dossier d'origine n'existe plus (ou ne le reçoit plus) : il est
+    /// revenu à la racine de l'espace.
+    pub at_root: bool,
+    /// Liens de partage révoqués quand il est parti dans la corbeille.
+    pub revoked_links: i64,
+}
+
+impl Restored {
+    fn at(name: String, wanted: Option<i64>, to: &Origin) -> Self {
+        Self {
+            name,
+            space_id: to.space_id,
+            folder_id: to.folder_id,
+            at_root: wanted.is_some() && to.folder_id.is_none(),
+            revoked_links: 0,
+        }
+    }
+}
+
 /// Restaure un élément de la corbeille à sa place, ou à la racine de son
-/// espace si son dossier n'existe plus. Renvoie son nom, pour le message.
-pub async fn restore(db: &SqlitePool, user: i64, kind: Kind, id: i64) -> AppResult<String> {
+/// espace si son dossier n'existe plus. Renvoie où il est revenu.
+pub async fn restore(db: &SqlitePool, user: i64, kind: Kind, id: i64) -> AppResult<Restored> {
     match kind {
         Kind::Note => {
             let row = sqlx::query!(
@@ -416,7 +441,11 @@ pub async fn restore(db: &SqlitePool, user: i64, kind: Kind, id: i64) -> AppResu
             )
             .execute(db)
             .await?;
-            Ok(crate::notes::display_title(&row.title))
+            Ok(Restored::at(
+                crate::notes::plain_title(&row.title),
+                row.trash_folder_id,
+                &to,
+            ))
         }
         Kind::File => {
             let row = sqlx::query!(
@@ -427,6 +456,15 @@ pub async fn restore(db: &SqlitePool, user: i64, kind: Kind, id: i64) -> AppResu
             .await?
             .ok_or(AppError::NotFound)?;
             let to = origin(db, user, row.space_id, row.trash_folder_id).await?;
+            // Ses liens de partage ont été révoqués à la suppression : on le
+            // dira, ils ne reviennent pas.
+            let revoked_links = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "n!: i64" FROM share_links l JOIN files f ON f.id = l.file_id
+                   WHERE l.file_id = ? AND l.revoked_at IS NOT NULL AND l.revoked_at >= f.deleted_at"#,
+                id
+            )
+            .fetch_one(db)
+            .await?;
             sqlx::query!(
                 "UPDATE files SET space_id = ?, folder_id = ?, deleted_at = NULL, deleted_by = NULL,
                    deleted_via = NULL, trash_op = NULL, trash_root = 0, trash_folder_id = NULL
@@ -437,14 +475,26 @@ pub async fn restore(db: &SqlitePool, user: i64, kind: Kind, id: i64) -> AppResu
             )
             .execute(db)
             .await?;
-            Ok(row.name)
+            Ok(Restored {
+                revoked_links,
+                ..Restored::at(row.name, row.trash_folder_id, &to)
+            })
         }
         Kind::Folder => restore_folder(db, user, id).await,
-        Kind::Space => restore_space(db, user, id).await,
+        Kind::Space => {
+            let name = restore_space(db, user, id).await?;
+            Ok(Restored {
+                name,
+                space_id: id,
+                folder_id: None,
+                at_root: false,
+                revoked_links: 0,
+            })
+        }
     }
 }
 
-async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<String> {
+async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<Restored> {
     let row = sqlx::query!(
         r#"SELECT space_id, trash_folder_id, coalesce(trash_name, name) AS "name!: String",
                   trash_op AS "op!: i64"
@@ -455,6 +505,7 @@ async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<String
     .await?
     .ok_or(AppError::NotFound)?;
     let mut to = origin(db, user, row.space_id, row.trash_folder_id).await?;
+    let wanted = row.trash_folder_id;
     // Cinq niveaux de dossiers au plus : s'il ne tient plus dans son ancien dossier avec
     // ses sous-dossiers (ce dossier a pu descendre entre-temps), il revient à
     // la racine de l'espace. Sa hauteur se lit dans la corbeille, où ses
@@ -510,7 +561,7 @@ async fn restore_folder(db: &SqlitePool, user: i64, id: i64) -> AppResult<String
             .await?;
     }
     tx.commit().await?;
-    Ok(name)
+    Ok(Restored::at(name, wanted, &to))
 }
 
 async fn restore_space(db: &SqlitePool, user: i64, id: i64) -> AppResult<String> {
@@ -727,16 +778,6 @@ async fn remove_from_disk(state: &AppState, keys: Vec<String>) {
             crate::files::remove_stored(config, &key).await;
         }
     }
-}
-
-/// « Vider la corbeille » : efface tout ce que le compte y voit.
-pub async fn empty(state: &AppState, user: i64) -> AppResult<usize> {
-    let entries = page::entries(&state.db, user).await?;
-    let count = entries.len();
-    for entry in entries {
-        erase(state, user, entry.kind, entry.id).await?;
-    }
-    Ok(count)
 }
 
 /// Efface ce qui est dans la corbeille depuis plus de 30 jours.

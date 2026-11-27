@@ -127,9 +127,9 @@
   </nav>
   {% endif %}
   {% if searching %}
-  <p class="muted files-found" role="status">{% if items.is_empty() %}Aucun fichier ne correspond{% else %}{{ items.len() }} fichier{% if items.len() > 1 %}s{% endif %} trouvé{% if items.len() > 1 %}s{% endif %} dans {{ place }}{% endif %}</p>
+  <p class="muted files-found" role="status">{% if items.is_empty() && notes.is_empty() %}Rien ne correspond{% else %}Trouvé dans {{ place }} : {% if !items.is_empty() %}{{ items.len() }} fichier{% if items.len() > 1 %}s{% endif %}{% endif %}{% if !items.is_empty() && !notes.is_empty() %} et {% endif %}{% if !notes.is_empty() %}{{ notes.len() }} note{% if notes.len() > 1 %}s{% endif %}{% endif %}{% endif %}</p>
   {% endif %}
-  {% if searching && items.is_empty() %}
+  {% if searching && items.is_empty() && notes.is_empty() %}
   {% else if folders.is_empty() && notes.is_empty() && items.is_empty() %}
   <div class="empty-state">
     {% if view == "temporaire" %}
@@ -166,7 +166,7 @@
           {% endif %}
           <div class="pop-sep" role="separator"></div>
           {% if folder.empty %}
-          <form method="post" action="/folders/{{ id }}/delete" hx-confirm="Supprimer le dossier « {{ folder.name }} » ?">
+          <form method="post" action="/folders/{{ id }}/delete" hx-confirm="Mettre le dossier vide « {{ folder.name }} » à la corbeille ?">
             <button class="pop-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer</button>
           </form>
           {% else %}
@@ -184,7 +184,7 @@
         </div>
         {% if !folder.empty %}
         <div id="pd-delete-{{ id }}" class="pop-dialog pop-warning" popover role="alertdialog" aria-labelledby="pd-delete-{{ id }}-title">
-          <p class="pop-dialog-title" id="pd-delete-{{ id }}-title">{{ crate::assets::icon("alert")|safe }}Supprimer le dossier « {{ folder.name }} » ?</p>
+          <p class="pop-dialog-title" id="pd-delete-{{ id }}-title">{{ crate::assets::icon("alert")|safe }}Mettre le dossier « {{ folder.name }} » à la corbeille ?</p>
           <p>Il contient {{ folder.summary }}.</p>
           <div class="pop-dialog-actions">
             <form method="post" action="/folders/{{ id }}/delete">
@@ -193,7 +193,7 @@
             </form>
             <form method="post" action="/folders/{{ id }}/delete">
               <input type="hidden" name="contenu" value="supprimer">
-              <button class="btn btn-danger" type="submit">Tout supprimer</button>
+              <button class="btn btn-danger" type="submit">Tout mettre à la corbeille</button>
             </form>
             <button class="btn" type="button" popovertarget="pd-delete-{{ id }}" popovertargetaction="hide">Annuler</button>
           </div>
@@ -250,7 +250,7 @@
           <button type="button" popovertarget="pm-convert-{{ item.id }}" title="Crée une copie, l'original est gardé">{{ crate::assets::icon("convert")|safe }}Convertir…</button>
           {% endif %}
           <div class="pop-sep" role="separator"></div>
-          <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Supprimer définitivement « {{ item.name }} » ?">
+          <form method="post" action="/files/{{ item.id }}/delete" hx-confirm="Mettre « {{ item.name }} » à la corbeille ? Il y reste 30 jours.">
             <input type="hidden" name="next" value="{{ here }}">
             <button class="pop-danger" type="submit">{{ crate::assets::icon("trash")|safe }}Supprimer</button>
           </form>

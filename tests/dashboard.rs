@@ -164,7 +164,8 @@ async fn les_widgets_suivent_leur_taille() {
     assert_eq!(files.status, StatusCode::OK);
     assert!(files.body.contains("c.txt") && files.body.contains("b.txt"));
     assert!(!files.body.contains("a.txt"));
-    assert!(files.body.contains("3 fichiers dans cet espace"));
+    // Perso réunit tous les espaces : le compteur le dit.
+    assert!(files.body.contains("3 fichiers, tous espaces confondus"));
 
     // Réglages rapides : le thème, les agendas, la place prise.
     let settings = alice.get_fragment("/widgets/settings?w=2&h=2").await;

@@ -454,7 +454,7 @@ Cahier des charges dans `SPEC.md` (« Outils par espace »), demandé par Rémi 
 
 ## Parcours et espaces : avancement
 
-Cahier des charges dans `SPEC.md` (« Parcours et espaces »), demandé par Rémi le 26 novembre 2026. Cinq lots, une PR chacun. Lot 1 : branche `parcours-espaces`, partie de `v1`, **pas encore fusionnée ni essayée sur le serveur**.
+Cahier des charges dans `SPEC.md` (« Parcours et espaces »), demandé par Rémi le 26 novembre 2026. Cinq lots. Lot 1 : PR #93, fusionnée le 26 novembre 2026, pas encore essayée sur le serveur.
 
 **Lot 1, l'espace ne se perd plus :**
 
@@ -469,7 +469,38 @@ Cahier des charges dans `SPEC.md` (« Parcours et espaces »), demandé par Rém
 - [x] Vu dans le navigateur (instance locale, ordinateur) : sur `/e/ecole/tools`, un clic sur Taff dans l'île laisse `/tools` et passe l'onglet sur Taff ; dans le dossier Math d'École, un clic sur Taff mène aux fichiers de Taff ; dans Taff archivé, le widget propose Taff et la tâche ajoutée y reste. Aucune erreur dans la console.
 - [ ] Sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
 
-**Lots 2 à 5** (retours, corbeille dans Fichiers, Perso et Notes, rangement) : pas commencés.
+**Lots 2 à 5** : une seule PR, branche `parcours-espaces-suite` (un commit par lot), partie de `v1` après la fusion du lot 1 (PR #93). **Pas encore fusionnée ni essayée sur le serveur.**
+
+**Lot 2, on revient d'où l'on vient :**
+
+- [x] Le retour de l'éditeur mène à la page d'où l'on a ouvert la note (paramètre `depuis`, posé par `app.js` comme pour les fichiers) ; une note supprimée y ramène ; une note créée depuis un dossier de Fichiers revient au dossier ; une adresse d'un autre site est ignorée. Test `une_note_ramene_a_la_page_d_ou_on_l_a_ouverte`.
+- [x] Depuis Perso, une note, un fichier ou un événement d'un autre espace s'ouvre sur place, avec la pastille de son espace ; depuis un autre espace, dans le sien. Une image collée part dans l'espace de la note (`data-note-space`). Tests `perso_ouvre_les_autres_espaces_sur_place`, `un_evenement_cree_depuis_perso_y_ramene` ; anciens tests mis à jour (`adresse`, `notes`, `retour`, `ranger`, `commandes`, `espaces_partages_notes`, `agenda_evenements`).
+- [x] Une action de la liste des fichiers pendant une recherche garde la recherche et le tag. Test `une_action_garde_la_recherche_des_fichiers`.
+- [x] La reconnexion ouvre la page demandée, espace compris, une seule fois. Test `la_connexion_ramene_a_la_page_demandee`. Refuser une invitation ramène à la carte des espaces : `refuser_une_invitation_ramene_aux_espaces`. Compresser (`POST /files/{id}/compress`) revient à `next`.
+
+**Lot 3, la corbeille dans Fichiers :**
+
+- [x] Dossier « Corbeille » à la racine de Fichiers, à côté de Temporaire (`/files?dossier=corbeille`, `src/trash/page.rs`, `templates/files/trash.html`) : dans un espace, ce qui en vient ; depuis Perso, tout ; origine « École / Math » ; filtre par sorte. `/settings/trash` y mène ; Réglages garde un lien. Test `la_corbeille_est_un_dossier_de_fichiers` ; les tests de `corbeille.rs` lisent le nouveau dossier.
+- [x] Confirmations « Mettre à la corbeille » ; messages de suppression avec le lien « Ouvrir la corbeille » ; une suppression dans Temporaire dit qu'elle ne passe pas par la corbeille.
+- [x] Restaurer dit où l'élément revient (« dans École / Math », ou « à la racine d'École : son dossier n'existe plus »), avec « Ouvrir », et prévient si ses liens de partage avaient été révoqués. Test `restaurer_dit_ou_l_element_revient`.
+- [x] « Vider » n'efface que ce qu'on a supprimé soi-même, dans la corbeille ouverte ; la confirmation dit ce qui reste. Test `vider_ne_touche_pas_aux_suppressions_des_autres`.
+- [x] « R&D » n'est plus échappé deux fois (`notes::plain_title`). Test `un_titre_n_est_echappe_qu_une_fois_dans_la_corbeille`.
+
+**Lot 4, Perso, Notes et Fichiers parlent la même langue :**
+
+- [x] Widgets de Perso : « Aucune note, dans aucun espace », « N fichiers, tous espaces confondus » ; épinglées avec leur pastille et dans la limite du widget. Test `les_widgets_de_perso_parlent_de_tous_les_espaces`.
+- [x] Pas de lien de widget vers un outil masqué ; l'interrupteur d'un outil remplace aussi la barre du téléphone (`_tabbar.html`, hors bande). Test `un_widget_ne_mene_pas_a_un_outil_masque`.
+- [x] Notes : titre de section cliquable vers `/notes?dossier=N` (chemin, « Voir dans Fichiers ») ; menu de ligne (ranger, épingler, corbeille) ; « #BTS » trouve « bts ». Test `les_sections_de_dossier_des_notes_s_ouvrent`.
+- [x] La recherche de Fichiers trouve aussi les notes de l'endroit (« Trouvé dans École / Math : 1 note »). Test `la_recherche_de_fichiers_trouve_aussi_les_notes`.
+- [x] L'indicateur des conversions mène aux fichiers de l'espace de la conversion. Test `l_indicateur_mene_a_l_espace_de_la_conversion`.
+
+**Lot 5, ranger ne casse rien :**
+
+- [x] Les images qu'une note affiche la suivent dans un autre espace (site, API, commande `/move`, dossier déplacé), sauf celles qu'une autre note de l'ancien espace affiche ou qui sont ailleurs ; le message le dit. Tests `les_images_suivent_leur_note`, `un_dossier_deplace_emmene_les_images_de_ses_notes`, test unitaire `fichiers_cites_par_une_note`.
+- [x] Une conversion en cours suit son fichier déplacé. Test `une_conversion_en_cours_suit_son_fichier`.
+- [x] Un lien de partage dont l'auteur n'a plus accès est affiché « Inutilisable », n'est plus compté comme partagé, et le déplacement le dit ; la fenêtre « Ranger » marque les espaces partagés et prévient quand on sort un élément de l'un d'eux. Test `un_lien_devenu_inutilisable_le_dit`.
+- [x] Vu dans le navigateur (instance locale, ordinateur) : une session expirée sur `/e/ecole/notes` y revient après la connexion ; « Nouvelle note » dans le dossier Math, puis retour « École / Math » ; depuis Perso, la note d'École s'ouvre sur place, pastille « École », retour à Perso ; le menu d'une ligne de Notes met la note à la corbeille, le message mène au dossier Corbeille d'École (origine « École / Math »), et la restaurer dit « est revenu dans École / Math », avec « Ouvrir » ; la racine de Fichiers montre Temporaire et Corbeille. Aucune erreur dans la console.
+- [ ] Sur le serveur après `dashu-update`, sur ordinateur et sur iPhone.
 
 ## Dossiers : cinq niveaux : avancement
 

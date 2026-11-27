@@ -614,7 +614,13 @@ pub async fn delete(
             label(&space.name, &folders, folder.parent_id)
         )
     };
-    ctx.flash_ok(message).await?;
+    ctx.flash_link(
+        "ok",
+        &message,
+        crate::trash::page::PLACE,
+        "Ouvrir la corbeille",
+    )
+    .await?;
     Ok(see_other(&back))
 }
 
@@ -779,11 +785,41 @@ pub(crate) async fn move_to(
         }
     }
     tx.commit().await?;
-    Ok(Moved::Done(format!(
+    // Les images que ses notes affichent, rangées ailleurs dans l'ancien
+    // espace, les suivent (SPEC, « Parcours et espaces »).
+    let mut carried = 0;
+    if target.id != folder.space_id {
+        for folder_id in std::iter::once(id).chain(subs.iter().copied()) {
+            for note in sqlx::query_scalar!(
+                r#"SELECT id AS "id!" FROM notes WHERE folder_id = ?"#,
+                folder_id
+            )
+            .fetch_all(db)
+            .await?
+            {
+                carried += crate::notes::carry_images(
+                    db,
+                    user,
+                    note,
+                    folder.space_id,
+                    target.id,
+                    Some(folder_id),
+                )
+                .await?;
+            }
+        }
+    }
+    let mut message = format!(
         "Dossier « {} » déplacé dans « {} »",
         folder.name,
         label(&target.name, &folders, parent_id)
-    )))
+    );
+    match carried {
+        0 => {}
+        1 => message.push_str(" · 1 image de ses notes le suit"),
+        n => message.push_str(&format!(" · {n} images de ses notes le suivent")),
+    }
+    Ok(Moved::Done(message))
 }
 
 // ---------------------------------------------------------------------
@@ -804,6 +840,8 @@ pub struct Dest {
     /// Pas une destination possible (un espace, pour le dossier des clients
     /// de 1Life) : montré, mais grisé.
     pub disabled: bool,
+    /// Un espace partagé avec d'autres comptes (marqué « partagé »).
+    pub shared: bool,
 }
 
 /// Ce que la fenêtre « Ranger » propose pour un élément.
@@ -836,6 +874,7 @@ pub fn destinations(spaces: &[Space], folders: &[Folder], reach: &Reach) -> Vec<
             color: space.color.clone(),
             current: reach.here == Some((space.id, None)),
             disabled: !reach.spaces,
+            shared: false,
         });
         branch(&mut out, space, folders, reach, None, 1);
     }
@@ -868,6 +907,7 @@ fn branch(
             color: space.color.clone(),
             current: reach.here == Some((space.id, Some(folder.id))),
             disabled: false,
+            shared: false,
         });
         branch(out, space, folders, reach, Some(folder.id), depth + 1);
     }
@@ -883,6 +923,9 @@ struct DestinationsFragment {
     /// Page où revenir après le rangement (vide : celle par défaut).
     next: String,
     items: Vec<Dest>,
+    /// L'élément est dans un espace partagé : le sortir le retire aux autres
+    /// membres. Le nom de l'espace, pour l'avertissement.
+    leaving_shared: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -926,6 +969,7 @@ pub async fn picker(
             title: "Dossier des clients".into(),
             action: format!("/e/{}/1life/clients/dossier", ctx.active.slug),
             next: String::new(),
+            leaving_shared: None,
             items: destinations(
                 &ctx.spaces,
                 &folders,
@@ -1032,12 +1076,44 @@ pub async fn picker(
         }
         (None, None, None) => return Err(AppError::NotFound),
     };
+    // Les espaces partagés (rejoints, ou à soi avec des membres) : marqués,
+    // et un avertissement quand l'élément en vient.
+    let shared = shared_spaces(&ctx, &state.db).await?;
+    let mut items = destinations(&ctx.spaces, &folders, &reach);
+    for item in items.iter_mut().filter(|d| d.depth == 0) {
+        item.shared = shared.contains(&item.space_id);
+    }
+    let leaving_shared = reach
+        .here
+        .map(|(space, _)| space)
+        .filter(|space| shared.contains(space))
+        .and_then(|space| ctx.space_by_id(space))
+        .map(|space| space.name.clone());
     Ok(web::html(DestinationsFragment {
         title,
         action,
         next,
-        items: destinations(&ctx.spaces, &folders, &reach),
+        items,
+        leaving_shared,
     }))
+}
+
+/// Les espaces du compte partagés avec d'autres : ceux qu'il a rejoints, et
+/// les siens qui ont des membres.
+async fn shared_spaces(ctx: &Ctx, db: &sqlx::SqlitePool) -> AppResult<Vec<i64>> {
+    let with_members: Vec<i64> = sqlx::query_scalar!(
+        r#"SELECT DISTINCT space_id AS "space_id!" FROM space_members
+           WHERE space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)"#,
+        ctx.user.id
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(ctx
+        .spaces
+        .iter()
+        .filter(|s| !s.mine || with_members.contains(&s.id))
+        .map(|s| s.id)
+        .collect())
 }
 
 /// Adresse de la fenêtre « Ranger » d'un élément (`note`, `fichier` ou

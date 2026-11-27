@@ -1802,7 +1802,7 @@ Par défaut, pour avancer :
 
 - **Une écriture depuis un onglet sur un espace disparu est refusée** (409 et retour à l'accueil). Une page, elle, se rabat sur le dernier espace utilisé.
 - **Un formulaire classique** (sans en-tête d'onglet) garde ses adresses sans préfixe, comme avant.
-- **Un lot par PR**, dans l'ordre. Chaque lot a ses tests dans `tests/parcours.rs` ou dans le fichier de son module.
+- **Le lot 1 dans sa PR, les lots 2 à 5 dans une seule** (demandé par Rémi le 27 novembre 2026), un commit par lot. Les tests sont dans `tests/parcours.rs`.
 
 ## Critères d'acceptation
 
@@ -1817,7 +1817,30 @@ Lot 1 :
 - [ ] Le bandeau d'un espace archivé ne propose « Restaurer » qu'au propriétaire, et ramène sur la page de l'espace
 - [ ] Un espace archivé se supprime même quand Perso est le seul espace en service
 
-Lots 2 à 5 : un critère par point ci-dessus, écrit avec son lot.
+Lot 2 :
+
+- [ ] Une note ouverte depuis un dossier de Fichiers, le dashboard ou une recherche y ramène, à la suppression aussi ; une adresse d'un autre site est ignorée
+- [ ] Depuis Perso, une note, un fichier ou un événement d'un autre espace s'ouvre sur place, marqué de son espace ; ailleurs, dans le sien ; une image collée part dans l'espace de la note
+- [ ] Une action de Fichiers pendant une recherche garde la recherche ; la reconnexion ouvre la page demandée
+
+Lot 3 :
+
+- [ ] La racine de Fichiers montre « Corbeille » ; dans un espace, ce qui en vient ; depuis Perso, tout ; `/settings/trash` y mène
+- [ ] Les confirmations disent « Mettre à la corbeille » ; les messages de suppression ont un lien vers elle
+- [ ] Restaurer dit où l'élément revient, racine comprise ; « Vider » laisse ce que les autres membres ont supprimé
+- [ ] « R&D » s'affiche « R&D »
+
+Lot 4 :
+
+- [ ] Les widgets de Perso ne disent plus « dans cet espace » ; les épinglées ont leur pastille et tiennent dans le widget ; aucun lien vers un outil masqué
+- [ ] Un titre de section de l'onglet Notes ouvre le dossier ; une ligne a un menu ; « #BTS » trouve « bts » ; la recherche de Fichiers trouve les notes
+- [ ] Masquer un outil met à jour la barre du téléphone ; l'indicateur des conversions mène à l'espace de la conversion
+
+Lot 5 :
+
+- [ ] Une note déplacée emmène les images qu'elle seule affiche, depuis le site, l'API, la commande et un dossier déplacé
+- [ ] Une conversion en cours suit son fichier ; un lien de partage inutilisable est dit tel ; « Ranger » prévient en sortant d'un espace partagé
+
 
 - [ ] Chaque point a ses tests d'intégration ; STATUS et README à jour
 

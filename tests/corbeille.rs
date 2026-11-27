@@ -130,7 +130,10 @@ async fn une_note_supprimee_disparait_de_partout_puis_revient_a_sa_place() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     // La corbeille la montre : qui, quand, par où, et d'où elle vient.
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(trash.body.contains("Théorème"));
     assert!(trash.body.contains("par toi, depuis le site"));
     assert!(trash.body.contains("École"));
@@ -166,7 +169,14 @@ async fn une_note_supprimee_disparait_de_partout_puis_revient_a_sa_place() {
             .body
             .contains("Théorème")
     );
-    assert!(!alice.get("/settings/trash").await.body.contains("Théorème"));
+    assert!(
+        !alice
+            .with_header("x-espace", "perso")
+            .get("/files?dossier=corbeille")
+            .await
+            .body
+            .contains("Théorème")
+    );
 }
 
 #[tokio::test]
@@ -292,7 +302,10 @@ async fn un_dossier_part_avec_son_contenu_et_revient_avec_lui() {
     assert!(!alice.get("/e/ecole/notes").await.body.contains("Cours"));
 
     // Une ligne pour le dossier, avec ce qu'il a emporté ; une pour « Vieux ».
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(trash.body.contains("Math"));
     assert!(trash.body.contains("2 notes, 1 fichier, 1 sous-dossier"));
     assert!(trash.body.contains("Vieux"));
@@ -325,7 +338,10 @@ async fn un_dossier_part_avec_son_contenu_et_revient_avec_lui() {
         assert_eq!(place, (ecole, Some(folder)), "{table} {id}");
     }
     // « Vieux », supprimé à part, reste dans la corbeille.
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(trash.body.contains("Vieux"));
     assert!(
         !trash
@@ -377,7 +393,12 @@ async fn un_espace_supprime_ne_se_restaure_que_par_son_proprietaire() {
     assert!(!spaces.to_string().contains("\"taff\""));
 
     // Bob ne le voit pas dans sa corbeille et ne peut pas le restaurer.
-    assert!(!bob.get("/settings/trash").await.body.contains("Taff"));
+    // (Sa propre île nomme son Taff : on regarde la liste seulement.)
+    let bin = bob
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
+    assert!(!bin.body.contains("<strong>Taff</strong>"));
     let refused = bob
         .post(&format!("/settings/trash/espace/{taff}/restore"), &[])
         .await;
@@ -427,7 +448,10 @@ async fn la_corbeille_d_un_espace_partage_est_commune() {
     bob.post(&format!("/notes/{id}/delete"), &[]).await;
 
     // Alice la voit, avec son auteur, et la restaure.
-    let trash = alice.get("/settings/trash").await;
+    let trash = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(trash.body.contains("Notes de Bob"));
     assert!(trash.body.contains("par bob@example.test"));
     let restored = alice
@@ -451,7 +475,13 @@ async fn la_corbeille_d_un_espace_partage_est_commune() {
         .await;
     assert!(moved.is_ok());
     alice.post(&format!("/notes/{secret}/delete"), &[]).await;
-    assert!(!bob.get("/settings/trash").await.body.contains("Journal"));
+    assert!(
+        !bob.with_header("x-espace", "perso")
+            .get("/files?dossier=corbeille")
+            .await
+            .body
+            .contains("Journal")
+    );
     for action in ["restore", "erase"] {
         let refused = bob
             .post(&format!("/settings/trash/note/{secret}/{action}"), &[])
@@ -484,7 +514,10 @@ async fn supprimer_definitivement_et_vider_sur_le_site_seulement() {
         .await,
         0
     );
-    let page = alice.get("/settings/trash").await;
+    let page = alice
+        .with_header("x-espace", "perso")
+        .get("/files?dossier=corbeille")
+        .await;
     assert!(page.body.contains("hx-confirm=\"Vider la corbeille ?"));
     let emptied = alice.post("/settings/trash/empty", &[]).await;
     assert!(

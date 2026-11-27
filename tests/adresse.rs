@@ -139,8 +139,13 @@ async fn une_note_s_ouvre_dans_son_espace() {
     let path = note(&mut alice, "Cours de réseau").await;
     alice.post("/space", &[("slug", "perso")]).await;
 
-    // Depuis Perso (ou /open), la note s'ouvre à l'adresse de son espace.
-    let opened = alice.get(&path).await;
+    // Depuis Perso, la vue d'ensemble : sur place, marquée École.
+    let here = alice.get(&path).await;
+    assert_eq!(here.status, StatusCode::OK);
+    assert!(here.body.contains("Cours de réseau"));
+    assert!(here.body.contains("\"X-Espace\":\"perso\""));
+    // Depuis un autre espace (ou /open), à l'adresse de son espace.
+    let opened = alice.get(&format!("/e/taff{path}")).await;
     assert_eq!(opened.location(), format!("/e/ecole{path}"));
     let page = alice.follow(opened).await;
     assert!(page.body.contains("data-accent=\"blue\""));

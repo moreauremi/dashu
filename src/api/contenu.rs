@@ -868,7 +868,7 @@ pub(crate) async fn trash_restore(
 ) -> ApiResult<serde_json::Value> {
     let kind = Kind::from_key(kind)
         .ok_or_else(|| ApiError::bad_request("kind : note, fichier, dossier ou espace"))?;
-    let name = trash::restore(db, user.id, kind, id).await?;
+    let name = trash::restore(db, user.id, kind, id).await?.name;
     tracing::info!(
         user = user.id,
         via = user.via,

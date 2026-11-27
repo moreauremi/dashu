@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT title, body_md FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+  "query": "SELECT title, body_md, space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "name": "body_md",
         "ordinal": 1,
         "type_info": "Text"
+      },
+      {
+        "name": "space_id",
+        "ordinal": 2,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -19,8 +24,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "f2e208f569ea79bc8cfe716963a26f5c15d87836e12adb342a54c40d7acac57a"
+  "hash": "dc9095ca2183fd4b999ea2b51715a9a3aadc40694aac60944309a7e9b5b4e95f"
 }

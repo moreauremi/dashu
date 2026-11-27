@@ -3026,6 +3026,31 @@ body:has(.jobs-indicator:not([hidden])) .upload-queue.is-floating {
   border-top: 1px solid var(--border);
 }
 
+/* Une note et son menu d'actions (Ranger, Épingler, Supprimer), côte à côte. */
+.note-item {
+  display: flex;
+  align-items: center;
+}
+
+.note-item > .note-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-actions {
+  flex: none;
+  padding-right: 8px;
+}
+
+.note-group-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.note-group-title a:hover {
+  text-decoration: underline;
+}
+
 .note-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

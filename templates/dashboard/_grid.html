@@ -6,7 +6,8 @@
   <section class="card widget dw w{{ widget.w }} h{{ widget.h }}" data-kind="{{ kind.key }}" data-w="{{ widget.w }}" data-h="{{ widget.h }}" aria-labelledby="w-{{ kind.key }}-title">
     <header class="card-head">
       <h2 id="w-{{ kind.key }}-title">{{ kind.title }}</h2>
-      {% if let Some((href, label)) = kind.link %}<a class="card-link" href="{{ href }}">{{ label }}</a>{% endif %}
+      {#- Pas de lien vers un outil masqué dans cet espace. -#}
+      {% if let Some((href, label)) = kind.link %}{% if crate::dashboard::shows(masked, href) %}<a class="card-link" href="{{ href }}">{{ label }}</a>{% endif %}{% endif %}
       <div class="dw-tools" role="group" aria-label="Disposition de {{ kind.title }}">
         <button class="icon-btn dw-move" type="button" data-dw="move" aria-label="Déplacer {{ kind.title }} (glisser, ou flèches ; Maj + flèches pour la taille)" title="Glisser pour déplacer">{{ crate::assets::icon("move")|safe }}</button>
         {% for (letter, label, w, h) in crate::dashboard::layout::SIZES %}

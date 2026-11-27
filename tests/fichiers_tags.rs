@@ -152,7 +152,7 @@ async fn rechercher_par_le_nom_dans_l_endroit_montre() {
     // Dans École : tout l'espace, dossiers compris ; chaque résultat dit où
     // il est rangé.
     let found = alice.get("/files?dossier=espace&q=vlan").await.body;
-    assert!(found.contains("1 fichier trouvé dans École"));
+    assert!(found.contains("Trouvé dans École : 1 fichier"));
     let row = common::between(&found, "cours-vlan.pdf</span>", "</li>").unwrap();
     assert!(row.contains("École / Réseaux"));
     assert!(!found.contains("Planning-"));
@@ -173,11 +173,11 @@ async fn rechercher_par_le_nom_dans_l_endroit_montre() {
     assert!(found.contains("cours-vlan.pdf") && found.contains("tp-ospf.pdf"));
     assert!(!found.contains("Planning-"));
     let found = alice.get(&format!("/files?dossier={tp}&q=vlan")).await.body;
-    assert!(found.contains("Aucun fichier ne correspond"));
+    assert!(found.contains("Rien ne correspond"));
 
     // Un autre espace n'est pas cherché depuis École ; la racine cherche partout.
     let found = alice.get("/files?dossier=espace&q=vacances").await.body;
-    assert!(found.contains("Aucun fichier ne correspond"));
+    assert!(found.contains("Rien ne correspond"));
     let found = alice.get("/files?dossier=racine&q=vacances").await.body;
     assert!(found.contains("photo-vacances.png") && found.contains("Perso"));
 
@@ -205,7 +205,7 @@ async fn rechercher_par_le_nom_dans_l_endroit_montre() {
             .get("/files?dossier=espace&q=ospf")
             .await
             .body
-            .contains("Aucun fichier ne correspond")
+            .contains("Rien ne correspond")
     );
 }
 

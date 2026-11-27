@@ -73,6 +73,11 @@ const DEFAULT: [&str; MAX] = ["dashboard", "notes", "calendar", "search"];
 
 /// Entrées à afficher, d'après la valeur enregistrée (`None` : par défaut).
 /// Les identifiants inconnus sont ignorés ; au-delà de quatre, on coupe.
+/// Le raccourci mène à la page ouverte (gabarit `_tabbar.html`).
+pub fn is_current(key: &str, nav: &str) -> bool {
+    key == nav
+}
+
 pub fn selected(stored: Option<&str>) -> Vec<&'static Tab> {
     let keys: Vec<&str> = match stored {
         Some(text) => text.split(',').map(str::trim).collect(),

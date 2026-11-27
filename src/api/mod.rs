@@ -934,7 +934,7 @@ pub(crate) async fn note_update(
     };
 
     let current = sqlx::query!(
-        "SELECT title, body_md FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
+        "SELECT title, body_md, space_id FROM notes WHERE id = ? AND space_id IN (SELECT space_id FROM space_access WHERE user_id = ?)",
         id,
         user.id
     )
@@ -997,6 +997,8 @@ pub(crate) async fn note_update(
         )
         .execute(&state.db)
         .await?;
+        // Ses images la suivent, comme sur le site.
+        notes::carry_images(&state.db, user.id, id, current.space_id, space.id, None).await?;
     }
     if let Some(folder) = changes.folder {
         notes::file_in_folder(&state.db, user.id, id, folder).await?;

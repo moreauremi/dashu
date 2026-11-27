@@ -1285,7 +1285,8 @@
   // passe l'adresse de la page quittée, espace compris, dans le paramètre
   // « depuis » (src/files/mod.rs, view). Son lien de retour (data-retour) y
   // ramène.
-  const FILE_PAGE = /^(\/e\/[a-z0-9-]+)?\/files\/\d+$/;
+  // Même chose pour une note (src/notes/mod.rs, edit_page).
+  const FILE_PAGE = /^(\/e\/[a-z0-9-]+)?\/(files|notes)\/\d+$/;
   const SPACE_PREFIX = /^\/e\/[a-z0-9-]+(\/|$)/;
 
   /** Adresse de la page affichée, avec l'espace de l'onglet. */
