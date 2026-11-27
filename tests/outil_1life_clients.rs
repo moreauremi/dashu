@@ -1327,8 +1327,9 @@ async fn cr_et_audit_restent_bientot_et_clients_reste_hors_de_l_api() {
     assert_eq!(home.status, StatusCode::OK);
     let card = between(&home.body, "href=\"/e/taff/1life/clients\"", "</a>").unwrap();
     assert!(card.contains("Clients") && !card.contains("Bientôt"));
-    assert_eq!(home.body.matches("Bientôt").count(), 2);
-    for module in ["cr", "audit"] {
+    // Compte rendu, Audit et Tâches.
+    assert_eq!(home.body.matches("Bientôt").count(), 3);
+    for module in ["cr", "audit", "taches"] {
         let page = alice.get(&format!("/e/taff/1life/{module}")).await;
         assert!(page.body.contains("Module à venir"), "{module}");
     }

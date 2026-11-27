@@ -1687,6 +1687,7 @@ Un **outil** est une entrée de la barre latérale : Dashboard, Notes, Fichiers,
 - **Une fois autorisé**, 1Life se règle par espace comme les autres outils, **masqué par défaut**. Masqué dans l'espace actif, ses pages ramènent à l'accueil de l'espace, comme les autres outils. Retirer l'autorisation le fait disparaître partout ; ses réglages par espace restent, pour une autorisation future.
 - **Contenu, squelette seulement** : une page d'accueil avec trois cartes, « Compte rendu », « Audit » et « Clients », chacune marquée « Bientôt ». Chaque module a son adresse (`/1life/cr`, `/1life/audit`, `/1life/clients`) et une page « Module à venir ». Un petit registre des modules, dans le module 1Life, les déclare : en ajouter un = une entrée. *Clients est fait depuis le 26 novembre 2026 : voir « 1Life — Clients ».*
 - **Aucune logique métier pour l'instant** : pas de table pour les modules, pas d'appel à une IA, pas d'action dans l'API ni pour Hermès.
+- **Module Tâches** (demandé le 27 novembre 2026) : une quatrième carte « Tâches », marquée « Bientôt » comme Compte rendu, à l'adresse `/1life/taches`, avec sa page « Module à venir ».
 
 ## Modèle de données
 

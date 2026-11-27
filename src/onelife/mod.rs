@@ -62,6 +62,13 @@ pub const MODULES: &[Module] = &[
         summary: "Ses clients : dossiers, infos et journées.",
         soon: false,
     },
+    Module {
+        id: "taches",
+        name: "Tâches",
+        icon: "tasks",
+        summary: "Suivre ses tâches de travail.",
+        soon: true,
+    },
 ];
 
 #[derive(Template)]
@@ -137,7 +144,7 @@ mod tests {
         }
         assert_eq!(
             MODULES.iter().map(|m| m.id).collect::<Vec<_>>(),
-            ["cr", "audit", "clients"]
+            ["cr", "audit", "clients", "taches"]
         );
     }
 }
